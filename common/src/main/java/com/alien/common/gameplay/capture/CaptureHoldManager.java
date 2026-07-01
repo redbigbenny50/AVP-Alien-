@@ -74,6 +74,11 @@ public final class CaptureHoldManager {
         return HELD.containsKey(mob.getUUID());
     }
 
+    /** Whether {@code mob} is currently held specifically by {@code player}. */
+    public static boolean isHeldBy(Mob mob, Player player) {
+        return player.getUUID().equals(HELD.get(mob.getUUID()));
+    }
+
     /**
      * The mob held by {@code player} in {@code level} that is nearest to them, or {@code null} if the player is not
      * holding anything resolvable in that level. Used when handing a held mob off to an anchor.
@@ -112,11 +117,11 @@ public final class CaptureHoldManager {
             Mob mob = mobEntity instanceof Mob m ? m : null;
 
             if (
-                holder == null
-                    || !holder.isAlive()
-                    || mob == null
-                    || !mob.isAlive()
-                    || mob.level() != holder.level()
+                    holder == null
+                            || !holder.isAlive()
+                            || mob == null
+                            || !mob.isAlive()
+                            || mob.level() != holder.level()
             ) {
                 it.remove();
                 if (mob != null && mob.isAlive()) {

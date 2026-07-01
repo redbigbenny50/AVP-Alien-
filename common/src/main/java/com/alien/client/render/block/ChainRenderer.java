@@ -34,12 +34,12 @@ public final class ChainRenderer {
     private ChainRenderer() {}
 
     public static void render(
-        PoseStack poseStack,
-        MultiBufferSource source,
-        Vec3 start,
-        Vec3 end,
-        Vec3 camLocal,
-        int light
+            PoseStack poseStack,
+            MultiBufferSource source,
+            Vec3 start,
+            Vec3 end,
+            Vec3 camLocal,
+            int light
     ) {
         double dist = start.distanceTo(end);
         if (dist < 1.0e-4) {
@@ -86,27 +86,27 @@ public final class ChainRenderer {
             float ny = (float) segDir.y;
             float nz = (float) segDir.z;
 
-            // front and back so it's visible from either side
+            // A single quad suffices: entityCutoutNoCull disables backface culling, so this face is drawn
+            // from both sides. A second, coplanar back-face quad only causes z-fighting.
             quad(buffer, pose, a0, a1, b1, b0, u, uNext, light, nx, ny, nz);
-            quad(buffer, pose, a1, a0, b0, b1, u, uNext, light, -nx, -ny, -nz);
 
             u = uNext;
         }
     }
 
     private static void quad(
-        VertexConsumer buffer,
-        PoseStack.Pose pose,
-        Vec3 p0,
-        Vec3 p1,
-        Vec3 p2,
-        Vec3 p3,
-        float uStart,
-        float uEnd,
-        int light,
-        float nx,
-        float ny,
-        float nz
+            VertexConsumer buffer,
+            PoseStack.Pose pose,
+            Vec3 p0,
+            Vec3 p1,
+            Vec3 p2,
+            Vec3 p3,
+            float uStart,
+            float uEnd,
+            int light,
+            float nx,
+            float ny,
+            float nz
     ) {
         vertex(buffer, pose, p0, uStart, 0.0F, light, nx, ny, nz);
         vertex(buffer, pose, p1, uStart, 1.0F, light, nx, ny, nz);
@@ -115,21 +115,21 @@ public final class ChainRenderer {
     }
 
     private static void vertex(
-        VertexConsumer buffer,
-        PoseStack.Pose pose,
-        Vec3 p,
-        float u,
-        float v,
-        int light,
-        float nx,
-        float ny,
-        float nz
+            VertexConsumer buffer,
+            PoseStack.Pose pose,
+            Vec3 p,
+            float u,
+            float v,
+            int light,
+            float nx,
+            float ny,
+            float nz
     ) {
         buffer.addVertex(pose, (float) p.x, (float) p.y, (float) p.z)
-            .setColor(255, 255, 255, 255)
-            .setUv(u, v)
-            .setOverlay(OverlayTexture.NO_OVERLAY)
-            .setLight(light)
-            .setNormal(pose, nx, ny, nz);
+                .setColor(255, 255, 255, 255)
+                .setUv(u, v)
+                .setOverlay(OverlayTexture.NO_OVERLAY)
+                .setLight(light)
+                .setNormal(pose, nx, ny, nz);
     }
 }

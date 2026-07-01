@@ -20,7 +20,7 @@ import org.jetbrains.annotations.NotNull;
  * The capture chain — a heavy-duty restraint used to chain a mob to a capture {@link AnchorBlock}.
  * <p>
  * Right-click a mob to take hold of it: it is registered with {@link CaptureHoldManager}, which reels it toward you and
- * restricts its distance. This is deliberately <em>not</em> a vanilla leash — there is no rope to render through the
+ * restricts its distance. Right-click the same mob again to let it go. This is deliberately <em>not</em> a vanilla leash — there is no rope to render through the
  * vanilla pipeline and nothing drops a {@code minecraft:lead} when the hold breaks. Right-click an anchor to bind the
  * mob you are holding to that anchor's chain; sneak-right-click an anchor to release its chain.
  */
@@ -32,14 +32,22 @@ public class CaptureChainItem extends Item {
 
     @Override
     public @NotNull InteractionResult interactLivingEntity(
-        @NotNull ItemStack stack,
-        @NotNull Player player,
-        @NotNull LivingEntity target,
-        @NotNull InteractionHand hand
+            @NotNull ItemStack stack,
+            @NotNull Player player,
+            @NotNull LivingEntity target,
+            @NotNull InteractionHand hand
     ) {
-        if (target instanceof Mob mob && target != player && !CaptureHoldManager.isHeld(mob)) {
+        if (target instanceof Mob mob && target != player) {
+            // Held by another player: don't interfere with their hold.
+            if (CaptureHoldManager.isHeld(mob) && !CaptureHoldManager.isHeldBy(mob, player)) {
+                return super.interactLivingEntity(stack, player, target, hand);
+            }
             if (!player.level().isClientSide) {
-                CaptureHoldManager.hold(mob, player);
+                if (CaptureHoldManager.isHeldBy(mob, player)) {
+                    CaptureHoldManager.release(mob); // toggle off — let the mob go
+                } else {
+                    CaptureHoldManager.hold(mob, player); // grab
+                }
             }
             return InteractionResult.sidedSuccess(player.level().isClientSide);
         }
@@ -52,9 +60,9 @@ public class CaptureChainItem extends Item {
         BlockPos pos = context.getClickedPos();
         Player player = context.getPlayer();
         if (
-            player == null
-                || !(level.getBlockState(pos).getBlock() instanceof AnchorBlock)
-                || !(level.getBlockEntity(pos) instanceof AnchorBlockEntity anchor)
+                player == null
+                        || !(level.getBlockState(pos).getBlock() instanceof AnchorBlock)
+                        || !(level.getBlockEntity(pos) instanceof AnchorBlockEntity anchor)
         ) {
             return super.useOn(context);
         }
