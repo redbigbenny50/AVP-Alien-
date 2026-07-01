@@ -1,0 +1,189 @@
+plugins {
+    id 'com.diffplug.spotless'
+    id 'java-library'
+    id 'maven-publish'
+    id 'idea'
+}
+
+base {
+    archivesName = "${mod_id}-${project.name}-${minecraft_version}"
+}
+
+java {
+    toolchain.languageVersion = JavaLanguageVersion.of(java_version)
+}
+
+repositories {
+    mavenCentral()
+    // https://docs.gradle.org/current/userguide/declaring_repositories.html#declaring_content_exclusively_found_in_one_repository
+    exclusiveContent {
+        forRepository {
+            maven {
+                name = 'Sponge'
+                url = 'https://repo.spongepowered.org/repository/maven-public'
+            }
+        }
+        filter { includeGroupAndSubgroups("org.spongepowered") }
+    }
+    maven {
+        name = 'BlameJared'
+        url = 'https://maven.blamejared.com'
+    }
+    maven {
+        url = 'https://www.cursemaven.com'
+        content {
+            includeGroup "curse.maven"
+        }
+    }
+    exclusiveContent {
+        forRepository {
+            maven {
+                name = "Modrinth"
+                url = "https://api.modrinth.com/maven"
+            }
+        }
+        filter {
+            includeGroup "maven.modrinth"
+        }
+    }
+    maven { url "https://maven.terraformersmc.com/releases" } // modmenu
+    maven { url 'https://maven.azuredoom.com/mods' }
+    maven {
+        name = 'Parchment'
+        url = 'https://maven.parchmentmc.org'
+    }
+    maven {
+        name = "avpReleases"
+        url = uri("https://maven.aliensvspredatormod.com/releases")
+    }
+    maven { url = "https://maven.architectury.dev/" }
+}
+
+dependencies {
+    implementation 'org.jetbrains:annotations:24.1.0'
+}
+
+['apiElements', 'runtimeElements'].each { variant ->
+    configurations."$variant".outgoing {
+        capability("$group:$mod_id-${project.name}-${minecraft_version}:$version")
+        capability("$group:$mod_id:$version")
+    }
+    publishing.publications.configureEach {
+        suppressPomMetadataWarningsFor(variant)
+    }
+}
+
+jar {
+    from(rootProject.file("LICENSE")) {
+        rename { "${it}_${mod_name}" }
+    }
+
+    manifest {
+        attributes([
+                'Specification-Title'   : mod_name,
+                'Specification-Vendor'  : mod_author,
+                'Specification-Version' : project.jar.archiveVersion,
+                'Implementation-Title'  : project.name,
+                'Implementation-Version': project.jar.archiveVersion,
+                'Implementation-Vendor' : mod_author,
+                'Built-On-Minecraft'    : minecraft_version
+        ])
+    }
+}
+
+processResources {
+    def expandProps = [
+            "version": version,
+            "group": project.group,
+            "minecraft_version": minecraft_version,
+            "minecraft_version_range": minecraft_version_range,
+            "fabric_version": fabric_version,
+            "fabric_loader_version": fabric_loader_version,
+            "mod_name": mod_name,
+            "mod_author": mod_author,
+            "mod_id": mod_id,
+            "mod_logo": mod_logo,
+            "mod_license": mod_license,
+            "mod_description": mod_description,
+            "mod_issues": mod_issues,
+            "mod_sources": mod_sources,
+            "mod_url": mod_url,
+            "loader_version_range": loader_version_range,
+            "neo_version": neo_version,
+            "neo_version_range": neo_version_range,
+            "mod_credits": mod_credits,
+            "java_version": java_version,
+            "azurelib_version": azurelib_version,
+            "blib_version": blib_version,
+            "avp_human_version": avp_human_version,
+            "avp_predator_version": avp_predator_version,
+            "gigeresque_version": gigeresque_version,
+            "blib_engine_version": blib_engine_version
+    ]
+
+    filesMatching(['pack.mcmeta', 'fabric.mod.json', 'META-INF/mods.toml', 'META-INF/neoforge.mods.toml', '*.mixins.json']) {
+        expand expandProps
+    }
+    inputs.properties(expandProps)
+}
+
+publishing {
+    repositories {
+        maven {
+            name = project.mod_id
+            url = "https://maven.aliensvspredatormod.com/releases"
+
+            credentials(PasswordCredentials) {
+                username = findProperty("avpMavenUsername")
+                password = findProperty("avpMavenPassword")
+            }
+
+            authentication {
+                basic(BasicAuthentication)
+            }
+        }
+    }
+    publications {
+        maven(MavenPublication) {
+            artifactId base.archivesName.get()
+            from components.java
+            pom.withXml {
+                asNode().dependencies.dependency.each { dep ->
+                    if (dep.groupId.text() == 'com.terraformersmc' && dep.artifactId.text() == 'modmenu') {
+                        dep.parent().remove(dep)
+                    }
+                }
+            }
+        }
+    }
+}
+
+tasks.withType(GenerateModuleMetadata).configureEach {
+    enabled = false
+}
+
+idea {
+    module {
+        downloadSources = true
+        downloadJavadoc = true
+    }
+}
+
+spotless {
+    java {
+        eclipse().configFile("$rootDir/eclipse-formatter.xml")
+        endWithNewline()
+        importOrder("", "java", group.toString(), "\\#")
+        leadingTabsToSpaces(4)
+        removeUnusedImports()
+        trimTrailingWhitespace()
+    }
+}
+
+tasks.build {
+    dependsOn("spotlessApply")
+}
+
+tasks.named('compileJava', JavaCompile) {
+    dependsOn("spotlessApply")
+}

@@ -1,13 +1,85 @@
 plugins {
-    id 'blib-multiloader-common'
+    id 'multiloader-common'
+    id 'net.neoforged.moddev' version "${neo_moddev}"
+    id 'com.diffplug.spotless'
+}
+
+neoForge {
+    neoFormVersion = "${neoform_version}"
+
+    accessTransformers = ["../common/src/main/resources/META-INF/accesstransformer.cfg"]
+
+    parchment {
+        minecraftVersion = "${parchment_minecraft}"
+        mappingsVersion = "${parchment_version}"
+    }
+
+    runs {
+        client {
+            client()
+        }
+        server {
+            server()
+        }
+    }
 }
 
 dependencies {
+    compileOnly group: 'org.spongepowered', name: 'mixin', version: '0.8.5'
+    compileOnly "mod.azure.azurelib:azurelib-common-${minecraft_version}:${azurelib_version}"
+    compileOnly group: 'io.github.llamalad7', name: 'mixinextras-common', version: '0.3.5'
+    annotationProcessor group: 'io.github.llamalad7', name: 'mixinextras-common', version: '0.3.5'
+    implementation("com.blib:blib-common-${minecraft_version}:${project.blib_version}") {
+        exclude group: 'org.slf4j', module: 'slf4j-api'
+    }
     compileOnly "com.blib.engine:blib_engine-common-1.21.1:${project.blib_engine_version}"
-
-    // Compatibility
-    compileOnly "com.avp.human:avp_human-common-1.21.1:${project.avp_human_version}"
-    compileOnly "com.avp.predator:avp_predator-common-1.21.1:${project.avp_predator_version}"
-
     compileOnly "maven.modrinth:gigeresque:${project.gigeresque_version}"
+    compileOnly("com.avp.human:avp_human-common-1.21.1:${project.avp_human_version}") {
+        exclude group: 'org.slf4j', module: 'slf4j-api'
+    }
+    compileOnly("com.avp.predator:avp_predator-common-1.21.1:${project.avp_predator_version}") {
+        exclude group: 'org.slf4j', module: 'slf4j-api'
+    }
+}
+
+configurations {
+    commonJava {
+        canBeResolved = false
+        canBeConsumed = true
+    }
+    commonResources {
+        canBeResolved = false
+        canBeConsumed = true
+    }
+}
+
+tasks.register('prepareGeneratedDir') {
+    doLast {
+        file('src/main/generated').mkdirs()
+    }
+}
+
+tasks.named('processResources') {
+    dependsOn 'prepareGeneratedDir'
+}
+
+sourceSets {
+    main {
+        resources {
+            srcDir 'src/main/generated'
+        }
+    }
+}
+
+tasks.register('packageCommonResources', Sync) {
+    from sourceSets.main.resources
+    into layout.buildDirectory.dir("commonResourcesOut")
+}
+
+artifacts {
+    commonJava sourceSets.main.java.sourceDirectories.singleFile
+
+    commonResources(tasks.named('packageCommonResources').get().outputs.files.singleFile) {
+        builtBy tasks.named('packageCommonResources')
+    }
 }
