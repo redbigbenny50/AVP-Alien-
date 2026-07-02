@@ -170,6 +170,7 @@ public class CocoonManager implements NBTSerializable {
             }
 
             if (newEntity instanceof Xenomorph newXenomorph) {
+                RoyalCandidateProgress.carryRoyalLineCandidate(xenomorph, newXenomorph);
                 newXenomorph.getCocoonManager().beginDestinationCocooning(destinationTimeInTicks);
                 // Record what she emerged from so the client can pick a source-specific emerge animation
                 // (queen: molt.prae vs molt.crusher). 'xenomorph' here is the source that is being replaced.
