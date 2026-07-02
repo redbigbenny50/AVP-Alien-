@@ -22,6 +22,7 @@ import com.alien.common.registry.init.AlienDecoratedPotPatterns;
 import com.alien.common.registry.init.AlienEntityTypes;
 import com.alien.common.registry.init.AlienFactionDataTypes;
 import com.alien.common.registry.init.AlienGameEvents;
+import com.alien.common.registry.init.AlienGameRules;
 import com.alien.common.registry.init.AlienMobEffects;
 import com.alien.common.registry.init.AlienParticleTypes;
 import com.alien.common.registry.init.AlienPotions;
@@ -105,6 +106,7 @@ public class Alien {
         AlienCreativeModeTabs.initialize();
 
         AlienGameEvents.initialize();
+        AlienGameRules.initialize();
         AlienMobEffects.initialize();
         AlienParticleTypes.initialize();
 
@@ -132,6 +134,7 @@ public class Alien {
         // Listeners/Events
         AlienReloadListeners.initialize();
         AlienAdvancementEvents.initialize();
+        com.alien.common.gameplay.hive.war.AlienTerritoryWarSystem.initialize();
 
         MOD.events().postLevelTick().register(Alien::tickHiveRegistry);
         MOD.events().postLevelTick().register(Alien::tickQueenSpawnCooldown);
@@ -173,6 +176,7 @@ public class Alien {
     private static void onAlienEntityLoaded(net.minecraft.world.entity.Entity entity) {
         if (entity instanceof com.alien.common.gameplay.entity.living.alien.Alien alien) {
             alien.getHiveManager().ensureVariantFactionMembership();
+            com.alien.common.gameplay.hive.migration.LegacyHiveRecovery.recoverLoadedAlien(entity);
         }
     }
 
@@ -181,6 +185,9 @@ public class Alien {
         // structure after BLib's faction store is definitely loaded. Idempotent — does nothing on a clean hive-only
         // world.
         com.alien.common.gameplay.hive.migration.OldHiveMigrator.run(server);
+        com.alien.common.gameplay.claim.LegacyPlayerClaimMigration.migrateToBLib(server);
+        HiveLocationRegistry.INSTANCE.rebuildFromFactions();
+        com.alien.common.gameplay.hive.migration.LegacyHiveRecovery.detectAndRecover(server);
         HiveLocationRegistry.INSTANCE.rebuildFromFactions();
         HiveLocationRegistry.INSTANCE.repairTerritoryClaims(server);
     }
@@ -198,7 +205,10 @@ public class Alien {
 
         if (server != null) {
             HiveLocationRegistry.INSTANCE.tick(server);
+            com.alien.common.gameplay.hive.bootstrap.RoyalBootstrapResolver.tick(server);
             com.alien.common.network.handler.HiveRenderToggleHandler.tick(server);
+            com.alien.common.network.handler.HiveStatsSidebarHandler.tick(server);
+            com.alien.common.gameplay.hive.migration.LegacyHiveRecovery.tickPlayerMessages(server);
         }
     }
 

@@ -25,6 +25,14 @@ public class Ovipositor extends Mob {
     }
 
     @Override
+    public void tick() {
+        super.tick();
+        if (!level().isClientSide && !hasValidRoyalVehicle()) {
+            discard();
+        }
+    }
+
+    @Override
     public boolean hurt(@NotNull DamageSource damageSource, float amount) {
         if (damageSource.is(AlienDamageTypesTags.DOES_NOT_HURT_ALIENS)) {
             return false;
@@ -39,6 +47,14 @@ public class Ovipositor extends Mob {
     @Override
     protected final boolean canRide(@NotNull Entity vehicle) {
         return super.canRide(vehicle) && vehicle.getType().is(AlienEntityTypeTags.QUEENS);
+    }
+
+    private boolean hasValidRoyalVehicle() {
+        var vehicle = getVehicle();
+        return vehicle != null
+            && vehicle.isAlive()
+            && !vehicle.isRemoved()
+            && vehicle.getType().is(AlienEntityTypeTags.QUEENS);
     }
 
     @Override

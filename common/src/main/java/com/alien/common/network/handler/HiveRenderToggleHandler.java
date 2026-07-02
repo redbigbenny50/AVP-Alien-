@@ -48,6 +48,7 @@ public final class HiveRenderToggleHandler {
             push(sp);
         } else {
             ENABLED_PLAYERS.remove(sp.getUUID());
+            clear(sp);
         }
     }
 
@@ -82,11 +83,16 @@ public final class HiveRenderToggleHandler {
             push(player);
         } else {
             ENABLED_PLAYERS.remove(player.getUUID());
+            clear(player);
         }
     }
 
     private static void push(ServerPlayer player) {
         var data = HiveRenderDataBuilder.build(player);
         Alien.MOD.networking().sendToClient(player, new S2CHiveRenderDataPayload(data));
+    }
+
+    private static void clear(ServerPlayer player) {
+        Alien.MOD.networking().sendToClient(player, new S2CHiveRenderDataPayload(HiveRenderDataBuilder.empty()));
     }
 }

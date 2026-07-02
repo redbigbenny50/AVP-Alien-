@@ -340,6 +340,7 @@ public final class HiveLocationRegistry {
             if (lineageData.factionId() == null) {
                 lineageData.setFactionId(factionId);
             }
+            com.alien.common.gameplay.hive.faction.FactionAesthetics.ensureClaimMapStyle(faction, lineageData.variant());
 
             // Backfill lineage path name + monotonic number.
             if (lineageData.lineageNumber() < 0) {
@@ -382,6 +383,7 @@ public final class HiveLocationRegistry {
             if (!expectedName.equals(variantFaction.name())) {
                 variantFaction.setName(expectedName);
             }
+            com.alien.common.gameplay.hive.faction.FactionAesthetics.ensureClaimMapStyle(variantFaction, variant);
         }
 
         // Self-heal: delete any LocationFactionData whose backing HiveLocation is missing. These orphans accumulate
@@ -486,6 +488,10 @@ public final class HiveLocationRegistry {
             com.alien.common.gameplay.hive.convoy.MigrationDispatch.scanAndDispatch(server);
             com.alien.common.gameplay.hive.convoy.RaidDispatch.scanAndDispatch(server);
             com.alien.common.gameplay.hive.empress.EmpressEmergenceTask.scanAndStart(server);
+        }
+
+        if (server.overworld().getGameTime() % Math.max(1L, config.contestTickWindow()) == 0L) {
+            com.alien.common.gameplay.hive.war.AlienTerritoryWarSystem.scanAndApply(server);
         }
 
         ticksSinceLastScan++;

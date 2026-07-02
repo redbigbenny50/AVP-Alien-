@@ -1,9 +1,11 @@
 package com.alien.common.gameplay.entity.living.alien;
 
 import com.alien.common.data.AlienVariantTypes;
+import com.alien.common.gameplay.entity.living.alien.xenomorph.RoyalCandidateProgress;
 import com.alien.common.gameplay.entity.living.alien.xenomorph.Xenomorph;
 import com.alien.common.gameplay.entity.living.alien.xenomorph.drone.Drone;
 import com.alien.common.gameplay.entity.living.alien.xenomorph.runner.Runner;
+import com.alien.common.gameplay.hive.bootstrap.RoyalBootstrapLeakRecorder;
 import com.alien.common.gameplay.hive.convoy.ConvoyId;
 import com.alien.common.gameplay.hive.convoy.ConvoyMemberTracker;
 import com.alien.common.gameplay.hive.convoy.ConvoyMembership;
@@ -460,6 +462,10 @@ public abstract class Alien extends Monster implements DataUser {
             }
         }
 
+        if (killedEntity && this instanceof Xenomorph xenomorph) {
+            RoyalCandidateProgress.onKilledEntity(xenomorph, level, entity);
+        }
+
         return killedEntity;
     }
 
@@ -737,6 +743,7 @@ public abstract class Alien extends Monster implements DataUser {
                 return;
             }
 
+            RoyalBootstrapLeakRecorder.recordIfEligible(this);
             onStrainLeak();
         }
     }

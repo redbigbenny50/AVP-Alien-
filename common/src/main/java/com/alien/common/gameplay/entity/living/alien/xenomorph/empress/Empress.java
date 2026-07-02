@@ -20,6 +20,7 @@ import net.minecraft.nbt.CompoundTag;
 import net.minecraft.sounds.SoundEvent;
 import net.minecraft.world.damagesource.DamageSource;
 import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.Entity.RemovalReason;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.ai.attributes.AttributeSupplier;
 import net.minecraft.world.entity.ai.attributes.Attributes;
@@ -168,6 +169,23 @@ public class Empress extends Xenomorph implements GOAPUser<Empress>, EggLayer {
 
     public EmpressData getEmpressData() {
         return empressData;
+    }
+
+    @Override
+    public boolean hurt(@NotNull DamageSource damageSource, float amount) {
+        var wasHurt = super.hurt(damageSource, amount);
+        if (wasHurt && !level().isClientSide) {
+            empressOvipositorManager.abandonOvipositor();
+        }
+        return wasHurt;
+    }
+
+    @Override
+    public void remove(@NotNull RemovalReason removalReason) {
+        if (!level().isClientSide) {
+            empressOvipositorManager.abandonOvipositor();
+        }
+        super.remove(removalReason);
     }
 
     @Override

@@ -30,7 +30,7 @@ public class Harbinger extends Xenomorph implements GOAPUser<Harbinger> {
 
     private static final int FRENZY_DURATION_TICKS = 20 * 30;
 
-    private static final double FRENZY_AURA_RADIUS_BLOCKS = 16.0;
+    private static final double FRENZY_AURA_RADIUS_BLOCKS = 32.0;
 
     public static final AttackType CLAW = AttackType.builder("harbinger_claw")
         .requiresAnyArm()

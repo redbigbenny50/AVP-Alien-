@@ -1,6 +1,9 @@
 {
   "model": "avp_alien:geo/entity/queen.geo.json",
   "bone": "gHead",
+  "hidden_bones": [
+    "gInhibitor"
+  ],
   "transforms": {
     "idle": {
       "thirdperson_righthand": {

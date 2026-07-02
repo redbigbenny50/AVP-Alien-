@@ -2,6 +2,8 @@ package com.alien.common.util;
 
 import com.alien.common.gameplay.entity.living.alien.Alien;
 import com.alien.common.model.alien.Host;
+import com.alien.common.registry.init.AlienEntityTypes;
+import com.alien.common.registry.init.AlienGameRules;
 import com.alien.common.registry.init.AlienSoundEvents;
 import com.alien.common.registry.key.AlienDamageTypeKeys;
 import com.alien.compatibility.avp_human.AVPHuman;
@@ -13,9 +15,12 @@ import net.minecraft.world.Difficulty;
 import net.minecraft.world.effect.MobEffectInstance;
 import net.minecraft.world.effect.MobEffects;
 import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.Mob;
 import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
@@ -95,31 +100,44 @@ public class AlienEmbryoUtil {
             return;
         }
 
-        var embryos = AlienEmbryoUtil.birthEmbryos(hostEntity);
+        var totemPlayer = hostEntity instanceof Player player
+            && hostEntity.level().getGameRules().getBoolean(AlienGameRules.AVP_ALIEN_TOTEMS_PREVENT_CHESTBURSTER_DEATH)
+            && findTotem(player) != null
+                ? player
+                : null;
+        var embryos = AlienEmbryoUtil.birthEmbryos(hostEntity, totemPlayer != null);
 
         embryos.forEach(embryo -> {});
 
         hostEntity.level().playSound(null, hostEntity, AlienSoundEvents.ENTITY_CHESTBURSTER_BURST.get(), SoundSource.HOSTILE, 0.25F, 1);
 
-        hostEntity.hurt(hostEntity.damageSources().source(AlienDamageTypeKeys.CHESTBURSTING), Float.MAX_VALUE);
+        if (totemPlayer == null) {
+            hostEntity.hurt(hostEntity.damageSources().source(AlienDamageTypeKeys.CHESTBURSTING), Float.MAX_VALUE);
+        } else {
+            consumeTotem(totemPlayer);
+        }
 
         // Remove the embryo no matter what.
         host.removeEmbryo();
     }
 
     public static List<Entity> birthEmbryos(LivingEntity parentEntity) {
+        return birthEmbryos(parentEntity, false);
+    }
+
+    private static List<Entity> birthEmbryos(LivingEntity parentEntity, boolean preferAberrantEmbryo) {
         if (AVPHuman.MOD.isLoaded()) {
             if (((Host) parentEntity).getOrCreateParasiteGeneContainer() instanceof GeneContainerProxy.Wrapper(var geneContainer)) {
                 return EmbryoUtil.birthEmbryos(
                     parentEntity,
                     geneContainer,
-                    AlienEmbryoUtil::alienEmbryoFactory,
+                    host -> AlienEmbryoUtil.alienEmbryoFactory(host, preferAberrantEmbryo),
                     1
                 );
             }
         }
 
-        var alienEmbryo = AlienEmbryoUtil.alienEmbryoFactory(parentEntity);
+        var alienEmbryo = AlienEmbryoUtil.alienEmbryoFactory(parentEntity, preferAberrantEmbryo);
 
         return alienEmbryo == null
             ? List.of()
@@ -127,6 +145,10 @@ public class AlienEmbryoUtil {
     }
 
     public static @Nullable Entity alienEmbryoFactory(@NotNull LivingEntity hostEntity) {
+        return alienEmbryoFactory(hostEntity, false);
+    }
+
+    private static @Nullable Entity alienEmbryoFactory(@NotNull LivingEntity hostEntity, boolean preferAberrantEmbryo) {
         var level = hostEntity.level();
         var host = (Host) hostEntity;
         var embryoTypeOption = host.getEmbryoType();
@@ -135,7 +157,7 @@ public class AlienEmbryoUtil {
             return null;
         }
 
-        var embryo = embryoTypeOption.unwrap().create(level);
+        var embryo = aberrantEquivalent(embryoTypeOption.unwrap(), preferAberrantEmbryo).create(level);
 
         if (embryo == null) {
             return null;
@@ -175,5 +197,45 @@ public class AlienEmbryoUtil {
         level.addFreshEntity(embryo);
 
         return embryo;
+    }
+
+    private static EntityType<?> aberrantEquivalent(EntityType<?> original, boolean preferAberrantEmbryo) {
+        if (!preferAberrantEmbryo) {
+            return original;
+        }
+        if (original == AlienEntityTypes.CHESTBURSTER.get()) {
+            return AlienEntityTypes.ABERRANT_CHESTBURSTER.get();
+        }
+        if (original == AlienEntityTypes.ROYAL_CHESTBURSTER.get()) {
+            return AlienEntityTypes.ROYAL_ABERRANT_CHESTBURSTER.get();
+        }
+        if (original == AlienEntityTypes.PREDALIEN_CHESTBURSTER.get()) {
+            return AlienEntityTypes.ABERRANT_PREDALIEN_CHESTBURSTER.get();
+        }
+        return original;
+    }
+
+    private static @Nullable ItemStack findTotem(Player player) {
+        if (player.getMainHandItem().is(Items.TOTEM_OF_UNDYING)) {
+            return player.getMainHandItem();
+        }
+        if (player.getOffhandItem().is(Items.TOTEM_OF_UNDYING)) {
+            return player.getOffhandItem();
+        }
+        return null;
+    }
+
+    private static void consumeTotem(Player player) {
+        var totem = findTotem(player);
+        if (totem != null) {
+            totem.shrink(1);
+        }
+
+        player.setHealth(1.0F);
+        player.removeAllEffects();
+        player.addEffect(new MobEffectInstance(MobEffects.REGENERATION, 900, 1));
+        player.addEffect(new MobEffectInstance(MobEffects.ABSORPTION, 100, 1));
+        player.addEffect(new MobEffectInstance(MobEffects.FIRE_RESISTANCE, 800, 0));
+        player.level().broadcastEntityEvent(player, (byte) 35);
     }
 }

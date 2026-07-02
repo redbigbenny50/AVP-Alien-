@@ -13,7 +13,9 @@
     "MixinMob_IncapacitateHost",
     "MixinPersistentEntitySectionManager_ConvoyUnload",
     "MixinProjectileUtil_AllowHittingVehicle",
-    "MixinVillagerHostilesSensor_RunAwayFromAVPMonsters"
+    "MixinVillagerHostilesSensor_RunAwayFromAVPMonsters",
+    "MixinGameRulesAccessor",
+    "MixinGameRulesBooleanValueAccessor"
   ],
   "client": [
     "client.MixinLocalPlayer_NoBlockingMovementPenalty",

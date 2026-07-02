@@ -77,6 +77,20 @@ public final class ConvoyCodec {
 
     private static final String NBT_WAVE_BREAK_STARTED_TICK = "WaveBreakStartedTick";
 
+    private static final String NBT_FRENZIED_JOIN_COUNT = "FrenziedJoinCount";
+
+    private static final String NBT_TARGET_DEATH_COUNT = "TargetDeathCount";
+
+    private static final String NBT_DEATH_WINDOW_STARTED_TICK = "DeathWindowStartedTick";
+
+    private static final String NBT_LAST_TARGET_DEATH_TICK = "LastTargetDeathTick";
+
+    private static final String NBT_TARGET_DOWN_SINCE_TICK = "TargetDownSinceTick";
+
+    private static final String NBT_LOSS_CONFIRMED_TICK = "LossConfirmedTick";
+
+    private static final String NBT_TARGET_WAS_ALIVE = "TargetWasAlive";
+
     private static final String NBT_RETURNING_HOME = "ReturningHome";
 
     private static final String NBT_RETURN_HOME_REASON = "ReturnHomeReason";
@@ -147,6 +161,13 @@ public final class ConvoyCodec {
             tag.putInt(NBT_ACTIVE_WAVE_INDEX, raid.activeWaveIndex());
             tag.putInt(NBT_ACTIVE_WAVE_INITIAL_COUNT, raid.activeWaveInitialCount());
             tag.putLong(NBT_WAVE_BREAK_STARTED_TICK, raid.waveBreakStartedTick());
+            tag.putInt(NBT_FRENZIED_JOIN_COUNT, raid.frenziedJoinCount());
+            tag.putInt(NBT_TARGET_DEATH_COUNT, raid.targetDeathCount());
+            tag.putLong(NBT_DEATH_WINDOW_STARTED_TICK, raid.deathWindowStartedTick());
+            tag.putLong(NBT_LAST_TARGET_DEATH_TICK, raid.lastTargetDeathTick());
+            tag.putLong(NBT_TARGET_DOWN_SINCE_TICK, raid.targetDownSinceTick());
+            tag.putLong(NBT_LOSS_CONFIRMED_TICK, raid.lossConfirmedTick());
+            tag.putBoolean(NBT_TARGET_WAS_ALIVE, raid.targetWasAlive());
             tag.putBoolean(NBT_RETURNING_HOME, raid.returningHome());
             tag.putString(NBT_RETURN_HOME_REASON, raid.returnHomeReason().serializedName());
             if (raid.returnLocationId() != null) {
@@ -220,6 +241,13 @@ public final class ConvoyCodec {
                 tag.contains(NBT_ACTIVE_WAVE_INDEX) ? tag.getInt(NBT_ACTIVE_WAVE_INDEX) : -1,
                 tag.getInt(NBT_ACTIVE_WAVE_INITIAL_COUNT),
                 tag.contains(NBT_WAVE_BREAK_STARTED_TICK) ? tag.getLong(NBT_WAVE_BREAK_STARTED_TICK) : -1L,
+                tag.contains(NBT_FRENZIED_JOIN_COUNT) ? tag.getInt(NBT_FRENZIED_JOIN_COUNT) : 0,
+                tag.contains(NBT_TARGET_DEATH_COUNT) ? tag.getInt(NBT_TARGET_DEATH_COUNT) : 0,
+                tag.contains(NBT_DEATH_WINDOW_STARTED_TICK) ? tag.getLong(NBT_DEATH_WINDOW_STARTED_TICK) : -1L,
+                tag.contains(NBT_LAST_TARGET_DEATH_TICK) ? tag.getLong(NBT_LAST_TARGET_DEATH_TICK) : -1L,
+                tag.contains(NBT_TARGET_DOWN_SINCE_TICK) ? tag.getLong(NBT_TARGET_DOWN_SINCE_TICK) : -1L,
+                tag.contains(NBT_LOSS_CONFIRMED_TICK) ? tag.getLong(NBT_LOSS_CONFIRMED_TICK) : -1L,
+                tag.getBoolean(NBT_TARGET_WAS_ALIVE),
                 tag.getBoolean(NBT_RETURNING_HOME),
                 decodeReturnHomeReason(tag),
                 tag.contains(NBT_RETURN_LOCATION_ID)

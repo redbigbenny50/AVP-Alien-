@@ -17,6 +17,7 @@ import net.minecraft.world.phys.Vec3;
 import org.jetbrains.annotations.Nullable;
 
 import java.time.Duration;
+import java.util.List;
 
 public class EmpressOvipositorManager implements NBTSerializable {
 
@@ -88,6 +89,28 @@ public class EmpressOvipositorManager implements NBTSerializable {
 
     public boolean hasOvipositor() {
         return getOvipositorOrNull() != null;
+    }
+
+    public void abandonOvipositor() {
+        getOvipositor().ifSome(ovipositor -> {
+            ovipositor.stopRiding();
+            ovipositor.discard();
+        });
+        for (var passenger : List.copyOf(empress.getPassengers())) {
+            if (passenger.getType() == AlienEntityTypes.OVIPOSITOR.get()) {
+                passenger.stopRiding();
+                passenger.discard();
+            }
+        }
+        if (!empress.level().isClientSide) {
+            var area = empress.getBoundingBox().inflate(8.0D);
+            for (var ovipositor : empress.level().getEntitiesOfClass(Ovipositor.class, area)) {
+                if (ovipositor.getVehicle() == empress || ovipositor.distanceToSqr(empress) <= 16.0D) {
+                    ovipositor.stopRiding();
+                    ovipositor.discard();
+                }
+            }
+        }
     }
 
     private void createOvipositor() {

@@ -428,6 +428,20 @@ public sealed interface Convoy {
 
         private long waveBreakStartedTick;
 
+        private int frenziedJoinCount;
+
+        private int targetDeathCount;
+
+        private long deathWindowStartedTick;
+
+        private long lastTargetDeathTick;
+
+        private long targetDownSinceTick;
+
+        private long lossConfirmedTick;
+
+        private boolean targetWasAlive;
+
         private boolean returningHome;
 
         private ReturnHomeReason returnHomeReason;
@@ -607,6 +621,120 @@ public sealed interface Convoy {
             long dispatchedTick,
             long expiresAtTick
         ) {
+            this(
+                id,
+                lineageFactionId,
+                dimension,
+                sourceLocationId,
+                targetPlayerId,
+                currentPos,
+                lastKnownTargetPos,
+                composition,
+                materializedMembers,
+                warningIssued,
+                nextWaveIndex,
+                activeWaveIndex,
+                activeWaveInitialCount,
+                waveBreakStartedTick,
+                0,
+                0,
+                -1L,
+                -1L,
+                -1L,
+                -1L,
+                false,
+                returningHome,
+                returnHomeReason,
+                returnLocationId,
+                returnPos,
+                dispatchedTick,
+                expiresAtTick
+            );
+        }
+
+        public Raid(
+            ConvoyId id,
+            ResourceLocation lineageFactionId,
+            ResourceKey<Level> dimension,
+            HiveLocationId sourceLocationId,
+            UUID targetPlayerId,
+            Vec3 currentPos,
+            BlockPos lastKnownTargetPos,
+            EntityReserves composition,
+            Map<UUID, EntityType<?>> materializedMembers,
+            boolean warningIssued,
+            int nextWaveIndex,
+            int activeWaveIndex,
+            int activeWaveInitialCount,
+            long waveBreakStartedTick,
+            int frenziedJoinCount,
+            boolean returningHome,
+            ReturnHomeReason returnHomeReason,
+            @Nullable HiveLocationId returnLocationId,
+            @Nullable BlockPos returnPos,
+            long dispatchedTick,
+            long expiresAtTick
+        ) {
+            this(
+                id,
+                lineageFactionId,
+                dimension,
+                sourceLocationId,
+                targetPlayerId,
+                currentPos,
+                lastKnownTargetPos,
+                composition,
+                materializedMembers,
+                warningIssued,
+                nextWaveIndex,
+                activeWaveIndex,
+                activeWaveInitialCount,
+                waveBreakStartedTick,
+                frenziedJoinCount,
+                0,
+                -1L,
+                -1L,
+                -1L,
+                -1L,
+                false,
+                returningHome,
+                returnHomeReason,
+                returnLocationId,
+                returnPos,
+                dispatchedTick,
+                expiresAtTick
+            );
+        }
+
+        public Raid(
+            ConvoyId id,
+            ResourceLocation lineageFactionId,
+            ResourceKey<Level> dimension,
+            HiveLocationId sourceLocationId,
+            UUID targetPlayerId,
+            Vec3 currentPos,
+            BlockPos lastKnownTargetPos,
+            EntityReserves composition,
+            Map<UUID, EntityType<?>> materializedMembers,
+            boolean warningIssued,
+            int nextWaveIndex,
+            int activeWaveIndex,
+            int activeWaveInitialCount,
+            long waveBreakStartedTick,
+            int frenziedJoinCount,
+            int targetDeathCount,
+            long deathWindowStartedTick,
+            long lastTargetDeathTick,
+            long targetDownSinceTick,
+            long lossConfirmedTick,
+            boolean targetWasAlive,
+            boolean returningHome,
+            ReturnHomeReason returnHomeReason,
+            @Nullable HiveLocationId returnLocationId,
+            @Nullable BlockPos returnPos,
+            long dispatchedTick,
+            long expiresAtTick
+        ) {
             this.id = id;
             this.lineageFactionId = lineageFactionId;
             this.dimension = dimension;
@@ -621,6 +749,13 @@ public sealed interface Convoy {
             this.activeWaveIndex = activeWaveIndex;
             this.activeWaveInitialCount = Math.max(0, activeWaveInitialCount);
             this.waveBreakStartedTick = waveBreakStartedTick;
+            this.frenziedJoinCount = Math.max(0, frenziedJoinCount);
+            this.targetDeathCount = Math.max(0, targetDeathCount);
+            this.deathWindowStartedTick = deathWindowStartedTick;
+            this.lastTargetDeathTick = lastTargetDeathTick;
+            this.targetDownSinceTick = targetDownSinceTick;
+            this.lossConfirmedTick = lossConfirmedTick;
+            this.targetWasAlive = targetWasAlive;
             this.returningHome = returningHome;
             this.returnHomeReason = returningHome ? normalizeReturnHomeReason(returnHomeReason) : ReturnHomeReason.NONE;
             this.returnLocationId = returnLocationId;
@@ -736,6 +871,75 @@ public sealed interface Convoy {
             return waveBreakStartedTick;
         }
 
+        public int frenziedJoinCount() {
+            return frenziedJoinCount;
+        }
+
+        public void incrementFrenziedJoinCount() {
+            frenziedJoinCount++;
+        }
+
+        public int targetDeathCount() {
+            return targetDeathCount;
+        }
+
+        public long deathWindowStartedTick() {
+            return deathWindowStartedTick;
+        }
+
+        public long lastTargetDeathTick() {
+            return lastTargetDeathTick;
+        }
+
+        public long targetDownSinceTick() {
+            return targetDownSinceTick;
+        }
+
+        public long lossConfirmedTick() {
+            return lossConfirmedTick;
+        }
+
+        public boolean targetWasAlive() {
+            return targetWasAlive;
+        }
+
+        public boolean lossConfirmed() {
+            return lossConfirmedTick >= 0L;
+        }
+
+        public void noteTargetAlive() {
+            targetWasAlive = true;
+            targetDownSinceTick = -1L;
+        }
+
+        public void noteTargetDown(long currentTick) {
+            if (targetDownSinceTick < 0L) {
+                targetDownSinceTick = currentTick;
+            }
+        }
+
+        public void recordTargetDeath(long currentTick, long deathWindowTicks) {
+            if (deathWindowStartedTick < 0L || currentTick - deathWindowStartedTick > deathWindowTicks) {
+                deathWindowStartedTick = currentTick;
+                targetDeathCount = 0;
+            }
+
+            targetDeathCount++;
+            lastTargetDeathTick = currentTick;
+            targetDownSinceTick = currentTick;
+            targetWasAlive = false;
+        }
+
+        public void setTargetWasAlive(boolean targetWasAlive) {
+            this.targetWasAlive = targetWasAlive;
+        }
+
+        public void confirmLoss(long currentTick) {
+            if (lossConfirmedTick < 0L) {
+                lossConfirmedTick = currentTick;
+            }
+        }
+
         public void beginWave(int waveIndex, int spawnedCount) {
             this.activeWaveIndex = Math.clamp(waveIndex, 0, WAVE_COUNT - 1);
             this.activeWaveInitialCount = Math.max(1, spawnedCount);
@@ -821,6 +1025,8 @@ public sealed interface Convoy {
             this.returnHomeReason = ReturnHomeReason.NONE;
             this.returnLocationId = null;
             this.returnPos = null;
+            this.lossConfirmedTick = -1L;
+            this.targetDownSinceTick = -1L;
         }
 
         public void rewindActiveWave() {
