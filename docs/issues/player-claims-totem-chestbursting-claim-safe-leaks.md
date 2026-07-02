@@ -2,27 +2,29 @@
 
 ## Summary
 
-Add always-on player chunk claiming to AVP Alien, add an off-by-default gamerule that lets Totems of Undying prevent player chestbursting death while still spawning an aberrant chestburster, and preserve the planned first-hive bootstrap leak system while making player-claimed chunks safe from leak/despawn triggers.
+Add always-on shared BLib player chunk claiming, add an off-by-default gamerule that lets Totems of Undying prevent player chestbursting death while still spawning an aberrant chestburster, and preserve the planned first-hive bootstrap leak system while making player-claimed chunks safe from leak/despawn triggers.
 
 ## Key Changes
 
 ### Player Claims
 
-- Add persistent per-dimension chunk ownership for player claims.
-- Add persistent per-player purchased extra claim slots.
+- Add persistent BLib-owned per-dimension chunk ownership for player claims.
+- Add persistent BLib-owned per-player purchased extra claim slots.
 - Register player claims into BLib territory with stable player claim ids.
 - Keep claims "BLib only" for hive behavior: do not directly block hive AI, expansion, queen spawning, or existing hive territory logic.
 
 ### Claim Commands
 
-Add `/avp_alien claim` commands:
+Add shared BLib `/claim` commands:
 
-- `/avp_alien claim chunk`
+- `/claim chunk`
   - Claims the player's current chunk if unclaimed and within their cap.
-- `/avp_alien claim buy`
+- `/claim buy`
   - Consumes diamonds and adds one extra claim slot.
-- `/avp_alien claim info`
+- `/claim info`
   - Shows claimed count, max slots, next buy cost, and current chunk status.
+- `/claim unclaim`
+  - Releases the player's current chunk if they own it.
 
 Claim economy:
 
@@ -77,7 +79,7 @@ Note: BLib's current Xaero highlighter remains color-only until a deeper texture
 
 - Run `./gradlew build`.
 - Verify a player can claim 9 chunks and must buy more slots for a 10th.
-- Verify `/avp_alien claim buy` costs 9, then 18, then 27 diamonds.
+- Verify `/claim buy` costs 9, then 18, then 27 diamonds.
 - Verify claims and purchased slots survive world reload.
 - Verify another player cannot claim an already claimed chunk.
 - Verify chestbursting behaves normally when `avpAlienTotemsPreventChestbursterDeath` is false.
