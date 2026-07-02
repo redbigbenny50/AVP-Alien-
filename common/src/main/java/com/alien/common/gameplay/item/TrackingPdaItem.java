@@ -22,11 +22,12 @@ public class TrackingPdaItem extends Item {
 
     @Override
     public @NotNull InteractionResultHolder<ItemStack> use(
-            @NotNull Level level,
-            @NotNull Player player,
-            @NotNull InteractionHand hand
+        @NotNull Level level,
+        @NotNull Player player,
+        @NotNull InteractionHand hand
     ) {
         if (level.isClientSide) {
+            com.alien.client.gui.ClientTrackerAlerts.requestOpen();
             Alien.MOD.networking().sendToServer(C2SRequestTrackedQueensPayload.INSTANCE);
         }
 

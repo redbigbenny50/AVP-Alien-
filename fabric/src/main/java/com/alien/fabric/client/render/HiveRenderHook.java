@@ -1,6 +1,7 @@
 package com.alien.fabric.client.render;
 
 import com.alien.client.render.hive.HiveRenderer;
+import com.alien.client.render.waypoint.WaypointBeamRenderer;
 import net.fabricmc.fabric.api.client.rendering.v1.WorldRenderEvents;
 import net.minecraft.client.renderer.MultiBufferSource;
 
@@ -20,6 +21,11 @@ public final class HiveRenderHook {
                 return;
             }
             HiveRenderer.render(
+                context.matrixStack(),
+                buffers,
+                context.camera().getPosition()
+            );
+            WaypointBeamRenderer.render(
                 context.matrixStack(),
                 buffers,
                 context.camera().getPosition()

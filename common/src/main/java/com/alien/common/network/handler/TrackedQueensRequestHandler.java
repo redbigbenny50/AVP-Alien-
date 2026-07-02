@@ -25,14 +25,34 @@ public final class TrackedQueensRequestHandler {
         }
 
         var rows = new ArrayList<TrackedQueenRow>();
+        var lost = new ArrayList<TrackedQueenRow.Lost>();
 
         TrackedQueenRegistry.getOrCreate(sp.server).ifSome(registry -> {
             for (var entry : registry.entries().entrySet()) {
+                var id = entry.getKey();
                 var e = entry.getValue();
-                rows.add(new TrackedQueenRow(entry.getKey(), e.name(), e.dimension(), e.pos(), e.lastSeenGameTime()));
+                var pos = e.pos();
+                var dim = e.dimension();
+                // Use the queen's live position/dimension if she is loaded, so the PDA can update in real time; fall
+                // back to her last-seen registry snapshot when she is unloaded (and therefore not moving).
+                for (var lvl : sp.server.getAllLevels()) {
+                    var ent = lvl.getEntity(id);
+                    if (ent != null) {
+                        pos = ent.blockPosition();
+                        dim = lvl.dimension();
+                        break;
+                    }
+                }
+                rows.add(new TrackedQueenRow(id, e.name(), dim, pos, e.lastSeenGameTime()));
+            }
+            for (var entry : registry.lost().entrySet()) {
+                var l = entry.getValue();
+                lost.add(new TrackedQueenRow.Lost(entry.getKey(), l.name(), l.dimension(), l.pos(), l.reason(), l.lostGameTime()));
             }
         });
 
-        Alien.MOD.networking().sendToClient(sp, new S2CTrackedQueensPayload(TrackedQueenRow.packList(rows)));
+        var data = TrackedQueenRow.packList(rows);
+        TrackedQueenRow.packLostInto(data, lost);
+        Alien.MOD.networking().sendToClient(sp, new S2CTrackedQueensPayload(data));
     }
 }

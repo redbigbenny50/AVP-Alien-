@@ -54,6 +54,7 @@ public class EnUsItemProvider {
         addItem(builder, AlienItems.CAPTURE_CHAIN, "Capture Chain");
         addItem(builder, AlienItems.INHIBITOR, "Inhibitor");
         addItem(builder, AlienItems.TRACKER, "Tracker");
+        addItem(builder, AlienItems.TRACKING_PDA, "Tracking PDA");
         addItem(builder, AlienItems.ALIEN_MUSIC_DISC_1_FRAGMENT, "Disc Fragment");
         builder.add(AlienItems.ALIEN_MUSIC_DISC_1_FRAGMENT.get().getDescriptionId() + ".desc", "Music Disc - Silver Smile");
         addItem(builder, AlienItems.CHITIN, "Chitin");
@@ -180,9 +181,9 @@ public class EnUsItemProvider {
     };
 
     private static void addItem(
-            FabricLanguageProvider.TranslationBuilder translationBuilder,
-            Supplier<? extends Item> itemSupplier,
-            String value
+        FabricLanguageProvider.TranslationBuilder translationBuilder,
+        Supplier<? extends Item> itemSupplier,
+        String value
     ) {
         addItem(translationBuilder, itemSupplier.get(), value);
     }

@@ -31,7 +31,7 @@ public class QueenAnimator extends AzEntityAnimator<Queen> {
     private int previousAttackId = Integer.MIN_VALUE;
 
     private final CocoonAnimationStateTracker<Queen> cocoonAnimationStateTracker =
-            new CocoonAnimationStateTracker<>(QueenAnimator::selectLoopAnimation, QueenAnimator::selectEmergeAnimation);
+        new CocoonAnimationStateTracker<>(QueenAnimator::selectLoopAnimation, QueenAnimator::selectEmergeAnimation);
 
     public QueenAnimator() {
         super(AzAnimatorConfig.defaultConfig());
@@ -40,9 +40,9 @@ public class QueenAnimator extends AzEntityAnimator<Queen> {
     @Override
     public void registerTracks(AzAnimationTrackContainer<Queen> animationTrackContainer) {
         animationTrackContainer.add(
-                AzAnimationTrack.builder(this, AzAlienAnimationUtil.BODY)
-                        .setTransitionLength(5)
-                        .build()
+            AzAnimationTrack.builder(this, AzAlienAnimationUtil.BODY)
+                .setTransitionLength(5)
+                .build()
         );
     }
 
@@ -106,21 +106,22 @@ public class QueenAnimator extends AzEntityAnimator<Queen> {
     /** Source-specific in-cocoon loop: from a crusher she plays molting.crusher, otherwise molting.prae. */
     private static String selectLoopAnimation(Queen queen) {
         return queen.cocoonSourceForm.get() == CocoonSourceForm.CRUSHER
-                ? QueenAnimationRefs.MOLTING_CRUSHER_ANIMATION_NAME
-                : QueenAnimationRefs.MOLTING_PRAE_ANIMATION_NAME;
+            ? QueenAnimationRefs.MOLTING_CRUSHER_ANIMATION_NAME
+            : QueenAnimationRefs.MOLTING_PRAE_ANIMATION_NAME;
     }
 
     /** Source-specific emerge burst: from a crusher she plays emerge.crusher, otherwise emerge.prae. */
     private static String selectEmergeAnimation(Queen queen) {
         return queen.cocoonSourceForm.get() == CocoonSourceForm.CRUSHER
-                ? QueenAnimationRefs.EMERGE_CRUSHER_ANIMATION_NAME
-                : QueenAnimationRefs.EMERGE_PRAE_ANIMATION_NAME;
+            ? QueenAnimationRefs.EMERGE_CRUSHER_ANIMATION_NAME
+            : QueenAnimationRefs.EMERGE_PRAE_ANIMATION_NAME;
     }
 
     private void runPassiveAnimations(Queen queen) {
         var dispatcher = queen.getAnimationDispatcher();
 
-        // Front-end Stage 3: while hibernating she holds the curled sleep pose, overriding idle/walk/run. Driven off the
+        // Front-end Stage 3: while hibernating she holds the curled sleep pose, overriding idle/walk/run. Driven off
+        // the
         // synced flag because the lifecycle phase is server-only state — animation dispatch must happen client-side.
         if (queen.isHibernating.get()) {
             dispatcher.hibernate();
@@ -189,24 +190,24 @@ public class QueenAnimator extends AzEntityAnimator<Queen> {
     private String selectAttackAnimation(Queen queen, AttackType attackType, int attackId) {
         if (attackType == Queen.SWIPE_DOWN) {
             return chooseArmAnimation(
-                    queen,
-                    attackId,
-                    QueenAnimationRefs.LEFT_SWIPE_DOWN_ANIMATION_NAME,
-                    QueenAnimationRefs.RIGHT_SWIPE_DOWN_ANIMATION_NAME
+                queen,
+                attackId,
+                QueenAnimationRefs.LEFT_SWIPE_DOWN_ANIMATION_NAME,
+                QueenAnimationRefs.RIGHT_SWIPE_DOWN_ANIMATION_NAME
             );
         } else if (attackType == Queen.BACKHAND) {
             return chooseArmAnimation(
-                    queen,
-                    attackId,
-                    QueenAnimationRefs.LEFT_BACKHAND_ANIMATION_NAME,
-                    QueenAnimationRefs.RIGHT_BACKHAND_ANIMATION_NAME
+                queen,
+                attackId,
+                QueenAnimationRefs.LEFT_BACKHAND_ANIMATION_NAME,
+                QueenAnimationRefs.RIGHT_BACKHAND_ANIMATION_NAME
             );
         } else if (attackType == Queen.TAIL_STRIKE) {
             return chooseTailAnimation(
-                    queen,
-                    attackId,
-                    QueenAnimationRefs.LEFT_TAIL_STRIKE_ANIMATION_NAME,
-                    QueenAnimationRefs.RIGHT_TAIL_STRIKE_ANIMATION_NAME
+                queen,
+                attackId,
+                QueenAnimationRefs.LEFT_TAIL_STRIKE_ANIMATION_NAME,
+                QueenAnimationRefs.RIGHT_TAIL_STRIKE_ANIMATION_NAME
             );
         }
 

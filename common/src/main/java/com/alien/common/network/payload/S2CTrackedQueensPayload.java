@@ -22,9 +22,9 @@ public record S2CTrackedQueensPayload(CompoundTag data) implements CustomPacketP
     public static final Type<S2CTrackedQueensPayload> TYPE = new Type<>(PAYLOAD_ID);
 
     public static final StreamCodec<S2CTrackedQueensPayload> CODEC = RecordStreamCodec.of(
-            CompoundTagStreamCodec.INSTANCE,
-            S2CTrackedQueensPayload::data,
-            S2CTrackedQueensPayload::new
+        CompoundTagStreamCodec.INSTANCE,
+        S2CTrackedQueensPayload::data,
+        S2CTrackedQueensPayload::new
     );
 
     @Override

@@ -3,6 +3,7 @@ package com.alien.common.gameplay.hive.faction;
 import com.alien.Alien;
 import com.alien.common.gameplay.hive.growth.ContestResolutionTask;
 import com.alien.common.gameplay.hive.id.LineageIds;
+import com.alien.common.gameplay.hive.lifecycle.FirewallStabilityTask;
 import com.alien.common.gameplay.hive.lifecycle.QueenlessMaturationTask;
 import com.blib.api.common.faction.v1.FactionMember;
 import net.minecraft.server.MinecraftServer;
@@ -45,6 +46,11 @@ public final class LineageInvariantTask {
         // growth stages over time.
         QueenlessMaturationTask.scanAll(server);
 
+        // 2b. Firewall fund tracking — for locations whose queen-replacement fund is currently spent, accrues
+        // stability progress toward refill (or pauses under sustained pressure). Runs after maturation so a queen
+        // crowned this same scan starts its fund-spent tracking fresh next cycle rather than double-counting.
+        FirewallStabilityTask.scanAll(server);
+
         // 3. Contested chunk resolution.
         ContestResolutionTask.scanAll(server);
     }
@@ -63,8 +69,8 @@ public final class LineageInvariantTask {
     }
 
     private static void scanLineage(
-        com.blib.api.common.faction.v1.FactionMembership membership,
-        LineageFactionData lineage
+            com.blib.api.common.faction.v1.FactionMembership membership,
+            LineageFactionData lineage
     ) {
         var lineageVariant = lineage.variant();
         var mismatchedUuids = new HashSet<UUID>();
@@ -83,9 +89,9 @@ public final class LineageInvariantTask {
         if (removedReserveEntries > 0) {
             lineage.markDirty();
             Alien.LOGGER.info(
-                "Hive: LineageInvariantTask removed {} variant-mismatched reserve entries from lineage variant={}",
-                removedReserveEntries,
-                lineageVariant
+                    "Hive: LineageInvariantTask removed {} variant-mismatched reserve entries from lineage variant={}",
+                    removedReserveEntries,
+                    lineageVariant
             );
         }
 
@@ -97,9 +103,9 @@ public final class LineageInvariantTask {
     }
 
     private static void evictAll(
-        com.blib.api.common.faction.v1.FactionMembership membership,
-        Set<UUID> uuids,
-        LineageFactionData lineage
+            com.blib.api.common.faction.v1.FactionMembership membership,
+            Set<UUID> uuids,
+            LineageFactionData lineage
     ) {
         // Snapshot to avoid concurrent-modification when removeMember fires onMemberRemoved which mutates
         // location loadedMembersByType.
@@ -109,9 +115,9 @@ public final class LineageInvariantTask {
         }
 
         Alien.LOGGER.info(
-            "Hive: LineageInvariantTask evicted {} variant-mismatched member(s) from lineage variant={}",
-            snapshot.size(),
-            lineage.variant()
+                "Hive: LineageInvariantTask evicted {} variant-mismatched member(s) from lineage variant={}",
+                snapshot.size(),
+                lineage.variant()
         );
     }
 }

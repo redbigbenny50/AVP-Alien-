@@ -15,19 +15,19 @@ public class AlienCommands {
 
     public static void initialize() {
         REGISTRY.register(
-                LiteralArgumentBuilder.<CommandSourceStack>literal(Alien.MOD.id())
-                        .then(
-                                Commands.literal("debug")
-                                        .requires(
-                                                commandSourceStack -> commandSourceStack.hasPermission(Commands.LEVEL_GAMEMASTERS)
-                                        )
-                                        .then(CountCommand.create())
-                                        .then(
-                                                Commands.literal("hive")
-                                                        .then(NearestHiveCommand.create())
-                                        )
-                                        .then(HiveDebugCommands.create())
+            LiteralArgumentBuilder.<CommandSourceStack>literal(Alien.MOD.id())
+                .then(
+                    Commands.literal("debug")
+                        .requires(
+                            commandSourceStack -> commandSourceStack.hasPermission(Commands.LEVEL_GAMEMASTERS)
                         )
+                        .then(CountCommand.create())
+                        .then(
+                            Commands.literal("hive")
+                                .then(NearestHiveCommand.create())
+                        )
+                        .then(HiveDebugCommands.create())
+                )
         );
     }
 }

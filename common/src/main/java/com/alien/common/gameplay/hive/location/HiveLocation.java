@@ -96,6 +96,14 @@ public final class HiveLocation {
 
     private static final String NBT_QUEENLESS_LEADER_SNAPSHOT = "QueenlessLeaderSnapshot";
 
+    private static final String NBT_FIREWALL_FUND_AVAILABLE = "FirewallFundAvailable";
+
+    private static final String NBT_FIREWALL_STABLE_ACCRUED_TICKS = "FirewallStableAccruedTicks";
+
+    private static final String NBT_FIREWALL_BIOMASS_SAMPLE_TICK = "FirewallBiomassSampleTick";
+
+    private static final String NBT_FIREWALL_BIOMASS_SAMPLE_VALUE = "FirewallBiomassSampleValue";
+
     private static final String NBT_BIOMASS = "Biomass";
 
     private static final String NBT_ROYAL_JELLY = "RoyalJelly";
@@ -166,6 +174,33 @@ public final class HiveLocation {
      * inside the territory. Persisted across restarts.
      */
     private long noContactTicksAccrued;
+
+    /**
+     * Whether the royal-replacement "firewall" fund is currently available to cover a queen crowning in
+     * {@link com.alien.common.gameplay.hive.lifecycle.QueenlessMaturationTask}. Starts {@code true} (a fresh location
+     * always covers its first queen loss). Flips to {@code false} the moment a queen is successfully crowned through
+     * that pathway, and back to {@code true} once {@link #firewallStableAccruedTicks} reaches
+     * {@code config.firewallCooldownTicks()}. While {@code false}, the final molt into a queen is denied — the
+     * location stays queenless (and, if attrition continues, eventually dies via the existing
+     * {@link com.alien.common.gameplay.hive.lifecycle.LocationDormancyTask} population/no-contact rules — no separate
+     * "permanently dead" mechanic is needed).
+     */
+    private boolean firewallFundAvailable;
+
+    /**
+     * Ticks accrued while this location meets all four stability conditions (has an active ovipositor, jelly reserves
+     * above {@code config.firewallJellyFloor()}, a positive biomass income rate, and population room to grow) since
+     * the fund was last spent. Reaching {@code config.firewallCooldownTicks()} refills the fund. Pauses (holds
+     * progress, does not reset) whenever any condition is unmet — sustained pressure denies refill without erasing
+     * prior progress the moment stability briefly returns.
+     */
+    private long firewallStableAccruedTicks;
+
+    /** Game tick of the last biomass sample taken for the firewall's income-rate check. {@code Long.MIN_VALUE} = none yet. */
+    private long firewallBiomassSampleTick;
+
+    /** Biomass balance at {@link #firewallBiomassSampleTick}, used to derive the income rate on the next sample. */
+    private int firewallBiomassSampleValue;
 
     private long combatRespiteRemainingTicks;
 
@@ -243,11 +278,11 @@ public final class HiveLocation {
     private @Nullable HiveLocationRemovalReason removalReason;
 
     public HiveLocation(
-        HiveLocationId id,
-        ResourceLocation lineageFactionId,
-        ResourceKey<Level> dimension,
-        BlockPos centerPos,
-        @Nullable UUID founderId
+            HiveLocationId id,
+            ResourceLocation lineageFactionId,
+            ResourceKey<Level> dimension,
+            BlockPos centerPos,
+            @Nullable UUID founderId
     ) {
         this(id);
         this.lineageFactionId = lineageFactionId;
@@ -271,6 +306,10 @@ public final class HiveLocation {
         this.peakDecayElapsedTicks = 0L;
         this.evacuatingRemainingTicks = 0L;
         this.noContactTicksAccrued = 0L;
+        this.firewallFundAvailable = true;
+        this.firewallStableAccruedTicks = 0L;
+        this.firewallBiomassSampleTick = Long.MIN_VALUE;
+        this.firewallBiomassSampleValue = 0;
         this.combatRespiteRemainingTicks = 0L;
         this.combatKillsSinceLastRespite = 0;
         this.locationNumber = -1L;
@@ -356,7 +395,7 @@ public final class HiveLocation {
      */
     public boolean withinSlab(int y) {
         return y >= hiveFloorY() - SLAB_TOLERANCE
-            && y < hiveCeilingY() + SLAB_TOLERANCE;
+                && y < hiveCeilingY() + SLAB_TOLERANCE;
     }
 
     public @Nullable UUID founderId() {
@@ -404,11 +443,11 @@ public final class HiveLocation {
     }
 
     public void recordAbstractSpreadAttempt(
-        long tick,
-        String result,
-        @Nullable ChunkPos candidateChunk,
-        @Nullable HiveLocationId createdLocationId,
-        String detail
+            long tick,
+            String result,
+            @Nullable ChunkPos candidateChunk,
+            @Nullable HiveLocationId createdLocationId,
+            String detail
     ) {
         this.lastAbstractSpreadAttempt = new AbstractSpreadAttemptDebug(tick, result, candidateChunk, createdLocationId, detail);
     }
@@ -443,6 +482,38 @@ public final class HiveLocation {
 
     public void setNoContactTicksAccrued(long noContactTicksAccrued) {
         this.noContactTicksAccrued = Math.max(0L, noContactTicksAccrued);
+    }
+
+    public boolean firewallFundAvailable() {
+        return firewallFundAvailable;
+    }
+
+    public void setFirewallFundAvailable(boolean firewallFundAvailable) {
+        this.firewallFundAvailable = firewallFundAvailable;
+    }
+
+    public long firewallStableAccruedTicks() {
+        return firewallStableAccruedTicks;
+    }
+
+    public void setFirewallStableAccruedTicks(long firewallStableAccruedTicks) {
+        this.firewallStableAccruedTicks = Math.max(0L, firewallStableAccruedTicks);
+    }
+
+    public long firewallBiomassSampleTick() {
+        return firewallBiomassSampleTick;
+    }
+
+    public void setFirewallBiomassSampleTick(long firewallBiomassSampleTick) {
+        this.firewallBiomassSampleTick = firewallBiomassSampleTick;
+    }
+
+    public int firewallBiomassSampleValue() {
+        return firewallBiomassSampleValue;
+    }
+
+    public void setFirewallBiomassSampleValue(int firewallBiomassSampleValue) {
+        this.firewallBiomassSampleValue = firewallBiomassSampleValue;
     }
 
     public long combatRespiteRemainingTicks() {
@@ -696,6 +767,18 @@ public final class HiveLocation {
         if (noContactTicksAccrued > 0L) {
             tag.putLong(NBT_NO_CONTACT_TICKS_ACCRUED, noContactTicksAccrued);
         }
+        // Only persist when it deviates from the fresh-location default (available, nothing accrued, no sample yet) —
+        // keeps untouched locations' NBT unchanged, matching the sibling fields' save-if-nonzero convention.
+        if (!firewallFundAvailable) {
+            tag.putBoolean(NBT_FIREWALL_FUND_AVAILABLE, false);
+        }
+        if (firewallStableAccruedTicks > 0L) {
+            tag.putLong(NBT_FIREWALL_STABLE_ACCRUED_TICKS, firewallStableAccruedTicks);
+        }
+        if (firewallBiomassSampleTick != Long.MIN_VALUE) {
+            tag.putLong(NBT_FIREWALL_BIOMASS_SAMPLE_TICK, firewallBiomassSampleTick);
+            tag.putInt(NBT_FIREWALL_BIOMASS_SAMPLE_VALUE, firewallBiomassSampleValue);
+        }
         if (combatRespiteRemainingTicks > 0L) {
             tag.putLong(NBT_COMBAT_RESPITE_REMAINING_TICKS, combatRespiteRemainingTicks);
         }
@@ -815,27 +898,39 @@ public final class HiveLocation {
         location.ageInTicks = tag.getLong(NBT_AGE_IN_TICKS);
         location.lastGrowthTick = tag.getLong(NBT_LAST_GROWTH_TICK);
         location.lastPassiveClaimTick = tag.contains(NBT_LAST_PASSIVE_CLAIM_TICK)
-            ? Math.max(0L, tag.getLong(NBT_LAST_PASSIVE_CLAIM_TICK))
-            : Math.max(0L, location.lastGrowthTick);
+                ? Math.max(0L, tag.getLong(NBT_LAST_PASSIVE_CLAIM_TICK))
+                : Math.max(0L, location.lastGrowthTick);
         location.lastAbstractSpreadTick = Math.max(0L, tag.getLong(NBT_LAST_ABSTRACT_SPREAD_TICK));
         location.lastAbstractSpreadAttempt = tag.contains(NBT_LAST_ABSTRACT_SPREAD_ATTEMPT)
-            ? AbstractSpreadAttemptDebug.load(tag.getCompound(NBT_LAST_ABSTRACT_SPREAD_ATTEMPT))
-            : AbstractSpreadAttemptDebug.none();
+                ? AbstractSpreadAttemptDebug.load(tag.getCompound(NBT_LAST_ABSTRACT_SPREAD_ATTEMPT))
+                : AbstractSpreadAttemptDebug.none();
         location.peakXenomorphCount = Math.max(1, tag.getInt(NBT_PEAK_XENOMORPH_COUNT));
         location.peakDecayElapsedTicks = Math.max(0L, tag.getLong(NBT_PEAK_DECAY_ELAPSED));
         location.evacuatingRemainingTicks = Math.max(0L, tag.getLong(NBT_EVACUATING_REMAINING));
         location.noContactTicksAccrued = tag.contains(NBT_NO_CONTACT_TICKS_ACCRUED)
-            ? Math.max(0L, tag.getLong(NBT_NO_CONTACT_TICKS_ACCRUED))
-            : 0L;
+                ? Math.max(0L, tag.getLong(NBT_NO_CONTACT_TICKS_ACCRUED))
+                : 0L;
+        // Hives saved before this state existed load gracefully as a fresh location: fund available, nothing
+        // accrued, no sample taken yet — exactly the private-constructor defaults, so no migration is needed.
+        location.firewallFundAvailable = !tag.contains(NBT_FIREWALL_FUND_AVAILABLE) || tag.getBoolean(NBT_FIREWALL_FUND_AVAILABLE);
+        location.firewallStableAccruedTicks = tag.contains(NBT_FIREWALL_STABLE_ACCRUED_TICKS)
+                ? Math.max(0L, tag.getLong(NBT_FIREWALL_STABLE_ACCRUED_TICKS))
+                : 0L;
+        location.firewallBiomassSampleTick = tag.contains(NBT_FIREWALL_BIOMASS_SAMPLE_TICK)
+                ? tag.getLong(NBT_FIREWALL_BIOMASS_SAMPLE_TICK)
+                : Long.MIN_VALUE;
+        location.firewallBiomassSampleValue = tag.contains(NBT_FIREWALL_BIOMASS_SAMPLE_VALUE)
+                ? tag.getInt(NBT_FIREWALL_BIOMASS_SAMPLE_VALUE)
+                : 0;
         location.combatRespiteRemainingTicks = Math.max(0L, tag.getLong(NBT_COMBAT_RESPITE_REMAINING_TICKS));
         location.combatKillsSinceLastRespite = Math.max(0, tag.getInt(NBT_COMBAT_KILLS_SINCE_LAST_RESPITE));
         location.locationNumber = tag.contains(NBT_LOCATION_NUMBER) ? tag.getLong(NBT_LOCATION_NUMBER) : -1L;
         location.queenlessMaturationLastAdvanceTick = tag.contains(NBT_QUEENLESS_MATURATION_LAST_ADVANCE)
-            ? tag.getLong(NBT_QUEENLESS_MATURATION_LAST_ADVANCE)
-            : Long.MIN_VALUE;
+                ? tag.getLong(NBT_QUEENLESS_MATURATION_LAST_ADVANCE)
+                : Long.MIN_VALUE;
         location.queenlessLeaderSnapshot = tag.hasUUID(NBT_QUEENLESS_LEADER_SNAPSHOT)
-            ? tag.getUUID(NBT_QUEENLESS_LEADER_SNAPSHOT)
-            : null;
+                ? tag.getUUID(NBT_QUEENLESS_LEADER_SNAPSHOT)
+                : null;
         location.biomass = Math.max(0, tag.getInt(NBT_BIOMASS));
         location.reproductiveEstablished = tag.getBoolean(NBT_REPRODUCTIVE_ESTABLISHED);
         location.inhibited = tag.getBoolean(NBT_INHIBITED);
@@ -907,11 +1002,11 @@ public final class HiveLocation {
     }
 
     public record AbstractSpreadAttemptDebug(
-        long tick,
-        String result,
-        @Nullable ChunkPos candidateChunk,
-        @Nullable HiveLocationId createdLocationId,
-        String detail
+            long tick,
+            String result,
+            @Nullable ChunkPos candidateChunk,
+            @Nullable HiveLocationId createdLocationId,
+            String detail
     ) {
 
         private static final String NBT_TICK = "Tick";
@@ -937,11 +1032,11 @@ public final class HiveLocation {
 
         public static AbstractSpreadAttemptDebug none() {
             return new AbstractSpreadAttemptDebug(
-                -1L,
-                "never",
-                null,
-                null,
-                "No abstract spread attempt has been recorded."
+                    -1L,
+                    "never",
+                    null,
+                    null,
+                    "No abstract spread attempt has been recorded."
             );
         }
 
@@ -962,18 +1057,18 @@ public final class HiveLocation {
 
         public static AbstractSpreadAttemptDebug load(CompoundTag tag) {
             var candidateChunk = tag.contains(NBT_CANDIDATE_CHUNK_X) && tag.contains(NBT_CANDIDATE_CHUNK_Z)
-                ? new ChunkPos(tag.getInt(NBT_CANDIDATE_CHUNK_X), tag.getInt(NBT_CANDIDATE_CHUNK_Z))
-                : null;
+                    ? new ChunkPos(tag.getInt(NBT_CANDIDATE_CHUNK_X), tag.getInt(NBT_CANDIDATE_CHUNK_Z))
+                    : null;
             var createdLocationId = tag.contains(NBT_CREATED_LOCATION_ID)
-                ? new HiveLocationId(ResourceLocation.parse(tag.getString(NBT_CREATED_LOCATION_ID)))
-                : null;
+                    ? new HiveLocationId(ResourceLocation.parse(tag.getString(NBT_CREATED_LOCATION_ID)))
+                    : null;
 
             return new AbstractSpreadAttemptDebug(
-                tag.contains(NBT_TICK) ? tag.getLong(NBT_TICK) : -1L,
-                tag.contains(NBT_RESULT) ? tag.getString(NBT_RESULT) : "unknown",
-                candidateChunk,
-                createdLocationId,
-                tag.contains(NBT_DETAIL) ? tag.getString(NBT_DETAIL) : ""
+                    tag.contains(NBT_TICK) ? tag.getLong(NBT_TICK) : -1L,
+                    tag.contains(NBT_RESULT) ? tag.getString(NBT_RESULT) : "unknown",
+                    candidateChunk,
+                    createdLocationId,
+                    tag.contains(NBT_DETAIL) ? tag.getString(NBT_DETAIL) : ""
             );
         }
     }

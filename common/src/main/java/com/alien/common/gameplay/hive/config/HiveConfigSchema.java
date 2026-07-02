@@ -16,111 +16,121 @@ import java.util.Objects;
 public final class HiveConfigSchema {
 
     private static final List<GroupSpec> GROUP_SPECS = List.of(
-        group("Lineage Seeds", "protoHiveStageInterval"),
-        group(
-            "Location Lifecycle",
-            "settlementTicks",
-            "locationMaxNoContactTicks",
-            "locationBootstrapGraceTicks",
-            "bossBarDisplayRadiusBlocks",
-            "angryGraceTicks",
-            "contestTickWindow",
-            "minimumHiveLocationDistanceChunks",
-            "initialHiveLocationClaimRadiusChunks"
-        ),
-        group("Shedding", "shedGraceTicks", "minLineageAgeForShedding"),
-        group(
-            "Convoys",
-            "convoySpeedBlocksPerSecond",
-            "arrivalRadiusBlocks",
-            "manifestDistanceBlocks",
-            "convoyInterceptRadiusBlocks",
-            "reinforcementSpeedMultiplier",
-            "migrationSpeedMultiplier",
-            "raidSpeedMultiplier"
-        ),
-        group("Reinforcements", "reinforcementSourceCooldownTicks", "reinforcementMinSize", "reinforcementMaxSize"),
-        group(
-            "Migration",
-            "resettleGraceTicks",
-            "migrationBiomassDecayTicks",
-            "migrationTerritoryFloorChunks",
-            "migrationRallyTicks",
-            "migrationBiomassPayloadCap"
-        ),
-        group(
-            "Raids",
-            "raidThresholdKills",
-            "raidAggroWindowTicks",
-            "raidMinLocationSizeChunks",
-            "perSourceRaidCooldownTicks",
-            "raidExpiryTicks",
-            "baseRaidSize",
-            "raidSizePerClaimedChunk",
-            "raidEngageRadiusBlocks"
-        ),
-        group("Combat Pressure", "combatRespiteKillThreshold", "combatRespiteMinTicks", "combatRespiteMaxTicks"),
-        group("Leadership", "empressMoltDurationTicks", "localLeaderPickCadenceTicks"),
-        group(
-            "Abstract Spread",
-            "maxLineageSpreadChunks",
-            "lineageSpreadCooldownTicks",
-            "maxLocationsPerLineage",
-            "minimumPopulationForHiveSpread",
-            "abstractSpreadMinFounderGroupSize",
-            "abstractSpreadMaxFounderGroupSize",
-            "foragerJoinTicks"
-        ),
-        group(
-            "Claiming And Resin",
-            "claimActivityWindowTicks",
-            "perLocationClaimCooldownTicks",
-            "lineageScanIntervalTicks",
-            "maxChunksPerLocation",
-            "maxChunksPerLineage",
-            "maxLineagesPerDimensionPerVariant",
-            "maxClaimsPerScan",
-            "resinFullDensityTicks",
-            "maxPassiveClaimsPerUnloadedScan"
-        ),
-        group(
-            "Biomass",
-            "baseChunkCost",
-            "ovipositorCreationBiomassCost",
-            "resinSpreadBiomassCost",
-            "growthFactor",
-            "baseUnloadedBiomassPerChunkPerSec",
-            "unloadedEmpressBonusPerSec",
-            "loadedBiomassPerLoadedXenomorphPerSec",
-            "loadedBiomassPerNonAlienKill",
-            "loadedBiomassPerResinBlockPlaced",
-            "loadedBiomassPerOvomorphPerSec",
-            "loadedBiomassEmpressPresentBonusPerSec",
-            "loadedBiomassIdleBonusPerSec",
-            "biomassAccumulationCapMultiplier"
-        ),
-        group(
-            "Persistence",
-            "biomassDirtyThreshold",
-            "lastGrowthTickDirtyThreshold",
-            "slowPathLocationUpdatesPerTick",
-            "passiveClaimCatchUpWindowCap"
-        ),
-        group(
-            "Population And Spawning",
-            "populationPerChunk",
-            "minimumPopulationRatioForClaiming",
-            "hiveSpawnerMinimumLoadedXenomorphs",
-            "reserveSpawnsCanIgnoreResin",
-            "hiveSpawnerIntervalTicks",
-            "hiveSpawnerMaxSpawnAttemptsPerLocation",
-            "hiveSpawnerMaxSpawnsPerLocation",
-            "maxOvomorphsPerHiveLocation",
-            "royalJellyTicksPerProduction",
-            "scourgeJellyTicksPerQueenProduction",
-            "scourgeJellyTicksPerHarbingerProduction"
-        ),
-        group("Queen Lifecycle", "queenFrontEndPhasesEnabled")
+            group("Lineage Seeds", "protoHiveStageInterval"),
+            group(
+                    "Location Lifecycle",
+                    "settlementTicks",
+                    "locationMaxNoContactTicks",
+                    "locationBootstrapGraceTicks",
+                    "bossBarDisplayRadiusBlocks",
+                    "angryGraceTicks",
+                    "contestTickWindow",
+                    "minimumHiveLocationDistanceChunks",
+                    "initialHiveLocationClaimRadiusChunks"
+            ),
+            group("Shedding", "shedGraceTicks", "minLineageAgeForShedding"),
+            group(
+                    "Convoys",
+                    "convoySpeedBlocksPerSecond",
+                    "arrivalRadiusBlocks",
+                    "manifestDistanceBlocks",
+                    "convoyInterceptRadiusBlocks",
+                    "reinforcementSpeedMultiplier",
+                    "migrationSpeedMultiplier",
+                    "raidSpeedMultiplier"
+            ),
+            group("Reinforcements", "reinforcementSourceCooldownTicks", "reinforcementMinSize", "reinforcementMaxSize"),
+            group(
+                    "Migration",
+                    "resettleGraceTicks",
+                    "migrationBiomassDecayTicks",
+                    "migrationTerritoryFloorChunks",
+                    "migrationRallyTicks",
+                    "migrationBiomassPayloadCap"
+            ),
+            group(
+                    "Raids",
+                    "raidThresholdKills",
+                    "raidAggroWindowTicks",
+                    "raidMinLocationSizeChunks",
+                    "perSourceRaidCooldownTicks",
+                    "raidExpiryTicks",
+                    "baseRaidSize",
+                    "raidSizePerClaimedChunk",
+                    "raidEngageRadiusBlocks"
+            ),
+            group("Combat Pressure", "combatRespiteKillThreshold", "combatRespiteMinTicks", "combatRespiteMaxTicks"),
+            group(
+                    "Leadership",
+                    "empressMoltDurationTicks",
+                    "localLeaderPickCadenceTicks",
+                    "firewallCooldownTicks",
+                    "firewallStabilityScanIntervalTicks",
+                    "firewallJellyFloor",
+                    "firewallCrowningJellyCost"
+            ),
+            group(
+                    "Abstract Spread",
+                    "maxLineageSpreadChunks",
+                    "lineageSpreadCooldownTicks",
+                    "maxLocationsPerLineage",
+                    "maxLocationsUnderEmpress",
+                    "minimumPopulationForHiveSpread",
+                    "abstractSpreadMinFounderGroupSize",
+                    "abstractSpreadMaxFounderGroupSize",
+                    "foragerJoinTicks"
+            ),
+            group(
+                    "Claiming And Resin",
+                    "claimActivityWindowTicks",
+                    "perLocationClaimCooldownTicks",
+                    "lineageScanIntervalTicks",
+                    "maxChunksPerLocation",
+                    "maxTerritoryRadiusChunks",
+                    "maxChunksPerLineage",
+                    "maxLineagesPerDimensionPerVariant",
+                    "maxClaimsPerScan",
+                    "resinFullDensityTicks",
+                    "maxPassiveClaimsPerUnloadedScan"
+            ),
+            group(
+                    "Biomass",
+                    "baseChunkCost",
+                    "ovipositorCreationBiomassCost",
+                    "resinSpreadBiomassCost",
+                    "growthFactor",
+                    "baseUnloadedBiomassPerChunkPerSec",
+                    "unloadedEmpressBonusPerSec",
+                    "loadedBiomassPerLoadedXenomorphPerSec",
+                    "loadedBiomassPerNonAlienKill",
+                    "loadedBiomassPerResinBlockPlaced",
+                    "loadedBiomassPerOvomorphPerSec",
+                    "loadedBiomassEmpressPresentBonusPerSec",
+                    "loadedBiomassIdleBonusPerSec",
+                    "biomassAccumulationCapMultiplier"
+            ),
+            group(
+                    "Persistence",
+                    "biomassDirtyThreshold",
+                    "lastGrowthTickDirtyThreshold",
+                    "slowPathLocationUpdatesPerTick",
+                    "passiveClaimCatchUpWindowCap"
+            ),
+            group(
+                    "Population And Spawning",
+                    "populationPerChunk",
+                    "minimumPopulationRatioForClaiming",
+                    "hiveSpawnerMinimumLoadedXenomorphs",
+                    "reserveSpawnsCanIgnoreResin",
+                    "hiveSpawnerIntervalTicks",
+                    "hiveSpawnerMaxSpawnAttemptsPerLocation",
+                    "hiveSpawnerMaxSpawnsPerLocation",
+                    "maxOvomorphsPerHiveLocation",
+                    "royalJellyTicksPerProduction",
+                    "scourgeJellyTicksPerQueenProduction",
+                    "scourgeJellyTicksPerHarbingerProduction"
+            ),
+            group("Queen Lifecycle", "queenFrontEndPhasesEnabled")
     );
 
     private static final List<Field> FIELDS;
@@ -342,20 +352,20 @@ public final class HiveConfigSchema {
     }
 
     public record Field(
-        String name,
-        String label,
-        String group,
-        ValueType type,
-        String defaultValue
+            String name,
+            String label,
+            String group,
+            ValueType type,
+            String defaultValue
     ) {}
 
     public record Group(
-        String name,
-        List<Field> fields
+            String name,
+            List<Field> fields
     ) {}
 
     private record GroupSpec(
-        String name,
-        List<String> fieldNames
+            String name,
+            List<String> fieldNames
     ) {}
 }

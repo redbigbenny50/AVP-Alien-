@@ -20,6 +20,7 @@ import net.minecraft.world.level.block.entity.BlockEntityTicker;
 import net.minecraft.world.level.block.entity.BlockEntityType;
 import net.minecraft.world.level.block.state.BlockBehaviour;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.pathfinder.PathComputationType;
 import net.minecraft.world.level.block.state.StateDefinition;
 import net.minecraft.world.level.block.state.properties.AttachFace;
 import net.minecraft.world.phys.BlockHitResult;
@@ -45,24 +46,24 @@ public class AnchorBlock extends FaceAttachedHorizontalDirectionalBlock implemen
     private static final VoxelShape CEILING_SHAPE = Block.box(0.0, 8.0, 0.0, 16.0, 16.0, 16.0);
 
     private static final Map<Direction, VoxelShape> WALL_SHAPES = Maps.newEnumMap(
-        Map.of(
-            Direction.NORTH,
-            Block.box(0.0, 0.0, 8.0, 16.0, 16.0, 16.0),
-            Direction.SOUTH,
-            Block.box(0.0, 0.0, 0.0, 16.0, 16.0, 8.0),
-            Direction.EAST,
-            Block.box(0.0, 0.0, 0.0, 8.0, 16.0, 16.0),
-            Direction.WEST,
-            Block.box(8.0, 0.0, 0.0, 16.0, 16.0, 16.0)
-        )
+            Map.of(
+                    Direction.NORTH,
+                    Block.box(0.0, 0.0, 8.0, 16.0, 16.0, 16.0),
+                    Direction.SOUTH,
+                    Block.box(0.0, 0.0, 0.0, 16.0, 16.0, 8.0),
+                    Direction.EAST,
+                    Block.box(0.0, 0.0, 0.0, 8.0, 16.0, 16.0),
+                    Direction.WEST,
+                    Block.box(8.0, 0.0, 0.0, 16.0, 16.0, 16.0)
+            )
     );
 
     public AnchorBlock(BlockBehaviour.Properties properties) {
         super(properties);
         this.registerDefaultState(
-            this.defaultBlockState()
-                .setValue(FACE, AttachFace.FLOOR)
-                .setValue(FACING, Direction.NORTH)
+                this.defaultBlockState()
+                        .setValue(FACE, AttachFace.FLOOR)
+                        .setValue(FACING, Direction.NORTH)
         );
     }
 
@@ -77,12 +78,12 @@ public class AnchorBlock extends FaceAttachedHorizontalDirectionalBlock implemen
             BlockState candidate;
             if (direction.getAxis() == Direction.Axis.Y) {
                 candidate = this.defaultBlockState()
-                    .setValue(FACE, direction == Direction.UP ? AttachFace.CEILING : AttachFace.FLOOR)
-                    .setValue(FACING, context.getHorizontalDirection());
+                        .setValue(FACE, direction == Direction.UP ? AttachFace.CEILING : AttachFace.FLOOR)
+                        .setValue(FACING, context.getHorizontalDirection());
             } else {
                 candidate = this.defaultBlockState()
-                    .setValue(FACE, AttachFace.WALL)
-                    .setValue(FACING, direction.getOpposite());
+                        .setValue(FACE, AttachFace.WALL)
+                        .setValue(FACING, direction.getOpposite());
             }
             if (candidate.canSurvive(context.getLevel(), context.getClickedPos())) {
                 return candidate;
@@ -98,6 +99,13 @@ public class AnchorBlock extends FaceAttachedHorizontalDirectionalBlock implemen
             case CEILING -> CEILING_SHAPE;
             case WALL -> WALL_SHAPES.get(state.getValue(FACING));
         };
+    }
+
+    @Override
+    protected boolean isPathfindable(BlockState state, PathComputationType type) {
+        // Collision is kept, but the pathfinder treats the anchor as an obstacle so mobs route around it instead of
+        // climbing onto the partial block and getting stuck oscillating on top (the way they do on stalagmites).
+        return false;
     }
 
     @Override
@@ -119,9 +127,9 @@ public class AnchorBlock extends FaceAttachedHorizontalDirectionalBlock implemen
     @Override
     @SuppressWarnings("unchecked")
     public <T extends BlockEntity> @Nullable BlockEntityTicker<T> getTicker(
-        Level level,
-        BlockState state,
-        BlockEntityType<T> type
+            Level level,
+            BlockState state,
+            BlockEntityType<T> type
     ) {
         if (level.isClientSide || type != AlienBlockEntityTypes.ANCHOR.get()) {
             return null;
@@ -132,16 +140,16 @@ public class AnchorBlock extends FaceAttachedHorizontalDirectionalBlock implemen
     /** Sneak-right-click an anchor to drop its chain. */
     @Override
     protected @NotNull InteractionResult useWithoutItem(
-        BlockState state,
-        Level level,
-        BlockPos pos,
-        Player player,
-        BlockHitResult hit
+            BlockState state,
+            Level level,
+            BlockPos pos,
+            Player player,
+            BlockHitResult hit
     ) {
         if (
-            player.isShiftKeyDown()
-                && level.getBlockEntity(pos) instanceof AnchorBlockEntity anchor
-                && anchor.hasChain()
+                player.isShiftKeyDown()
+                        && level.getBlockEntity(pos) instanceof AnchorBlockEntity anchor
+                        && anchor.hasChain()
         ) {
             if (!level.isClientSide) {
                 anchor.release();

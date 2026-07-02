@@ -1,14 +1,16 @@
 package com.alien.common.network.handler;
 
+import com.alien.client.gui.ClientTrackerAlerts;
+import com.alien.client.gui.TrackingPdaScreen;
 import com.alien.client.render.CaptureHoldClientState;
 import com.alien.client.render.hive.ClientHiveRenderCache;
+import com.alien.common.gameplay.level.saveddata.TrackedQueenRow;
 import com.alien.common.network.payload.S2CCaptureHoldPayload;
 import com.alien.common.network.payload.S2CHiveInspectionPayload;
 import com.alien.common.network.payload.S2CHiveRenderDataPayload;
 import com.alien.common.network.payload.S2CTrackedQueensPayload;
-import com.alien.common.gameplay.level.saveddata.TrackedQueenRow;
-import com.alien.client.gui.TrackingPdaScreen;
 import com.alien.compatibility.blib_engine.client.inspector.ClientHiveInspectionCache;
+import net.minecraft.client.Minecraft;
 import net.minecraft.world.entity.player.Player;
 
 /**
@@ -41,6 +43,14 @@ public final class AlienClientPacketListener {
 
     /** Server-pushed tracked-queen list for the PDA: open the readout screen. */
     public static void handleTrackedQueens(S2CTrackedQueensPayload payload, Player player) {
-        TrackingPdaScreen.open(TrackedQueenRow.unpackList(payload.data()));
+        var rows = TrackedQueenRow.unpackList(payload.data());
+        ClientTrackerAlerts.set(TrackedQueenRow.unpackLost(payload.data()));
+        if (Minecraft.getInstance().screen instanceof TrackingPdaScreen pda) {
+            pda.update(rows);
+        } else if (ClientTrackerAlerts.consumeOpen()) {
+            TrackingPdaScreen.open(rows);
+        }
+        // Otherwise this is a background refresh reply that arrived while no PDA is open (e.g. just after ESC); ignore
+        // it.
     }
 }

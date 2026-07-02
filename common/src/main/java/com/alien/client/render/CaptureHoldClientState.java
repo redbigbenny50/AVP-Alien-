@@ -1,7 +1,7 @@
 package com.alien.client.render;
 
 import net.minecraft.world.entity.Entity;
-import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.entity.LivingEntity;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.Map;
@@ -42,6 +42,6 @@ public final class CaptureHoldClientState {
             return null;
         }
         Entity holder = mob.level().getEntity(holderId);
-        return holder instanceof Player ? holder : null;
+        return holder instanceof LivingEntity ? holder : null;
     }
 }

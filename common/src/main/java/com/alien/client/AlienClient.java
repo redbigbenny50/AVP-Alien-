@@ -30,7 +30,6 @@ import com.alien.client.render.entity.DroneRenderer;
 import com.alien.client.render.entity.EmpressRenderer;
 import com.alien.client.render.entity.HarbingerRenderer;
 import com.alien.client.render.entity.OvipositorRenderer;
-import com.alien.client.render.entity.RoyalCocoonRenderer;
 import com.alien.client.render.entity.OvomorphRenderer;
 import com.alien.client.render.entity.PraetorianRenderer;
 import com.alien.client.render.entity.PredalienAdolescentRenderer;
@@ -40,6 +39,7 @@ import com.alien.client.render.entity.ProwlerRenderer;
 import com.alien.client.render.entity.QueenRenderer;
 import com.alien.client.render.entity.RavagerRenderer;
 import com.alien.client.render.entity.RazorClawRenderer;
+import com.alien.client.render.entity.RoyalCocoonRenderer;
 import com.alien.client.render.entity.RunnerRenderer;
 import com.alien.client.render.entity.SpitterRenderer;
 import com.alien.client.render.entity.WarriorRenderer;
@@ -49,7 +49,6 @@ import com.alien.client.render.entity.parasite.attachment.AlienParasiteHeadAttac
 import com.alien.client.render.entity.parasite.attachment.ParasiteHeadAttachmentOffsetDataCache;
 import com.alien.client.render.entity.parasite.facehugger.FacehuggerRenderer;
 import com.alien.common.registry.init.AlienBlockEntityTypes;
-import com.alien.common.registry.init.item.AlienItems;
 import com.alien.common.registry.init.AlienEntityTypes;
 import com.alien.common.registry.init.AlienParticleTypes;
 import com.alien.common.registry.init.block.AberrantAlienResinBlocks;
@@ -58,6 +57,7 @@ import com.alien.common.registry.init.block.AlienResinBlocks;
 import com.alien.common.registry.init.block.IrradiatedAlienResinBlocks;
 import com.alien.common.registry.init.block.NetherAlienResinBlocks;
 import com.alien.common.registry.init.item.AlienArmorItems;
+import com.alien.common.registry.init.item.AlienItems;
 import com.alien.common.registry.init.item.AlienXenomorphHeadItems;
 import com.alien.compatibility.blib_engine.BLibEngine;
 import com.blib.api.client.mod.v1.BLibClientMod;
@@ -96,85 +96,85 @@ public class AlienClient {
 
     private static void registerArmorRenderers() {
         MOD.registries()
-                .registerArmorRenderer(
-                        AberrantChitinArmorRenderer::new,
-                        List.of(
-                                AlienArmorItems.ABERRANT_CHITIN_HELMET,
-                                AlienArmorItems.ABERRANT_CHITIN_CHESTPLATE,
-                                AlienArmorItems.ABERRANT_CHITIN_LEGGINGS,
-                                AlienArmorItems.ABERRANT_CHITIN_BOOTS
-                        )
-                );
+            .registerArmorRenderer(
+                AberrantChitinArmorRenderer::new,
+                List.of(
+                    AlienArmorItems.ABERRANT_CHITIN_HELMET,
+                    AlienArmorItems.ABERRANT_CHITIN_CHESTPLATE,
+                    AlienArmorItems.ABERRANT_CHITIN_LEGGINGS,
+                    AlienArmorItems.ABERRANT_CHITIN_BOOTS
+                )
+            );
         MOD.registries()
-                .registerArmorRenderer(
-                        ChitinArmorRenderer::new,
-                        List.of(
-                                AlienArmorItems.CHITIN_HELMET,
-                                AlienArmorItems.CHITIN_CHESTPLATE,
-                                AlienArmorItems.CHITIN_LEGGINGS,
-                                AlienArmorItems.CHITIN_BOOTS
-                        )
-                );
+            .registerArmorRenderer(
+                ChitinArmorRenderer::new,
+                List.of(
+                    AlienArmorItems.CHITIN_HELMET,
+                    AlienArmorItems.CHITIN_CHESTPLATE,
+                    AlienArmorItems.CHITIN_LEGGINGS,
+                    AlienArmorItems.CHITIN_BOOTS
+                )
+            );
         MOD.registries()
-                .registerArmorRenderer(
-                        IrradiatedChitinArmorRenderer::new,
-                        List.of(
-                                AlienArmorItems.IRRADIATED_CHITIN_HELMET,
-                                AlienArmorItems.IRRADIATED_CHITIN_CHESTPLATE,
-                                AlienArmorItems.IRRADIATED_CHITIN_LEGGINGS,
-                                AlienArmorItems.IRRADIATED_CHITIN_BOOTS
-                        )
-                );
+            .registerArmorRenderer(
+                IrradiatedChitinArmorRenderer::new,
+                List.of(
+                    AlienArmorItems.IRRADIATED_CHITIN_HELMET,
+                    AlienArmorItems.IRRADIATED_CHITIN_CHESTPLATE,
+                    AlienArmorItems.IRRADIATED_CHITIN_LEGGINGS,
+                    AlienArmorItems.IRRADIATED_CHITIN_BOOTS
+                )
+            );
         MOD.registries()
-                .registerArmorRenderer(
-                        NetherChitinArmorRenderer::new,
-                        List.of(
-                                AlienArmorItems.NETHER_CHITIN_HELMET,
-                                AlienArmorItems.NETHER_CHITIN_CHESTPLATE,
-                                AlienArmorItems.NETHER_CHITIN_LEGGINGS,
-                                AlienArmorItems.NETHER_CHITIN_BOOTS
-                        )
-                );
+            .registerArmorRenderer(
+                NetherChitinArmorRenderer::new,
+                List.of(
+                    AlienArmorItems.NETHER_CHITIN_HELMET,
+                    AlienArmorItems.NETHER_CHITIN_CHESTPLATE,
+                    AlienArmorItems.NETHER_CHITIN_LEGGINGS,
+                    AlienArmorItems.NETHER_CHITIN_BOOTS
+                )
+            );
         MOD.registries()
-                .registerArmorRenderer(
-                        PlatedAberrantChitinArmorRenderer::new,
-                        List.of(
-                                AlienArmorItems.PLATED_ABERRANT_CHITIN_HELMET,
-                                AlienArmorItems.PLATED_ABERRANT_CHITIN_CHESTPLATE,
-                                AlienArmorItems.PLATED_ABERRANT_CHITIN_LEGGINGS,
-                                AlienArmorItems.PLATED_ABERRANT_CHITIN_BOOTS
-                        )
-                );
+            .registerArmorRenderer(
+                PlatedAberrantChitinArmorRenderer::new,
+                List.of(
+                    AlienArmorItems.PLATED_ABERRANT_CHITIN_HELMET,
+                    AlienArmorItems.PLATED_ABERRANT_CHITIN_CHESTPLATE,
+                    AlienArmorItems.PLATED_ABERRANT_CHITIN_LEGGINGS,
+                    AlienArmorItems.PLATED_ABERRANT_CHITIN_BOOTS
+                )
+            );
         MOD.registries()
-                .registerArmorRenderer(
-                        PlatedChitinArmorRenderer::new,
-                        List.of(
-                                AlienArmorItems.PLATED_CHITIN_HELMET,
-                                AlienArmorItems.PLATED_CHITIN_CHESTPLATE,
-                                AlienArmorItems.PLATED_CHITIN_LEGGINGS,
-                                AlienArmorItems.PLATED_CHITIN_BOOTS
-                        )
-                );
+            .registerArmorRenderer(
+                PlatedChitinArmorRenderer::new,
+                List.of(
+                    AlienArmorItems.PLATED_CHITIN_HELMET,
+                    AlienArmorItems.PLATED_CHITIN_CHESTPLATE,
+                    AlienArmorItems.PLATED_CHITIN_LEGGINGS,
+                    AlienArmorItems.PLATED_CHITIN_BOOTS
+                )
+            );
         MOD.registries()
-                .registerArmorRenderer(
-                        PlatedIrradiatedChitinArmorRenderer::new,
-                        List.of(
-                                AlienArmorItems.PLATED_IRRADIATED_CHITIN_HELMET,
-                                AlienArmorItems.PLATED_IRRADIATED_CHITIN_CHESTPLATE,
-                                AlienArmorItems.PLATED_IRRADIATED_CHITIN_LEGGINGS,
-                                AlienArmorItems.PLATED_IRRADIATED_CHITIN_BOOTS
-                        )
-                );
+            .registerArmorRenderer(
+                PlatedIrradiatedChitinArmorRenderer::new,
+                List.of(
+                    AlienArmorItems.PLATED_IRRADIATED_CHITIN_HELMET,
+                    AlienArmorItems.PLATED_IRRADIATED_CHITIN_CHESTPLATE,
+                    AlienArmorItems.PLATED_IRRADIATED_CHITIN_LEGGINGS,
+                    AlienArmorItems.PLATED_IRRADIATED_CHITIN_BOOTS
+                )
+            );
         MOD.registries()
-                .registerArmorRenderer(
-                        PlatedNetherChitinArmorRenderer::new,
-                        List.of(
-                                AlienArmorItems.PLATED_NETHER_CHITIN_HELMET,
-                                AlienArmorItems.PLATED_NETHER_CHITIN_CHESTPLATE,
-                                AlienArmorItems.PLATED_NETHER_CHITIN_LEGGINGS,
-                                AlienArmorItems.PLATED_NETHER_CHITIN_BOOTS
-                        )
-                );
+            .registerArmorRenderer(
+                PlatedNetherChitinArmorRenderer::new,
+                List.of(
+                    AlienArmorItems.PLATED_NETHER_CHITIN_HELMET,
+                    AlienArmorItems.PLATED_NETHER_CHITIN_CHESTPLATE,
+                    AlienArmorItems.PLATED_NETHER_CHITIN_LEGGINGS,
+                    AlienArmorItems.PLATED_NETHER_CHITIN_BOOTS
+                )
+            );
     }
 
     private static void registerBlockRenderLayers() {
@@ -242,15 +242,15 @@ public class AlienClient {
         MOD.registries().registerEntityRenderer(AlienEntityTypes.ABERRANT_PRAETORIAN, PraetorianRenderer::new);
         MOD.registries().registerEntityRenderer(AlienEntityTypes.ABERRANT_PREDALIEN, PredalienRenderer::new);
         MOD.registries()
-                .registerEntityRenderer(
-                        AlienEntityTypes.ABERRANT_PREDALIEN_ADOLESCENT,
-                        PredalienAdolescentRenderer::new
-                );
+            .registerEntityRenderer(
+                AlienEntityTypes.ABERRANT_PREDALIEN_ADOLESCENT,
+                PredalienAdolescentRenderer::new
+            );
         MOD.registries()
-                .registerEntityRenderer(
-                        AlienEntityTypes.ABERRANT_PREDALIEN_CHESTBURSTER,
-                        PredalienChestbursterRenderer::new
-                );
+            .registerEntityRenderer(
+                AlienEntityTypes.ABERRANT_PREDALIEN_CHESTBURSTER,
+                PredalienChestbursterRenderer::new
+            );
         MOD.registries().registerEntityRenderer(AlienEntityTypes.ABERRANT_PROWLER, ProwlerRenderer::new);
         MOD.registries().registerEntityRenderer(AlienEntityTypes.ABERRANT_RAZOR_CLAW, RazorClawRenderer::new);
         MOD.registries().registerEntityRenderer(AlienEntityTypes.ABERRANT_RAVAGER, RavagerRenderer::new);
@@ -301,10 +301,10 @@ public class AlienClient {
         MOD.registries().registerEntityRenderer(AlienEntityTypes.NETHER_PREDALIEN, PredalienRenderer::new);
         MOD.registries().registerEntityRenderer(AlienEntityTypes.NETHER_PREDALIEN_ADOLESCENT, PredalienAdolescentRenderer::new);
         MOD.registries()
-                .registerEntityRenderer(
-                        AlienEntityTypes.NETHER_PREDALIEN_CHESTBURSTER,
-                        PredalienChestbursterRenderer::new
-                );
+            .registerEntityRenderer(
+                AlienEntityTypes.NETHER_PREDALIEN_CHESTBURSTER,
+                PredalienChestbursterRenderer::new
+            );
         MOD.registries().registerEntityRenderer(AlienEntityTypes.NETHER_PROWLER, ProwlerRenderer::new);
         MOD.registries().registerEntityRenderer(AlienEntityTypes.NETHER_RAZOR_CLAW, RazorClawRenderer::new);
         MOD.registries().registerEntityRenderer(AlienEntityTypes.NETHER_RAVAGER, RavagerRenderer::new);
@@ -395,34 +395,34 @@ public class AlienClient {
 
     private static void registerBlockEntityRenderers() {
         MOD.registries()
-                .registerBlockEntityRenderer(
-                        AlienBlockEntityTypes.QUEEN_HEAD,
-                        ctx -> new QueenHeadBlockEntityRenderer()
-                );
+            .registerBlockEntityRenderer(
+                AlienBlockEntityTypes.QUEEN_HEAD,
+                ctx -> new QueenHeadBlockEntityRenderer()
+            );
         MOD.registries()
-                .registerBlockEntityRenderer(
-                        AlienBlockEntityTypes.CRUSHER_HEAD,
-                        ctx -> new CrusherHeadBlockEntityRenderer()
-                );
+            .registerBlockEntityRenderer(
+                AlienBlockEntityTypes.CRUSHER_HEAD,
+                ctx -> new CrusherHeadBlockEntityRenderer()
+            );
         MOD.registries()
-                .registerBlockEntityRenderer(
-                        AlienBlockEntityTypes.XENOMORPH_HEAD,
-                        ctx -> new XenomorphHeadBlockEntityRenderer()
-                );
+            .registerBlockEntityRenderer(
+                AlienBlockEntityTypes.XENOMORPH_HEAD,
+                ctx -> new XenomorphHeadBlockEntityRenderer()
+            );
         MOD.registries()
-                .registerBlockEntityRenderer(
-                        AlienBlockEntityTypes.ANCHOR,
-                        ctx -> new AnchorBlockEntityRenderer()
-                );
+            .registerBlockEntityRenderer(
+                AlienBlockEntityTypes.ANCHOR,
+                ctx -> new AnchorBlockEntityRenderer()
+            );
     }
 
     private static void registerParticleProviderFactories() {
         MOD.registries().registerParticleProviderFactory(AlienParticleTypes.ACID, AcidParticleProvider::new);
         MOD.registries().registerParticleProviderFactory(AlienParticleTypes.BLUE_ACID, BlueAcidParticleProvider::new);
         MOD.registries()
-                .registerParticleProviderFactory(
-                        AlienParticleTypes.IRRADIATED_ACID,
-                        IrradiatedAcidParticleProvider::new
-                );
+            .registerParticleProviderFactory(
+                AlienParticleTypes.IRRADIATED_ACID,
+                IrradiatedAcidParticleProvider::new
+            );
     }
 }

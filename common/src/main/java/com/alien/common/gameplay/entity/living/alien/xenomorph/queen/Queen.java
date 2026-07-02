@@ -160,14 +160,20 @@ public class Queen extends Xenomorph implements GOAPUser<Queen>, EggLayer {
             QueenInhibitionService.tickFollow(serverLevel, this);
         }
 
-        if (isTracked() && tickCount % 40 == 0 && level() instanceof ServerLevel trackedLevel) {
-            TrackedQueenRegistry.getOrCreate(trackedLevel)
-                    .ifSome(registry -> registry.updatePosition(
+        if (isTracked() && level() instanceof ServerLevel trackedLevel) {
+            TrackedQueenRegistry.getOrCreate(trackedLevel).ifSome(registry -> {
+                if (registry.consumePendingDestroy(getUUID())) {
+                    // "Destroy tracker" was requested while she was unloaded; clear the tag now instead of re-adding.
+                    setTracked(false);
+                } else if (tickCount % 40 == 0) {
+                    registry.updatePosition(
                             getUUID(),
                             blockPosition(),
                             trackedLevel.dimension(),
                             trackedLevel.getGameTime()
-                    ));
+                    );
+                }
+            });
         }
     }
 
@@ -209,6 +215,12 @@ public class Queen extends Xenomorph implements GOAPUser<Queen>, EggLayer {
         }
 
         return super.finalizeSpawn(serverLevelAccessor, difficulty, spawnType, spawnGroupData);
+    }
+
+    @Override
+    public boolean removeWhenFarAway(double distanceToClosestPlayer) {
+        // Queens are persistent by nature -- they anchor a hive and may be tracked, so they must never despawn.
+        return false;
     }
 
     private void applyNaturalSpawnEffects() {
@@ -314,7 +326,7 @@ public class Queen extends Xenomorph implements GOAPUser<Queen>, EggLayer {
         super.die(damageSource);
 
         if (level() instanceof ServerLevel serverLevel) {
-            TrackedQueenRegistry.getOrCreate(serverLevel).ifSome(registry -> registry.untrack(getUUID()));
+            TrackedQueenRegistry.markLostAndAnnounce(serverLevel, getUUID(), TrackedQueenRegistry.REASON_DECEASED);
         }
     }
 

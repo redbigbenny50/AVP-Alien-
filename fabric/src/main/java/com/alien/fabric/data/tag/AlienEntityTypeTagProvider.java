@@ -25,6 +25,7 @@ public class AlienEntityTypeTagProvider extends FabricTagProvider.EntityTypeTagP
     protected void addTags(HolderLookup.Provider wrapperLookup) {
         addAberrantAliens();
         addAcidImmune();
+        addCaptureChainBlacklist();
         addPredalienAdolescents();
         addAdolescents();
         addAliens();
@@ -216,6 +217,13 @@ public class AlienEntityTypeTagProvider extends FabricTagProvider.EntityTypeTagP
                 AlienEntityTypes.IRRADIATED_HARBINGER.get(),
                 AlienEntityTypes.NETHER_HARBINGER.get()
             );
+    }
+
+    private void addCaptureChainBlacklist() {
+        getOrCreateTagBuilder(AlienEntityTypeTags.CAPTURE_CHAIN_BLACKLIST)
+            .add(EntityType.ENDER_DRAGON)
+            .add(EntityType.WARDEN)
+            .add(EntityType.WITHER);
     }
 
     private void addHatedByXenomorphs() {

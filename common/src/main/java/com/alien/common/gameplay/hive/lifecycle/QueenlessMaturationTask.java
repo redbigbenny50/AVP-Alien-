@@ -100,13 +100,13 @@ public final class QueenlessMaturationTask {
     }
 
     private static void advanceLocation(
-        net.minecraft.server.level.ServerLevel serverLevel,
-        com.blib.api.common.faction.v1.Faction<?> faction,
-        LineageFactionData lineage,
-        ResourceLocation lineageId,
-        HiveLocation location,
-        long currentTick,
-        long stageInterval
+            net.minecraft.server.level.ServerLevel serverLevel,
+            com.blib.api.common.faction.v1.Faction<?> faction,
+            LineageFactionData lineage,
+            ResourceLocation lineageId,
+            HiveLocation location,
+            long currentTick,
+            long stageInterval
     ) {
         var leaderId = location.leadership().getLeaderIdOrNull();
         if (leaderId == null) {
@@ -131,9 +131,9 @@ public final class QueenlessMaturationTask {
             if (entity != null && !faction.membership().hasMember(com.blib.api.common.faction.v1.FactionMember.entity(entity))) {
                 faction.membership().addEntity(entity);
                 Alien.LOGGER.info(
-                    "Hive: queenless leader {} re-joined lineage {} after cocoon transition",
-                    leaderId,
-                    lineageId
+                        "Hive: queenless leader {} re-joined lineage {} after cocoon transition",
+                        leaderId,
+                        lineageId
                 );
             }
             return;
@@ -163,15 +163,53 @@ public final class QueenlessMaturationTask {
             return;
         }
 
+        if (stage.to().is(AlienEntityTypeTags.QUEENS)) {
+            // This is the crowning molt itself — gated behind the firewall fund (per
+            // AVP_Queen_Lifecycle_Design.md § 6). A fresh location's fund starts available, so a location's first-ever
+            // queen loss always crowns normally; only a second loss before the fund refills gets denied here. Earlier,
+            // non-queen growth stages toward queen-track (drone→warrior→praetorian, etc.) are never gated — only the
+            // final step is.
+            var config = HiveLocationRegistry.INSTANCE.config();
+
+            if (!location.firewallFundAvailable()) {
+                Alien.LOGGER.info(
+                        "Hive: crowning denied for leader {} (lineage {}) — firewall fund still spent, {}/{} stable ticks accrued",
+                        leaderId,
+                        lineageId,
+                        location.firewallStableAccruedTicks(),
+                        config.firewallCooldownTicks()
+                );
+                return;
+            }
+
+            var jellyCost = config.firewallCrowningJellyCost();
+            if (location.royalJelly() < jellyCost) {
+                Alien.LOGGER.info(
+                        "Hive: crowning denied for leader {} (lineage {}) — insufficient royal jelly ({}/{})",
+                        leaderId,
+                        lineageId,
+                        location.royalJelly(),
+                        jellyCost
+                );
+                return;
+            }
+
+            location.setRoyalJelly(location.royalJelly() - jellyCost);
+            location.setFirewallFundAvailable(false);
+            location.setFirewallStableAccruedTicks(0L);
+            location.setFirewallBiomassSampleTick(Long.MIN_VALUE);
+            location.setFirewallBiomassSampleValue(0);
+        }
+
         var result = xenomorph.getGrowthManager().forceGrow(stage);
         location.setQueenlessMaturationLastAdvanceTick(currentTick);
         Alien.LOGGER.info(
-            "Hive: queenless maturation advanced leader {} ({}) → {} (lineage {}); growth result {}",
-            leaderId,
-            entity.getType().builtInRegistryHolder().key().location(),
-            stage.to().builtInRegistryHolder().key().location(),
-            lineageId,
-            result.getClass().getSimpleName()
+                "Hive: queenless maturation advanced leader {} ({}) → {} (lineage {}); growth result {}",
+                leaderId,
+                entity.getType().builtInRegistryHolder().key().location(),
+                stage.to().builtInRegistryHolder().key().location(),
+                lineageId,
+                result.getClass().getSimpleName()
         );
     }
 
@@ -186,12 +224,12 @@ public final class QueenlessMaturationTask {
             return null;
         }
         return pickByPriority(
-            candidates,
-            AlienEntityTypeTags.QUEENS,
-            AlienEntityTypeTags.PRAETORIANS,
-            AlienEntityTypeTags.CRUSHERS,
-            AlienEntityTypeTags.WARRIORS,
-            AlienEntityTypeTags.PROWLERS
+                candidates,
+                AlienEntityTypeTags.QUEENS,
+                AlienEntityTypeTags.PRAETORIANS,
+                AlienEntityTypeTags.CRUSHERS,
+                AlienEntityTypeTags.WARRIORS,
+                AlienEntityTypeTags.PROWLERS
         );
     }
 

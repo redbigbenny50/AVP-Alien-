@@ -2,9 +2,6 @@ package com.alien.common.gameplay.entity.living.alien;
 
 import com.alien.Alien;
 import com.alien.common.gameplay.entity.living.alien.xenomorph.queen.Queen;
-import net.minecraft.core.particles.DustParticleOptions;
-import net.minecraft.server.level.ServerLevel;
-import org.joml.Vector3f;
 import com.alien.common.gameplay.hive.faction.HiveMemberLocationResolver;
 import com.alien.common.gameplay.hive.faction.LineageFactionData;
 import com.alien.common.gameplay.hive.faction.VariantFactionRegistry;
@@ -18,9 +15,12 @@ import com.alien.common.registry.tag.AlienEntityTypeTags;
 import com.blib.api.common.faction.v1.FactionMember;
 import com.blib.api.common.nbt.v1.model.NBTSerializable;
 import com.just.core.functional.option.Option;
+import net.minecraft.core.particles.DustParticleOptions;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.ChunkPos;
+import org.joml.Vector3f;
 
 /**
  * Per-alien hive manager. Drives:
@@ -131,7 +131,10 @@ public class HiveManager implements NBTSerializable {
         return false;
     }
 
-    /** Near-black founding motes. Dust is recolourable (unlike the old fixed-purple spell swirl); tweak the RGB to taste. */
+    /**
+     * Near-black founding motes. Dust is recolourable (unlike the old fixed-purple spell swirl); tweak the RGB to
+     * taste.
+     */
     private static final DustParticleOptions FOUNDING_DUST = new DustParticleOptions(new Vector3f(0.05F, 0.05F, 0.05F), 1.0F);
 
     /** Black dust aura while she is actively settling, throttled so it reads as a gentle aura rather than a fog. */
@@ -143,15 +146,15 @@ public class HiveManager implements NBTSerializable {
         var width = queen.getBbWidth();
         var height = queen.getBbHeight();
         serverLevel.sendParticles(
-                FOUNDING_DUST,
-                queen.getX(),
-                queen.getY() + height * 0.6,
-                queen.getZ(),
-                4,
-                width * 0.6,
-                height * 0.5,
-                width * 0.6,
-                0.02
+            FOUNDING_DUST,
+            queen.getX(),
+            queen.getY() + height * 0.6,
+            queen.getZ(),
+            4,
+            width * 0.6,
+            height * 0.5,
+            width * 0.6,
+            0.02
         );
     }
 
@@ -231,8 +234,8 @@ public class HiveManager implements NBTSerializable {
         // queens must be too, otherwise a queen that hasn't yet settled into an ovipositor gets shed after the grace
         // window and the lineage is left queenless.
         if (
-                alien.getType().is(AlienEntityTypeTags.EMPRESSES)
-                        || alien.getType().is(AlienEntityTypeTags.QUEENS)
+            alien.getType().is(AlienEntityTypeTags.EMPRESSES)
+                || alien.getType().is(AlienEntityTypeTags.QUEENS)
         ) {
             return false;
         }

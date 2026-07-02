@@ -16,8 +16,8 @@ public class Ovipositor extends Mob {
 
     public static AttributeSupplier.Builder createOvipositorAttributes() {
         return createMobAttributes()
-                .add(Attributes.MAX_HEALTH, 100)
-                .add(Attributes.MOVEMENT_SPEED, 0);
+            .add(Attributes.MAX_HEALTH, 100)
+            .add(Attributes.MOVEMENT_SPEED, 0);
     }
 
     public Ovipositor(EntityType<? extends Ovipositor> entityType, Level level) {

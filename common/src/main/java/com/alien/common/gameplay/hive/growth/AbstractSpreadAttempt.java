@@ -78,11 +78,11 @@ public final class AbstractSpreadAttempt {
      * conditions or the candidate check failed.
      */
     public static @Nullable HiveLocationId tryRun(
-        MinecraftServer server,
-        ResourceLocation lineageId,
-        LineageFactionData lineage,
-        HiveLocation sourceLocation,
-        long currentTick
+            MinecraftServer server,
+            ResourceLocation lineageId,
+            LineageFactionData lineage,
+            HiveLocation sourceLocation,
+            long currentTick
     ) {
         var config = HiveLocationRegistry.INSTANCE.config();
 
@@ -90,13 +90,13 @@ public final class AbstractSpreadAttempt {
         var remainingCooldownTicks = remainingCooldownTicks(sourceLocation, currentTick, config);
         if (remainingCooldownTicks > 0L) {
             record(
-                sourceLocation,
-                lineage,
-                currentTick,
-                RESULT_COOLDOWN,
-                null,
-                null,
-                "Next eligible in " + remainingCooldownTicks + " ticks."
+                    sourceLocation,
+                    lineage,
+                    currentTick,
+                    RESULT_COOLDOWN,
+                    null,
+                    null,
+                    "Next eligible in " + remainingCooldownTicks + " ticks."
             );
             return null;
         }
@@ -104,13 +104,33 @@ public final class AbstractSpreadAttempt {
         // Max locations cap.
         if (lineage.locationsById().size() >= config.maxLocationsPerLineage()) {
             record(
-                sourceLocation,
-                lineage,
-                currentTick,
-                RESULT_MAX_LOCATIONS,
-                null,
-                null,
-                "Lineage has " + lineage.locationsById().size() + "/" + config.maxLocationsPerLineage() + " locations."
+                    sourceLocation,
+                    lineage,
+                    currentTick,
+                    RESULT_MAX_LOCATIONS,
+                    null,
+                    null,
+                    "Lineage has " + lineage.locationsById().size() + "/" + config.maxLocationsPerLineage() + " locations."
+            );
+            return null;
+        }
+
+        // Empress hive-count cap. An empress can only control up to maxLocationsUnderEmpress hives (including her
+        // own origin hive) — a stricter, empress-specific ceiling below the general per-lineage cap above. Once she's
+        // present, growth stops well short of maxLocationsPerLineage unless that config is tightened to match.
+        if (lineage.empressId() != null && lineage.locationsById().size() >= config.maxLocationsUnderEmpress()) {
+            record(
+                    sourceLocation,
+                    lineage,
+                    currentTick,
+                    RESULT_MAX_LOCATIONS,
+                    null,
+                    null,
+                    "Empress-led lineage has "
+                            + lineage.locationsById().size()
+                            + "/"
+                            + config.maxLocationsUnderEmpress()
+                            + " hives (empress cap)."
             );
             return null;
         }
@@ -118,13 +138,13 @@ public final class AbstractSpreadAttempt {
         var serverLevel = server.getLevel(lineage.dimension());
         if (serverLevel == null) {
             record(
-                sourceLocation,
-                lineage,
-                currentTick,
-                RESULT_DIMENSION_UNLOADED,
-                null,
-                null,
-                "Dimension " + lineage.dimension().location() + " is not loaded."
+                    sourceLocation,
+                    lineage,
+                    currentTick,
+                    RESULT_DIMENSION_UNLOADED,
+                    null,
+                    null,
+                    "Dimension " + lineage.dimension().location() + " is not loaded."
             );
             return null;
         }
@@ -137,13 +157,13 @@ public final class AbstractSpreadAttempt {
         var sourcePopulation = CastePopulation.totalTrackedPopulation(sourceLocation);
         if (sourcePopulation < config.minimumPopulationForHiveSpread()) {
             record(
-                sourceLocation,
-                lineage,
-                currentTick,
-                RESULT_INSUFFICIENT_POPULATION,
-                null,
-                null,
-                "Source population is " + sourcePopulation + "/" + config.minimumPopulationForHiveSpread() + "."
+                    sourceLocation,
+                    lineage,
+                    currentTick,
+                    RESULT_INSUFFICIENT_POPULATION,
+                    null,
+                    null,
+                    "Source population is " + sourcePopulation + "/" + config.minimumPopulationForHiveSpread() + "."
             );
             return null;
         }
@@ -151,25 +171,25 @@ public final class AbstractSpreadAttempt {
         var founderParty = FounderParty.forLineage(lineage, config);
         if (founderParty == null) {
             record(
-                sourceLocation,
-                lineage,
-                currentTick,
-                RESULT_SPREAD_DISABLED,
-                null,
-                null,
-                "Could not resolve queen/drone/runner founder types for variant " + lineage.variant() + "."
+                    sourceLocation,
+                    lineage,
+                    currentTick,
+                    RESULT_SPREAD_DISABLED,
+                    null,
+                    null,
+                    "Could not resolve queen/drone/runner founder types for variant " + lineage.variant() + "."
             );
             return null;
         }
         if (!founderParty.availableIn(sourceLocation)) {
             record(
-                sourceLocation,
-                lineage,
-                currentTick,
-                RESULT_INSUFFICIENT_FOUNDER_POPULATION,
-                null,
-                null,
-                founderParty.missingDetail(sourceLocation)
+                    sourceLocation,
+                    lineage,
+                    currentTick,
+                    RESULT_INSUFFICIENT_FOUNDER_POPULATION,
+                    null,
+                    null,
+                    founderParty.missingDetail(sourceLocation)
             );
             return null;
         }
@@ -177,13 +197,13 @@ public final class AbstractSpreadAttempt {
         var candidateChunk = pickCandidateInSpreadZone(sourceLocation, config);
         if (candidateChunk == null) {
             record(
-                sourceLocation,
-                lineage,
-                currentTick,
-                RESULT_SPREAD_DISABLED,
-                null,
-                null,
-                "maxLineageSpreadChunks is " + config.maxLineageSpreadChunks() + "."
+                    sourceLocation,
+                    lineage,
+                    currentTick,
+                    RESULT_SPREAD_DISABLED,
+                    null,
+                    null,
+                    "maxLineageSpreadChunks is " + config.maxLineageSpreadChunks() + "."
             );
             return null;
         }
@@ -191,13 +211,13 @@ public final class AbstractSpreadAttempt {
         var candidateValidation = validateCandidate(lineage, candidateChunk, config);
         if (!candidateValidation.valid()) {
             record(
-                sourceLocation,
-                lineage,
-                currentTick,
-                candidateValidation.result(),
-                candidateChunk,
-                null,
-                candidateValidation.detail()
+                    sourceLocation,
+                    lineage,
+                    currentTick,
+                    candidateValidation.result(),
+                    candidateChunk,
+                    null,
+                    candidateValidation.detail()
             );
             return null;
         }
@@ -210,21 +230,21 @@ public final class AbstractSpreadAttempt {
 
         sourceLocation.setLastAbstractSpreadTick(currentTick);
         record(
-            sourceLocation,
-            lineage,
-            currentTick,
-            RESULT_SUCCESS,
-            candidateChunk,
-            locationId,
-            "Dispatched " + founderGroup.composition().getCount() + " founder reserves by convoy to the new location."
+                sourceLocation,
+                lineage,
+                currentTick,
+                RESULT_SUCCESS,
+                candidateChunk,
+                locationId,
+                "Dispatched " + founderGroup.composition().getCount() + " founder reserves by convoy to the new location."
         );
 
         Alien.LOGGER.info(
-            "Hive: abstract spread for lineage {}: minted location {} at chunk {} (sourced from {})",
-            lineageId,
-            locationId,
-            candidateChunk,
-            sourceLocation.id()
+                "Hive: abstract spread for lineage {}: minted location {} at chunk {} (sourced from {})",
+                lineageId,
+                locationId,
+                candidateChunk,
+                sourceLocation.id()
         );
 
         return locationId;
@@ -256,33 +276,33 @@ public final class AbstractSpreadAttempt {
         var occupant = HiveLocationRegistry.INSTANCE.getByChunk(lineage.dimension(), candidate);
         if (occupant != null) {
             return CandidateValidation.reject(
-                RESULT_OCCUPIED,
-                "Candidate chunk is already claimed by " + occupant.id().value() + "."
+                    RESULT_OCCUPIED,
+                    "Candidate chunk is already claimed by " + occupant.id().value() + "."
             );
         }
 
         var coreOverlap = findInitialCoreOverlap(lineage, candidate);
         if (coreOverlap != null) {
             return CandidateValidation.reject(
-                RESULT_CORE_OVERLAP,
-                "Initial claim footprint would overlap " + coreOverlap.occupant().id().value()
-                    + " at chunk " + coreOverlap.chunk() + "."
+                    RESULT_CORE_OVERLAP,
+                    "Initial claim footprint would overlap " + coreOverlap.occupant().id().value()
+                            + " at chunk " + coreOverlap.chunk() + "."
             );
         }
 
         var tooClose = HiveLocationRegistry.INSTANCE.findTooCloseToCenter(
-            lineage.dimension(),
-            candidate,
-            config.minimumHiveLocationDistanceChunks()
+                lineage.dimension(),
+                candidate,
+                config.minimumHiveLocationDistanceChunks()
         );
         if (tooClose != null) {
             return CandidateValidation.reject(
-                RESULT_TOO_CLOSE,
-                "Candidate is within "
-                    + config.minimumHiveLocationDistanceChunks()
-                    + " chunks of existing hive location "
-                    + tooClose.id().value()
-                    + "."
+                    RESULT_TOO_CLOSE,
+                    "Candidate is within "
+                            + config.minimumHiveLocationDistanceChunks()
+                            + " chunks of existing hive location "
+                            + tooClose.id().value()
+                            + "."
             );
         }
 
@@ -291,8 +311,8 @@ public final class AbstractSpreadAttempt {
         for (var location : lineage.locationsById().values()) {
             if (location.decoratedChunks().contains(candidate)) {
                 return CandidateValidation.reject(
-                    RESULT_DECORATED,
-                    "Candidate chunk was previously decorated by " + location.id().value() + "."
+                        RESULT_DECORATED,
+                        "Candidate chunk was previously decorated by " + location.id().value() + "."
                 );
             }
         }
@@ -315,20 +335,20 @@ public final class AbstractSpreadAttempt {
     }
 
     private static HiveLocation mintAbstractLocation(
-        ServerLevel level,
-        LineageFactionData lineage,
-        ResourceLocation lineageId,
-        ChunkPos candidate,
-        long currentTick
+            ServerLevel level,
+            LineageFactionData lineage,
+            ResourceLocation lineageId,
+            ChunkPos candidate,
+            long currentTick
     ) {
         var locationId = HiveLocationIds.create();
         var centerPos = candidate.getMiddleBlockPosition(64); // Y is approximate; chunk-load corrects later
         var location = new HiveLocation(
-            locationId,
-            lineageId,
-            lineage.dimension(),
-            centerPos,
-            null // No founder — minted abstractly without a queen entity.
+                locationId,
+                lineageId,
+                lineage.dimension(),
+                centerPos,
+                null // No founder — minted abstractly without a queen entity.
         );
         location.setLocationNumber(lineage.allocateLocationNumber());
         HiveLocationFactionProvisioner.ensure(location, lineage);
@@ -346,23 +366,23 @@ public final class AbstractSpreadAttempt {
     }
 
     private static void dispatchFounderConvoy(
-        LineageFactionData lineage,
-        ResourceLocation lineageId,
-        HiveLocation sourceLocation,
-        HiveLocation destinationLocation,
-        FounderGroup founderGroup,
-        long currentTick
+            LineageFactionData lineage,
+            ResourceLocation lineageId,
+            HiveLocation sourceLocation,
+            HiveLocation destinationLocation,
+            FounderGroup founderGroup,
+            long currentTick
     ) {
         var convoy = new Convoy.Reinforcement(
-            ConvoyId.fresh(),
-            lineageId,
-            sourceLocation.dimension(),
-            sourceLocation.id(),
-            destinationLocation.id(),
-            centerOf(sourceLocation.centerPos()),
-            destinationLocation.centerPos(),
-            founderGroup.composition(),
-            currentTick
+                ConvoyId.fresh(),
+                lineageId,
+                sourceLocation.dimension(),
+                sourceLocation.id(),
+                destinationLocation.id(),
+                centerOf(sourceLocation.centerPos()),
+                destinationLocation.centerPos(),
+                founderGroup.composition(),
+                currentTick
         );
 
         lineage.convoys().add(convoy);
@@ -387,28 +407,28 @@ public final class AbstractSpreadAttempt {
     }
 
     private static void record(
-        HiveLocation sourceLocation,
-        LineageFactionData lineage,
-        long currentTick,
-        String result,
-        @Nullable ChunkPos candidateChunk,
-        @Nullable HiveLocationId createdLocationId,
-        String detail
+            HiveLocation sourceLocation,
+            LineageFactionData lineage,
+            long currentTick,
+            String result,
+            @Nullable ChunkPos candidateChunk,
+            @Nullable HiveLocationId createdLocationId,
+            String detail
     ) {
         sourceLocation.recordAbstractSpreadAttempt(
-            currentTick,
-            result,
-            candidateChunk,
-            createdLocationId,
-            detail
+                currentTick,
+                result,
+                candidateChunk,
+                createdLocationId,
+                detail
         );
         lineage.markDirty();
     }
 
     private record CandidateValidation(
-        boolean valid,
-        String result,
-        String detail
+            boolean valid,
+            String result,
+            String detail
     ) {
 
         private static CandidateValidation accept() {
@@ -421,16 +441,16 @@ public final class AbstractSpreadAttempt {
     }
 
     private record CoreOverlap(
-        ChunkPos chunk,
-        HiveLocation occupant
+            ChunkPos chunk,
+            HiveLocation occupant
     ) {}
 
     private record FounderParty(
-        EntityType<?> queenType,
-        EntityType<?> droneType,
-        EntityType<?> runnerType,
-        int minSize,
-        int maxSize
+            EntityType<?> queenType,
+            EntityType<?> droneType,
+            EntityType<?> runnerType,
+            int minSize,
+            int maxSize
     ) {
 
         private static @Nullable FounderParty forLineage(LineageFactionData lineage, HiveConfig config) {
@@ -443,19 +463,19 @@ public final class AbstractSpreadAttempt {
             var minSize = Math.max(3, config.abstractSpreadMinFounderGroupSize());
             var maxSize = Math.max(minSize, config.abstractSpreadMaxFounderGroupSize());
             return new FounderParty(
-                (EntityType<?>) queenType,
-                (EntityType<?>) droneType,
-                (EntityType<?>) runnerType,
-                minSize,
-                maxSize
+                    (EntityType<?>) queenType,
+                    (EntityType<?>) droneType,
+                    (EntityType<?>) runnerType,
+                    minSize,
+                    maxSize
             );
         }
 
         private boolean availableIn(HiveLocation location) {
             return location.localReserves().getCount(queenType) >= 1
-                && location.localReserves().getCount(droneType) >= 1
-                && location.localReserves().getCount(runnerType) >= 1
-                && eligibleReserveCount(location) >= minSize;
+                    && location.localReserves().getCount(droneType) >= 1
+                    && location.localReserves().getCount(runnerType) >= 1
+                    && eligibleReserveCount(location) >= minSize;
         }
 
         private FounderGroup drainFrom(HiveLocation location) {
@@ -472,16 +492,16 @@ public final class AbstractSpreadAttempt {
 
         private String missingDetail(HiveLocation location) {
             return "Source reserves need queen/drone/runner founder party; have "
-                + location.localReserves().getCount(queenType)
-                + "/"
-                + location.localReserves().getCount(droneType)
-                + "/"
-                + location.localReserves().getCount(runnerType)
-                + " and "
-                + eligibleReserveCount(location)
-                + "/"
-                + minSize
-                + " eligible founder reserves.";
+                    + location.localReserves().getCount(queenType)
+                    + "/"
+                    + location.localReserves().getCount(droneType)
+                    + "/"
+                    + location.localReserves().getCount(runnerType)
+                    + " and "
+                    + eligibleReserveCount(location)
+                    + "/"
+                    + minSize
+                    + " eligible founder reserves.";
         }
 
         private int eligibleReserveCount(HiveLocation location) {
@@ -503,11 +523,11 @@ public final class AbstractSpreadAttempt {
         private static void drainFillers(HiveLocation location, EntityReserves composition, int count) {
             var remaining = count;
             var available = new java.util.ArrayList<>(
-                location.localReserves()
-                    .getAvailableEntityTypes()
-                    .stream()
-                    .filter(FounderParty::isFounderFillerEligible)
-                    .toList()
+                    location.localReserves()
+                            .getAvailableEntityTypes()
+                            .stream()
+                            .filter(FounderParty::isFounderFillerEligible)
+                            .toList()
             );
 
             while (remaining > 0 && !available.isEmpty()) {
@@ -529,17 +549,17 @@ public final class AbstractSpreadAttempt {
 
         private static boolean isFounderFillerEligible(EntityType<?> type) {
             return type.is(AlienEntityTypeTags.DRONES)
-                || type.is(AlienEntityTypeTags.RUNNERS)
-                || type.is(AlienEntityTypeTags.WARRIORS)
-                || type.is(AlienEntityTypeTags.PROWLERS)
-                || type.is(AlienEntityTypeTags.PRAETORIANS)
-                || type.is(AlienEntityTypeTags.CRUSHERS)
-                || type.is(AlienEntityTypeTags.RAVAGERS)
-                || type.is(AlienEntityTypeTags.RAZOR_CLAWS)
-                || type.is(AlienEntityTypeTags.BURSTERS)
-                || type.is(AlienEntityTypeTags.CARRIERS)
-                || type.is(AlienEntityTypeTags.CHRYSALISES)
-                || type.is(AlienEntityTypeTags.SPITTERS);
+                    || type.is(AlienEntityTypeTags.RUNNERS)
+                    || type.is(AlienEntityTypeTags.WARRIORS)
+                    || type.is(AlienEntityTypeTags.PROWLERS)
+                    || type.is(AlienEntityTypeTags.PRAETORIANS)
+                    || type.is(AlienEntityTypeTags.CRUSHERS)
+                    || type.is(AlienEntityTypeTags.RAVAGERS)
+                    || type.is(AlienEntityTypeTags.RAZOR_CLAWS)
+                    || type.is(AlienEntityTypeTags.BURSTERS)
+                    || type.is(AlienEntityTypeTags.CARRIERS)
+                    || type.is(AlienEntityTypeTags.CHRYSALISES)
+                    || type.is(AlienEntityTypeTags.SPITTERS);
         }
     }
 

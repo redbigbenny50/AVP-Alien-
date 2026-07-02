@@ -91,6 +91,16 @@ public class AlienSoundEvents {
 
     public static final BLibHolder<SoundEvent> JUKEBOX_SOUNDS_ALIEN_MUSIC_1 = create("jukebox_sounds.alien_music_1");
 
+    public static final BLibHolder<SoundEvent> UI_TERMINAL_OPEN = create("ui.terminal.open");
+
+    public static final BLibHolder<SoundEvent> UI_TERMINAL_CLOSE = create("ui.terminal.close");
+
+    public static final BLibHolder<SoundEvent> UI_TERMINAL_MOUSEOVER = create("ui.terminal.mouseover");
+
+    public static final BLibHolder<SoundEvent> UI_TERMINAL_CLICK = create("ui.terminal.click");
+
+    public static final BLibHolder<SoundEvent> UI_TERMINAL_EXECUTE = create("ui.terminal.execute");
+
     private static BLibHolder<SoundEvent> create(String path) {
         return REGISTRY.createHolder(path, () -> SoundEvent.createVariableRangeEvent(AlienResources.location(path)));
     }

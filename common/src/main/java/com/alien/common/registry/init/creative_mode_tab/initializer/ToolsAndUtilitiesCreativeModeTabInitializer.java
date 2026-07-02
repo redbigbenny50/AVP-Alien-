@@ -12,6 +12,7 @@ public class ToolsAndUtilitiesCreativeModeTabInitializer {
         CreativeModeTabUtil.accept(output, AlienItems.CAPTURE_CHAIN);
         CreativeModeTabUtil.accept(output, AlienItems.INHIBITOR);
         CreativeModeTabUtil.accept(output, AlienItems.TRACKER);
+        CreativeModeTabUtil.accept(output, AlienItems.TRACKING_PDA);
         CreativeModeTabUtil.accept(output, AlienItems.ALIEN_MUSIC_DISC_1);
     };
 }

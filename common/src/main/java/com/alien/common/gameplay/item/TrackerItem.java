@@ -3,6 +3,7 @@ package com.alien.common.gameplay.item;
 import com.alien.common.gameplay.entity.living.alien.xenomorph.queen.Queen;
 import com.alien.common.gameplay.level.saveddata.TrackedQueenRegistry;
 import com.alien.common.model.alien.variant.AlienVariant;
+import net.minecraft.core.component.DataComponents;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResult;
 import net.minecraft.world.entity.LivingEntity;
@@ -23,8 +24,18 @@ public class TrackerItem extends Item {
         super(properties);
     }
 
-    /** Readable label stored with the tracked queen, e.g. "Aberrant Queen"; plain "Queen" for the normal strain. */
-    private static String queenLabel(Queen queen) {
+    /**
+     * Readable label stored with the tracked queen. If the tracker item was renamed in an anvil, that nickname is used
+     * so players can label each tracker by location; otherwise it falls back to the strain label, e.g. "Aberrant Queen"
+     * (plain "Queen" for the normal strain).
+     */
+    private static String queenLabel(ItemStack stack, Queen queen) {
+        if (stack.has(DataComponents.CUSTOM_NAME)) {
+            var custom = stack.getHoverName().getString().trim();
+            if (!custom.isEmpty()) {
+                return custom;
+            }
+        }
         var variant = queen.getVariant();
         if (variant == AlienVariant.NORMAL) {
             return "Queen";
@@ -43,12 +54,13 @@ public class TrackerItem extends Item {
         if (target instanceof Queen queen && !queen.isTracked()) {
             if (!player.level().isClientSide) {
                 queen.setTracked(true);
+                queen.setPersistenceRequired();
                 TrackedQueenRegistry.getOrCreate(queen.level())
                         .ifSome(registry -> registry.track(
                                 queen.getUUID(),
                                 queen.blockPosition(),
                                 queen.level().dimension(),
-                                queenLabel(queen),
+                                queenLabel(stack, queen),
                                 queen.level().getGameTime()
                         ));
                 if (!player.getAbilities().instabuild) {

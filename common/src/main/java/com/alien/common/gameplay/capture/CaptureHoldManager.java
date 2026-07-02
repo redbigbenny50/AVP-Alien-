@@ -117,11 +117,11 @@ public final class CaptureHoldManager {
             Mob mob = mobEntity instanceof Mob m ? m : null;
 
             if (
-                    holder == null
-                            || !holder.isAlive()
-                            || mob == null
-                            || !mob.isAlive()
-                            || mob.level() != holder.level()
+                holder == null
+                    || !holder.isAlive()
+                    || mob == null
+                    || !mob.isAlive()
+                    || mob.level() != holder.level()
             ) {
                 it.remove();
                 if (mob != null && mob.isAlive()) {
