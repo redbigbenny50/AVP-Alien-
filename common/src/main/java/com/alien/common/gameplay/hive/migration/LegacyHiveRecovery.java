@@ -46,11 +46,10 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
-import java.util.LinkedHashMap;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.UUID;
 
 public final class LegacyHiveRecovery {
@@ -406,7 +405,11 @@ public final class LegacyHiveRecovery {
     private static boolean repairSnapshot(MinecraftServer server, LegacyHiveRecoveryData recoveryData, LegacyHiveSnapshot snapshot) {
         var level = server.getLevel(snapshot.dimension());
         if (level == null) {
-            Alien.LOGGER.warn("Legacy hive recovery: dimension {} is not loaded; skipping {}", snapshot.dimension().location(), snapshot.id());
+            Alien.LOGGER.warn(
+                "Legacy hive recovery: dimension {} is not loaded; skipping {}",
+                snapshot.dimension().location(),
+                snapshot.id()
+            );
             return false;
         }
 
@@ -524,7 +527,13 @@ public final class LegacyHiveRecovery {
         lineageData.setDimension(snapshot.dimension());
         lineageData.setFounderId(snapshot.leaderId());
 
-        var location = new HiveLocation(HiveLocationIds.create(), lineageId, snapshot.dimension(), snapshot.centerPos(), snapshot.leaderId());
+        var location = new HiveLocation(
+            HiveLocationIds.create(),
+            lineageId,
+            snapshot.dimension(),
+            snapshot.centerPos(),
+            snapshot.leaderId()
+        );
         location.setLocationNumber(lineageData.allocateLocationNumber());
         HiveLocationFactionProvisioner.ensure(location, lineageData);
         lineageData.addLocation(location);
@@ -580,10 +589,12 @@ public final class LegacyHiveRecovery {
         joinedMembers.add(queen);
 
         var area = queen.getBoundingBox().inflate(NEARBY_MEMBER_JOIN_RADIUS_BLOCKS);
-        for (var alien : level.getEntitiesOfClass(
-            com.alien.common.gameplay.entity.living.alien.Alien.class,
-            area
-        )) {
+        for (
+            var alien : level.getEntitiesOfClass(
+                com.alien.common.gameplay.entity.living.alien.Alien.class,
+                area
+            )
+        ) {
             if (alien == queen) {
                 continue;
             }
@@ -745,7 +756,9 @@ public final class LegacyHiveRecovery {
         var variant = readVariant(tag);
         var biomass = readBiomass(tag);
         var reserves = readLegacyReserves(tag);
-        var id = tag.contains("Id") ? tag.getString("Id") : tag.contains("id") ? tag.getString("id") : fallbackId != null ? fallbackId : center.toShortString();
+        var id = tag.contains("Id")
+            ? tag.getString("Id")
+            : tag.contains("id") ? tag.getString("id") : fallbackId != null ? fallbackId : center.toShortString();
 
         return new LegacyHiveSnapshot(id, dimension, center, leader, variant, biomass, members, reserves);
     }
@@ -966,7 +979,10 @@ public final class LegacyHiveRecovery {
         return 0;
     }
 
-    private record CreatedLocation(LineageFactionData lineage, HiveLocation location) {}
+    private record CreatedLocation(
+        LineageFactionData lineage,
+        HiveLocation location
+    ) {}
 
     private record LegacyHiveSnapshot(
         String id,
@@ -979,7 +995,10 @@ public final class LegacyHiveRecovery {
         Map<EntityType<?>, Integer> reserves
     ) {}
 
-    private record LegacyHiveMember(UUID uuid, @Nullable EntityType<?> entityType) {
+    private record LegacyHiveMember(
+        UUID uuid,
+        @Nullable EntityType<?> entityType
+    ) {
 
         boolean isQueen() {
             return entityType != null && entityType.is(AlienEntityTypeTags.QUEENS);

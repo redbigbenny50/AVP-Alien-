@@ -134,6 +134,13 @@ public class AlienDataSyncKeys {
             .build(false)
     );
 
+    public static final BLibHolder<DataSyncKey<Boolean>> QUEEN_IS_TRACKED = create(
+        "queen_is_tracked",
+        builder -> builder.networkSynchronized(StreamCodecs.BOOLEAN)
+            .persistent("isTracked", Codec.BOOL)
+            .build(false)
+    );
+
     public static final BLibHolder<DataSyncKey<Integer>> XENOMORPH_ATTACK_DURATION_IN_TICKS = create(
         "xenomorph_attack_duration_in_ticks",
         builder -> builder.networkSynchronized(StreamCodecs.INT)

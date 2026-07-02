@@ -1,10 +1,13 @@
 package com.alien.common.network.handler;
 
+import com.alien.client.gui.TrackingPdaScreen;
 import com.alien.client.render.CaptureHoldClientState;
 import com.alien.client.render.hive.ClientHiveRenderCache;
+import com.alien.common.gameplay.level.saveddata.TrackedQueenRow;
 import com.alien.common.network.payload.S2CCaptureHoldPayload;
 import com.alien.common.network.payload.S2CHiveInspectionPayload;
 import com.alien.common.network.payload.S2CHiveRenderDataPayload;
+import com.alien.common.network.payload.S2CTrackedQueensPayload;
 import com.alien.compatibility.blib_engine.client.inspector.ClientHiveInspectionCache;
 import net.minecraft.world.entity.player.Player;
 
@@ -34,5 +37,10 @@ public final class AlienClientPacketListener {
     /** Server-pushed hive render data for the debug wireframe overlay. */
     public static void handleHiveRenderData(S2CHiveRenderDataPayload payload, Player player) {
         ClientHiveRenderCache.apply(payload);
+    }
+
+    /** Server-pushed tracked-queen list for the PDA: open the readout screen. */
+    public static void handleTrackedQueens(S2CTrackedQueensPayload payload, Player player) {
+        TrackingPdaScreen.open(TrackedQueenRow.unpackList(payload.data()));
     }
 }

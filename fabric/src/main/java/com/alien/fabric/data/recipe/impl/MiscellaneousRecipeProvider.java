@@ -64,6 +64,33 @@ public class MiscellaneousRecipeProvider {
             .pattern("I I")
             .into(1, AlienItems.INHIBITOR);
 
+        // Capture chain: three vanilla chains stacked in a column.
+        builder.shaped()
+            .withCategory(RecipeCategory.TOOLS)
+            .define('C', Items.CHAIN)
+            .pattern("C")
+            .pattern("C")
+            .pattern("C")
+            .into(2, AlienItems.CAPTURE_CHAIN);
+
+        // Anchor: an iron ingot centred over a row of three iron blocks -> 8 anchors.
+        builder.shaped()
+            .withCategory(RecipeCategory.MISC)
+            .define('I', Items.IRON_INGOT)
+            .define('B', Items.IRON_BLOCK)
+            .pattern(" I ")
+            .pattern("BBB")
+            .into(8, AlienItems.ANCHOR);
+
+        // Tracker tag: redstone + amethyst shard + glowstone dust + iron ingot.
+        builder.shapeless()
+            .withCategory(RecipeCategory.TOOLS)
+            .requires(1, Items.REDSTONE)
+            .requires(1, Items.AMETHYST_SHARD)
+            .requires(1, Items.GLOWSTONE_DUST)
+            .requires(1, Items.IRON_INGOT)
+            .into(1, AlienItems.TRACKER);
+
         builder.shapeless()
             .withCategory(RecipeCategory.MISC)
             .requires(9, AlienItems.ALIEN_MUSIC_DISC_1_FRAGMENT)

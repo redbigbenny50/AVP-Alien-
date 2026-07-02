@@ -48,8 +48,9 @@ public final class LocationMoveSensors {
             return null;
         }
 
-        // A bound queen does not locate or dig — her front-end is frozen until she is fully released.
-        if (queen.getBindManager().hasAnyChain()) {
+        // A bound OR inhibited queen does not locate or dig — her front-end is frozen while she is chained or carries
+        // an inhibitor, so a captured queen whose chains are broken waits (to be freed) instead of re-locating.
+        if (queen.getBindManager().hasAnyChain() || queen.isInhibited()) {
             return null;
         }
 

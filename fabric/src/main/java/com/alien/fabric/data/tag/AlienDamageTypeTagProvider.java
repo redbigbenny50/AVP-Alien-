@@ -39,11 +39,6 @@ public class AlienDamageTypeTagProvider extends FabricTagProvider<DamageType> {
                 AlienDamageTypeKeys.CHESTBURSTING
             );
 
-        getOrCreateTagBuilder(DamageTypeTags.BYPASSES_INVULNERABILITY)
-            .add(
-                AlienDamageTypeKeys.CHESTBURSTING
-            );
-
         getOrCreateTagBuilder(DamageTypeTags.BYPASSES_RESISTANCE)
             .add(
                 AlienDamageTypeKeys.CHESTBURSTING

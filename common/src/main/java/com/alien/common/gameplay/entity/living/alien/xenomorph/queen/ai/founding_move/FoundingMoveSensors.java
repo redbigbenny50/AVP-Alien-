@@ -78,8 +78,10 @@ public final class FoundingMoveSensors {
             return null;
         }
 
-        // A bound queen does not found — her front-end is frozen until she is fully released.
-        if (xenomorph instanceof Queen queen && queen.getBindManager().hasAnyChain()) {
+        // A bound OR inhibited queen does not found — her front-end is frozen while she is chained or carries an
+        // inhibitor. This is what keeps a captured queen whose chains have been broken from re-founding: she stays
+        // inhibited and waits to be freed (inhibitor pried off) instead of relocating.
+        if (xenomorph instanceof Queen queen && (queen.getBindManager().hasAnyChain() || queen.isInhibited())) {
             return null;
         }
 

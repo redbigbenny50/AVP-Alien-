@@ -1,6 +1,17 @@
 package com.alien.common.gameplay.hive.command;
 
 import com.alien.Alien;
+import com.alien.common.gameplay.entity.living.alien.xenomorph.burster.Burster;
+import com.alien.common.gameplay.entity.living.alien.xenomorph.carrier.Carrier;
+import com.alien.common.gameplay.entity.living.alien.xenomorph.chrysalis.Chrysalis;
+import com.alien.common.gameplay.entity.living.alien.xenomorph.drone.Drone;
+import com.alien.common.gameplay.entity.living.alien.xenomorph.harbinger.Harbinger;
+import com.alien.common.gameplay.entity.living.alien.xenomorph.prowler.Prowler;
+import com.alien.common.gameplay.entity.living.alien.xenomorph.queen.Queen;
+import com.alien.common.gameplay.entity.living.alien.xenomorph.ravager.Ravager;
+import com.alien.common.gameplay.entity.living.alien.xenomorph.razor_claw.RazorClaw;
+import com.alien.common.gameplay.entity.living.alien.xenomorph.runner.Runner;
+import com.alien.common.gameplay.entity.living.alien.xenomorph.warrior.Warrior;
 import com.alien.common.gameplay.hive.convoy.Convoy;
 import com.alien.common.gameplay.hive.convoy.ConvoyId;
 import com.alien.common.gameplay.hive.convoy.MigrationDispatch;
@@ -25,17 +36,7 @@ import com.alien.common.gameplay.hive.lifecycle.LocationDeathHandler;
 import com.alien.common.gameplay.hive.lifecycle.QueenSettlementDetector;
 import com.alien.common.gameplay.hive.location.HiveLocation;
 import com.alien.common.gameplay.hive.location.HiveLocationRegistry;
-import com.alien.common.gameplay.entity.living.alien.xenomorph.burster.Burster;
-import com.alien.common.gameplay.entity.living.alien.xenomorph.carrier.Carrier;
-import com.alien.common.gameplay.entity.living.alien.xenomorph.chrysalis.Chrysalis;
-import com.alien.common.gameplay.entity.living.alien.xenomorph.drone.Drone;
-import com.alien.common.gameplay.entity.living.alien.xenomorph.harbinger.Harbinger;
-import com.alien.common.gameplay.entity.living.alien.xenomorph.prowler.Prowler;
-import com.alien.common.gameplay.entity.living.alien.xenomorph.queen.Queen;
-import com.alien.common.gameplay.entity.living.alien.xenomorph.ravager.Ravager;
-import com.alien.common.gameplay.entity.living.alien.xenomorph.razor_claw.RazorClaw;
-import com.alien.common.gameplay.entity.living.alien.xenomorph.runner.Runner;
-import com.alien.common.gameplay.entity.living.alien.xenomorph.warrior.Warrior;
+import com.alien.common.gameplay.level.saveddata.TrackedQueenRegistry;
 import com.alien.common.model.alien.variant.AlienVariant;
 import com.alien.common.registry.RaidWaveProfileRegistry;
 import com.alien.common.registry.init.AlienFactionDataTypes;
@@ -89,6 +90,7 @@ public final class HiveDebugCommands {
     public static LiteralArgumentBuilder<CommandSourceStack> create() {
         return Commands.literal("hive")
             .then(Commands.literal("list_lineages").executes(HiveDebugCommands::listLineages))
+            .then(Commands.literal("list_tracked").executes(HiveDebugCommands::listTracked))
             .then(Commands.literal("dump_indexes").executes(HiveDebugCommands::dumpIndexes))
             .then(Commands.literal("inhibit_here").executes(HiveDebugCommands::inhibitHere))
             .then(
@@ -439,6 +441,38 @@ public final class HiveDebugCommands {
         }
 
         return ids.size();
+    }
+
+    private static int listTracked(com.mojang.brigadier.context.CommandContext<CommandSourceStack> ctx) {
+        var source = ctx.getSource();
+        var now = source.getLevel().getGameTime();
+
+        TrackedQueenRegistry.getOrCreate(source.getServer()).ifSome(registry -> {
+            var entries = registry.entries();
+            source.sendSuccess(() -> Component.literal("Tracked queens (" + entries.size() + "):"), false);
+
+            for (var e : entries.entrySet()) {
+                var id = e.getKey();
+                var entry = e.getValue();
+                var ageSeconds = Math.max(0, (now - entry.lastSeenGameTime()) / 20);
+
+                source.sendSuccess(
+                    () -> Component.literal("  ")
+                        .append(copyableId(id.toString()))
+                        .append(
+                            Component.literal(
+                                " " + entry.name()
+                                    + " dim=" + entry.dimension().location()
+                                    + " pos=" + entry.pos().getX() + "," + entry.pos().getY() + "," + entry.pos().getZ()
+                                    + " seen " + ageSeconds + "s ago"
+                            )
+                        ),
+                    false
+                );
+            }
+        });
+
+        return 1;
     }
 
     private static int dumpIndexes(com.mojang.brigadier.context.CommandContext<CommandSourceStack> ctx) {

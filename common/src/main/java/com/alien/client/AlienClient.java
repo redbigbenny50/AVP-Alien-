@@ -386,6 +386,7 @@ public class AlienClient {
         });
         registerAsset(AlienItems.ANCHOR, "anchor");
         registerAsset(AlienItems.INHIBITOR, "inhibitor");
+        registerAsset(AlienItems.TRACKER, "tracker");
     }
 
     private static void registerAsset(BLibHolder<Item> holder, String configPath) {

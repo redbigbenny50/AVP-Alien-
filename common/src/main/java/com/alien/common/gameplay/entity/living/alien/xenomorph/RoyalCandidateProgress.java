@@ -56,7 +56,9 @@ public final class RoyalCandidateProgress {
 
     private static boolean isWild(Xenomorph xenomorph) {
         var locationAtPosition = HiveLocationRegistry.INSTANCE.getByChunk(xenomorph.level().dimension(), xenomorph.chunkPosition());
-        return (locationAtPosition == null || !locationAtPosition.isAlive()) && HiveMemberLocationResolver.reserveReturnLocation(xenomorph) == null;
+        return (locationAtPosition == null || !locationAtPosition.isAlive()) && HiveMemberLocationResolver.reserveReturnLocation(
+            xenomorph
+        ) == null;
     }
 
     private static void notifyTracking(Xenomorph xenomorph, String message) {

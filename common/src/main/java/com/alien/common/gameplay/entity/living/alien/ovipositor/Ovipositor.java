@@ -2,6 +2,7 @@ package com.alien.common.gameplay.entity.living.alien.ovipositor;
 
 import com.alien.common.registry.tag.AlienDamageTypesTags;
 import com.alien.common.registry.tag.AlienEntityTypeTags;
+import net.minecraft.nbt.CompoundTag;
 import net.minecraft.world.damagesource.DamageSource;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
@@ -82,5 +83,32 @@ public class Ovipositor extends Mob {
     @Override
     public int getAirSupply() {
         return Integer.MAX_VALUE;
+    }
+
+    /**
+     * True when this is a captive queen's chained eggsack (grown while inhibited + fully bound), false for a normal
+     * founding ovipositor. Lets {@code OvipositorManager} tell the two apart so a captured queen drops her founding
+     * eggsack and swaps to the chained one. Persisted so the distinction survives reload.
+     */
+    private boolean chainedEggsack = false;
+
+    public boolean isChainedEggsack() {
+        return chainedEggsack;
+    }
+
+    public void setChainedEggsack(boolean value) {
+        this.chainedEggsack = value;
+    }
+
+    @Override
+    public void addAdditionalSaveData(@NotNull CompoundTag compoundTag) {
+        super.addAdditionalSaveData(compoundTag);
+        compoundTag.putBoolean("ChainedEggsack", chainedEggsack);
+    }
+
+    @Override
+    public void readAdditionalSaveData(@NotNull CompoundTag compoundTag) {
+        super.readAdditionalSaveData(compoundTag);
+        this.chainedEggsack = compoundTag.getBoolean("ChainedEggsack");
     }
 }

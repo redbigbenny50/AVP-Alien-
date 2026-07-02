@@ -47,12 +47,32 @@ public class OvipositorManager implements NBTSerializable {
         this.hadOvipositorLastTick = hasOvipositor;
 
         if (hasOvipositor) {
-            // Captive-eggsack teardown: an inhibited queen who has lost containment (chains stripped) is "inhibited
-            // but loose" and produces nothing per design — drop the eggsack. A non-inhibited queen's ovipositor is the
-            // normal founding one and is never touched here.
-            if (queen.isInhibited() && !queen.isContained()) {
+            // Released: a chained eggsack on a queen who is no longer inhibited (inhibitor pried off) is dropped —
+            // she's
+            // free again, not a captive breeder.
+            if (!queen.isInhibited() && getOvipositor().isSomeAnd(Ovipositor::isChainedEggsack)) {
                 getOvipositor().ifSome(ovipositor -> ovipositor.discard());
                 return;
+            }
+
+            // Captured-queen eggsack handling. Reads the AUTHORITATIVE anchor count (isFullyBound), not the synced
+            // isContained(): the bind-chain-count sync key isn't persisted, so just after a reload it reads 0 for one
+            // tick (this manager ticks before the bind manager re-syncs it). The persisted anchors are correct
+            // immediately, so this avoids tearing the eggsack down on every reload.
+            if (queen.isInhibited()) {
+                // Inhibited but not contained (chains stripped) — "inhibited but loose" produces nothing per design.
+                if (!queen.getBindManager().isFullyBound()) {
+                    getOvipositor().ifSome(ovipositor -> ovipositor.discard());
+                    return;
+                }
+
+                // Inhibited AND contained: she belongs on the CHAINED eggsack. If she's still riding her founding
+                // ovipositor (captured after she'd already founded), drop it so canCreateChainedEggsack below grows the
+                // chained one in its place — otherwise she stays stuck on the founding eggsack forever.
+                if (!getOvipositor().isSomeAnd(Ovipositor::isChainedEggsack)) {
+                    getOvipositor().ifSome(ovipositor -> ovipositor.discard());
+                    return;
+                }
             }
             getOvipositor().ifSome(ovipositor -> {
                 ovipositor.setYRot(queen.getYRot());
@@ -331,7 +351,7 @@ public class OvipositorManager implements NBTSerializable {
      */
     private boolean canCreateChainedEggsack() {
         return queen.isInhibited()
-            && queen.isContained()
+            && queen.getBindManager().isFullyBound()
             && queen.getTarget() == null
             && AlienVariantTypes.getFor(queen.getVariant()).canReproduce()
             && !ovipositorCreationCooldown.isActive();
@@ -349,6 +369,10 @@ public class OvipositorManager implements NBTSerializable {
             ovipositor.startRiding(queen, true);
             ovipositor.yBodyRot = queen.yBodyRot;
             ovipositor.yHeadRot = queen.yHeadRot;
+            // A captive breeder's eggsack must not vanish to far-away despawn while she's contained; the teardown above
+            // is the only thing that removes it.
+            ovipositor.setPersistenceRequired();
+            ovipositor.setChainedEggsack(true);
             queen.level().addFreshEntity(ovipositor);
         }
     }

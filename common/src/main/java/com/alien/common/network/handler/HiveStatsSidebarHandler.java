@@ -160,8 +160,14 @@ public final class HiveStatsSidebarHandler {
         lines.add(Component.literal("Pop: " + pop + "/" + popCap).withStyle(ChatFormatting.AQUA));
         lines.add(Component.literal("Loaded: " + loaded + "  Res: " + reserves).withStyle(ChatFormatting.AQUA));
         lines.add(Component.literal("Chunks: " + location.claimedChunks().size()).withStyle(ChatFormatting.YELLOW));
-        lines.add(Component.literal("Royal: " + location.royalJelly() + "/" + JellyProduction.royalJellyCap(location)).withStyle(ChatFormatting.GOLD));
-        lines.add(Component.literal("Scourge: " + location.scourgeJelly() + "/" + JellyProduction.scourgeJellyCap(location)).withStyle(ChatFormatting.DARK_GREEN));
+        lines.add(
+            Component.literal("Royal: " + location.royalJelly() + "/" + JellyProduction.royalJellyCap(location))
+                .withStyle(ChatFormatting.GOLD)
+        );
+        lines.add(
+            Component.literal("Scourge: " + location.scourgeJelly() + "/" + JellyProduction.scourgeJellyCap(location))
+                .withStyle(ChatFormatting.DARK_GREEN)
+        );
         lines.add(Component.literal("Vents: " + location.ventManager().ventCount()).withStyle(ChatFormatting.GRAY));
         lines.add(Component.literal("Repro: " + location.reproductiveEstablished()).withStyle(ChatFormatting.GRAY));
         lines.add(Component.literal("Leader: " + shortUuid(location.leadership().getLeaderIdOrNull())).withStyle(ChatFormatting.GRAY));

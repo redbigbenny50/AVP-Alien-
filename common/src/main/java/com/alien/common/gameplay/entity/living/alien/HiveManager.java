@@ -15,11 +15,12 @@ import com.alien.common.registry.tag.AlienEntityTypeTags;
 import com.blib.api.common.faction.v1.FactionMember;
 import com.blib.api.common.nbt.v1.model.NBTSerializable;
 import com.just.core.functional.option.Option;
-import net.minecraft.core.particles.ParticleTypes;
+import net.minecraft.core.particles.DustParticleOptions;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.ChunkPos;
+import org.joml.Vector3f;
 
 /**
  * Per-alien hive manager. Drives:
@@ -90,6 +91,14 @@ public class HiveManager implements NBTSerializable {
             return;
         }
 
+        // Already founded (she belongs to a lineage) — stop settling and drop her founding aura. The front-end phase
+        // machine is off by default, so isReadyToFound() stays true forever; without this she perpetually re-banks
+        // settlement after founding, re-firing the ritual and trailing particles nonstop.
+        if (belongsToLineage(queen)) {
+            QueenSettlementDetector.forget(queen.getUUID());
+            return;
+        }
+
         var settlementPos = QueenSettlementDetector.observe(queen, currentGameTime);
         if (settlementPos == null) {
             // Still counting down the out-of-combat settlement timer — trail purple "founding" particles so the act of
@@ -112,7 +121,23 @@ public class HiveManager implements NBTSerializable {
         HiveLocationFoundingService.foundFromResult(queen, settlementPos, result);
     }
 
-    /** Purple spell-swirl while she is actively settling, throttled so it reads as a gentle aura rather than a fog. */
+    /** True once she has founded — membership in any lineage faction is the phase-independent "founded" signal. */
+    private static boolean belongsToLineage(Queen queen) {
+        for (var factionId : Alien.MOD.factions().getFactionIds(queen.getUUID())) {
+            if (LineageIds.isLineageId(factionId)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Near-black founding motes. Dust is recolourable (unlike the old fixed-purple spell swirl); tweak the RGB to
+     * taste.
+     */
+    private static final DustParticleOptions FOUNDING_DUST = new DustParticleOptions(new Vector3f(0.05F, 0.05F, 0.05F), 1.0F);
+
+    /** Black dust aura while she is actively settling, throttled so it reads as a gentle aura rather than a fog. */
     private void spawnFoundingParticles(Queen queen) {
         if (queen.tickCount % 4 != 0 || !(queen.level() instanceof ServerLevel serverLevel)) {
             return;
@@ -121,7 +146,7 @@ public class HiveManager implements NBTSerializable {
         var width = queen.getBbWidth();
         var height = queen.getBbHeight();
         serverLevel.sendParticles(
-            ParticleTypes.WITCH,
+            FOUNDING_DUST,
             queen.getX(),
             queen.getY() + height * 0.6,
             queen.getZ(),

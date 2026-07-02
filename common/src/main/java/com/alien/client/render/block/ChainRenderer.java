@@ -86,9 +86,9 @@ public final class ChainRenderer {
             float ny = (float) segDir.y;
             float nz = (float) segDir.z;
 
-            // front and back so it's visible from either side
+            // A single quad suffices: entityCutoutNoCull disables backface culling, so this face is drawn
+            // from both sides. A second, coplanar back-face quad only causes z-fighting.
             quad(buffer, pose, a0, a1, b1, b0, u, uNext, light, nx, ny, nz);
-            quad(buffer, pose, a1, a0, b0, b1, u, uNext, light, -nx, -ny, -nz);
 
             u = uNext;
         }

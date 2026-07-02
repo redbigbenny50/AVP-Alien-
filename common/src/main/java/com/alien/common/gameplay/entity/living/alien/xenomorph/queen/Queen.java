@@ -13,10 +13,12 @@ import com.alien.common.gameplay.entity.living.alien.xenomorph.queen.ai.QueenGOA
 import com.alien.common.gameplay.hive.lifecycle.QueenInhibitionService;
 import com.alien.common.gameplay.level.saveddata.QueenSpawnChunkData;
 import com.alien.common.gameplay.level.saveddata.StrainLeakData;
+import com.alien.common.gameplay.level.saveddata.TrackedQueenRegistry;
 import com.alien.common.model.alien.variant.AlienVariant;
 import com.alien.common.registry.init.AlienDataSyncKeys;
 import com.alien.common.registry.init.AlienEntityTypes;
 import com.alien.common.registry.init.AlienSoundEvents;
+import com.alien.common.registry.init.item.AlienItems;
 import com.alien.common.registry.tag.AlienEntityTypeTags;
 import com.blib.api.common.data_sync.v1.DataAccessor;
 import com.blib.api.common.entity.v1.PlayerStatConstants;
@@ -36,13 +38,17 @@ import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResult;
 import net.minecraft.world.damagesource.DamageSource;
 import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.Entity.RemovalReason;
 import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.MobSpawnType;
-import net.minecraft.world.entity.Entity.RemovalReason;
 import net.minecraft.world.entity.SpawnGroupData;
 import net.minecraft.world.entity.ai.attributes.AttributeSupplier;
 import net.minecraft.world.entity.ai.attributes.Attributes;
+import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.item.AxeItem;
+import net.minecraft.world.item.SwordItem;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.ServerLevelAccessor;
 import net.minecraft.world.phys.Vec3;
@@ -128,6 +134,8 @@ public class Queen extends Xenomorph implements GOAPUser<Queen>, EggLayer {
      */
     public final DataAccessor<Boolean> hasInhibitor;
 
+    public final DataAccessor<Boolean> tracked;
+
     /**
      * Transient: true while clip-digging to her location anchor (Stage 2b). Not saved — a reload never stays noclip.
      */
@@ -142,6 +150,7 @@ public class Queen extends Xenomorph implements GOAPUser<Queen>, EggLayer {
         this.bindChainCount = new DataAccessor<>(this, AlienDataSyncKeys.QUEEN_BIND_CHAIN_COUNT.get());
         this.bindManager = new QueenBindManager(this);
         this.hasInhibitor = new DataAccessor<>(this, AlienDataSyncKeys.QUEEN_HAS_INHIBITOR.get());
+        this.tracked = new DataAccessor<>(this, AlienDataSyncKeys.QUEEN_IS_TRACKED.get());
         this.legacyDormant = false;
         this.legacyDormantPreviousNoAi = false;
         this.loadedWithoutLifecycleState = false;
@@ -175,6 +184,18 @@ public class Queen extends Xenomorph implements GOAPUser<Queen>, EggLayer {
         bindManager.tick();
         if (isInhibited() && tickCount % 20 == 0 && level() instanceof ServerLevel serverLevel) {
             QueenInhibitionService.tickFollow(serverLevel, this);
+        }
+
+        if (isTracked() && tickCount % 40 == 0 && level() instanceof ServerLevel trackedLevel) {
+            TrackedQueenRegistry.getOrCreate(trackedLevel)
+                .ifSome(
+                    registry -> registry.updatePosition(
+                        getUUID(),
+                        blockPosition(),
+                        trackedLevel.dimension(),
+                        trackedLevel.getGameTime()
+                    )
+                );
         }
     }
 
@@ -338,6 +359,14 @@ public class Queen extends Xenomorph implements GOAPUser<Queen>, EggLayer {
         hasInhibitor.set(inhibited);
     }
 
+    public boolean isTracked() {
+        return tracked.get();
+    }
+
+    public void setTracked(boolean value) {
+        tracked.set(value);
+    }
+
     public boolean isLegacyDormant() {
         return legacyDormant;
     }
@@ -457,6 +486,15 @@ public class Queen extends Xenomorph implements GOAPUser<Queen>, EggLayer {
     }
 
     @Override
+    public void die(@NotNull DamageSource damageSource) {
+        super.die(damageSource);
+
+        if (level() instanceof ServerLevel serverLevel) {
+            TrackedQueenRegistry.getOrCreate(serverLevel).ifSome(registry -> registry.untrack(getUUID()));
+        }
+    }
+
+    @Override
     public void remove(@NotNull RemovalReason removalReason) {
         if (!level().isClientSide) {
             abandonOvipositor();
@@ -465,11 +503,31 @@ public class Queen extends Xenomorph implements GOAPUser<Queen>, EggLayer {
     }
 
     @Override
-    protected @NotNull InteractionResult mobInteract(@NotNull net.minecraft.world.entity.player.Player player, @NotNull InteractionHand hand) {
+    public @NotNull InteractionResult mobInteract(@NotNull Player player, @NotNull InteractionHand hand) {
         if (legacyDormant && !level().isClientSide) {
             wakeFromLegacyDormantRecovery();
             return InteractionResult.SUCCESS;
         }
+
+        var stack = player.getItemInHand(hand);
+        if (
+            isInhibited()
+                && player.isShiftKeyDown()
+                && (stack.getItem() instanceof SwordItem || stack.getItem() instanceof AxeItem)
+        ) {
+            if (level() instanceof ServerLevel serverLevel) {
+                setInhibited(false);
+                QueenInhibitionService.onReleased(serverLevel, this);
+                spawnAtLocation(AlienItems.INHIBITOR.get());
+                stack.hurtAndBreak(
+                    5,
+                    player,
+                    hand == InteractionHand.MAIN_HAND ? EquipmentSlot.MAINHAND : EquipmentSlot.OFFHAND
+                );
+            }
+            return InteractionResult.sidedSuccess(level().isClientSide);
+        }
+
         return super.mobInteract(player, hand);
     }
 

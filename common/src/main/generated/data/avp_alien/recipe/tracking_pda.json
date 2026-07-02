@@ -1,0 +1,13 @@
+{
+  "type": "minecraft:crafting_shapeless",
+  "category": "tools",
+  "ingredients": [
+    { "item": "minecraft:observer" },
+    { "item": "minecraft:amethyst_shard" },
+    { "item": "minecraft:book" }
+  ],
+  "result": {
+    "count": 1,
+    "id": "avp_alien:tracking_pda"
+  }
+}

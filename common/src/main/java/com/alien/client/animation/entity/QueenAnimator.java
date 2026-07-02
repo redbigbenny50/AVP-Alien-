@@ -94,7 +94,7 @@ public class QueenAnimator extends AzEntityAnimator<Queen> {
 
         var tracker = bakedModel.getBoneOrNull("gTracker");
         if (tracker != null) {
-            tracker.setHidden(true);
+            tracker.setHidden(!animatable.isTracked());
         }
 
         var inhibitor = bakedModel.getBoneOrNull("gInhibitor");

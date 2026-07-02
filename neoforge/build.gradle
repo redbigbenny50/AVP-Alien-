@@ -1,24 +1,119 @@
-//file:noinspection GroovyAssignabilityCheck
 plugins {
-    id 'blib-multiloader-neoforge'
+    id 'multiloader-loader'
+    id 'net.neoforged.moddev' version "${neo_moddev}"
+    id 'me.modmuss50.mod-publish-plugin' version "${modmuss50_mod_publish_version}"
+    id 'com.diffplug.spotless'
 }
 
+configurations {
+    localRuntime {
+        canBeConsumed = false
+        visible = false
+    }
+
+    named(sourceSets.main.runtimeClasspathConfigurationName) {
+        extendsFrom(configurations.localRuntime)
+    }
+}
+
+neoForge {
+    version = "${neo_version}"
+    accessTransformers = ["../common/src/main/resources/META-INF/accesstransformer.cfg"]
+
+    parchment {
+        minecraftVersion = "${parchment_minecraft}"
+        mappingsVersion = "${parchment_version}"
+    }
+
+    runs {
+        client {
+            client()
+            gameDirectory = this.mkdir(this.file('runs/client'))
+        }
+
+        data {
+            data()
+            programArguments.addAll '--mod', project.mod_id, '--all', '--output', file('../common/src/main/generated/').getAbsolutePath(), '--existing', file('../common/src/main/resources/').getAbsolutePath()
+        }
+
+        server {
+            server()
+            programArgument '--nogui'
+            gameDirectory = this.mkdir(this.file('runs/server'))
+        }
+        configureEach {
+            systemProperty('neoforge.enabledGameTestNamespaces', mod_id)
+            ideName = "NeoForge ${it.name.capitalize()} (${project.path})"
+            logLevel = org.slf4j.event.Level.DEBUG
+        }
+    }
+
+    mods {
+        "${mod_id}" {
+            sourceSet(sourceSets.main)
+        }
+    }
+}
+
+sourceSets.main.resources { srcDir 'src/generated/resources' }
+
 dependencies {
-    blibMod "dev.architectury:architectury-neoforge:${project.architectury_version}"
-    blibMod "me.shedaniel.cloth:cloth-config-neoforge:${project.cloth_version}"
-
-    // Compatibility
-    blibCompileOnly("com.avp.human:avp_human-neoforge-1.21.1:${project.avp_human_version}") {
+    implementation "dev.architectury:architectury-neoforge:${project.architectury_version}"
+    implementation "me.shedaniel.cloth:cloth-config-neoforge:${project.cloth_version}"
+    implementation("com.blib:blib-neoforge-${minecraft_version}:${project.blib_version}") {
+        exclude group: 'org.slf4j', module: 'slf4j-api'
+    }
+    implementation("com.avp.human:avp_human-neoforge-${minecraft_version}:${project.avp_human_version}") {
+        exclude group: 'org.slf4j', module: 'slf4j-api'
         exclude group: 'com.blib'
     }
-    blibCompileOnly("com.avp.predator:avp_predator-neoforge-1.21.1:${project.avp_predator_version}") {
+    implementation("com.avp.predator:avp_predator-neoforge-${minecraft_version}:${project.avp_predator_version}") {
+        exclude group: 'org.slf4j', module: 'slf4j-api'
         exclude group: 'com.blib'
     }
-    blibMod("com.blib.engine:blib_engine-neoforge-1.21.1:${project.blib_engine_version}") {
+    implementation("com.blib.engine:blib_engine-neoforge-${minecraft_version}:${project.blib_engine_version}") {
+        exclude group: 'org.slf4j', module: 'slf4j-api'
         exclude group: 'com.blib'
     }
-
-    blibMod "maven.modrinth:gigeresque:${project.gigeresque_version}"
     // Required for gigeresque.
-    blibRuntimeOnly "mod.azure.azurelib:azurelib-neo-${project.minecraft_version}:${project.azurelib_version}"
+    implementation "mod.azure.azurelib:azurelib-neo-${minecraft_version}:${azurelib_version}"
+    implementation "maven.modrinth:gigeresque:${project.gigeresque_version}"
+
+    compileOnly "dev.emi:emi-neoforge:${emi_version}"
+    compileOnly "mezz.jei:jei-$minecraft_version-neoforge:${jei_version}"
+    compileOnly "me.shedaniel:RoughlyEnoughItems-neoforge:${rei_version}"
+}
+
+def keyPropsFile = new File(rootProject.projectDir, "key.properties")
+if (keyPropsFile.exists()) {
+    publishMods {
+        def releaseProp = new Properties()
+        releaseProp.load(new FileInputStream(keyPropsFile))
+        file = jar.archiveFile
+        changelog = rootProject.file("changelog.md").text
+        type = STABLE
+        modLoaders.add("neoforge")
+
+        curseforge {
+            projectId = project.curseforgeID
+            projectSlug = project.projectSlug
+            accessToken = releaseProp.getProperty("curseKey")
+            minecraftVersions.add("${minecraft_version}")
+            requires {
+                slug = "blib-resurrection"
+            }
+            javaVersions.add(JavaVersion.VERSION_21)
+            client = true
+            server = true
+        }
+        modrinth {
+            projectId = project.modrinthID
+            accessToken = releaseProp.getProperty('modrinthKey')
+            minecraftVersions.add("${minecraft_version}")
+            requires {
+                slug = "blib-resurrection"
+            }
+            environment = CLIENT_AND_SERVER
+        }
+    }
 }
