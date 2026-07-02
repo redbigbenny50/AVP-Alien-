@@ -1,11 +1,15 @@
 package com.alien.common.gameplay.entity.living.alien.xenomorph;
 
 import com.alien.AlienResources;
+import com.alien.common.gameplay.block.entity.capture.anchor.AnchorBlockEntity;
 import com.alien.common.gameplay.entity.CrawlingManager;
 import com.alien.common.gameplay.entity.living.alien.Alien;
 import com.alien.common.gameplay.entity.living.alien.GrowthManager;
 import com.alien.common.gameplay.entity.living.alien.ResinManager;
+import com.alien.common.gameplay.entity.living.alien.ovomorph.Ovomorph;
+import com.alien.common.gameplay.entity.living.alien.xenomorph.queen.Queen;
 import com.alien.common.gameplay.entity.living.alien.xenomorph.ai.cocoon.CocoonGOAP;
+import com.alien.common.gameplay.hive.convoy.ConvoyMemberTracker;
 import com.alien.common.model.alien.variant.AlienVariant;
 import com.alien.common.model.resin.ResinProducer;
 import com.alien.common.registry.init.AlienDataSyncKeys;
@@ -20,6 +24,7 @@ import com.blib.api.common.dismemberment.v1.LimbDefinitionRegistry;
 import com.blib.api.common.entity.v1.EntitySenseCache;
 import com.blib.api.common.entity.v1.EntitySenseCacheUser;
 import com.blib.api.common.goap.v1.GOAPUser;
+import com.blib.api.common.block.v1.BlockBreakProgressManager;
 import com.blib.api.common.pathfinding.v1.cache.TerrainCacheRegistry;
 import com.blib.api.common.pathfinding.v1.evaluator.PathBlockBreakingConfig;
 import com.blib.api.common.pathfinding.v1.evaluator.PathCrawlConfig;
@@ -34,6 +39,7 @@ import com.blib.api.common.pathfinding.v1.terrain.TerrainClassifiers;
 import com.blib.api.common.pathfinding.v1.terrain.TerrainType;
 import com.just.ai.goap.graph.Graph;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
@@ -56,8 +62,8 @@ import net.minecraft.world.level.ClipContext;
 import net.minecraft.world.level.GameRules;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.LevelReader;
-import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.gameevent.DynamicGameEventListener;
 import net.minecraft.world.level.material.Fluid;
@@ -66,7 +72,10 @@ import net.minecraft.world.phys.Vec3;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Objects;
+import java.util.UUID;
 import java.util.function.BiConsumer;
 
 public abstract class Xenomorph extends Alien implements ResinProducer, EntitySenseCacheUser, PathNavigatorUser {
@@ -84,6 +93,26 @@ public abstract class Xenomorph extends Alien implements ResinProducer, EntitySe
     private static final float PATH_BLOCK_BREAK_DAMAGE_PER_TICK = 50.0f;
 
     private static final int FRENZIED_RAID_BREAKOUT_INTERVAL_TICKS = 4;
+
+    private static final int RAID_CONTAINMENT_BREAKOUT_INTERVAL_TICKS = 10;
+
+    private static final double RAID_CONTAINMENT_TARGET_RADIUS_BLOCKS = 24.0D;
+
+    private static final double RAID_CONTAINMENT_BREAK_RANGE_BLOCKS = 3.0D;
+
+    private static final double RAID_CONTAINMENT_NAVIGATION_SPEED = 1.25D;
+
+    private static final float RAID_BREAKOUT_BLOCK_DAMAGE_PER_ATTEMPT = 50.0F;
+
+    private static final int RAID_EGG_MAX_ATTEMPT_TICKS = 8 * 20;
+
+    private static final int RAID_EGG_NO_PROGRESS_TICKS = 3 * 20;
+
+    private static final int RAID_EGG_FAILED_COOLDOWN_TICKS = 30 * 20;
+
+    private static final int RAID_EGG_MAX_ATTACKERS = 2;
+
+    private static final double RAID_EGG_PROGRESS_EPSILON_SQR = 0.35D * 0.35D;
 
     private static final ResourceLocation LOST_LIMB_MAX_HEALTH_MODIFIER = AlienResources.location("lost_limb_max_health");
 
@@ -135,6 +164,16 @@ public abstract class Xenomorph extends Alien implements ResinProducer, EntitySe
     private final PathNavigator hiveIntruderPathNavigator;
 
     private final XenomorphConfig config;
+
+    private final Map<UUID, Integer> failedRaidEggTargets = new HashMap<>();
+
+    private @Nullable UUID raidEggTargetId;
+
+    private int raidEggTargetStartedAtTick;
+
+    private int raidEggNoProgressTicks;
+
+    private double raidEggLastDistanceSqr = Double.MAX_VALUE;
 
     private final AttackCooldownTracker cooldownTracker;
 
@@ -437,6 +476,7 @@ public abstract class Xenomorph extends Alien implements ResinProducer, EntitySe
             breakIntersectingCobwebs();
             escapeHumanRazorWire();
             breakFrenziedRaidObstructions();
+            breakRaidContainmentTargets();
         }
 
         crawlingManager.tick();
@@ -600,7 +640,7 @@ public abstract class Xenomorph extends Alien implements ResinProducer, EntitySe
         getNavigation().stop();
         pathNavigator.stop();
         hiveIntruderPathNavigator.stop();
-        level().destroyBlock(pos, false, this);
+        damageRaidBreakoutBlock(pos);
     }
 
     private @Nullable BlockPos firstIntersectingFrenzyBreakoutBlock() {
@@ -658,6 +698,299 @@ public abstract class Xenomorph extends Alien implements ResinProducer, EntitySe
         }
 
         return state.is(AlienBlockTags.XENOMORPH_FRENZY_BREAKABLE);
+    }
+
+    private void breakRaidContainmentTargets() {
+        if (tickCount % RAID_CONTAINMENT_BREAKOUT_INTERVAL_TICKS != 0) {
+            return;
+        }
+        if (!level().getGameRules().getBoolean(GameRules.RULE_MOBGRIEFING)) {
+            return;
+        }
+        if (!hasEffect(AlienMobEffects.getFrenzyHolder()) || !ConvoyMemberTracker.isRaidMember(this)) {
+            return;
+        }
+        if (this instanceof Queen) {
+            return;
+        }
+
+        if (tryBreakOutNearbyQueen()) {
+            clearRaidEggTarget();
+            return;
+        }
+        if (!tryBreakOutNearbyEgg()) {
+            clearRaidEggTarget();
+        }
+    }
+
+    private boolean tryBreakOutNearbyQueen() {
+        var bounds = getBoundingBox().inflate(RAID_CONTAINMENT_TARGET_RADIUS_BLOCKS);
+        var queens = level().getEntitiesOfClass(Queen.class, bounds, queen -> queen != this
+            && queen.isAlive()
+            && !queen.isRemoved()
+            && (queen.isContained() || queen.isInhibited())
+            && queen.getVariant() == getVariant());
+
+        Queen nearest = null;
+        var nearestDistance = Double.MAX_VALUE;
+        for (var queen : queens) {
+            var distance = distanceToSqr(queen);
+            if (distance < nearestDistance) {
+                nearest = queen;
+                nearestDistance = distance;
+            }
+        }
+        if (nearest == null) {
+            return false;
+        }
+
+        var anchor = nearest.getBindManager().anchors()
+            .stream()
+            .filter(pos -> level().getBlockEntity(pos) instanceof AnchorBlockEntity)
+            .min((first, second) -> Double.compare(distanceToSqr(first.getCenter()), distanceToSqr(second.getCenter())))
+            .orElse(null);
+        if (anchor != null) {
+            return workOnAnchor(anchor);
+        }
+
+        var containment = firstTargetedContainmentBlockAround(nearest);
+        if (containment != null) {
+            breakOrMoveToContainment(containment);
+            return true;
+        }
+        moveToward(nearest.position());
+        return true;
+    }
+
+    private boolean workOnAnchor(BlockPos anchorPos) {
+        if (distanceToSqr(anchorPos.getCenter()) > RAID_CONTAINMENT_BREAK_RANGE_BLOCKS * RAID_CONTAINMENT_BREAK_RANGE_BLOCKS) {
+            moveToward(anchorPos.getCenter());
+            return true;
+        }
+
+        if (level().getBlockEntity(anchorPos) instanceof AnchorBlockEntity anchor) {
+            if (damageRaidBreakoutBlock(anchorPos) == BlockBreakProgressManager.Result.DESTROYED) {
+                anchor.release();
+            }
+            return true;
+        }
+        return false;
+    }
+
+    private boolean tryBreakOutNearbyEgg() {
+        clearExpiredRaidEggFailures();
+
+        var bounds = getBoundingBox().inflate(RAID_CONTAINMENT_TARGET_RADIUS_BLOCKS);
+        var eggs = level().getEntitiesOfClass(Ovomorph.class, bounds, egg -> egg.isAlive()
+            && !egg.isRemoved()
+            && egg.getVariant() == getVariant()
+            && !egg.getHatchManager().isHatching()
+            && !egg.getHatchManager().isHatched()
+            && ConvoyMemberTracker.isNearActiveRaidContext(egg, RAID_CONTAINMENT_TARGET_RADIUS_BLOCKS)
+            && !isRaidEggFailureCoolingDown(egg.getUUID()));
+
+        Ovomorph nearest = null;
+        var nearestDistance = Double.MAX_VALUE;
+        for (var egg : eggs) {
+            if (!canAttemptRaidEgg(egg)) {
+                continue;
+            }
+            var distance = distanceToSqr(egg);
+            if (distance < nearestDistance) {
+                nearest = egg;
+                nearestDistance = distance;
+            }
+        }
+        if (nearest == null) {
+            return false;
+        }
+
+        updateRaidEggProgress(nearest, nearestDistance);
+        if (shouldAbandonRaidEgg(nearest, nearestDistance)) {
+            failRaidEggTarget(nearest.getUUID());
+            return false;
+        }
+
+        var containment = firstTargetedContainmentBlockAround(nearest);
+        if (containment != null) {
+            breakOrMoveToContainment(containment);
+            return true;
+        }
+
+        if (distanceToSqr(nearest) <= RAID_CONTAINMENT_BREAK_RANGE_BLOCKS * RAID_CONTAINMENT_BREAK_RANGE_BLOCKS) {
+            nearest.tryHatch();
+            clearRaidEggTarget();
+        } else {
+            moveToward(nearest.position());
+        }
+        return true;
+    }
+
+    private boolean canAttemptRaidEgg(Ovomorph egg) {
+        if (raidEggHigherPriorityTargetCount(egg) >= RAID_EGG_MAX_ATTACKERS) {
+            return false;
+        }
+        if (firstTargetedContainmentBlockAround(egg) != null) {
+            return true;
+        }
+
+        var path = getNavigation().createPath(egg, 0);
+        return path != null && path.canReach();
+    }
+
+    private boolean isCurrentRaidEggTarget(Ovomorph egg) {
+        return raidEggTargetId != null && raidEggTargetId.equals(egg.getUUID());
+    }
+
+    private int raidEggHigherPriorityTargetCount(Ovomorph egg) {
+        var bounds = egg.getBoundingBox().inflate(RAID_CONTAINMENT_TARGET_RADIUS_BLOCKS);
+        var count = 0;
+
+        for (var xenomorph : level().getEntitiesOfClass(Xenomorph.class, bounds, xenomorph -> xenomorph != this
+            && xenomorph.isAlive()
+            && !xenomorph.isRemoved()
+            && xenomorph.hasEffect(AlienMobEffects.getFrenzyHolder())
+            && ConvoyMemberTracker.isRaidMember(xenomorph))) {
+            if (xenomorph.isCurrentRaidEggTarget(egg) && xenomorph.getUUID().compareTo(getUUID()) < 0) {
+                count++;
+            }
+        }
+
+        return count;
+    }
+
+    private void updateRaidEggProgress(Ovomorph egg, double distanceSqr) {
+        if (!isCurrentRaidEggTarget(egg)) {
+            raidEggTargetId = egg.getUUID();
+            raidEggTargetStartedAtTick = tickCount;
+            raidEggNoProgressTicks = 0;
+            raidEggLastDistanceSqr = distanceSqr;
+            return;
+        }
+
+        if (distanceSqr + RAID_EGG_PROGRESS_EPSILON_SQR < raidEggLastDistanceSqr) {
+            raidEggNoProgressTicks = 0;
+            raidEggLastDistanceSqr = distanceSqr;
+            return;
+        }
+
+        raidEggNoProgressTicks += RAID_CONTAINMENT_BREAKOUT_INTERVAL_TICKS;
+    }
+
+    private boolean shouldAbandonRaidEgg(Ovomorph egg, double distanceSqr) {
+        if (firstTargetedContainmentBlockAround(egg) != null) {
+            return false;
+        }
+        if (tickCount - raidEggTargetStartedAtTick > RAID_EGG_MAX_ATTEMPT_TICKS) {
+            return true;
+        }
+        if (raidEggNoProgressTicks > RAID_EGG_NO_PROGRESS_TICKS) {
+            return true;
+        }
+        if (distanceSqr <= RAID_CONTAINMENT_BREAK_RANGE_BLOCKS * RAID_CONTAINMENT_BREAK_RANGE_BLOCKS) {
+            return false;
+        }
+
+        var path = getNavigation().createPath(egg, 0);
+        return path == null || !path.canReach();
+    }
+
+    private boolean isRaidEggFailureCoolingDown(UUID eggId) {
+        var expiresAtTick = failedRaidEggTargets.get(eggId);
+        if (expiresAtTick == null) {
+            return false;
+        }
+        if (expiresAtTick <= tickCount) {
+            failedRaidEggTargets.remove(eggId);
+            return false;
+        }
+        return true;
+    }
+
+    private void failRaidEggTarget(UUID eggId) {
+        failedRaidEggTargets.put(eggId, tickCount + RAID_EGG_FAILED_COOLDOWN_TICKS);
+        clearRaidEggTarget();
+        getNavigation().stop();
+    }
+
+    private void clearRaidEggTarget() {
+        raidEggTargetId = null;
+        raidEggTargetStartedAtTick = 0;
+        raidEggNoProgressTicks = 0;
+        raidEggLastDistanceSqr = Double.MAX_VALUE;
+    }
+
+    private void clearExpiredRaidEggFailures() {
+        failedRaidEggTargets.entrySet().removeIf(entry -> entry.getValue() <= tickCount);
+    }
+
+    private @Nullable BlockPos firstTargetedContainmentBlockAround(Entity target) {
+        var base = target.blockPosition();
+        var orderedDirections = new Direction[] {
+            Direction.NORTH,
+            Direction.SOUTH,
+            Direction.WEST,
+            Direction.EAST,
+            Direction.UP,
+            Direction.DOWN
+        };
+
+        for (var direction : orderedDirections) {
+            var pos = base.relative(direction);
+            if (canBreakTargetedContainmentBlock(pos)) {
+                return pos;
+            }
+        }
+
+        var above = base.above(2);
+        if (canBreakTargetedContainmentBlock(above)) {
+            return above;
+        }
+        return null;
+    }
+
+    private boolean canBreakTargetedContainmentBlock(BlockPos pos) {
+        var state = level().getBlockState(pos);
+        if (state.isAir() || state.hasBlockEntity()) {
+            return false;
+        }
+        if (state.getDestroySpeed(level(), pos) < 0.0F || state.is(AlienBlockTags.XENOMORPH_IMMUNE)) {
+            return false;
+        }
+        return state.is(AlienBlockTags.XENOMORPH_FRENZY_BREAKABLE)
+            || state.isSuffocating(level(), pos)
+            || !state.getCollisionShape(level(), pos).isEmpty();
+    }
+
+    private void breakOrMoveToContainment(BlockPos pos) {
+        if (distanceToSqr(pos.getCenter()) > RAID_CONTAINMENT_BREAK_RANGE_BLOCKS * RAID_CONTAINMENT_BREAK_RANGE_BLOCKS) {
+            moveToward(pos.getCenter());
+            return;
+        }
+
+        getNavigation().stop();
+        pathNavigator.stop();
+        hiveIntruderPathNavigator.stop();
+        damageRaidBreakoutBlock(pos);
+    }
+
+    private BlockBreakProgressManager.Result damageRaidBreakoutBlock(BlockPos pos) {
+        var state = level().getBlockState(pos);
+        if (!canDamageRaidBreakoutBlock(state, pos)) {
+            return BlockBreakProgressManager.Result.NOT_DAMAGED;
+        }
+        return BlockBreakProgressManager.damage(level(), pos, RAID_BREAKOUT_BLOCK_DAMAGE_PER_ATTEMPT);
+    }
+
+    private boolean canDamageRaidBreakoutBlock(BlockState state, BlockPos pos) {
+        if (level().getBlockEntity(pos) instanceof AnchorBlockEntity) {
+            return state.getDestroySpeed(level(), pos) >= 0.0F && !state.is(AlienBlockTags.XENOMORPH_IMMUNE);
+        }
+        return canBreakTargetedContainmentBlock(pos) || canFrenziedRaidBreakoutBlock(state, pos);
+    }
+
+    private void moveToward(Vec3 pos) {
+        getNavigation().moveTo(pos.x, pos.y, pos.z, RAID_CONTAINMENT_NAVIGATION_SPEED);
     }
 
     private @Nullable Vec3 averageIntersectingBlockCenter(TagKey<Block> blockTag) {

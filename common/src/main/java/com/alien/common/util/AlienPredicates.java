@@ -9,6 +9,7 @@ import com.alien.common.gameplay.hive.id.HiveLocationId;
 import com.alien.common.gameplay.hive.id.HiveLocationIds;
 import com.alien.common.gameplay.hive.location.HiveLocation;
 import com.alien.common.gameplay.hive.location.HiveLocationRegistry;
+import com.alien.common.gameplay.hive.war.AlienTerritoryWarSystem;
 import com.alien.common.model.alien.Host;
 import com.alien.common.model.alien.variant.AlienVariant;
 import com.alien.common.registry.tag.AlienBlockTags;
@@ -117,8 +118,10 @@ public class AlienPredicates {
 
     // This function is here for semantics reasons.
     public static boolean areAliensEnemies(Alien first, Alien second) {
-        // Aliens with different strains will always attack each other.
-        return areAliensDifferentStrains(first, second);
+        // Different strains always fight. Same-strain hives also fight when their lineages are not unified under the
+        // same empress authority.
+        return areAliensDifferentStrains(first, second)
+            || AlienTerritoryWarSystem.areAlienLineagesEnemies(first, second);
     }
 
     private static boolean areAliensDifferentStrains(Alien first, Alien second) {
