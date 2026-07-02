@@ -2,6 +2,7 @@ package com.alien.common.gameplay.hive.tick;
 
 import com.alien.Alien;
 import com.alien.common.data.AlienAdvancements;
+import com.alien.common.gameplay.entity.living.alien.xenomorph.Xenomorph;
 import com.alien.common.gameplay.hive.config.HiveConfig;
 import com.alien.common.gameplay.hive.convoy.Convoy;
 import com.alien.common.gameplay.hive.convoy.Convoy.Raid.ReturnHomeReason;
@@ -10,6 +11,7 @@ import com.alien.common.gameplay.hive.convoy.ConvoyBossBars;
 import com.alien.common.gameplay.hive.convoy.ConvoyId;
 import com.alien.common.gameplay.hive.convoy.ConvoyInterception;
 import com.alien.common.gameplay.hive.convoy.ConvoyMemberTracker;
+import com.alien.common.gameplay.hive.convoy.RaidDispatch;
 import com.alien.common.gameplay.hive.convoy.ConvoyTravel;
 import com.alien.common.gameplay.hive.faction.LineageFactionData;
 import com.alien.common.gameplay.hive.id.LineageIds;
@@ -21,9 +23,12 @@ import com.alien.common.registry.init.AlienSoundEvents;
 import net.minecraft.ChatFormatting;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.MinecraftServer;
+import net.minecraft.server.level.ServerLevel;
 import net.minecraft.sounds.SoundSource;
 import net.minecraft.world.effect.MobEffectInstance;
+import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.level.ChunkPos;
+import net.minecraft.world.phys.AABB;
 
 import java.util.HashMap;
 import java.util.HashSet;
@@ -46,6 +51,8 @@ public final class LineageConvoyTickTask {
     private static final int MARKED_FOR_DEATH_ACTIVE_RAID_TICKS = 20 * 10;
 
     private static final int MARKED_FOR_DEATH_DURATION_DRIFT_TICKS = 20;
+
+    private static final double RAID_FRENZY_JOIN_CONTEXT_RADIUS_BLOCKS = 32.0D;
 
     private LineageConvoyTickTask() {}
 
@@ -80,7 +87,10 @@ public final class LineageConvoyTickTask {
                             anyChanged = true;
                         }
                     } else {
-                        var returnHomeReason = returnHomeReason(raid, server);
+                        if (updateRaidLossState(raid, server, lineage, config, currentTick)) {
+                            anyChanged = true;
+                        }
+                        var returnHomeReason = returnHomeReason(raid, server, config, currentTick);
                         if (
                             returnHomeReason != ReturnHomeReason.NONE
                                 && beginRaidReturnHome(raid, server, lineage, returnHomeReason)
@@ -127,10 +137,13 @@ public final class LineageConvoyTickTask {
                         continue;
                     }
 
-                    if (!raid.returningHome()) {
+                    if (!raid.returningHome() && !raid.lossConfirmed()) {
                         updateRaidTargetPos(raid, server);
                         refreshMarkedForDeath(raid, server, config);
                         maybeWarnRaidTarget(raid, server, lineage, config);
+                        if (joinNearbyFrenziedRaidMembers(raid, server, lineage, config) > 0) {
+                            anyChanged = true;
+                        }
                         grantLeadRaidToEnemyHiveAdvancement(raid, server, lineage);
                         if (raid.shouldStartWaveBreak()) {
                             raid.startWaveBreak(currentTick);
@@ -176,6 +189,128 @@ public final class LineageConvoyTickTask {
 
         ConvoyBossBars.retain(activeConvoyIds);
         grantDualVariantRaidAdvancements(server);
+    }
+
+    private static int joinNearbyFrenziedRaidMembers(
+        Convoy.Raid raid,
+        MinecraftServer server,
+        LineageFactionData lineage,
+        HiveConfig config
+    ) {
+        if (raid.frenziedJoinCount() >= config.raidFrenzyExtraMemberCap()) {
+            return 0;
+        }
+
+        var level = server.getLevel(raid.dimension());
+        if (level == null) {
+            return 0;
+        }
+
+        var scanBounds = raidContextBounds(raid, level).inflate(RAID_FRENZY_JOIN_CONTEXT_RADIUS_BLOCKS);
+        var candidates = level.getEntitiesOfClass(Xenomorph.class, scanBounds, candidate -> {
+            if (!candidate.isAlive() || candidate.isRemoved()) {
+                return false;
+            }
+            if (!candidate.hasEffect(AlienMobEffects.getFrenzyHolder())) {
+                return false;
+            }
+            if (candidate.convoyMembership() != null) {
+                return false;
+            }
+            return matchesRaidLineageOrVariant(candidate, raid, lineage)
+                && isNearRaidContext(candidate, raid, level, RAID_FRENZY_JOIN_CONTEXT_RADIUS_BLOCKS);
+        });
+
+        var target = server.getPlayerList().getPlayer(raid.targetPlayerId());
+        var joined = 0;
+        for (var candidate : candidates) {
+            if (raid.frenziedJoinCount() >= config.raidFrenzyExtraMemberCap()) {
+                break;
+            }
+
+            ConvoyMemberTracker.markJoinedRaid(raid, candidate);
+            if (target != null && target.isAlive() && target.level().dimension().equals(raid.dimension())) {
+                candidate.setTarget(target);
+            }
+            joined++;
+        }
+        return joined;
+    }
+
+    private static AABB raidContextBounds(Convoy.Raid raid, ServerLevel level) {
+        var targetCenter = raid.lastKnownTargetPos().getCenter();
+        var minX = Math.min(raid.currentPos().x, targetCenter.x);
+        var minY = Math.min(raid.currentPos().y, targetCenter.y);
+        var minZ = Math.min(raid.currentPos().z, targetCenter.z);
+        var maxX = Math.max(raid.currentPos().x, targetCenter.x);
+        var maxY = Math.max(raid.currentPos().y, targetCenter.y);
+        var maxZ = Math.max(raid.currentPos().z, targetCenter.z);
+
+        for (var memberId : raid.materializedMembers().keySet()) {
+            var member = level.getEntity(memberId);
+            if (member == null) {
+                continue;
+            }
+            var pos = member.position();
+            minX = Math.min(minX, pos.x);
+            minY = Math.min(minY, pos.y);
+            minZ = Math.min(minZ, pos.z);
+            maxX = Math.max(maxX, pos.x);
+            maxY = Math.max(maxY, pos.y);
+            maxZ = Math.max(maxZ, pos.z);
+        }
+
+        return new AABB(minX, minY, minZ, maxX, maxY, maxZ);
+    }
+
+    private static boolean matchesRaidLineageOrVariant(
+        Xenomorph candidate,
+        Convoy.Raid raid,
+        LineageFactionData lineage
+    ) {
+        var hasCandidateLineage = false;
+        for (var factionId : Alien.MOD.factions().getFactionIds(candidate.getUUID())) {
+            if (!LineageIds.isLineageId(factionId)) {
+                continue;
+            }
+            hasCandidateLineage = true;
+            if (factionId.equals(raid.lineageFactionId())) {
+                return true;
+            }
+        }
+
+        return !hasCandidateLineage && candidate.getVariant() == lineage.variant();
+    }
+
+    private static boolean isNearRaidContext(
+        LivingEntity candidate,
+        Convoy.Raid raid,
+        ServerLevel level,
+        double radiusBlocks
+    ) {
+        var radiusSqr = radiusBlocks * radiusBlocks;
+        if (candidate.position().distanceToSqr(raid.currentPos()) <= radiusSqr) {
+            return true;
+        }
+        if (candidate.position().distanceToSqr(raid.lastKnownTargetPos().getCenter()) <= radiusSqr) {
+            return true;
+        }
+        return isNearMaterializedRaidMember(candidate, raid, level, radiusSqr);
+    }
+
+    private static boolean isNearMaterializedRaidMember(
+        LivingEntity candidate,
+        Convoy.Raid raid,
+        ServerLevel level,
+        double radiusSqr
+    ) {
+        for (var memberId : raid.materializedMembers().keySet()) {
+            var member = level.getEntity(memberId);
+            if (member != null && member != candidate && member.position().distanceToSqr(candidate.position()) <= radiusSqr) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private static Convoy.Reinforcement turnReinforcementHomeIfDestinationGone(
@@ -346,13 +481,76 @@ public final class LineageConvoyTickTask {
         raid.setLastKnownTargetPos(player.blockPosition());
     }
 
-    private static ReturnHomeReason returnHomeReason(Convoy.Raid raid, MinecraftServer server) {
+    private static boolean updateRaidLossState(
+        Convoy.Raid raid,
+        MinecraftServer server,
+        LineageFactionData lineage,
+        HiveConfig config,
+        long currentTick
+    ) {
+        if (raid.lossConfirmed()) {
+            return false;
+        }
+
+        var changed = false;
+        var player = server.getPlayerList().getPlayer(raid.targetPlayerId());
+        if (
+            player != null
+                && player.isAlive()
+                && !player.isCreative()
+                && !player.isSpectator()
+                && player.level().dimension().equals(raid.dimension())
+        ) {
+            changed = raid.targetDownSinceTick() >= 0L || !raid.targetWasAlive();
+            raid.noteTargetAlive();
+            return changed;
+        }
+
+        if (player != null && !player.isAlive()) {
+            if (raid.targetWasAlive()) {
+                raid.recordTargetDeath(currentTick, config.raidLossDeathWindowTicks());
+                changed = true;
+            } else {
+                changed = raid.targetDownSinceTick() < 0L;
+                raid.noteTargetDown(currentTick);
+            }
+        }
+
+        var repeatedDeaths = raid.targetDeathCount() >= config.raidLossDeathThreshold();
+        var stayedDown = raid.targetDownSinceTick() >= 0L
+            && currentTick - raid.targetDownSinceTick() >= config.raidLossDownGraceTicks();
+        if (!repeatedDeaths && !stayedDown) {
+            return changed;
+        }
+
+        raid.confirmLoss(currentTick);
+        lineage.clearKillAttributionForPlayer(raid.targetPlayerId());
+        RaidDispatch.markRaidPressureSpent(raid.sourceLocationId(), currentTick);
+        Alien.LOGGER.info(
+            "Hive: raid {} confirmed target {} defeated after {} death(s); aftermath running for {} ticks",
+            raid.id(),
+            raid.targetPlayerId(),
+            raid.targetDeathCount(),
+            config.raidLossAftermathTicks()
+        );
+        return true;
+    }
+
+    private static ReturnHomeReason returnHomeReason(
+        Convoy.Raid raid,
+        MinecraftServer server,
+        HiveConfig config,
+        long currentTick
+    ) {
+        if (raid.lossConfirmed()) {
+            return currentTick - raid.lossConfirmedTick() >= config.raidLossAftermathTicks()
+                ? ReturnHomeReason.TARGET_DEFEATED
+                : ReturnHomeReason.NONE;
+        }
+
         var player = server.getPlayerList().getPlayer(raid.targetPlayerId());
         if (player == null) {
             return ReturnHomeReason.NONE;
-        }
-        if (!player.isAlive()) {
-            return ReturnHomeReason.TARGET_DEFEATED;
         }
         if (player.isCreative() || player.isSpectator()) {
             return ReturnHomeReason.TARGET_UNAVAILABLE;

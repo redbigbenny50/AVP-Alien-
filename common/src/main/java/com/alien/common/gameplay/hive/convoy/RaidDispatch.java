@@ -53,6 +53,10 @@ public final class RaidDispatch {
         lastDispatchTickByLocation.clear();
     }
 
+    public static void markRaidPressureSpent(HiveLocationId sourceLocationId, long currentTick) {
+        lastDispatchTickByLocation.put(sourceLocationId, currentTick);
+    }
+
     public static void scanAndDispatch(MinecraftServer server) {
         var currentTick = server.overworld().getGameTime();
         var config = HiveLocationRegistry.INSTANCE.config();

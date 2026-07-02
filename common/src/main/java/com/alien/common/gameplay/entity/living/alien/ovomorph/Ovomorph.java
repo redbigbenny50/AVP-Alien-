@@ -4,10 +4,12 @@ import com.alien.common.data.AlienVariantTypes;
 import com.alien.common.gameplay.entity.living.alien.Alien;
 import com.alien.common.gameplay.entity.living.alien.GrowthManager;
 import com.alien.common.gameplay.entity.living.alien.ovomorph.ai.OvomorphGOAP;
+import com.alien.common.gameplay.hive.convoy.ConvoyMemberTracker;
 import com.alien.common.model.alien.HatchState;
 import com.alien.common.model.alien.variant.AlienVariant;
 import com.alien.common.registry.init.AlienDataSyncKeys;
 import com.alien.common.registry.init.AlienEntityTypes;
+import com.alien.common.registry.init.AlienMobEffects;
 import com.alien.common.registry.init.AlienSoundEvents;
 import com.alien.common.registry.tag.AlienEntityTypeTags;
 import com.alien.common.util.AlienPredicates;
@@ -43,6 +45,8 @@ public class Ovomorph extends Alien implements GOAPUser<Ovomorph>, Shearable {
     public static final HatchState DEFAULT_HATCH_STATE = HatchState.SLEEPING;
 
     private static final int HOST_VIBRATION_RADIUS = 8;
+
+    private static final double RAID_FRENZY_HATCH_CONTEXT_RADIUS_BLOCKS = 32.0D;
 
     public static AttributeSupplier.Builder createOvomorphAttributes() {
         return Alien.createAlienAttributes()
@@ -110,6 +114,8 @@ public class Ovomorph extends Alien implements GOAPUser<Ovomorph>, Shearable {
         vibrationSystemManager.tick();
 
         if (!level().isClientSide) {
+            tryRaidFrenzyHatch();
+
             this.wantsPickup = canBePickedUp();
 
             if (!pickupRequestAcknowledged && wantsPickup && tickCount % 20 == 0) {
@@ -125,6 +131,16 @@ public class Ovomorph extends Alien implements GOAPUser<Ovomorph>, Shearable {
                 this.pickupRequestAcknowledged = false;
             }
         }
+    }
+
+    private void tryRaidFrenzyHatch() {
+        if (!hasEffect(AlienMobEffects.getFrenzyHolder())) {
+            return;
+        }
+        if (!ConvoyMemberTracker.isNearActiveRaidContext(this, RAID_FRENZY_HATCH_CONTEXT_RADIUS_BLOCKS)) {
+            return;
+        }
+        tryHatch();
     }
 
     public boolean canBeHeld() {

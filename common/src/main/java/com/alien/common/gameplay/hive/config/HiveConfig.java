@@ -59,6 +59,11 @@ public record HiveConfig(
     int baseRaidSize,
     double raidSizePerClaimedChunk,
     int raidEngageRadiusBlocks,
+    int raidFrenzyExtraMemberCap,
+    int raidLossDeathThreshold,
+    long raidLossDeathWindowTicks,
+    long raidLossDownGraceTicks,
+    long raidLossAftermathTicks,
 
     // ---------- § 8 Leadership ----------
     long empressMoltDurationTicks,
@@ -180,6 +185,11 @@ public record HiveConfig(
             4, // baseRaidSize
             0.25, // raidSizePerClaimedChunk
             32, // raidEngageRadiusBlocks
+            32, // raidFrenzyExtraMemberCap
+            2, // raidLossDeathThreshold
+            5L * TICKS_PER_MINUTE, // raidLossDeathWindowTicks
+            90L * TICKS_PER_SECOND, // raidLossDownGraceTicks
+            2L * TICKS_PER_MINUTE, // raidLossAftermathTicks
 
             // § 8 Leadership
             30L * TICKS_PER_SECOND, // empressMoltDurationTicks

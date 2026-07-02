@@ -52,10 +52,14 @@ import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.ClickEvent;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.HoverEvent;
+import net.minecraft.util.RandomSource;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.phys.Vec3;
 
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
@@ -198,6 +202,18 @@ public final class HiveDebugCommands {
                     .requires(CommandSourceStack::isPlayer)
                     .executes(HiveDebugCommands::hibernationSkip)
             )
+            .then(Commands.literal("awaken_legacy_queens").executes(HiveDebugCommands::awakenLegacyQueens))
+            .then(
+                Commands.literal("awaken_nearest_legacy_queen")
+                    .requires(CommandSourceStack::isPlayer)
+                    .executes(HiveDebugCommands::awakenNearestLegacyQueen)
+            )
+            .then(Commands.literal("kill_legacy_queens").executes(HiveDebugCommands::killLegacyQueens))
+            .then(
+                Commands.literal("kill_nearest_legacy_queen")
+                    .requires(CommandSourceStack::isPlayer)
+                    .executes(HiveDebugCommands::killNearestLegacyQueen)
+            )
             .then(
                 Commands.literal("skip_settlement")
                     .requires(CommandSourceStack::isPlayer)
@@ -211,6 +227,11 @@ public final class HiveDebugCommands {
                 Commands.literal("render")
                     .requires(CommandSourceStack::isPlayer)
                     .executes(HiveDebugCommands::toggleRender)
+            )
+            .then(
+                Commands.literal("stats")
+                    .requires(CommandSourceStack::isPlayer)
+                    .executes(HiveDebugCommands::toggleStatsSidebar)
             )
             .then(Commands.literal("force_emergence_scan").executes(HiveDebugCommands::forceEmergenceScan))
             .then(Commands.literal("inspect_settlement").executes(HiveDebugCommands::inspectSettlement))
@@ -1430,6 +1451,109 @@ public final class HiveDebugCommands {
         return now ? 1 : 0;
     }
 
+    private static int toggleStatsSidebar(com.mojang.brigadier.context.CommandContext<CommandSourceStack> ctx) {
+        var player = Objects.requireNonNull(ctx.getSource().getPlayer());
+        var now = !com.alien.common.network.handler.HiveStatsSidebarHandler.isEnabled(player.getUUID());
+        com.alien.common.network.handler.HiveStatsSidebarHandler.setEnabled(player, now);
+        ctx.getSource()
+            .sendSuccess(
+                () -> Component.literal("Hive stats sidebar " + (now ? "enabled" : "disabled") + "."),
+                false
+            );
+        return now ? 1 : 0;
+    }
+
+    private static int awakenLegacyQueens(com.mojang.brigadier.context.CommandContext<CommandSourceStack> ctx) {
+        var awakened = com.alien.common.gameplay.hive.migration.LegacyHiveRecovery.awakenLegacyQueens(
+            ctx.getSource().getServer()
+        );
+        ctx.getSource()
+            .sendSuccess(
+                () -> Component.literal(
+                    "Awakened "
+                        + awakened
+                        + " legacy dormant queen(s). Loaded legacy queens were rejoined to their repaired hive and their hive claimed its 3x3 founding area. Unloaded legacy queens will wake and claim when they load."
+                ),
+                true
+            );
+        return awakened;
+    }
+
+    private static int awakenNearestLegacyQueen(com.mojang.brigadier.context.CommandContext<CommandSourceStack> ctx) {
+        var queen = nearestQueen(ctx);
+        if (queen == null) {
+            ctx.getSource().sendFailure(Component.literal("No loaded queen found near you in this dimension."));
+            return 0;
+        }
+
+        if (!queen.isLegacyDormant()) {
+            ctx.getSource()
+                .sendFailure(
+                    Component.literal("Nearest queen is not currently legacy dormant: " + queen.getUUID())
+                );
+            return 0;
+        }
+
+        if (!com.alien.common.gameplay.hive.migration.LegacyHiveRecovery.awakenLegacyQueen(queen)) {
+            ctx.getSource()
+                .sendFailure(
+                    Component.literal("Nearest queen is not registered as a legacy recovery queen: " + queen.getUUID())
+                );
+            return 0;
+        }
+
+        ctx.getSource()
+            .sendSuccess(
+                () -> Component.literal(
+                    "Awakened nearest legacy queen "
+                        + queen.getUUID()
+                        + ". She was rejoined to her repaired hive and that hive claimed its 3x3 founding area."
+                ),
+                true
+            );
+        return 1;
+    }
+
+    private static int killLegacyQueens(com.mojang.brigadier.context.CommandContext<CommandSourceStack> ctx) {
+        var killed = com.alien.common.gameplay.hive.migration.LegacyHiveRecovery.killLegacyQueens(
+            ctx.getSource().getServer()
+        );
+        ctx.getSource()
+            .sendSuccess(
+                () -> Component.literal(
+                    "Killed "
+                        + killed
+                        + " loaded legacy queen(s). Unloaded legacy queens are queued to be killed when they load."
+                ),
+                true
+            );
+        return killed;
+    }
+
+    private static int killNearestLegacyQueen(com.mojang.brigadier.context.CommandContext<CommandSourceStack> ctx) {
+        var queen = nearestQueen(ctx);
+        if (queen == null) {
+            ctx.getSource().sendFailure(Component.literal("No loaded queen found near you in this dimension."));
+            return 0;
+        }
+
+        var queenId = queen.getUUID();
+        if (!com.alien.common.gameplay.hive.migration.LegacyHiveRecovery.killLegacyQueen(queen)) {
+            ctx.getSource()
+                .sendFailure(
+                    Component.literal("Nearest queen is not registered/detected as a legacy recovery queen: " + queenId)
+                );
+            return 0;
+        }
+
+        ctx.getSource()
+            .sendSuccess(
+                () -> Component.literal("Killed nearest legacy queen " + queenId + "."),
+                true
+            );
+        return 1;
+    }
+
     private static int toggleDebugSpawns(com.mojang.brigadier.context.CommandContext<CommandSourceStack> ctx) {
         var now = !com.alien.common.gameplay.hive.spawning.HiveLoadedSpawner.DEBUG_SPAWN_REJECTS;
         com.alien.common.gameplay.hive.spawning.HiveLoadedSpawner.DEBUG_SPAWN_REJECTS = now;
@@ -1844,7 +1968,7 @@ public final class HiveDebugCommands {
         lineage.setEmpressId(player.getUUID());
 
         var profile = RaidWaveProfileRegistry.forVariant(variant);
-        var composition = imaginaryRaidComposition(variant, waveIndex);
+        var composition = imaginaryRaidComposition(profile, variant, waveIndex, ctx.getSource().getLevel().random);
         var playerPos = player.blockPosition();
         var currentPos = new Vec3(playerPos.getX() + 0.5, playerPos.getY() + 0.5, playerPos.getZ() + 0.5);
         var readyBreakTick = currentTick - Math.max(0L, profile.wave(waveIndex).bufferTicks());
@@ -1881,7 +2005,7 @@ public final class HiveDebugCommands {
                         + " raid " + raid.id()
                         + " starts on wave " + waveNumber
                         + " against " + player.getGameProfile().getName()
-                        + " with " + composition.getCount() + " reserve member(s)."
+                        + " with " + composition.getCount() + " profile-derived reserve member(s); no real hive/source required."
                 ),
                 true
             );
@@ -1978,20 +2102,131 @@ public final class HiveDebugCommands {
         return location.localReserves().tryAdd(entityType, count) ? count : 0;
     }
 
-    private static EntityReserves imaginaryRaidComposition(AlienVariant variant, int waveIndex) {
+    private static EntityReserves imaginaryRaidComposition(
+        com.alien.common.gameplay.hive.convoy.RaidWaveProfile profile,
+        AlienVariant variant,
+        int startWaveIndex,
+        RandomSource random
+    ) {
         var composition = new EntityReserves();
-        if (waveIndex <= 0) {
-            addToComposition(composition, Warrior.getType(variant), 40);
-            addToComposition(composition, Prowler.getType(variant), 39);
-            addToComposition(composition, Chrysalis.getType(variant), 1);
-            addToComposition(composition, Harbinger.getType(variant), 1);
-            return composition;
+
+        for (var waveIndex = startWaveIndex; waveIndex < Convoy.Raid.WAVE_COUNT; waveIndex++) {
+            var wave = profile.wave(waveIndex);
+            addProfileWaveComposition(composition, wave, variant, random);
         }
 
-        addToComposition(composition, Warrior.getType(variant), 17);
-        addToComposition(composition, Prowler.getType(variant), 16);
-        addToComposition(composition, Harbinger.getType(variant), 1);
         return composition;
+    }
+
+    private static void addProfileWaveComposition(
+        EntityReserves composition,
+        com.alien.common.gameplay.hive.convoy.RaidWaveProfile.Wave wave,
+        AlienVariant variant,
+        RandomSource random
+    ) {
+        for (var guarantee : wave.guaranteed()) {
+            addFromProfilePools(composition, guarantee.pools(), variant, guarantee.count(), random);
+        }
+
+        addFromProfilePools(composition, wave.pools(), variant, wave.size() - wave.guaranteedSize(), random);
+    }
+
+    private static void addFromProfilePools(
+        EntityReserves composition,
+        List<com.alien.common.gameplay.hive.convoy.RaidWaveProfile.PoolEntry> pools,
+        AlienVariant variant,
+        int count,
+        RandomSource random
+    ) {
+        var selectedByPool = new HashMap<Integer, Integer>();
+        for (var i = 0; i < count; i++) {
+            var selected = chooseDebugRaidType(pools, variant, selectedByPool, random);
+            if (selected == null) {
+                return;
+            }
+            selectedByPool.merge(selected.poolIndex(), 1, Integer::sum);
+            addToComposition(composition, selected.entityType(), 1);
+        }
+    }
+
+    private static DebugRaidTypeSelection chooseDebugRaidType(
+        List<com.alien.common.gameplay.hive.convoy.RaidWaveProfile.PoolEntry> pools,
+        AlienVariant variant,
+        Map<Integer, Integer> selectedByPool,
+        RandomSource random
+    ) {
+        var candidates = new ArrayList<DebugRaidPoolCandidate>();
+        for (var i = 0; i < pools.size(); i++) {
+            var pool = pools.get(i);
+            if (selectedByPool.getOrDefault(i, 0) >= pool.maxCount()) {
+                continue;
+            }
+
+            var matchingTypes = debugRaidMatchingTypes(pool, variant);
+            if (!matchingTypes.isEmpty()) {
+                candidates.add(new DebugRaidPoolCandidate(i, pool, matchingTypes));
+            }
+        }
+
+        if (candidates.isEmpty()) {
+            return null;
+        }
+
+        var candidate = chooseDebugRaidPool(candidates, random);
+        var types = candidate.matchingTypes();
+        var entityType = types.get(random.nextInt(types.size()));
+        return new DebugRaidTypeSelection(candidate.poolIndex(), entityType);
+    }
+
+    private static DebugRaidPoolCandidate chooseDebugRaidPool(
+        List<DebugRaidPoolCandidate> candidates,
+        RandomSource random
+    ) {
+        var totalWeight = 0;
+        for (var candidate : candidates) {
+            totalWeight += candidate.pool().weight();
+        }
+
+        var target = random.nextInt(Math.max(1, totalWeight));
+        for (var candidate : candidates) {
+            target -= candidate.pool().weight();
+            if (target < 0) {
+                return candidate;
+            }
+        }
+        return candidates.getLast();
+    }
+
+    private static List<EntityType<?>> debugRaidMatchingTypes(
+        com.alien.common.gameplay.hive.convoy.RaidWaveProfile.PoolEntry pool,
+        AlienVariant variant
+    ) {
+        var matches = new ArrayList<EntityType<?>>();
+        for (var entityType : debugRaidAvailableTypes(variant)) {
+            if (pool.matches(entityType)) {
+                matches.add(entityType);
+            }
+        }
+        return matches;
+    }
+
+    private static List<EntityType<?>> debugRaidAvailableTypes(AlienVariant variant) {
+        var types = new ArrayList<EntityType<?>>();
+        addIfPresent(types, Warrior.getType(variant));
+        addIfPresent(types, Prowler.getType(variant));
+        addIfPresent(types, Chrysalis.getType(variant));
+        addIfPresent(types, RazorClaw.getType(variant));
+        addIfPresent(types, Burster.getType(variant));
+        addIfPresent(types, Ravager.getType(variant));
+        addIfPresent(types, Carrier.getType(variant));
+        addIfPresent(types, Harbinger.getType(variant));
+        return types;
+    }
+
+    private static void addIfPresent(List<EntityType<?>> types, EntityType<?> entityType) {
+        if (entityType != null) {
+            types.add(entityType);
+        }
     }
 
     private static void addToComposition(EntityReserves composition, EntityType<?> entityType, int count) {
@@ -1999,6 +2234,17 @@ public final class HiveDebugCommands {
             composition.add(entityType, count);
         }
     }
+
+    private record DebugRaidPoolCandidate(
+        int poolIndex,
+        com.alien.common.gameplay.hive.convoy.RaidWaveProfile.PoolEntry pool,
+        List<EntityType<?>> matchingTypes
+    ) {}
+
+    private record DebugRaidTypeSelection(
+        int poolIndex,
+        EntityType<?> entityType
+    ) {}
 
     private static int inspectKillAttribution(com.mojang.brigadier.context.CommandContext<CommandSourceStack> ctx) {
         var lineageFactionId = ResourceLocationArgument.getId(ctx, LINEAGE_ID_ARG);

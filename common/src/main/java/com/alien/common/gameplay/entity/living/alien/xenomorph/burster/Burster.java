@@ -16,6 +16,7 @@ import com.alien.common.model.alien.variant.AlienVariant;
 import com.alien.common.registry.init.AlienEntityTypes;
 import com.alien.common.registry.init.AlienSoundEvents;
 import com.alien.common.registry.tag.AlienEntityTypeTags;
+import com.blib.api.common.dismemberment.v1.LimbDismemberer;
 import com.blib.api.common.entity.v1.EntityUtil;
 import com.blib.api.common.entity.v1.PlayerStatConstants;
 import com.blib.api.common.goap.v1.GOAPUser;
@@ -30,6 +31,7 @@ import net.minecraft.world.entity.ai.attributes.AttributeSupplier;
 import net.minecraft.world.entity.ai.attributes.Attributes;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.gameevent.DynamicGameEventListener;
+import net.minecraft.world.phys.Vec3;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
@@ -42,6 +44,10 @@ public class Burster extends Xenomorph implements EggCarrier, GOAPUser<Burster>,
     private static final float EXPLOSION_RADIUS = 2F;
 
     private static final int ACID_AMOUNT = 3;
+
+    private static final double LIMB_HORIZONTAL_VELOCITY = 0.18D;
+
+    private static final double LIMB_VERTICAL_VELOCITY = 0.14D;
 
     public static final AttackType CLAW = AttackType.builder("burster_claw")
         .requiresAnyArm()
@@ -154,7 +160,29 @@ public class Burster extends Xenomorph implements EggCarrier, GOAPUser<Burster>,
         }
 
         hasExploded = true;
+        detachAllLimbs();
         ExplosiveXenomorphUtil.explodeWithAcid(this, EXPLOSION_RADIUS, ACID_AMOUNT);
+    }
+
+    private void detachAllLimbs() {
+        var randomSource = getRandom();
+        var bodyCenter = position().add(0.0D, getBbHeight() * 0.5D, 0.0D);
+
+        for (var definition : LimbDismemberer.getRemainingDefinitions(this)) {
+            var angle = randomSource.nextDouble() * Math.TAU;
+            var horizontalVelocity = LIMB_HORIZONTAL_VELOCITY * (0.65D + randomSource.nextDouble() * 0.7D);
+            var verticalVelocity = LIMB_VERTICAL_VELOCITY * (0.65D + randomSource.nextDouble() * 0.7D);
+            var velocity = new Vec3(
+                Math.cos(angle) * horizontalVelocity,
+                verticalVelocity,
+                Math.sin(angle) * horizontalVelocity
+            );
+
+            LimbDismemberer.detach(this, definition.id(), limb -> {
+                limb.moveTo(bodyCenter, getYRot(), getXRot());
+                limb.launch(velocity);
+            });
+        }
     }
 
     @Override

@@ -142,6 +142,9 @@ public final class ConvoyArrival {
         if (!raid.materializedMembers().isEmpty()) {
             return false;
         }
+        if (raid.lossConfirmed()) {
+            return false;
+        }
 
         var targetPlayer = server.getPlayerList().getPlayer(raid.targetPlayerId());
         var breakStartedTick = raid.waveBreakStartedTick();
