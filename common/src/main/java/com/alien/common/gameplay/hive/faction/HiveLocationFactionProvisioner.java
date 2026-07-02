@@ -18,6 +18,8 @@ public final class HiveLocationFactionProvisioner {
         if (locationFaction == null) {
             locationFaction = Alien.MOD.factions().getOrCreate(locationFactionId, AlienFactionDataTypes.LOCATION);
             FactionAesthetics.applyDefaults(locationFaction, lineage.variant(), FactionAesthetics.Tier.LOCATION);
+        } else {
+            FactionAesthetics.ensureClaimMapStyle(locationFaction, lineage.variant());
         }
 
         if (location.locationNumber() < 0) {

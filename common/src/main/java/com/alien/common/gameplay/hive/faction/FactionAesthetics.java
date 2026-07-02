@@ -1,6 +1,8 @@
 package com.alien.common.gameplay.hive.faction;
 
+import com.alien.AlienResources;
 import com.alien.common.model.alien.variant.AlienVariant;
+import com.blib.api.common.faction.v1.ClaimMapStyle;
 import com.blib.api.common.faction.v1.ClaimVisibility;
 import com.blib.api.common.faction.v1.Faction;
 import com.blib.api.common.faction.v1.ProtectionMode;
@@ -33,6 +35,18 @@ public final class FactionAesthetics {
         faction.setAllowExplosions(true);
         faction.setAllowMobGriefing(true);
         faction.setColor(colorFor(variant, tier));
+        faction.setClaimMapStyle(new ClaimMapStyle(resinVeinTextureFor(variant)));
+    }
+
+    /** Backfills the map overlay for old factions without replacing an existing/admin-set style. */
+    public static void ensureClaimMapStyle(Faction<?> faction, AlienVariant variant) {
+        var currentStyle = faction.claimMapStyle();
+
+        if (currentStyle != null && currentStyle.hasOverlayTexture()) {
+            return;
+        }
+
+        faction.setClaimMapStyle(new ClaimMapStyle(resinVeinTextureFor(variant)));
     }
 
     public static int colorFor(AlienVariant variant, Tier tier) {
@@ -57,6 +71,15 @@ public final class FactionAesthetics {
                 case LINEAGE -> 0x00AAAA;
                 case LOCATION -> 0x55FFFF;
             };
+        };
+    }
+
+    private static net.minecraft.resources.ResourceLocation resinVeinTextureFor(AlienVariant variant) {
+        return switch (variant) {
+            case NORMAL -> AlienResources.blockTextureLocation("resin_vein");
+            case ABERRANT -> AlienResources.blockTextureLocation("aberrant_resin_vein");
+            case NETHER -> AlienResources.blockTextureLocation("nether_resin_vein");
+            case IRRADIATED -> AlienResources.blockTextureLocation("irradiated_resin_vein");
         };
     }
 }

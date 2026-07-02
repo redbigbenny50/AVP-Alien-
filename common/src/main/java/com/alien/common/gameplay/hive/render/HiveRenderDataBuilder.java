@@ -35,6 +35,12 @@ public final class HiveRenderDataBuilder {
 
     private HiveRenderDataBuilder() {}
 
+    public static CompoundTag empty() {
+        var tag = new CompoundTag();
+        tag.put(K_HIVES, new ListTag());
+        return tag;
+    }
+
     public static CompoundTag build(ServerPlayer player) {
         var tag = new CompoundTag();
         var hives = new ListTag();
