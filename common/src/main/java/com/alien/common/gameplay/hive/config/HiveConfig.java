@@ -63,6 +63,7 @@ public record HiveConfig(
         // ---------- § 8 Leadership ----------
         long empressMoltDurationTicks,
         long localLeaderPickCadenceTicks,
+        int empressCandidateMinMembers,
         long firewallCooldownTicks,
         long firewallStabilityScanIntervalTicks,
         int firewallJellyFloor,
@@ -128,7 +129,24 @@ public record HiveConfig(
         long scourgeJellyTicksPerHarbingerProduction,
 
         // ---------- § 14 Queen lifecycle ----------
-        boolean queenFrontEndPhasesEnabled
+        boolean queenFrontEndPhasesEnabled,
+
+        // ---------- § 15 Parties ----------
+        int surfacePartyBaseSize,
+        double surfacePartySizePerClaimedChunk,
+        double surfacePartyVentDropChance,
+        int surfacePartyMaxVentsPerClaim,
+        int surfacePartySurfaceBandBlocks,
+        int biomassHuntingPartyBaseSize,
+        double biomassHuntingPartySizePerClaimedChunk,
+        int biomassHuntingPartyBonusSpitterCount,
+        long biomassHuntingPartyDurationTicks,
+        int attackPartyBaseSize,
+        double attackPartySizePerClaimedChunk,
+        long attackPartyCooldownTicks,
+        long attackPartyWave1DelayTicks,
+        long attackIntrusionDwellTicks,
+        long attackPartyDurationTicks
 ) {
 
     private static final int TICKS_PER_SECOND = 20;
@@ -190,6 +208,8 @@ public record HiveConfig(
                 // § 8 Leadership
                 30L * TICKS_PER_SECOND, // empressMoltDurationTicks
                 5L * TICKS_PER_SECOND, // localLeaderPickCadenceTicks (100 ticks)
+                250, // empressCandidateMinMembers: a queen's hive must have at least this many members to be an
+                // empress candidate at all (eligibility floor, not a ranking factor)
                 7L * 24L * TICKS_PER_HOUR, // firewallCooldownTicks: 7 game-days of accrued stability to refill the fund
                 5L * TICKS_PER_MINUTE, // firewallStabilityScanIntervalTicks: cadence for both the stability check and the
                 // biomass income-rate sample
@@ -199,7 +219,7 @@ public record HiveConfig(
                 // § 9 Lineage spread
                 32, // maxLineageSpreadChunks
                 30L * TICKS_PER_MINUTE, // lineageSpreadCooldownTicks
-                16, // maxLocationsPerLineage
+                8, // maxLocationsPerLineage: a lineage can have at most 8 member hives
                 5, // maxLocationsUnderEmpress: an empress can control up to 5 hives, including her own origin hive.
                 100, // minimumPopulationForHiveSpread
                 4, // abstractSpreadMinFounderGroupSize
@@ -221,7 +241,7 @@ public record HiveConfig(
                 1, // maxPassiveClaimsPerUnloadedScan
 
                 // § 11 Biomass
-                100, // baseChunkCost
+                25, // baseChunkCost
                 100, // ovipositorCreationBiomassCost
                 5, // resinSpreadBiomassCost
                 0.05, // growthFactor
@@ -258,7 +278,25 @@ public record HiveConfig(
                 TICKS_PER_MINUTE, // scourgeJellyTicksPerHarbingerProduction (1 game-min per harbinger)
 
                 // § 14 Queen lifecycle
-                true // queenFrontEndPhasesEnabled: run developing->location->hibernation before founding
+                true, // queenFrontEndPhasesEnabled: run developing->location->hibernation before founding
+
+                // § 15 Parties
+                2, // surfacePartyBaseSize
+                0.15, // surfacePartySizePerClaimedChunk
+                0.10, // surfacePartyVentDropChance: 10% roll on dawn despawn
+                3, // surfacePartyMaxVentsPerClaim: cap counted against near-surface vents only, not the full column
+                6, // surfacePartySurfaceBandBlocks: vertical margin around the terrain heightmap counted as "surface"
+                // (also reused by biomass hunting party's vent-spawn-point lookup)
+                2, // biomassHuntingPartyBaseSize
+                0.15, // biomassHuntingPartySizePerClaimedChunk
+                1, // biomassHuntingPartyBonusSpitterCount: extra spitters beyond the base budget, only if reserves allow
+                10L * TICKS_PER_MINUTE, // biomassHuntingPartyDurationTicks: active duration before returning home via vent
+                2, // attackPartyBaseSize
+                0.15, // attackPartySizePerClaimedChunk
+                3L * 24L * TICKS_PER_HOUR, // attackPartyCooldownTicks: gap between wave 1 and wave 2 (3 game-days)
+                24000L, // attackPartyWave1DelayTicks: wave 1 fires ~1 MC day after the intrusion is logged
+                30L * TICKS_PER_SECOND, // attackIntrusionDwellTicks: in-claim-while-hostile dwell before a campaign arms
+                10L * TICKS_PER_MINUTE // attackPartyDurationTicks: active duration hunting the target before giving up
         );
     }
 }

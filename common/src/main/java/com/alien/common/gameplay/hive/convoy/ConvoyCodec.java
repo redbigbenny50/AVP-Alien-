@@ -71,6 +71,10 @@ public final class ConvoyCodec {
 
     private static final String NBT_NEXT_WAVE_INDEX = "NextWaveIndex";
 
+    private static final String NBT_WAVE_COUNT = "WaveCount";
+
+    private static final String NBT_REVENGE = "Revenge";
+
     private static final String NBT_ACTIVE_WAVE_INDEX = "ActiveWaveIndex";
 
     private static final String NBT_ACTIVE_WAVE_INITIAL_COUNT = "ActiveWaveInitialCount";
@@ -158,6 +162,8 @@ public final class ConvoyCodec {
             tag.putLong(NBT_EXPIRES_AT_TICK, raid.expiresAtTick());
             tag.putBoolean(NBT_WARNING_ISSUED, raid.warningIssued());
             tag.putInt(NBT_NEXT_WAVE_INDEX, raid.nextWaveIndex());
+            tag.putInt(NBT_WAVE_COUNT, raid.waveCount());
+            tag.putBoolean(NBT_REVENGE, raid.isRevenge());
             tag.putInt(NBT_ACTIVE_WAVE_INDEX, raid.activeWaveIndex());
             tag.putInt(NBT_ACTIVE_WAVE_INITIAL_COUNT, raid.activeWaveInitialCount());
             tag.putLong(NBT_WAVE_BREAK_STARTED_TICK, raid.waveBreakStartedTick());
@@ -195,38 +201,56 @@ public final class ConvoyCodec {
         var compositionTag = tag.getCompound(NBT_COMPOSITION).getCompound("reserves");
         var composition = new EntityReserves();
         EntityReserves.CODEC.decode(BLibCodecs.Schema.NBT, compositionTag)
-            .inspectErr(failure -> Alien.LOGGER.error("Failed to load convoy composition: {}", failure))
-            .ifOk(loaded -> composition.putAll(loaded.getBackingMap()));
+                .inspectErr(failure -> Alien.LOGGER.error("Failed to load convoy composition: {}", failure))
+                .ifOk(loaded -> composition.putAll(loaded.getBackingMap()));
         var materializedMembers = decodeMaterializedMembers(tag.getList(NBT_MATERIALIZED_MEMBERS, Tag.TAG_COMPOUND));
 
         return switch (type) {
             case TYPE_REINFORCEMENT -> new Convoy.Reinforcement(
-                id,
-                lineageFactionId,
-                dimension,
-                new HiveLocationId(ResourceLocation.parse(tag.getString(NBT_SOURCE_LOCATION_ID))),
-                new HiveLocationId(ResourceLocation.parse(tag.getString(NBT_DESTINATION_LOCATION_ID))),
-                currentPos,
-                decodeBlockPos(tag.getIntArray(NBT_DESTINATION_POS)),
-                composition,
-                materializedMembers,
-                dispatchedTick
+                    id,
+                    lineageFactionId,
+                    dimension,
+                    new HiveLocationId(ResourceLocation.parse(tag.getString(NBT_SOURCE_LOCATION_ID))),
+                    new HiveLocationId(ResourceLocation.parse(tag.getString(NBT_DESTINATION_LOCATION_ID))),
+                    currentPos,
+                    decodeBlockPos(tag.getIntArray(NBT_DESTINATION_POS)),
+                    composition,
+                    materializedMembers,
+                    dispatchedTick
             );
             case TYPE_MIGRATION -> new Convoy.Migration(
-                id,
-                lineageFactionId,
-                dimension,
-                new HiveLocationId(ResourceLocation.parse(tag.getString(NBT_SOURCE_LOCATION_ID))),
-                new HiveLocationId(ResourceLocation.parse(tag.getString(NBT_DESTINATION_LOCATION_ID))),
-                currentPos,
-                decodeBlockPos(tag.getIntArray(NBT_DESTINATION_POS)),
-                composition,
-                materializedMembers,
-                tag.getInt(NBT_BIOMASS_PAYLOAD),
-                tag.getBoolean(NBT_CARRIES_EMPRESS),
-                dispatchedTick
+                    id,
+                    lineageFactionId,
+                    dimension,
+                    new HiveLocationId(ResourceLocation.parse(tag.getString(NBT_SOURCE_LOCATION_ID))),
+                    new HiveLocationId(ResourceLocation.parse(tag.getString(NBT_DESTINATION_LOCATION_ID))),
+                    currentPos,
+                    decodeBlockPos(tag.getIntArray(NBT_DESTINATION_POS)),
+                    composition,
+                    materializedMembers,
+                    tag.getInt(NBT_BIOMASS_PAYLOAD),
+                    tag.getBoolean(NBT_CARRIES_EMPRESS),
+                    dispatchedTick
             );
-            case TYPE_RAID -> new Convoy.Raid(
+            case TYPE_RAID -> loadRaid(tag, id, lineageFactionId, dimension, currentPos, composition, materializedMembers, dispatchedTick);
+            default -> {
+                Alien.LOGGER.warn("Unknown convoy type discriminator '{}' — skipping", type);
+                yield null;
+            }
+        };
+    }
+
+    private static Convoy.Raid loadRaid(
+            CompoundTag tag,
+            ConvoyId id,
+            ResourceLocation lineageFactionId,
+            ResourceKey<net.minecraft.world.level.Level> dimension,
+            Vec3 currentPos,
+            EntityReserves composition,
+            Map<UUID, net.minecraft.world.entity.EntityType<?>> materializedMembers,
+            long dispatchedTick
+    ) {
+        var raid = new Convoy.Raid(
                 id,
                 lineageFactionId,
                 dimension,
@@ -251,17 +275,19 @@ public final class ConvoyCodec {
                 tag.getBoolean(NBT_RETURNING_HOME),
                 decodeReturnHomeReason(tag),
                 tag.contains(NBT_RETURN_LOCATION_ID)
-                    ? new HiveLocationId(ResourceLocation.parse(tag.getString(NBT_RETURN_LOCATION_ID)))
-                    : null,
+                        ? new HiveLocationId(ResourceLocation.parse(tag.getString(NBT_RETURN_LOCATION_ID)))
+                        : null,
                 tag.contains(NBT_RETURN_POS) ? decodeBlockPos(tag.getIntArray(NBT_RETURN_POS)) : null,
                 dispatchedTick,
                 tag.getLong(NBT_EXPIRES_AT_TICK)
-            );
-            default -> {
-                Alien.LOGGER.warn("Unknown convoy type discriminator '{}' — skipping", type);
-                yield null;
-            }
-        };
+        );
+        if (tag.contains(NBT_WAVE_COUNT)) {
+            raid.setWaveCount(tag.getInt(NBT_WAVE_COUNT));
+        }
+        if (tag.getBoolean(NBT_REVENGE)) {
+            raid.markRevenge();
+        }
+        return raid;
     }
 
     private static Convoy.Raid.ReturnHomeReason decodeReturnHomeReason(CompoundTag tag) {
@@ -269,8 +295,8 @@ public final class ConvoyCodec {
             return Convoy.Raid.ReturnHomeReason.fromSerializedName(tag.getString(NBT_RETURN_HOME_REASON));
         }
         return tag.getBoolean(NBT_RETURNING_HOME)
-            ? Convoy.Raid.ReturnHomeReason.TARGET_DEFEATED
-            : Convoy.Raid.ReturnHomeReason.NONE;
+                ? Convoy.Raid.ReturnHomeReason.TARGET_DEFEATED
+                : Convoy.Raid.ReturnHomeReason.NONE;
     }
 
     private static ListTag encodeVec3(Vec3 vec) {

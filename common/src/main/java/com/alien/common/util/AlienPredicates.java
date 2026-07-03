@@ -67,7 +67,7 @@ public class AlienPredicates {
         }
 
         if (potentialTarget.getType().is(AlienEntityTypeTags.XENOMORPH_THREAT_2_LOW_DANGER)) {
-            return isHiveLowOnBiomass(alien);
+            return isHiveLowOnBiomass(alien) || isActiveBiomassHuntingPartyMember(alien);
         }
 
         if (potentialTarget.getType().is(AlienEntityTypeTags.XENOMORPH_THREAT_1_PASSIVE)) {
@@ -76,18 +76,45 @@ public class AlienPredicates {
 
         // Match the old 1.21.1 aggro baseline: anything valid and not explicitly ignored/passive/high-danger is
         // treated as low danger, so modded hostile mobs still enter the biomass-gated prey pool without a data tag.
-        return isHiveLowOnBiomass(alien);
+        return isHiveLowOnBiomass(alien) || isActiveBiomassHuntingPartyMember(alien);
+    }
+
+    /**
+     * True when {@code alien} is a currently-materialized member of an active {@code HiveParty.BiomassHunting} party.
+     * Unlike the passive hive-wide biomass gate above, this party's whole purpose is proactive THREAT_2 hunting, so its
+     * members bypass {@link #isHiveLowOnBiomass} entirely rather than only engaging once the hive is already
+     * struggling.
+     */
+    private static boolean isActiveBiomassHuntingPartyMember(@NotNull Alien alien) {
+        var membership = alien.partyMembership();
+        if (membership == null) {
+            return false;
+        }
+        var location = HiveLocationRegistry.INSTANCE.get(membership.sourceLocationId());
+        if (location == null) {
+            return false;
+        }
+        for (var party : location.parties()) {
+            if (party.id().equals(membership.partyId())) {
+                return party instanceof com.alien.common.gameplay.hive.party.HiveParty.BiomassHunting;
+            }
+        }
+        return false;
     }
 
     private static boolean isHiveLowOnBiomass(@NotNull Alien alien) {
         var location = findHomeLocation(alien);
+        return location != null && isLocationLowOnBiomass(location);
+    }
 
-        if (location == null) {
-            return false;
-        }
-
+    /**
+     * True when {@code location}'s current biomass is at or below {@link #LOW_BIOMASS_TARGET_THRESHOLD} (25%) of its
+     * cap. Public so location-level callers that don't have a live {@link Alien} entity — e.g.
+     * {@code SurfacePartyLifecycleTask}'s opportunistic-claim gating — can use the exact same "low biomass" definition
+     * as the hive-wide threat-tier gate above, rather than maintaining a second, differently-shaped threshold.
+     */
+    public static boolean isLocationLowOnBiomass(@NotNull HiveLocation location) {
         var cap = BiomassIncome.biomassCap(location, HiveLocationRegistry.INSTANCE.config());
-
         return cap > 0 && location.biomass() <= Math.ceil(cap * LOW_BIOMASS_TARGET_THRESHOLD);
     }
 

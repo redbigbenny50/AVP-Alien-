@@ -7,6 +7,12 @@ import com.alien.common.gameplay.hive.growth.CatchUpEngine;
 import com.alien.common.gameplay.hive.growth.LoadedBiomassTicker;
 import com.alien.common.gameplay.hive.location.HiveLocation;
 import com.alien.common.gameplay.hive.location.HiveLocationRegistry;
+import com.alien.common.gameplay.hive.party.AttackPartyDispatch;
+import com.alien.common.gameplay.hive.party.AttackPartyLifecycleTask;
+import com.alien.common.gameplay.hive.party.BiomassHuntingPartyDispatch;
+import com.alien.common.gameplay.hive.party.BiomassHuntingPartyLifecycleTask;
+import com.alien.common.gameplay.hive.party.SurfacePartyDispatch;
+import com.alien.common.gameplay.hive.party.SurfacePartyLifecycleTask;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 
@@ -19,6 +25,11 @@ import net.minecraft.server.level.ServerLevel;
  * claim attempts (the engine is idempotent on elapsed=0, so it's free to call when biomass hasn't moved).</li>
  * <li>Territory defense — loaded hive xenomorphs aggro players standing in claimed chunks.</li>
  * <li>Phase 8 — convoy manifestation interactions on this location's chunks.</li>
+ * <li>Parties — {@link SurfacePartyDispatch} (nightly vent-seeding surface spawns), {@link SurfacePartyLifecycleTask}
+ * (economy-bias recheck, opportunistic claims, dawn resolution), {@link BiomassHuntingPartyDispatch} (vent-gated
+ * Prowler/Warrior/bonus-Spitter hunting party), {@link BiomassHuntingPartyLifecycleTask} (duration-timer
+ * resolution with vent-teleport-home), and {@link AttackPartyDispatch}/{@link AttackPartyLifecycleTask} (per-target
+ * retribution against players who've attacked the hive) on the same 20-tick cadence.</li>
  * </ul>
  * <p>
  * See {@code HIVE_REDESIGN_12_PERFORMANCE.md} § 1.
@@ -77,6 +88,14 @@ public final class HiveLocationLoadedTickTask {
         if (currentTick % 20L == 0L) {
             CatchUpEngine.catchUpTo(serverLevel, location, lineage, currentTick);
             AbstractSpreadAttempt.tryRun(server, location.lineageFactionId(), lineage, location, currentTick);
+
+            var config = HiveLocationRegistry.INSTANCE.config();
+            SurfacePartyDispatch.tryRun(server, location, config);
+            SurfacePartyLifecycleTask.run(server, location, config);
+            BiomassHuntingPartyDispatch.tryRun(server, location, config);
+            BiomassHuntingPartyLifecycleTask.run(server, location, config);
+            AttackPartyDispatch.tryRun(server, location, config);
+            AttackPartyLifecycleTask.run(server, location, config);
         }
     }
 

@@ -64,6 +64,7 @@ public final class HiveConfigSchema {
                     "Leadership",
                     "empressMoltDurationTicks",
                     "localLeaderPickCadenceTicks",
+                    "empressCandidateMinMembers",
                     "firewallCooldownTicks",
                     "firewallStabilityScanIntervalTicks",
                     "firewallJellyFloor",
@@ -130,7 +131,25 @@ public final class HiveConfigSchema {
                     "scourgeJellyTicksPerQueenProduction",
                     "scourgeJellyTicksPerHarbingerProduction"
             ),
-            group("Queen Lifecycle", "queenFrontEndPhasesEnabled")
+            group("Queen Lifecycle", "queenFrontEndPhasesEnabled"),
+            group(
+                    "Parties",
+                    "surfacePartyBaseSize",
+                    "surfacePartySizePerClaimedChunk",
+                    "surfacePartyVentDropChance",
+                    "surfacePartyMaxVentsPerClaim",
+                    "surfacePartySurfaceBandBlocks",
+                    "biomassHuntingPartyBaseSize",
+                    "biomassHuntingPartySizePerClaimedChunk",
+                    "biomassHuntingPartyBonusSpitterCount",
+                    "biomassHuntingPartyDurationTicks",
+                    "attackPartyBaseSize",
+                    "attackPartySizePerClaimedChunk",
+                    "attackPartyCooldownTicks",
+                    "attackPartyWave1DelayTicks",
+                    "attackIntrusionDwellTicks",
+                    "attackPartyDurationTicks"
+            )
     );
 
     private static final List<Field> FIELDS;

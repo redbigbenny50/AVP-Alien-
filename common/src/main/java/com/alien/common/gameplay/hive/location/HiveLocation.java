@@ -128,6 +128,12 @@ public final class HiveLocation {
 
     private static final String NBT_LOCAL_RESERVES = "LocalReserves";
 
+    private static final String NBT_PARTIES = "Parties";
+
+    private static final String NBT_ATTACK_CAMPAIGNS = "AttackCampaigns";
+
+    private static final String NBT_GRUDGE_PLAYER_ID = "GrudgePlayerId";
+
     private static final String NBT_KNOWN_MEMBERS_BY_TYPE = "KnownMembersByType";
 
     private static final String NBT_LEADERSHIP = "Leadership";
@@ -265,6 +271,15 @@ public final class HiveLocation {
 
     private final HiveLocationReserves localReserves;
 
+    /** In-flight hive parties (recovery, revenge, surface spawn, etc.). Persisted via {@link com.alien.common.gameplay.hive.party.HivePartyCodec}. Hive-level — unlike {@code Convoy}, not empress-gated. */
+    private final java.util.List<com.alien.common.gameplay.hive.party.HiveParty> parties;
+
+    /** Per-player attack-retribution campaigns (territorial-intrusion 2-wave model). Keyed by player UUID. See {@link com.alien.common.gameplay.hive.party.AttackCampaign}. */
+    private final java.util.Map<UUID, com.alien.common.gameplay.hive.party.AttackCampaign> attackCampaigns;
+
+    /** Post-replacement grudge: set when this location's founder queen is killed by a player; the crowned successor prioritizes raiding this player on her first raid, then it clears. Null = no grudge. */
+    private @Nullable UUID grudgePlayerId;
+
     private final HiveLocationLeadership leadership;
 
     private final com.alien.common.gameplay.hive.vent.HiveVentManager ventManager;
@@ -325,6 +340,9 @@ public final class HiveLocation {
         this.chunkClaimTicks = new HashMap<>();
         this.decoratedChunks = new HashSet<>();
         this.localReserves = new HiveLocationReserves(this::lineageVariantOrNull);
+        this.parties = new java.util.ArrayList<>();
+        this.attackCampaigns = new java.util.HashMap<>();
+        this.grudgePlayerId = null;
         this.leadership = new HiveLocationLeadership();
         this.ventManager = new com.alien.common.gameplay.hive.vent.HiveVentManager();
         this.knownMembersByType = new HashMap<>();
@@ -667,6 +685,24 @@ public final class HiveLocation {
         return localReserves;
     }
 
+    /** Live mutable list of in-flight parties. Callers should treat this as append/remove-and-save, same as {@code Convoy#convoys}. */
+    public java.util.List<com.alien.common.gameplay.hive.party.HiveParty> parties() {
+        return parties;
+    }
+
+    /** Live mutable map of per-player attack-retribution campaigns. */
+    public java.util.Map<UUID, com.alien.common.gameplay.hive.party.AttackCampaign> attackCampaigns() {
+        return attackCampaigns;
+    }
+
+    public @Nullable UUID grudgePlayerId() {
+        return grudgePlayerId;
+    }
+
+    public void setGrudgePlayerId(@Nullable UUID grudgePlayerId) {
+        this.grudgePlayerId = grudgePlayerId;
+    }
+
     public HiveLocationLeadership leadership() {
         return leadership;
     }
@@ -846,6 +882,24 @@ public final class HiveLocation {
         localReserves.save(reservesTag);
         tag.put(NBT_LOCAL_RESERVES, reservesTag);
 
+        if (!parties.isEmpty()) {
+            tag.put(NBT_PARTIES, com.alien.common.gameplay.hive.party.HivePartyCodec.saveAll(parties));
+        }
+
+        if (!attackCampaigns.isEmpty()) {
+            var campaignsTag = new ListTag();
+            for (var entry : attackCampaigns.entrySet()) {
+                var entryTag = entry.getValue().save();
+                entryTag.putUUID("PlayerId", entry.getKey());
+                campaignsTag.add(entryTag);
+            }
+            tag.put(NBT_ATTACK_CAMPAIGNS, campaignsTag);
+        }
+
+        if (grudgePlayerId != null) {
+            tag.putUUID(NBT_GRUDGE_PLAYER_ID, grudgePlayerId);
+        }
+
         var knownMembersTag = new ListTag();
         for (var entry : knownMembersByType.entrySet()) {
             var members = entry.getValue();
@@ -967,6 +1021,27 @@ public final class HiveLocation {
 
         if (tag.contains(NBT_LOCAL_RESERVES)) {
             location.localReserves.load(tag.getCompound(NBT_LOCAL_RESERVES));
+        }
+
+        location.parties.clear();
+        if (tag.contains(NBT_PARTIES)) {
+            location.parties.addAll(
+                    com.alien.common.gameplay.hive.party.HivePartyCodec.loadAll(tag.getList(NBT_PARTIES, Tag.TAG_COMPOUND))
+            );
+        }
+
+        location.grudgePlayerId = tag.hasUUID(NBT_GRUDGE_PLAYER_ID) ? tag.getUUID(NBT_GRUDGE_PLAYER_ID) : null;
+
+        location.attackCampaigns.clear();
+        if (tag.contains(NBT_ATTACK_CAMPAIGNS)) {
+            var campaignsTag = tag.getList(NBT_ATTACK_CAMPAIGNS, Tag.TAG_COMPOUND);
+            for (var i = 0; i < campaignsTag.size(); i++) {
+                var entryTag = campaignsTag.getCompound(i);
+                location.attackCampaigns.put(
+                        entryTag.getUUID("PlayerId"),
+                        com.alien.common.gameplay.hive.party.AttackCampaign.load(entryTag)
+                );
+            }
         }
 
         if (tag.contains(NBT_KNOWN_MEMBERS_BY_TYPE)) {

@@ -45,6 +45,21 @@ public class HiveVentManager {
     }
 
     /**
+     * All known vents anywhere in the given chunk column (any Y). Used by {@code SurfacePartyLifecycleTask} for the
+     * surface-party vent-drop cap; the caller further filters to a near-surface Y band — this method itself does not
+     * distinguish depth.
+     */
+    public Set<BlockPos> getVentsWithinChunk(net.minecraft.world.level.ChunkPos chunkPos) {
+        var result = new java.util.HashSet<BlockPos>();
+        for (var pos : allVents()) {
+            if (pos.getX() >> 4 == chunkPos.x && pos.getZ() >> 4 == chunkPos.z) {
+                result.add(pos);
+            }
+        }
+        return result;
+    }
+
+    /**
      * Number of known vents in this location's territory.
      */
     public int ventCount() {
