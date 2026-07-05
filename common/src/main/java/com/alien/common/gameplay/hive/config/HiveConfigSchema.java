@@ -57,7 +57,12 @@ public final class HiveConfigSchema {
                     "raidExpiryTicks",
                     "baseRaidSize",
                     "raidSizePerClaimedChunk",
-                    "raidEngageRadiusBlocks"
+                    "raidEngageRadiusBlocks",
+                    "raidFrenzyExtraMemberCap",
+                    "raidLossDeathWindowTicks",
+                    "raidLossDeathThreshold",
+                    "raidLossDownGraceTicks",
+                    "raidLossAftermathTicks"
             ),
             group("Combat Pressure", "combatRespiteKillThreshold", "combatRespiteMinTicks", "combatRespiteMaxTicks"),
             group(

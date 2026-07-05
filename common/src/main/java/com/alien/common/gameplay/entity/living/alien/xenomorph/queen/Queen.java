@@ -3,8 +3,6 @@ package com.alien.common.gameplay.entity.living.alien.xenomorph.queen;
 import com.alien.common.data.AlienVariantTypes;
 import com.alien.common.gameplay.entity.living.alien.Alien;
 import com.alien.common.gameplay.entity.living.alien.xenomorph.AttackType;
-import com.alien.common.registry.init.AlienDataSyncKeys;
-import com.blib.api.common.data_sync.v1.DataAccessor;
 import com.alien.common.gameplay.entity.living.alien.xenomorph.Xenomorph;
 import com.alien.common.gameplay.entity.living.alien.xenomorph.XenomorphAttackConfig;
 import com.alien.common.gameplay.entity.living.alien.xenomorph.XenomorphConfig;
@@ -12,42 +10,44 @@ import com.alien.common.gameplay.entity.living.alien.xenomorph.XenomorphPathConf
 import com.alien.common.gameplay.entity.living.alien.xenomorph.ai.egg_laying.EggLayer;
 import com.alien.common.gameplay.entity.living.alien.xenomorph.drone.Drone;
 import com.alien.common.gameplay.entity.living.alien.xenomorph.queen.ai.QueenGOAP;
+import com.alien.common.gameplay.hive.lifecycle.QueenInhibitionService;
 import com.alien.common.gameplay.level.saveddata.QueenSpawnChunkData;
-import com.alien.common.gameplay.level.saveddata.TrackedQueenRegistry;
 import com.alien.common.gameplay.level.saveddata.StrainLeakData;
+import com.alien.common.gameplay.level.saveddata.TrackedQueenRegistry;
 import com.alien.common.model.alien.variant.AlienVariant;
+import com.alien.common.registry.init.AlienDataSyncKeys;
 import com.alien.common.registry.init.AlienEntityTypes;
 import com.alien.common.registry.init.AlienSoundEvents;
+import com.alien.common.registry.init.item.AlienItems;
 import com.alien.common.registry.tag.AlienEntityTypeTags;
+import com.blib.api.common.data_sync.v1.DataAccessor;
 import com.blib.api.common.entity.v1.PlayerStatConstants;
 import com.blib.api.common.entity.v1.PlayerUtil;
 import com.blib.api.common.goap.v1.GOAPUser;
 import com.just.ai.goap.Agent;
 import com.just.ai.goap.graph.Graph;
 import net.minecraft.ChatFormatting;
-import net.minecraft.tags.DamageTypeTags;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
-import com.alien.common.gameplay.hive.lifecycle.QueenInhibitionService;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.sounds.SoundEvent;
 import net.minecraft.sounds.SoundSource;
+import net.minecraft.tags.DamageTypeTags;
 import net.minecraft.world.DifficultyInstance;
-import net.minecraft.world.damagesource.DamageSource;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResult;
-import net.minecraft.world.entity.EquipmentSlot;
-import net.minecraft.world.entity.player.Player;
-import net.minecraft.world.item.AxeItem;
-import net.minecraft.world.item.SwordItem;
-import com.alien.common.registry.init.item.AlienItems;
-import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.damagesource.DamageSource;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.entity.EquipmentSlot;
+import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.MobSpawnType;
 import net.minecraft.world.entity.SpawnGroupData;
 import net.minecraft.world.entity.ai.attributes.AttributeSupplier;
 import net.minecraft.world.entity.ai.attributes.Attributes;
+import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.item.AxeItem;
+import net.minecraft.world.item.SwordItem;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.ServerLevelAccessor;
 import net.minecraft.world.phys.Vec3;
@@ -59,45 +59,45 @@ import java.util.Objects;
 public class Queen extends Xenomorph implements GOAPUser<Queen>, EggLayer {
 
     public static final AttackType SWIPE_DOWN = AttackType.builder("queen_swipe_down")
-            .requiresAnyArm()
-            .defaultDurationInTicks(18)
-            .sound(AlienSoundEvents.ENTITY_XENOMORPH_ATTACK)
-            .build();
+        .requiresAnyArm()
+        .defaultDurationInTicks(18)
+        .sound(AlienSoundEvents.ENTITY_XENOMORPH_ATTACK)
+        .build();
 
     public static final AttackType BACKHAND = AttackType.builder("queen_backhand")
-            .requiresAnyArm()
-            .defaultDurationInTicks(15)
-            .sound(AlienSoundEvents.ENTITY_XENOMORPH_ATTACK)
-            .build();
+        .requiresAnyArm()
+        .defaultDurationInTicks(15)
+        .sound(AlienSoundEvents.ENTITY_XENOMORPH_ATTACK)
+        .build();
 
     public static final AttackType TAIL_STRIKE = AttackType.builder("queen_tail_strike")
-            .requiresTail()
-            .defaultDurationInTicks(20)
-            .sound(AlienSoundEvents.ENTITY_XENOMORPH_ATTACK)
-            .build();
+        .requiresTail()
+        .defaultDurationInTicks(20)
+        .sound(AlienSoundEvents.ENTITY_XENOMORPH_ATTACK)
+        .build();
 
     private static final XenomorphConfig CONFIG = XenomorphConfig.builder(XenomorphPathConfig.WIDE_TALL, Queen::getType)
-            .attackConfig(
-                    XenomorphAttackConfig.builder()
-                            .addRegular(SWIPE_DOWN)
-                            .addRegular(BACKHAND)
-                            .addRegular(TAIL_STRIKE)
-                            .build()
-            )
-            .parallelDigCount(4)
-            .pushedByFluid(false)
-            .canCrawl(false)
-            .build();
+        .attackConfig(
+            XenomorphAttackConfig.builder()
+                .addRegular(SWIPE_DOWN)
+                .addRegular(BACKHAND)
+                .addRegular(TAIL_STRIKE)
+                .build()
+        )
+        .parallelDigCount(4)
+        .pushedByFluid(false)
+        .canCrawl(false)
+        .build();
 
     public static AttributeSupplier.Builder createQueenAttributes() {
         return Alien.createAlienAttributes()
-                .add(Attributes.ARMOR, 16.0F)
-                .add(Attributes.ARMOR_TOUGHNESS, 16.0F)
-                .add(Attributes.ATTACK_DAMAGE, PlayerStatConstants.BASE_HEALTH * 2.5F)
-                .add(Attributes.FOLLOW_RANGE, 35F)
-                .add(Attributes.KNOCKBACK_RESISTANCE, 1f)
-                .add(Attributes.MAX_HEALTH, PlayerStatConstants.BASE_HEALTH * 10F)
-                .add(Attributes.MOVEMENT_SPEED, PlayerStatConstants.BASE_WALK_SPEED * 0.9F);
+            .add(Attributes.ARMOR, 16.0F)
+            .add(Attributes.ARMOR_TOUGHNESS, 16.0F)
+            .add(Attributes.ATTACK_DAMAGE, PlayerStatConstants.BASE_HEALTH * 2.5F)
+            .add(Attributes.FOLLOW_RANGE, 35F)
+            .add(Attributes.KNOCKBACK_RESISTANCE, 1f)
+            .add(Attributes.MAX_HEALTH, PlayerStatConstants.BASE_HEALTH * 10F)
+            .add(Attributes.MOVEMENT_SPEED, PlayerStatConstants.BASE_WALK_SPEED * 0.9F);
     }
 
     private final QueenAnimationDispatcher animationDispatcher;
@@ -108,19 +108,35 @@ public class Queen extends Xenomorph implements GOAPUser<Queen>, EggLayer {
 
     private final QueenLifecyclePhaseManager lifecyclePhaseManager;
 
-    /** Synced chain count for the client (shackle reveal + chain render). The bind manager keeps it in lockstep with
-     * the anchor list each server tick. */
+    /**
+     * Synced chain count for the client (shackle reveal + chain render). The bind manager keeps it in lockstep with the
+     * anchor list each server tick.
+     */
     public final DataAccessor<Integer> bindChainCount;
 
     private final QueenBindManager bindManager;
 
-    /** Synced + persisted: whether the inhibitor device is attached. Drives the {@code gInhibitor} bone reveal and (in
-     * later slices) the contained-breeder behaviour — hive autonomy off, claim capped at one chunk. */
+    private static final String LEGACY_DORMANT_TAG = "legacyDormant";
+
+    private static final String LEGACY_DORMANT_COMPAT_TAG = "LegacyDormant";
+
+    private static final String LIFECYCLE_PHASE_TAG = "lifecyclePhase";
+
+    private boolean legacyDormant;
+
+    private boolean loadedWithoutLifecycleState;
+
+    /**
+     * Synced + persisted: whether the inhibitor device is attached. Drives the {@code gInhibitor} bone reveal and (in
+     * later slices) the contained-breeder behaviour — hive autonomy off, claim capped at one chunk.
+     */
     public final DataAccessor<Boolean> hasInhibitor;
 
     public final DataAccessor<Boolean> tracked;
 
-    /** Transient: true while clip-digging to her location anchor (Stage 2b). Not saved — a reload never stays noclip. */
+    /**
+     * Transient: true while clip-digging to her location anchor (Stage 2b). Not saved — a reload never stays noclip.
+     */
     private boolean digging;
 
     public Queen(EntityType<? extends Queen> entityType, Level level) {
@@ -133,6 +149,8 @@ public class Queen extends Xenomorph implements GOAPUser<Queen>, EggLayer {
         this.bindManager = new QueenBindManager(this);
         this.hasInhibitor = new DataAccessor<>(this, AlienDataSyncKeys.QUEEN_HAS_INHIBITOR.get());
         this.tracked = new DataAccessor<>(this, AlienDataSyncKeys.QUEEN_IS_TRACKED.get());
+        this.legacyDormant = false;
+        this.loadedWithoutLifecycleState = false;
     }
 
     @Override
@@ -167,10 +185,10 @@ public class Queen extends Xenomorph implements GOAPUser<Queen>, EggLayer {
                     setTracked(false);
                 } else if (tickCount % 40 == 0) {
                     registry.updatePosition(
-                            getUUID(),
-                            blockPosition(),
-                            trackedLevel.dimension(),
-                            trackedLevel.getGameTime()
+                        getUUID(),
+                        blockPosition(),
+                        trackedLevel.dimension(),
+                        trackedLevel.getGameTime()
                     );
                 }
             });
@@ -205,10 +223,10 @@ public class Queen extends Xenomorph implements GOAPUser<Queen>, EggLayer {
 
     @Override
     public @Nullable SpawnGroupData finalizeSpawn(
-            @NotNull ServerLevelAccessor serverLevelAccessor,
-            @NotNull DifficultyInstance difficulty,
-            @NotNull MobSpawnType spawnType,
-            @Nullable SpawnGroupData spawnGroupData
+        @NotNull ServerLevelAccessor serverLevelAccessor,
+        @NotNull DifficultyInstance difficulty,
+        @NotNull MobSpawnType spawnType,
+        @Nullable SpawnGroupData spawnGroupData
     ) {
         if (spawnType == MobSpawnType.NATURAL) {
             applyNaturalSpawnEffects();
@@ -235,15 +253,15 @@ public class Queen extends Xenomorph implements GOAPUser<Queen>, EggLayer {
         resetQueenSpawnCooldown();
 
         StrainLeakData.getOrCreate(level)
-                .ifSome(strainLeakData -> strainLeakData.add(getVariant(), -1));
+            .ifSome(strainLeakData -> strainLeakData.add(getVariant(), -1));
     }
 
     private void alertPlayersOfSpawn() {
         for (var player : PlayerUtil.getTrackingPlayers(this)) {
             player.playNotifySound(AlienSoundEvents.ENTITY_QUEEN_SCREAM.get(), SoundSource.MASTER, 1, 1);
             player.sendSystemMessage(
-                    Component.literal("A scream from the depths sends chills down your spine...")
-                            .withStyle(AlienVariantTypes.getFor(this).chatColor(), ChatFormatting.ITALIC)
+                Component.literal("A scream from the depths sends chills down your spine...")
+                    .withStyle(AlienVariantTypes.getFor(this).chatColor(), ChatFormatting.ITALIC)
             );
         }
     }
@@ -262,7 +280,7 @@ public class Queen extends Xenomorph implements GOAPUser<Queen>, EggLayer {
 
     private void resetQueenSpawnCooldown() {
         QueenSpawnChunkData.getOrCreate(level())
-                .ifSome(queenSpawnChunkData -> queenSpawnChunkData.getSpawnCooldown().reset());
+            .ifSome(queenSpawnChunkData -> queenSpawnChunkData.getSpawnCooldown().reset());
     }
 
     @Override
@@ -288,8 +306,8 @@ public class Queen extends Xenomorph implements GOAPUser<Queen>, EggLayer {
     @Override
     protected void doPush(@NotNull Entity entity) {
         if (
-                !ovipositorManager.hasOvipositor()
-                        || !entity.getType().is(AlienEntityTypeTags.ALIENS)
+            !ovipositorManager.hasOvipositor()
+                || !entity.getType().is(AlienEntityTypeTags.ALIENS)
         ) {
             super.doPush(entity);
         }
@@ -332,21 +350,28 @@ public class Queen extends Xenomorph implements GOAPUser<Queen>, EggLayer {
 
     @Override
     public @NotNull InteractionResult mobInteract(@NotNull Player player, @NotNull InteractionHand hand) {
+        if (legacyDormant && !level().isClientSide) {
+            wakeFromLegacyDormantRecovery();
+            return InteractionResult.SUCCESS;
+        }
+
         var stack = player.getItemInHand(hand);
 
         // Pry the inhibitor off: sneak + right-click an inhibited queen with a sword or axe. Re-enables her autonomy,
         // tears down her inhibited claim, and drops the inhibitor so it's recoverable. Costs the tool some durability.
-        if (isInhibited()
+        if (
+            isInhibited()
                 && player.isShiftKeyDown()
-                && (stack.getItem() instanceof SwordItem || stack.getItem() instanceof AxeItem)) {
+                && (stack.getItem() instanceof SwordItem || stack.getItem() instanceof AxeItem)
+        ) {
             if (level() instanceof ServerLevel serverLevel) {
                 setInhibited(false);
                 QueenInhibitionService.onReleased(serverLevel, this);
                 spawnAtLocation(AlienItems.INHIBITOR.get());
                 stack.hurtAndBreak(
-                        5,
-                        player,
-                        hand == InteractionHand.MAIN_HAND ? EquipmentSlot.MAINHAND : EquipmentSlot.OFFHAND
+                    5,
+                    player,
+                    hand == InteractionHand.MAIN_HAND ? EquipmentSlot.MAINHAND : EquipmentSlot.OFFHAND
                 );
             }
             return InteractionResult.sidedSuccess(level().isClientSide);
@@ -373,6 +398,24 @@ public class Queen extends Xenomorph implements GOAPUser<Queen>, EggLayer {
         tracked.set(value);
     }
 
+    public boolean isLegacyDormant() {
+        return legacyDormant;
+    }
+
+    public boolean wasLoadedWithoutLifecycleState() {
+        return loadedWithoutLifecycleState;
+    }
+
+    public void setLegacyDormant(boolean dormant) {
+        this.legacyDormant = dormant;
+    }
+
+    public void wakeFromLegacyDormantRecovery() {
+        this.legacyDormant = false;
+        this.loadedWithoutLifecycleState = false;
+        lifecyclePhaseManager.restartLocationPhase();
+    }
+
     /**
      * Whether she is in the involuntary, defeat-induced incapacitated state (Part 2). Not yet implemented — the
      * incapacitation state machine (incap HP bar, kill/heal/self-recovery/capture exits) is a deferred feature, so this
@@ -389,8 +432,8 @@ public class Queen extends Xenomorph implements GOAPUser<Queen>, EggLayer {
      */
     public boolean canBeInhibited() {
         return isIncapacitated()
-                || lifecyclePhaseManager.getPhase() == QueenLifecyclePhase.HIBERNATION
-                || bindManager.isFullyBound();
+            || lifecyclePhaseManager.getPhase() == QueenLifecyclePhase.HIBERNATION
+            || bindManager.isFullyBound();
     }
 
     /**
@@ -434,6 +477,9 @@ public class Queen extends Xenomorph implements GOAPUser<Queen>, EggLayer {
     public boolean hurt(DamageSource damageSource, float amount) {
         var wasHurt = super.hurt(damageSource, amount);
         if (wasHurt) {
+            if (!level().isClientSide) {
+                ovipositorManager.abandonOvipositor();
+            }
             // Stage 3b: a solid hit rouses a hibernating queen (the manager filters by phase + damage threshold).
             getLifecyclePhaseManager().onHibernationDamage(amount);
         }
@@ -470,8 +516,13 @@ public class Queen extends Xenomorph implements GOAPUser<Queen>, EggLayer {
         super.readAdditionalSaveData(compoundTag);
         ovipositorManager.load(compoundTag);
         queenData.load(compoundTag);
+        loadedWithoutLifecycleState = !compoundTag.contains(LIFECYCLE_PHASE_TAG)
+            && !compoundTag.contains(LEGACY_DORMANT_TAG)
+            && !compoundTag.contains(LEGACY_DORMANT_COMPAT_TAG);
         lifecyclePhaseManager.load(compoundTag);
         bindManager.load(compoundTag);
+        legacyDormant = compoundTag.getBoolean(LEGACY_DORMANT_TAG)
+            || compoundTag.getBoolean(LEGACY_DORMANT_COMPAT_TAG);
     }
 
     @Override
@@ -481,6 +532,7 @@ public class Queen extends Xenomorph implements GOAPUser<Queen>, EggLayer {
         queenData.save(compoundTag);
         lifecyclePhaseManager.save(compoundTag);
         bindManager.save(compoundTag);
+        compoundTag.putBoolean(LEGACY_DORMANT_TAG, legacyDormant);
     }
 
     public static EntityType<? extends Alien> getType(AlienVariant alienVariant) {
