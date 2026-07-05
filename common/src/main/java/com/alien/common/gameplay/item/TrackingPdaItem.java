@@ -27,6 +27,7 @@ public class TrackingPdaItem extends Item {
         @NotNull InteractionHand hand
     ) {
         if (level.isClientSide) {
+            com.alien.client.gui.ClientTrackerAlerts.requestOpen();
             Alien.MOD.networking().sendToServer(C2SRequestTrackedQueensPayload.INSTANCE);
         }
 

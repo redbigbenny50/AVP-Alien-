@@ -58,6 +58,12 @@ public class EnUsSoundEventProvider {
         addSound(builder, AlienSoundEvents.ITEM_ARMOR_EQUIP_CHITIN, "Chitin armor squishes");
 
         addSound(builder, AlienSoundEvents.JUKEBOX_SOUNDS_ALIEN_MUSIC_1, "Silver Smile plays");
+
+        addSound(builder, AlienSoundEvents.UI_TERMINAL_OPEN, "Terminal powers on");
+        addSound(builder, AlienSoundEvents.UI_TERMINAL_CLOSE, "Terminal powers off");
+        addSound(builder, AlienSoundEvents.UI_TERMINAL_MOUSEOVER, "Terminal blip");
+        addSound(builder, AlienSoundEvents.UI_TERMINAL_CLICK, "Terminal selects");
+        addSound(builder, AlienSoundEvents.UI_TERMINAL_EXECUTE, "Terminal confirms");
     };
 
     private static void addSound(

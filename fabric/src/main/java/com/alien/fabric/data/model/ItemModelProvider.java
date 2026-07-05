@@ -83,6 +83,7 @@ public class ItemModelProvider extends FabricModelProvider {
         generateStandardItem(generators, AlienItems.ROYALTY_POTTERY_SHERD);
         generateStandardItem(generators, AlienItems.VECTOR_POTTERY_SHERD);
         generateStandardItem(generators, AlienItems.POISON_JELLY);
+        generateStandardItem(generators, AlienItems.TRACKING_PDA);
 
         AlienSpawnEggItems.REGISTRY.getAll()
             .forEach(holder -> generateStandardItem(generators, holder));

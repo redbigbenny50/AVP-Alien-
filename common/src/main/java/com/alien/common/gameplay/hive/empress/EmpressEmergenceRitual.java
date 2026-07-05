@@ -7,6 +7,7 @@ import com.alien.common.gameplay.hive.faction.FactionMembershipTransfer;
 import com.alien.common.gameplay.hive.faction.LineageFactionData;
 import com.alien.common.gameplay.hive.faction.LocationMembership;
 import com.alien.common.gameplay.hive.location.HiveLocationRegistry;
+import com.alien.common.gameplay.level.saveddata.TrackedQueenRegistry;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.world.entity.MobSpawnType;
@@ -163,6 +164,10 @@ public final class EmpressEmergenceRitual {
             queen.setNoAi(false);
             return;
         }
+
+        // Her tracker (if any) can no longer follow a queen who no longer exists -- mark it lost so it surfaces in the
+        // PDA's caution list rather than lingering on a discarded entity.
+        TrackedQueenRegistry.markLostAndAnnounce(serverLevel, queen.getUUID(), TrackedQueenRegistry.REASON_EMPRESS);
 
         // Move the queen out of the world. The empress takes her place at the same position.
         queen.discard();

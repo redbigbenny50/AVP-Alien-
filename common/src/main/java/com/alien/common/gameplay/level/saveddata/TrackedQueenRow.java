@@ -42,6 +42,10 @@ public record TrackedQueenRow(
 
     private static final String NBT_SEEN = "lastSeen";
 
+    private static final String NBT_LOST = "lost";
+
+    private static final String NBT_REASON = "reason";
+
     public static CompoundTag packList(List<TrackedQueenRow> rows) {
         var list = new ListTag();
 
@@ -78,5 +82,49 @@ public record TrackedQueenRow(
         }
 
         return rows;
+    }
+
+    /** A tracker that has gone dark, with the reason it was lost. */
+    public record Lost(
+        UUID id,
+        String name,
+        ResourceKey<Level> dimension,
+        BlockPos pos,
+        String reason,
+        long lostGameTime
+    ) {}
+
+    /** Add a "lost" list to an existing packed tag (alongside the active {@code rows}). */
+    public static void packLostInto(CompoundTag tag, List<Lost> lost) {
+        var list = new ListTag();
+        for (var l : lost) {
+            var t = new CompoundTag();
+            t.putUUID(NBT_UUID, l.id());
+            t.putString(NBT_NAME, l.name());
+            t.putString(NBT_DIM, l.dimension().location().toString());
+            t.putInt(NBT_X, l.pos().getX());
+            t.putInt(NBT_Y, l.pos().getY());
+            t.putInt(NBT_Z, l.pos().getZ());
+            t.putString(NBT_REASON, l.reason());
+            t.putLong(NBT_SEEN, l.lostGameTime());
+            list.add(t);
+        }
+        tag.put(NBT_LOST, list);
+    }
+
+    public static List<Lost> unpackLost(CompoundTag tag) {
+        var out = new ArrayList<Lost>();
+        var list = tag.getList(NBT_LOST, Tag.TAG_COMPOUND);
+        for (var i = 0; i < list.size(); i++) {
+            var t = list.getCompound(i);
+            var id = t.getUUID(NBT_UUID);
+            var name = t.getString(NBT_NAME);
+            var dimension = ResourceKey.create(Registries.DIMENSION, ResourceLocation.parse(t.getString(NBT_DIM)));
+            var pos = new BlockPos(t.getInt(NBT_X), t.getInt(NBT_Y), t.getInt(NBT_Z));
+            var reason = t.getString(NBT_REASON);
+            var seen = t.getLong(NBT_SEEN);
+            out.add(new Lost(id, name, dimension, pos, reason, seen));
+        }
+        return out;
     }
 }

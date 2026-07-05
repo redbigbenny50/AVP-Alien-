@@ -15,6 +15,9 @@ public class AlienEntityTypeTags {
 
     public static final TagKey<EntityType<?>> ALIENS = create("aliens");
 
+    /** Mobs the capture chain refuses to grab or chain — bosses and the like. Datapack-overridable. */
+    public static final TagKey<EntityType<?>> CAPTURE_CHAIN_BLACKLIST = create("capture_chain_blacklist");
+
     public static final TagKey<EntityType<?>> ANSWERS_XENOMORPH_CRIES_FOR_HELP = create("answers_xenomorph_cries_for_help");
 
     public static final TagKey<EntityType<?>> CHESTBURSTERS = create("chestbursters");

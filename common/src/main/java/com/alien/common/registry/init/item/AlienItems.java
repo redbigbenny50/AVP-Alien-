@@ -11,6 +11,7 @@ import com.alien.common.gameplay.item.QueenHeadItem;
 import com.alien.common.gameplay.item.QueenHeadShieldItem;
 import com.alien.common.gameplay.item.SpitterHeadShieldItem;
 import com.alien.common.gameplay.item.TrackerItem;
+import com.alien.common.gameplay.item.TrackingPdaItem;
 import com.alien.common.gameplay.item.XenomorphHeadItem;
 import com.alien.common.gameplay.item.XenomorphHeadShieldItem;
 import com.alien.common.model.alien.variant.AlienVariant;
@@ -106,6 +107,11 @@ public class AlienItems {
     public static final BLibHolder<Item> TRACKER = create(
         "tracker",
         () -> new TrackerItem(new Item.Properties().stacksTo(16))
+    );
+
+    public static final BLibHolder<Item> TRACKING_PDA = create(
+        "tracking_pda",
+        () -> new TrackingPdaItem(new Item.Properties().stacksTo(1))
     );
 
     public static final BLibHolder<Item> QUEEN_HEAD = create(

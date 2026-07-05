@@ -1,13 +1,19 @@
 package com.alien.common.network;
 
 import com.alien.Alien;
+import com.alien.common.network.handler.AckLostTrackersHandler;
 import com.alien.common.network.handler.AlienClientPacketListener;
+import com.alien.common.network.handler.DestroyTrackerHandler;
 import com.alien.common.network.handler.HiveConfigUpdateHandler;
 import com.alien.common.network.handler.HiveInspectionRequestHandler;
 import com.alien.common.network.handler.HiveRenderToggleHandler;
+import com.alien.common.network.handler.RenameTrackerHandler;
 import com.alien.common.network.handler.ShieldAbilityActivationHandler;
 import com.alien.common.network.handler.TrackedQueensRequestHandler;
+import com.alien.common.network.payload.C2SAckLostTrackersPayload;
 import com.alien.common.network.payload.C2SActivateShieldAbilityPayload;
+import com.alien.common.network.payload.C2SDestroyTrackerPayload;
+import com.alien.common.network.payload.C2SRenameTrackerPayload;
 import com.alien.common.network.payload.C2SRequestHiveInspectionPayload;
 import com.alien.common.network.payload.C2SRequestTrackedQueensPayload;
 import com.alien.common.network.payload.C2SToggleHiveRenderPayload;
@@ -57,6 +63,15 @@ public final class AlienNetworking {
         );
         registry.registerPacketDirection(
             new PacketDirection.S2C<>(S2CTrackedQueensPayload.TYPE, S2CTrackedQueensPayload.CODEC)
+        );
+        registry.registerPacketDirection(
+            new PacketDirection.C2S<>(C2SDestroyTrackerPayload.TYPE, C2SDestroyTrackerPayload.CODEC)
+        );
+        registry.registerPacketDirection(
+            new PacketDirection.C2S<>(C2SAckLostTrackersPayload.TYPE, C2SAckLostTrackersPayload.CODEC)
+        );
+        registry.registerPacketDirection(
+            new PacketDirection.C2S<>(C2SRenameTrackerPayload.TYPE, C2SRenameTrackerPayload.CODEC)
         );
 
         registry.registerPacketHandler(
@@ -120,6 +135,27 @@ public final class AlienNetworking {
                 S2CTrackedQueensPayload.TYPE,
                 S2CTrackedQueensPayload.CODEC,
                 AlienClientPacketListener::handleTrackedQueens
+            )
+        );
+        registry.registerPacketHandler(
+            new NetworkHandler.FromClient<>(
+                C2SDestroyTrackerPayload.TYPE,
+                C2SDestroyTrackerPayload.CODEC,
+                DestroyTrackerHandler::handle
+            )
+        );
+        registry.registerPacketHandler(
+            new NetworkHandler.FromClient<>(
+                C2SAckLostTrackersPayload.TYPE,
+                C2SAckLostTrackersPayload.CODEC,
+                AckLostTrackersHandler::handle
+            )
+        );
+        registry.registerPacketHandler(
+            new NetworkHandler.FromClient<>(
+                C2SRenameTrackerPayload.TYPE,
+                C2SRenameTrackerPayload.CODEC,
+                RenameTrackerHandler::handle
             )
         );
     }

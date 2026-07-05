@@ -281,5 +281,35 @@
       "avp_alien:jukebox_sounds/alien_music_1"
     ],
     "subtitle": "subtitles.jukebox_sounds.alien_music_1"
+  },
+  "ui.terminal.open": {
+    "sounds": [
+      { "name": "minecraft:ui.toast.in", "type": "event" }
+    ],
+    "subtitle": "subtitles.ui.terminal.open"
+  },
+  "ui.terminal.close": {
+    "sounds": [
+      { "name": "minecraft:ui.toast.out", "type": "event" }
+    ],
+    "subtitle": "subtitles.ui.terminal.close"
+  },
+  "ui.terminal.mouseover": {
+    "sounds": [
+      { "name": "minecraft:ui.button.click", "type": "event" }
+    ],
+    "subtitle": "subtitles.ui.terminal.mouseover"
+  },
+  "ui.terminal.click": {
+    "sounds": [
+      { "name": "minecraft:ui.button.click", "type": "event" }
+    ],
+    "subtitle": "subtitles.ui.terminal.click"
+  },
+  "ui.terminal.execute": {
+    "sounds": [
+      { "name": "minecraft:ui.stonecutter.take_result", "type": "event" }
+    ],
+    "subtitle": "subtitles.ui.terminal.execute"
   }
 }

@@ -2,7 +2,9 @@ package com.alien.common.gameplay.item;
 
 import com.alien.common.gameplay.block.capture.anchor.AnchorBlock;
 import com.alien.common.gameplay.block.entity.capture.anchor.AnchorBlockEntity;
+import com.alien.common.gameplay.capture.CaptureChainInteraction;
 import com.alien.common.gameplay.capture.CaptureHoldManager;
+import com.alien.common.registry.init.item.AlienItems;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.InteractionHand;
@@ -14,6 +16,7 @@ import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.context.UseOnContext;
 import net.minecraft.world.level.Level;
+import net.minecraft.world.level.block.Block;
 import org.jetbrains.annotations.NotNull;
 
 /**
@@ -21,9 +24,9 @@ import org.jetbrains.annotations.NotNull;
  * <p>
  * Right-click a mob to take hold of it: it is registered with {@link CaptureHoldManager}, which reels it toward you and
  * restricts its distance. Right-click the same mob again to let it go. This is deliberately <em>not</em> a vanilla
- * leash — there is no rope to render through the vanilla pipeline and nothing drops a {@code minecraft:lead} when the
- * hold breaks. Right-click an anchor to bind the mob you are holding to that anchor's chain; sneak-right-click an
- * anchor to release its chain.
+ * leash — there is no rope to render through the vanilla pipeline. Binding a held mob to an anchor consumes one capture
+ * chain; sneak-right-clicking the anchor releases the mob and drops the capture chain back as an item (lead-style).
+ * Merely grabbing/letting go of a mob does not consume anything.
  */
 public class CaptureChainItem extends Item {
 
@@ -38,19 +41,12 @@ public class CaptureChainItem extends Item {
         @NotNull LivingEntity target,
         @NotNull InteractionHand hand
     ) {
-        if (target instanceof Mob mob && target != player) {
-            // Held by another player: don't interfere with their hold.
-            if (CaptureHoldManager.isHeld(mob) && !CaptureHoldManager.isHeldBy(mob, player)) {
-                return super.interactLivingEntity(stack, player, target, hand);
-            }
-            if (!player.level().isClientSide) {
-                if (CaptureHoldManager.isHeldBy(mob, player)) {
-                    CaptureHoldManager.release(mob); // toggle off — let the mob go
-                } else {
-                    CaptureHoldManager.hold(mob, player); // grab
-                }
-            }
-            return InteractionResult.sidedSuccess(player.level().isClientSide);
+        // Fallback path for mobs whose own right-click does not consume the interaction. Mobs that would otherwise
+        // swallow it first (e.g. villager trading) are handled earlier by the loader interaction events, which call
+        // the same CaptureChainInteraction logic before the mob's interact runs.
+        InteractionResult result = CaptureChainInteraction.tryHold(player, target, hand);
+        if (result != InteractionResult.PASS) {
+            return result;
         }
         return super.interactLivingEntity(stack, player, target, hand);
     }
@@ -71,10 +67,11 @@ public class CaptureChainItem extends Item {
             return InteractionResult.SUCCESS;
         }
 
-        // Sneak: release any existing chain.
+        // Sneak: release any existing chain. The physical chain frees and drops back as an item (lead-style).
         if (player.isShiftKeyDown()) {
             if (anchor.hasChain()) {
                 anchor.release();
+                Block.popResource(serverLevel, pos, new ItemStack(AlienItems.CAPTURE_CHAIN.get()));
                 return InteractionResult.CONSUME;
             }
             return InteractionResult.PASS;
@@ -90,6 +87,9 @@ public class CaptureChainItem extends Item {
         if (held != null) {
             anchor.bind(held);
             CaptureHoldManager.release(held);
+            if (!player.getAbilities().instabuild) {
+                context.getItemInHand().shrink(1);
+            }
             return InteractionResult.CONSUME;
         }
         return InteractionResult.PASS;

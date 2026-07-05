@@ -91,6 +91,17 @@ public class MiscellaneousRecipeProvider {
             .requires(1, Items.IRON_INGOT)
             .into(1, AlienItems.TRACKER);
 
+        // Tracking PDA: redstone, amethyst shard, observer stacked in a column.
+        builder.shaped()
+            .withCategory(RecipeCategory.TOOLS)
+            .define('R', Items.REDSTONE)
+            .define('A', Items.AMETHYST_SHARD)
+            .define('O', Items.OBSERVER)
+            .pattern("R")
+            .pattern("A")
+            .pattern("O")
+            .into(1, AlienItems.TRACKING_PDA);
+
         builder.shapeless()
             .withCategory(RecipeCategory.MISC)
             .requires(9, AlienItems.ALIEN_MUSIC_DISC_1_FRAGMENT)

@@ -34,44 +34,44 @@ import java.util.Objects;
 public class Empress extends Xenomorph implements GOAPUser<Empress>, EggLayer {
 
     public static final AttackType SWIPE_DOWN = AttackType.builder("empress_swipe_down")
-        .requiresAnyArm()
-        .defaultDurationInTicks(18)
-        .sound(AlienSoundEvents.ENTITY_XENOMORPH_ATTACK)
-        .build();
+            .requiresAnyArm()
+            .defaultDurationInTicks(18)
+            .sound(AlienSoundEvents.ENTITY_XENOMORPH_ATTACK)
+            .build();
 
     public static final AttackType BACKHAND = AttackType.builder("empress_backhand")
-        .requiresAnyArm()
-        .defaultDurationInTicks(15)
-        .sound(AlienSoundEvents.ENTITY_XENOMORPH_ATTACK)
-        .build();
+            .requiresAnyArm()
+            .defaultDurationInTicks(15)
+            .sound(AlienSoundEvents.ENTITY_XENOMORPH_ATTACK)
+            .build();
 
     public static final AttackType TAIL_STRIKE = AttackType.builder("empress_tail_strike")
-        .requiresTail()
-        .defaultDurationInTicks(20)
-        .sound(AlienSoundEvents.ENTITY_XENOMORPH_ATTACK)
-        .build();
+            .requiresTail()
+            .defaultDurationInTicks(20)
+            .sound(AlienSoundEvents.ENTITY_XENOMORPH_ATTACK)
+            .build();
 
     private static final XenomorphConfig CONFIG = XenomorphConfig.builder(XenomorphPathConfig.WIDE_TALL, Empress::getType)
-        .attackConfig(
-            XenomorphAttackConfig.builder()
-                .addRegular(SWIPE_DOWN)
-                .addRegular(BACKHAND)
-                .addRegular(TAIL_STRIKE)
-                .build()
-        )
-        .parallelDigCount(4)
-        .pushedByFluid(false)
-        .build();
+            .attackConfig(
+                    XenomorphAttackConfig.builder()
+                            .addRegular(SWIPE_DOWN)
+                            .addRegular(BACKHAND)
+                            .addRegular(TAIL_STRIKE)
+                            .build()
+            )
+            .parallelDigCount(4)
+            .pushedByFluid(false)
+            .build();
 
     public static AttributeSupplier.Builder createEmpressAttributes() {
         return Alien.createAlienAttributes()
-            .add(Attributes.ARMOR, 16.0F)
-            .add(Attributes.ARMOR_TOUGHNESS, 16.0F)
-            .add(Attributes.ATTACK_DAMAGE, PlayerStatConstants.BASE_HEALTH * 2.5F)
-            .add(Attributes.FOLLOW_RANGE, 35F)
-            .add(Attributes.KNOCKBACK_RESISTANCE, 1f)
-            .add(Attributes.MAX_HEALTH, PlayerStatConstants.BASE_HEALTH * 10F)
-            .add(Attributes.MOVEMENT_SPEED, PlayerStatConstants.BASE_WALK_SPEED * 0.9F);
+                .add(Attributes.ARMOR, 16.0F)
+                .add(Attributes.ARMOR_TOUGHNESS, 16.0F)
+                .add(Attributes.ATTACK_DAMAGE, PlayerStatConstants.BASE_HEALTH * 2.5F)
+                .add(Attributes.FOLLOW_RANGE, 35F)
+                .add(Attributes.KNOCKBACK_RESISTANCE, 1f)
+                .add(Attributes.MAX_HEALTH, PlayerStatConstants.BASE_HEALTH * 10F)
+                .add(Attributes.MOVEMENT_SPEED, PlayerStatConstants.BASE_WALK_SPEED * 0.9F);
     }
 
     private final EmpressAnimationDispatcher animationDispatcher;
@@ -147,8 +147,8 @@ public class Empress extends Xenomorph implements GOAPUser<Empress>, EggLayer {
     @Override
     protected void doPush(@NotNull Entity entity) {
         if (
-            !empressOvipositorManager.hasOvipositor()
-                || !entity.getType().is(AlienEntityTypeTags.ALIENS)
+                !empressOvipositorManager.hasOvipositor()
+                        || !entity.getType().is(AlienEntityTypeTags.ALIENS)
         ) {
             super.doPush(entity);
         }
@@ -234,5 +234,11 @@ public class Empress extends Xenomorph implements GOAPUser<Empress>, EggLayer {
             case ABERRANT -> AlienEntityTypes.ABERRANT_EMPRESS.get();
             case IRRADIATED -> AlienEntityTypes.IRRADIATED_EMPRESS.get();
         };
+    }
+
+    @Override
+    public boolean removeWhenFarAway(double distanceToClosestPlayer) {
+        // An empress rules a lineage of hives; she must never despawn.
+        return false;
     }
 }
