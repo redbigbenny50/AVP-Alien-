@@ -4,6 +4,8 @@ import com.alien.Alien;
 import com.alien.common.gameplay.hive.config.HiveConfig;
 import com.alien.common.gameplay.hive.faction.LineageFactionData;
 import com.alien.common.gameplay.hive.id.HiveLocationId;
+import com.alien.common.gameplay.hive.structure.FrontierSocket;
+import com.alien.common.gameplay.hive.structure.HiveStructureRole;
 import com.alien.common.model.alien.variant.AlienVariant;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.BuiltInRegistries;
@@ -125,6 +127,13 @@ public final class HiveLocation {
     private static final String NBT_CHUNK_CLAIM_TICKS = "ChunkClaimTicks";
 
     private static final String NBT_DECORATED_CHUNKS = "DecoratedChunks";
+
+    // Phase 2 structure scaffolding (additive state). Mirrors the claimed/decorated chunk serialization pattern.
+    private static final String NBT_STRUCTURE_ROLES = "StructureRoles";
+
+    private static final String NBT_STRUCTURE_PIECES = "StructurePieces";
+
+    private static final String NBT_FRONTIER_SOCKETS = "FrontierSockets";
 
     private static final String NBT_LOCAL_RESERVES = "LocalReserves";
 
@@ -271,6 +280,15 @@ public final class HiveLocation {
 
     private final Set<ChunkPos> decoratedChunks;
 
+    // Phase 2 structure scaffolding (additive state). Per-chunk structure role + which template piece occupies it, plus
+    // the set of open frontier doorways where the hive can expand. Populated by the founding hook (2.3) and the
+    // planner/placer (Phase 3); empty for hives founded before this state existed (graceful default).
+    private final Map<ChunkPos, HiveStructureRole> structureRoleByChunk;
+
+    private final Map<ChunkPos, String> structurePieceByChunk;
+
+    private final Set<FrontierSocket> frontierSockets;
+
     private final HiveLocationReserves localReserves;
 
     /** In-flight hive parties (recovery, revenge, surface spawn, etc.). Persisted via {@link com.alien.common.gameplay.hive.party.HivePartyCodec}. Hive-level — unlike {@code Convoy}, not empress-gated. */
@@ -344,6 +362,9 @@ public final class HiveLocation {
         this.claimedChunks = new LinkedHashSet<>();
         this.chunkClaimTicks = new HashMap<>();
         this.decoratedChunks = new HashSet<>();
+        this.structureRoleByChunk = new HashMap<>();
+        this.structurePieceByChunk = new HashMap<>();
+        this.frontierSockets = new LinkedHashSet<>();
         this.localReserves = new HiveLocationReserves(this::lineageVariantOrNull);
         this.parties = new java.util.ArrayList<>();
         this.attackCampaigns = new java.util.HashMap<>();
@@ -687,6 +708,39 @@ public final class HiveLocation {
         return decoratedChunks;
     }
 
+    // --- Phase 2 structure scaffolding accessors (additive; no behavior yet) ---
+
+    public Map<ChunkPos, HiveStructureRole> structureRoleByChunk() {
+        return structureRoleByChunk;
+    }
+
+    public Map<ChunkPos, String> structurePieceByChunk() {
+        return structurePieceByChunk;
+    }
+
+    public Set<FrontierSocket> frontierSockets() {
+        return frontierSockets;
+    }
+
+    /**
+     * Role of a chunk, or {@link HiveStructureRole#UNASSIGNED} if no role has been assigned (e.g. a plain claimed chunk,
+     * or a hive founded before structure state existed).
+     */
+    public HiveStructureRole structureRole(ChunkPos chunk) {
+        return structureRoleByChunk.getOrDefault(chunk, HiveStructureRole.UNASSIGNED);
+    }
+
+    /**
+     * Assigns a chunk's structure role and the template piece occupying it. Pass a null/blank pieceId to record only the
+     * role (e.g. a part chunk whose piece is tracked on the center).
+     */
+    public void assignStructure(ChunkPos chunk, HiveStructureRole role, @Nullable String pieceId) {
+        structureRoleByChunk.put(chunk, role);
+        if (pieceId != null && !pieceId.isBlank()) {
+            structurePieceByChunk.put(chunk, pieceId);
+        }
+    }
+
     public HiveLocationReserves localReserves() {
         return localReserves;
     }
@@ -892,6 +946,33 @@ public final class HiveLocation {
         }
         tag.put(NBT_DECORATED_CHUNKS, decoratedTag);
 
+        // Phase 2 structure scaffolding: per-chunk role + piece, and frontier sockets.
+        var rolesTag = new ListTag();
+        for (var entry : structureRoleByChunk.entrySet()) {
+            var entryTag = new CompoundTag();
+            entryTag.putInt("X", entry.getKey().x);
+            entryTag.putInt("Z", entry.getKey().z);
+            entryTag.putString("Role", entry.getValue().name());
+            rolesTag.add(entryTag);
+        }
+        tag.put(NBT_STRUCTURE_ROLES, rolesTag);
+
+        var piecesTag = new ListTag();
+        for (var entry : structurePieceByChunk.entrySet()) {
+            var entryTag = new CompoundTag();
+            entryTag.putInt("X", entry.getKey().x);
+            entryTag.putInt("Z", entry.getKey().z);
+            entryTag.putString("Piece", entry.getValue());
+            piecesTag.add(entryTag);
+        }
+        tag.put(NBT_STRUCTURE_PIECES, piecesTag);
+
+        var socketsTag = new ListTag();
+        for (var socket : frontierSockets) {
+            socketsTag.add(socket.toTag());
+        }
+        tag.put(NBT_FRONTIER_SOCKETS, socketsTag);
+
         var reservesTag = new CompoundTag();
         localReserves.save(reservesTag);
         tag.put(NBT_LOCAL_RESERVES, reservesTag);
@@ -1034,6 +1115,37 @@ public final class HiveLocation {
             for (var i = 0; i < decoratedTag.size(); i++) {
                 var chunkTag = decoratedTag.getCompound(i);
                 location.decoratedChunks.add(new ChunkPos(chunkTag.getInt("X"), chunkTag.getInt("Z")));
+            }
+        }
+
+        // Phase 2 structure scaffolding: per-chunk role + piece, and frontier sockets. Absent on pre-existing saves
+        // (graceful empty default - the maps/sets were initialized in the constructor).
+        if (tag.contains(NBT_STRUCTURE_ROLES)) {
+            var rolesTag = tag.getList(NBT_STRUCTURE_ROLES, Tag.TAG_COMPOUND);
+            for (var i = 0; i < rolesTag.size(); i++) {
+                var entryTag = rolesTag.getCompound(i);
+                location.structureRoleByChunk.put(
+                        new ChunkPos(entryTag.getInt("X"), entryTag.getInt("Z")),
+                        HiveStructureRole.byName(entryTag.getString("Role"))
+                );
+            }
+        }
+
+        if (tag.contains(NBT_STRUCTURE_PIECES)) {
+            var piecesTag = tag.getList(NBT_STRUCTURE_PIECES, Tag.TAG_COMPOUND);
+            for (var i = 0; i < piecesTag.size(); i++) {
+                var entryTag = piecesTag.getCompound(i);
+                location.structurePieceByChunk.put(
+                        new ChunkPos(entryTag.getInt("X"), entryTag.getInt("Z")),
+                        entryTag.getString("Piece")
+                );
+            }
+        }
+
+        if (tag.contains(NBT_FRONTIER_SOCKETS)) {
+            var socketsTag = tag.getList(NBT_FRONTIER_SOCKETS, Tag.TAG_COMPOUND);
+            for (var i = 0; i < socketsTag.size(); i++) {
+                location.frontierSockets.add(FrontierSocket.fromTag(socketsTag.getCompound(i)));
             }
         }
 
