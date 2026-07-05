@@ -93,18 +93,14 @@ public class AlienEmbryoUtil {
                 if (hostEntity.tickCount % 10 == 0) {
                     hostEntity.level()
                         .playSound(null, hostEntity, AlienSoundEvents.EFFECT_BONE_CRUNCH.get(), SoundSource.HOSTILE, 0.2F, 1);
-                    hostEntity.hurt(hostEntity.damageSources().source(AlienDamageTypeKeys.CHESTBURSTING), 0.01F);
+                    hurtChestbursting(hostEntity, 0.01F);
                 }
             }
 
             return;
         }
 
-        var totemPlayer = hostEntity instanceof Player player
-            && hostEntity.level().getGameRules().getBoolean(AlienGameRules.AVP_ALIEN_TOTEMS_PREVENT_CHESTBURSTER_DEATH)
-            && findTotem(player) != null
-                ? player
-                : null;
+        var totemPlayer = chestbursterTotemPlayer(hostEntity);
         var embryos = AlienEmbryoUtil.birthEmbryos(hostEntity, totemPlayer != null);
 
         embryos.forEach(embryo -> {});
@@ -112,7 +108,7 @@ public class AlienEmbryoUtil {
         hostEntity.level().playSound(null, hostEntity, AlienSoundEvents.ENTITY_CHESTBURSTER_BURST.get(), SoundSource.HOSTILE, 0.25F, 1);
 
         if (totemPlayer == null) {
-            hostEntity.hurt(hostEntity.damageSources().source(AlienDamageTypeKeys.CHESTBURSTING), Float.MAX_VALUE);
+            hurtChestbursting(hostEntity, Float.MAX_VALUE);
         } else {
             consumeTotem(totemPlayer);
         }
@@ -213,6 +209,28 @@ public class AlienEmbryoUtil {
             return AlienEntityTypes.ABERRANT_PREDALIEN_CHESTBURSTER.get();
         }
         return original;
+    }
+
+    private static boolean hurtChestbursting(LivingEntity hostEntity, float amount) {
+        if (
+            amount >= hostEntity.getHealth()
+                && chestbursterTotemPlayer(hostEntity) != null
+        ) {
+            hostEntity.setHealth(Math.max(1.0F, hostEntity.getHealth()));
+            return false;
+        }
+
+        return hostEntity.hurt(hostEntity.damageSources().source(AlienDamageTypeKeys.CHESTBURSTING), amount);
+    }
+
+    private static @Nullable Player chestbursterTotemPlayer(LivingEntity hostEntity) {
+        if (!(hostEntity instanceof Player player)) {
+            return null;
+        }
+        if (!hostEntity.level().getGameRules().getBoolean(AlienGameRules.AVP_ALIEN_TOTEMS_PREVENT_CHESTBURSTER_DEATH)) {
+            return null;
+        }
+        return findTotem(player) == null ? null : player;
     }
 
     private static @Nullable ItemStack findTotem(Player player) {
