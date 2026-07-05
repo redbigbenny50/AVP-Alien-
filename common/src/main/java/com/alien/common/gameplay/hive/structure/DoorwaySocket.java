@@ -7,17 +7,22 @@ import net.minecraft.world.level.block.Rotation;
  * A doorway on a hive structure piece - the unit of connection between pieces. Built from a PAIR of jigsaw blocks
  * (even-width, straddling the chunk-edge seam), collapsed into one logical socket.
  * <p>
- * Rotation-aware: {@link #rotated} returns the socket as it would sit after the piece is rotated, so the
- * assembler can test all four orientations of a piece against a frontier without re-parsing. This is what lets the elbow
- * (corner) hallway - and every other piece - orient to match whatever connection the layout needs.
+ * Rotation-aware: {@link #rotated} returns the socket as it would sit after the piece is rotated, so the assembler can
+ * test all four orientations of a piece against a frontier without re-parsing. This is what lets the elbow (corner)
+ * hallway - and every other piece - orient to match whatever connection the layout needs.
  *
  * @param edgeChunkX the chunk-relative X (in chunks) of the piece cell this doorway sits on (0-based within footprint)
  * @param edgeChunkZ the chunk-relative Z (in chunks) of the piece cell this doorway sits on
- * @param facing the horizontal direction the doorway opens (outward through the opening)
- * @param doorType the socket type label (e.g. avp_alien:hive_door, hive_royal_door, hive_jelly_door, hive_scourge_door);
- *     only sockets with the same doorType connect
+ * @param facing     the horizontal direction the doorway opens (outward through the opening)
+ * @param doorType   the socket type label (e.g. avp_alien:hive_door, hive_royal_door, hive_jelly_door,
+ *                   hive_scourge_door); only sockets with the same doorType connect
  */
-public record DoorwaySocket(int edgeChunkX, int edgeChunkZ, Direction facing, String doorType) {
+public record DoorwaySocket(
+    int edgeChunkX,
+    int edgeChunkZ,
+    Direction facing,
+    String doorType
+) {
 
     /**
      * This socket as it would sit after the piece is rotated by {@code rotation} about the piece's footprint. Rotates

@@ -107,9 +107,9 @@ public final class ConvoyBossBars {
 
     private static float raidProgress(Convoy.Raid raid, RaidWaveProfile waveProfile, long currentTick) {
         if (
-                raid.waveBreakStartedTick() >= 0L
-                        && raid.materializedMembers().isEmpty()
-                        && raid.composition().getCount() > 0
+            raid.waveBreakStartedTick() >= 0L
+                && raid.materializedMembers().isEmpty()
+                && raid.composition().getCount() > 0
         ) {
             var wave = waveProfile.wave(raid.displayWaveIndex());
             return raid.waveBreakProgress(currentTick, wave.bufferTicks());
@@ -125,11 +125,11 @@ public final class ConvoyBossBars {
     }
 
     private static void updateTrackingPlayers(
-            MinecraftServer server,
-            Convoy convoy,
-            LineageFactionData lineage,
-            HiveConfig config,
-            ServerBossEvent bossEvent
+        MinecraftServer server,
+        Convoy convoy,
+        LineageFactionData lineage,
+        HiveConfig config,
+        ServerBossEvent bossEvent
     ) {
         var level = server.getLevel(convoy.dimension());
         if (level == null) {
@@ -142,7 +142,7 @@ public final class ConvoyBossBars {
 
         for (var player : level.players()) {
             var inRangeNow = player.position().distanceToSqr(convoy.currentPos()) <= radiusSqr
-                    && AlienPredicates.isValidTarget(lineage.variant(), player);
+                && AlienPredicates.isValidTarget(lineage.variant(), player);
 
             if (inRangeNow && !bossEvent.getPlayers().contains(player)) {
                 bossEvent.addPlayer(player);
@@ -150,18 +150,18 @@ public final class ConvoyBossBars {
         }
 
         var toRemove = bossEvent.getPlayers()
-                .stream()
-                .filter(player -> shouldRemove(player, convoy, lineage, radiusSqr))
-                .toList();
+            .stream()
+            .filter(player -> shouldRemove(player, convoy, lineage, radiusSqr))
+            .toList();
 
         toRemove.forEach(bossEvent::removePlayer);
     }
 
     private static boolean shouldRemove(
-            ServerPlayer player,
-            Convoy convoy,
-            LineageFactionData lineage,
-            double radiusSqr
+        ServerPlayer player,
+        Convoy convoy,
+        LineageFactionData lineage,
+        double radiusSqr
     ) {
         if (!player.level().dimension().equals(convoy.dimension())) {
             return true;
@@ -173,7 +173,7 @@ public final class ConvoyBossBars {
     }
 
     private record BarState(
-            int initialCount,
-            ServerBossEvent bossEvent
+        int initialCount,
+        ServerBossEvent bossEvent
     ) {}
 }

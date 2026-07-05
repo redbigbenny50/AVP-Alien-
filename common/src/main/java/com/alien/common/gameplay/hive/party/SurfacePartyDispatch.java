@@ -44,8 +44,8 @@ public final class SurfacePartyDispatch {
         }
 
         var desiredSize = Math.max(
-                1,
-                Math.round(config.surfacePartyBaseSize() + config.surfacePartySizePerClaimedChunk() * location.claimedChunks().size())
+            1,
+            Math.round(config.surfacePartyBaseSize() + config.surfacePartySizePerClaimedChunk() * location.claimedChunks().size())
         );
 
         var composition = drainRunners(location, (int) desiredSize);
@@ -71,10 +71,10 @@ public final class SurfacePartyDispatch {
 
         location.parties().add(party);
         Alien.LOGGER.info(
-                "Hive: dispatched surface spawn party for location {} — {} runners at {}",
-                location.id(),
-                spawnedCount,
-                spawnPos
+            "Hive: dispatched surface spawn party for location {} — {} runners at {}",
+            location.id(),
+            spawnedCount,
+            spawnPos
         );
     }
 

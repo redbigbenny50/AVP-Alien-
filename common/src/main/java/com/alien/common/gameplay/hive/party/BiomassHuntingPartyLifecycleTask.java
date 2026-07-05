@@ -11,8 +11,8 @@ import java.util.ArrayList;
 
 /**
  * Per-tick (piggybacking {@code HiveLocationLoadedTickTask}'s 20-tick cadence) resolution for
- * {@link HiveParty.BiomassHunting} parties. No day/night cycle like {@link SurfacePartyLifecycleTask} — this party
- * runs for a fixed {@code config.biomassHuntingPartyDurationTicks()} active duration (tracked from
+ * {@link HiveParty.BiomassHunting} parties. No day/night cycle like {@link SurfacePartyLifecycleTask} — this party runs
+ * for a fixed {@code config.biomassHuntingPartyDurationTicks()} active duration (tracked from
  * {@link HiveParty#dispatchedTick()}), then resolves: surviving members are instantly teleported to the nearest known
  * hive vent (the "vents act as fast travel points back to hive" design point) before refunding to reserves and being
  * discarded. Party-specific targeting eligibility (the biomass-hunting THREAT_2 bypass in

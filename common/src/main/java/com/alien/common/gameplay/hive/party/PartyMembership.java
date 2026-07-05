@@ -3,8 +3,8 @@ package com.alien.common.gameplay.hive.party;
 import com.alien.common.gameplay.hive.id.HiveLocationId;
 
 /**
- * Links a materialized entity back to the {@link HiveParty} that spawned it. Mirrors {@code ConvoyMembership}'s
- * shape, but keyed to a {@link HiveLocationId} rather than a lineage faction id, since parties are hive-level (see
+ * Links a materialized entity back to the {@link HiveParty} that spawned it. Mirrors {@code ConvoyMembership}'s shape,
+ * but keyed to a {@link HiveLocationId} rather than a lineage faction id, since parties are hive-level (see
  * {@link HiveParty}'s class doc for the distinction from the empress-gated {@code Convoy} system).
  * <p>
  * Not NBT-persisted on the entity (unlike {@code ConvoyMembership}) — a deliberate simplification. If the server
@@ -15,7 +15,10 @@ import com.alien.common.gameplay.hive.id.HiveLocationId;
  * {@code AlienPredicates#isTargetThreatAllowed}'s biomass-hunting-party THREAT_2 bypass.
  * <p>
  * (A near-identical field existed briefly for {@link HiveParty.SurfaceSpawn}'s HARVEST bias and was removed once that
- * turned out to duplicate the hive-wide biomass-gated threat system — this revival is for {@link HiveParty.BiomassHunting},
- * which has a genuine, confirmed need for a party-specific eligibility override.)
+ * turned out to duplicate the hive-wide biomass-gated threat system — this revival is for
+ * {@link HiveParty.BiomassHunting}, which has a genuine, confirmed need for a party-specific eligibility override.)
  */
-public record PartyMembership(HiveLocationId sourceLocationId, HivePartyId partyId) {}
+public record PartyMembership(
+    HiveLocationId sourceLocationId,
+    HivePartyId partyId
+) {}

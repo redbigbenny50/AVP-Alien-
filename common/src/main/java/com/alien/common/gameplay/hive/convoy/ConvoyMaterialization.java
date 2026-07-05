@@ -41,12 +41,12 @@ final class ConvoyMaterialization {
     }
 
     static int spawnNextRaidWave(
-            ServerLevel level,
-            Convoy.Raid raid,
-            RaidWaveProfile waveProfile,
-            BlockPos spawnPos,
-            ServerPlayer targetPlayer,
-            long currentTick
+        ServerLevel level,
+        Convoy.Raid raid,
+        RaidWaveProfile waveProfile,
+        BlockPos spawnPos,
+        ServerPlayer targetPlayer,
+        long currentTick
     ) {
         if (raid.composition().getCount() <= 0) {
             return 0;
@@ -94,28 +94,28 @@ final class ConvoyMaterialization {
 
         for (var guarantee : waveConfig.guaranteed()) {
             if (
-                    !selectFromPools(
-                            selected,
-                            selectedCounts,
-                            inventory,
-                            guarantee.pools(),
-                            guarantee.count(),
-                            level
-                    )
+                !selectFromPools(
+                    selected,
+                    selectedCounts,
+                    inventory,
+                    guarantee.pools(),
+                    guarantee.count(),
+                    level
+                )
             ) {
                 return List.of();
             }
         }
 
         if (
-                !selectFromPools(
-                        selected,
-                        selectedCounts,
-                        inventory,
-                        waveConfig.pools(),
-                        desiredCount - selected.size(),
-                        level
-                )
+            !selectFromPools(
+                selected,
+                selectedCounts,
+                inventory,
+                waveConfig.pools(),
+                desiredCount - selected.size(),
+                level
+            )
         ) {
             return List.of();
         }
@@ -124,12 +124,12 @@ final class ConvoyMaterialization {
     }
 
     private static boolean selectFromPools(
-            List<EntityType<?>> selected,
-            HashMap<EntityType<?>, Integer> selectedCounts,
-            RaidWaveSelection.Inventory inventory,
-            List<RaidWaveProfile.PoolEntry> pools,
-            int count,
-            ServerLevel level
+        List<EntityType<?>> selected,
+        HashMap<EntityType<?>, Integer> selectedCounts,
+        RaidWaveSelection.Inventory inventory,
+        List<RaidWaveProfile.PoolEntry> pools,
+        int count,
+        ServerLevel level
     ) {
         var selectedByPool = new HashMap<Integer, Integer>();
         for (var i = 0; i < count; i++) {
@@ -156,11 +156,11 @@ final class ConvoyMaterialization {
     }
 
     private static int spawnEntities(
-            ServerLevel level,
-            Convoy convoy,
-            List<EntityType<?>> entityTypes,
-            BlockPos spawnPos,
-            ServerPlayer targetPlayer
+        ServerLevel level,
+        Convoy convoy,
+        List<EntityType<?>> entityTypes,
+        BlockPos spawnPos,
+        ServerPlayer targetPlayer
     ) {
         var spawnedCount = 0;
         for (var entityType : entityTypes) {
@@ -185,11 +185,11 @@ final class ConvoyMaterialization {
     }
 
     private static int spawnRaidWaveEntities(
-            ServerLevel level,
-            Convoy.Raid raid,
-            List<EntityType<?>> entityTypes,
-            BlockPos spawnPos,
-            ServerPlayer targetPlayer
+        ServerLevel level,
+        Convoy.Raid raid,
+        List<EntityType<?>> entityTypes,
+        BlockPos spawnPos,
+        ServerPlayer targetPlayer
     ) {
         var origins = raidSpawnOrigins(level, raid, spawnPos, targetPlayer, entityTypes.size());
         var usedSpawnPositions = new HashSet<BlockPos>();
@@ -216,11 +216,11 @@ final class ConvoyMaterialization {
         var failedCount = entityTypes.size() - spawnedCount;
         if (failedCount > 0) {
             Alien.LOGGER.info(
-                    "Hive: raid {} could not place {} of {} wave member(s) near {}",
-                    raid.id(),
-                    failedCount,
-                    entityTypes.size(),
-                    targetPlayer == null ? spawnPos.toShortString() : targetPlayer.blockPosition().toShortString()
+                "Hive: raid {} could not place {} of {} wave member(s) near {}",
+                raid.id(),
+                failedCount,
+                entityTypes.size(),
+                targetPlayer == null ? spawnPos.toShortString() : targetPlayer.blockPosition().toShortString()
             );
         }
 
@@ -228,11 +228,11 @@ final class ConvoyMaterialization {
     }
 
     private static List<BlockPos> raidSpawnOrigins(
-            ServerLevel level,
-            Convoy.Raid raid,
-            BlockPos fallbackOrigin,
-            @Nullable ServerPlayer targetPlayer,
-            int count
+        ServerLevel level,
+        Convoy.Raid raid,
+        BlockPos fallbackOrigin,
+        @Nullable ServerPlayer targetPlayer,
+        int count
     ) {
         var targetPos = targetPlayer == null ? fallbackOrigin : targetPlayer.blockPosition();
         var baseAngle = raidApproachAngle(raid, targetPos, fallbackOrigin);
@@ -244,7 +244,7 @@ final class ConvoyMaterialization {
             var angleJitter = (level.random.nextDouble() - 0.5) * 0.28;
             var angle = baseAngle + (fraction - 0.5) * RAID_SPAWN_ARC_RADIANS + angleJitter;
             var distance = RAID_MIN_SPAWN_DISTANCE_BLOCKS
-                    + (distanceRange <= 0 ? 0 : level.random.nextInt(distanceRange + 1));
+                + (distanceRange <= 0 ? 0 : level.random.nextInt(distanceRange + 1));
 
             var x = targetPos.getX() + (int) Math.round(Math.cos(angle) * distance);
             var z = targetPos.getZ() + (int) Math.round(Math.sin(angle) * distance);
@@ -270,11 +270,11 @@ final class ConvoyMaterialization {
     }
 
     private static @Nullable Entity spawnRaidMember(
-            EntityType<?> entityType,
-            ServerLevel level,
-            BlockPos origin,
-            @Nullable ServerPlayer targetPlayer,
-            Set<BlockPos> usedSpawnPositions
+        EntityType<?> entityType,
+        ServerLevel level,
+        BlockPos origin,
+        @Nullable ServerPlayer targetPlayer,
+        Set<BlockPos> usedSpawnPositions
     ) {
         var targetPos = targetPlayer == null ? origin : targetPlayer.blockPosition();
         var spawnPos = findRaidGroundSpawnPos(entityType, level, origin, targetPos, usedSpawnPositions);
@@ -290,10 +290,10 @@ final class ConvoyMaterialization {
     }
 
     private static @Nullable Entity spawnRelaxed(
-            EntityType<?> entityType,
-            ServerLevel level,
-            BlockPos origin,
-            @Nullable Set<BlockPos> usedSpawnPositions
+        EntityType<?> entityType,
+        ServerLevel level,
+        BlockPos origin,
+        @Nullable Set<BlockPos> usedSpawnPositions
     ) {
         var spawnPos = findGroundSpawnPos(entityType, level, origin, usedSpawnPositions);
         if (spawnPos == null) {
@@ -314,11 +314,11 @@ final class ConvoyMaterialization {
         }
 
         entity.moveTo(
-                spawnPos.getX() + 0.5,
-                spawnPos.getY(),
-                spawnPos.getZ() + 0.5,
-                level.random.nextFloat() * 360.0F,
-                0.0F
+            spawnPos.getX() + 0.5,
+            spawnPos.getY(),
+            spawnPos.getZ() + 0.5,
+            level.random.nextFloat() * 360.0F,
+            0.0F
         );
         if (entity instanceof Mob mob) {
             mob.finalizeSpawn(level, level.getCurrentDifficultyAt(spawnPos), MobSpawnType.MOB_SUMMONED, null);
@@ -328,11 +328,11 @@ final class ConvoyMaterialization {
     }
 
     private static @Nullable BlockPos findRaidGroundSpawnPos(
-            EntityType<?> entityType,
-            ServerLevel level,
-            BlockPos origin,
-            BlockPos targetPos,
-            Set<BlockPos> usedSpawnPositions
+        EntityType<?> entityType,
+        ServerLevel level,
+        BlockPos origin,
+        BlockPos targetPos,
+        Set<BlockPos> usedSpawnPositions
     ) {
         var preferred = findRaidGroundSpawnPos(entityType, level, origin, targetPos, usedSpawnPositions, true);
         if (preferred != null) {
@@ -342,12 +342,12 @@ final class ConvoyMaterialization {
     }
 
     private static @Nullable BlockPos findRaidGroundSpawnPos(
-            EntityType<?> entityType,
-            ServerLevel level,
-            BlockPos origin,
-            BlockPos targetPos,
-            Set<BlockPos> usedSpawnPositions,
-            boolean requireClearApproach
+        EntityType<?> entityType,
+        ServerLevel level,
+        BlockPos origin,
+        BlockPos targetPos,
+        Set<BlockPos> usedSpawnPositions,
+        boolean requireClearApproach
     ) {
         for (var radius = 0; radius <= RAID_SPAWN_SEARCH_RADIUS_BLOCKS; radius++) {
             for (var dx = -radius; dx <= radius; dx++) {
@@ -358,12 +358,12 @@ final class ConvoyMaterialization {
 
                     var columnOrigin = origin.offset(dx, 0, dz);
                     var pos = findRaidGroundSpawnPosInColumn(
-                            entityType,
-                            level,
-                            columnOrigin,
-                            targetPos,
-                            usedSpawnPositions,
-                            requireClearApproach
+                        entityType,
+                        level,
+                        columnOrigin,
+                        targetPos,
+                        usedSpawnPositions,
+                        requireClearApproach
                     );
                     if (pos != null) {
                         return pos;
@@ -375,12 +375,12 @@ final class ConvoyMaterialization {
     }
 
     private static @Nullable BlockPos findRaidGroundSpawnPosInColumn(
-            EntityType<?> entityType,
-            ServerLevel level,
-            BlockPos origin,
-            BlockPos targetPos,
-            Set<BlockPos> usedSpawnPositions,
-            boolean requireClearApproach
+        EntityType<?> entityType,
+        ServerLevel level,
+        BlockPos origin,
+        BlockPos targetPos,
+        Set<BlockPos> usedSpawnPositions,
+        boolean requireClearApproach
     ) {
         var minY = level.getMinBuildHeight() + 1;
         var maxY = level.getMaxBuildHeight() - 2;
@@ -399,10 +399,10 @@ final class ConvoyMaterialization {
     }
 
     private static @Nullable BlockPos findGroundSpawnPos(
-            EntityType<?> entityType,
-            ServerLevel level,
-            BlockPos origin,
-            @Nullable Set<BlockPos> usedSpawnPositions
+        EntityType<?> entityType,
+        ServerLevel level,
+        BlockPos origin,
+        @Nullable Set<BlockPos> usedSpawnPositions
     ) {
         for (var radius = 0; radius <= SPAWN_SEARCH_RADIUS_BLOCKS; radius++) {
             for (var dx = -radius; dx <= radius; dx++) {
@@ -423,10 +423,10 @@ final class ConvoyMaterialization {
     }
 
     private static @Nullable BlockPos findGroundSpawnPosInColumn(
-            EntityType<?> entityType,
-            ServerLevel level,
-            BlockPos origin,
-            @Nullable Set<BlockPos> usedSpawnPositions
+        EntityType<?> entityType,
+        ServerLevel level,
+        BlockPos origin,
+        @Nullable Set<BlockPos> usedSpawnPositions
     ) {
         var minY = level.getMinBuildHeight() + 1;
         var maxY = level.getMaxBuildHeight() - 2;
@@ -458,11 +458,11 @@ final class ConvoyMaterialization {
     }
 
     private static boolean isValidRaidGroundSpawnPos(
-            EntityType<?> entityType,
-            ServerLevel level,
-            BlockPos pos,
-            BlockPos targetPos,
-            boolean requireClearApproach
+        EntityType<?> entityType,
+        ServerLevel level,
+        BlockPos pos,
+        BlockPos targetPos,
+        boolean requireClearApproach
     ) {
         if (!isValidGroundSpawnPos(entityType, level, pos)) {
             return false;
@@ -478,7 +478,7 @@ final class ConvoyMaterialization {
 
     private static boolean hasHeadroom(ServerLevel level, BlockPos pos) {
         return level.getBlockState(pos).getCollisionShape(level, pos).isEmpty()
-                && level.getBlockState(pos.above()).getCollisionShape(level, pos.above()).isEmpty();
+            && level.getBlockState(pos.above()).getCollisionShape(level, pos.above()).isEmpty();
     }
 
     private static boolean hasUsableEscape(EntityType<?> entityType, ServerLevel level, BlockPos pos) {
@@ -491,10 +491,10 @@ final class ConvoyMaterialization {
     }
 
     private static boolean hasClearHorizontalApproach(
-            EntityType<?> entityType,
-            ServerLevel level,
-            BlockPos pos,
-            BlockPos targetPos
+        EntityType<?> entityType,
+        ServerLevel level,
+        BlockPos pos,
+        BlockPos targetPos
     ) {
         var dx = Integer.compare(targetPos.getX(), pos.getX());
         var dz = Integer.compare(targetPos.getZ(), pos.getZ());

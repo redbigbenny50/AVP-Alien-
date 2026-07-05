@@ -462,8 +462,8 @@ public sealed interface Convoy {
         private int waveCount = WAVE_COUNT;
 
         /**
-         * True if this is a revenge raid (queen killed) rather than an ordinary kill-threshold raid. Drives the
-         * revenge wave profile lookup and 3-wave count. Set via {@link #markRevenge} at dispatch.
+         * True if this is a revenge raid (queen killed) rather than an ordinary kill-threshold raid. Drives the revenge
+         * wave profile lookup and 3-wave count. Set via {@link #markRevenge} at dispatch.
          */
         private boolean revenge = false;
 

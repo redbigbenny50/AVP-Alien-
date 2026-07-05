@@ -25,7 +25,10 @@ public final class HiveTerritoryAggroTask {
 
     private static final long INTERVAL_TICKS = 20L;
 
-    /** A player's dwell only accrues while they've damaged a member within this window — keeps "fighting" distinct from "passing through". */
+    /**
+     * A player's dwell only accrues while they've damaged a member within this window — keeps "fighting" distinct from
+     * "passing through".
+     */
     private static final long HOSTILE_RECENCY_TICKS = 100L; // 5s
 
     private HiveTerritoryAggroTask() {}
@@ -87,7 +90,8 @@ public final class HiveTerritoryAggroTask {
             }
 
             if (campaign.cleared()) {
-                // Re-intrusion after a prior campaign cleared: this hit already reset lastHostileTick; start dwell over.
+                // Re-intrusion after a prior campaign cleared: this hit already reset lastHostileTick; start dwell
+                // over.
                 campaign.resetDwell();
                 // Un-clear by beginning fresh dwell accrual (campaign starts once threshold re-crossed below).
                 // We leave `cleared` true until the threshold is actually re-crossed, so a single stray hit post-clear

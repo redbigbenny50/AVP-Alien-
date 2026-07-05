@@ -27,9 +27,9 @@ import net.minecraft.server.level.ServerLevel;
  * <li>Phase 8 — convoy manifestation interactions on this location's chunks.</li>
  * <li>Parties — {@link SurfacePartyDispatch} (nightly vent-seeding surface spawns), {@link SurfacePartyLifecycleTask}
  * (economy-bias recheck, opportunistic claims, dawn resolution), {@link BiomassHuntingPartyDispatch} (vent-gated
- * Prowler/Warrior/bonus-Spitter hunting party), {@link BiomassHuntingPartyLifecycleTask} (duration-timer
- * resolution with vent-teleport-home), and {@link AttackPartyDispatch}/{@link AttackPartyLifecycleTask} (per-target
- * retribution against players who've attacked the hive) on the same 20-tick cadence.</li>
+ * Prowler/Warrior/bonus-Spitter hunting party), {@link BiomassHuntingPartyLifecycleTask} (duration-timer resolution
+ * with vent-teleport-home), and {@link AttackPartyDispatch}/{@link AttackPartyLifecycleTask} (per-target retribution
+ * against players who've attacked the hive) on the same 20-tick cadence.</li>
  * </ul>
  * <p>
  * See {@code HIVE_REDESIGN_12_PERFORMANCE.md} § 1.

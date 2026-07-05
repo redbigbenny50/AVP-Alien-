@@ -6,10 +6,10 @@ import com.alien.common.gameplay.hive.faction.LineageFactionData;
 import com.alien.common.gameplay.hive.id.HiveLocationId;
 import com.alien.common.gameplay.hive.id.LineageIds;
 import com.alien.common.gameplay.hive.location.HiveLocation;
-import com.alien.common.registry.tag.AlienEntityTypeTags;
 import com.alien.common.gameplay.hive.location.HiveLocationRegistry;
 import com.alien.common.gameplay.hive.location.HiveLocationReserves;
 import com.alien.common.registry.RaidWaveProfileRegistry;
+import com.alien.common.registry.tag.AlienEntityTypeTags;
 import com.blib.api.common.entity.v1.EntityReserves;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
@@ -85,9 +85,9 @@ public final class RaidDispatch {
 
     /**
      * Post-replacement grudge: for each location holding a {@code grudgePlayerId} (its founder queen was killed by that
-     * player), once the location has a living queen again (the firewall crowned a replacement) and the player is
-     * online in-dimension, dispatch a single grudge raid against them and clear the grudge — one raid only, not a
-     * permanent vendetta.
+     * player), once the location has a living queen again (the firewall crowned a replacement) and the player is online
+     * in-dimension, dispatch a single grudge raid against them and clear the grudge — one raid only, not a permanent
+     * vendetta.
      */
     private static void scanGrudge(
         MinecraftServer server,

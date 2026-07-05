@@ -967,8 +967,8 @@ public abstract class Alien extends Monster implements DataUser {
     /**
      * Notes that {@code player} was hostile to a member of this alien's home hive location right now — feeds
      * {@code HiveTerritoryAggroTask}'s intrusion dwell tracking (a player who breaches the claim, fights members, and
-     * lingers past the dwell threshold earns a two-wave retribution campaign). Only the "recently hostile" timestamp
-     * is stamped here; the dwell accrual and campaign start happen in the aggro task, which has the in-claim timing
+     * lingers past the dwell threshold earns a two-wave retribution campaign). Only the "recently hostile" timestamp is
+     * stamped here; the dwell accrual and campaign start happen in the aggro task, which has the in-claim timing
      * context this per-hit hook lacks.
      */
     private void recordAttackByPlayer(ServerPlayer player) {
@@ -983,10 +983,11 @@ public abstract class Alien extends Monster implements DataUser {
             return;
         }
 
-        var campaign = location.attackCampaigns().computeIfAbsent(
+        var campaign = location.attackCampaigns()
+            .computeIfAbsent(
                 player.getUUID(),
                 $ -> new com.alien.common.gameplay.hive.party.AttackCampaign()
-        );
+            );
         campaign.setLastHostileTick(serverLevel.getGameTime());
     }
 

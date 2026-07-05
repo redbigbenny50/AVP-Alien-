@@ -22,7 +22,6 @@ import java.util.List;
  * <li>{@code blocks}: list of {@code {pos: [x,y,z], state: <palette index>, nbt?: {...}}}. Jigsaw blocks carry a block
  * entity nbt with {@code name}, {@code target}, {@code final_state}, {@code joint}.</li>
  * </ul>
- *
  * Door types recognized as sockets are any jigsaw whose {@code name} starts with {@code avp_alien:hive}. Adjacent
  * jigsaws of the same type on the same edge are collapsed into one {@link DoorwaySocket} (the even-width paired-jigsaw
  * doorway).
@@ -30,8 +29,11 @@ import java.util.List;
 public final class HivePieceParser {
 
     private static final String JELLY_ROYAL_VAT_BLOCK = "avp_alien:royal_jelly_vat";
+
     private static final String JELLY_SCOURGE_VAT_BLOCK = "avp_alien:scourge_jelly_vat";
+
     private static final String TENDRIL_BLOCK = "avp_alien:resin_tendril";
+
     private static final String VENT_BLOCK = "avp_alien:resin_vent";
 
     private HivePieceParser() {}
@@ -91,10 +93,10 @@ public final class HivePieceParser {
 
         var sockets = pairJigsaws(rawJigsaws, sizeX, sizeZ, footprintX, footprintZ);
         var functional = new FunctionalPositions(
-                List.copyOf(eggBeds),
-                List.copyOf(royalVats),
-                List.copyOf(scourgeVats),
-                List.copyOf(vents)
+            List.copyOf(eggBeds),
+            List.copyOf(royalVats),
+            List.copyOf(scourgeVats),
+            List.copyOf(vents)
         );
         return new HivePiece(id, footprintX, footprintZ, List.copyOf(sockets), functional);
     }
@@ -111,15 +113,15 @@ public final class HivePieceParser {
 
     /**
      * Collapses raw jigsaws into doorway sockets. Each doorway is a PAIR of adjacent jigsaws (even-width, on the
-     * chunk-edge seam), so we group jigsaws by (door type, edge, edge-position) and emit one socket per group. Facing is
-     * derived from which outer face the jigsaw sits on (the piece bounds), pointing outward.
+     * chunk-edge seam), so we group jigsaws by (door type, edge, edge-position) and emit one socket per group. Facing
+     * is derived from which outer face the jigsaw sits on (the piece bounds), pointing outward.
      */
     private static List<DoorwaySocket> pairJigsaws(
-            List<RawJigsaw> raws,
-            int sizeX,
-            int sizeZ,
-            int footprintX,
-            int footprintZ
+        List<RawJigsaw> raws,
+        int sizeX,
+        int sizeZ,
+        int footprintX,
+        int footprintZ
     ) {
         var sockets = new ArrayList<DoorwaySocket>();
         var consumed = new boolean[raws.size()];
@@ -194,5 +196,8 @@ public final class HivePieceParser {
         return Math.max(0, Math.min(cell, footprint - 1));
     }
 
-    private record RawJigsaw(BlockPos pos, String name) {}
+    private record RawJigsaw(
+        BlockPos pos,
+        String name
+    ) {}
 }

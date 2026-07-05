@@ -82,7 +82,9 @@ public final class BiomassHuntingPartyDispatch {
         );
     }
 
-    /** Guaranteed Prowlers + Warriors up to {@code desiredCount}, plus up to {@code bonusSpitterCount} Spitters on top. */
+    /**
+     * Guaranteed Prowlers + Warriors up to {@code desiredCount}, plus up to {@code bonusSpitterCount} Spitters on top.
+     */
     private static EntityReserves drainComposition(HiveLocation location, int desiredCount, int bonusSpitterCount) {
         var reserves = location.localReserves();
         var composition = new EntityReserves();

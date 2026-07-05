@@ -17,8 +17,8 @@ import java.util.ArrayList;
 import java.util.UUID;
 
 /**
- * Dispatch for {@link HiveParty.AttackParty} — retribution against a player who breached this hive location's claim
- * and lingered while fighting (the territorial-intrusion model in {@code AttackCampaign}). Vent-dependent like
+ * Dispatch for {@link HiveParty.AttackParty} — retribution against a player who breached this hive location's claim and
+ * lingered while fighting (the territorial-intrusion model in {@code AttackCampaign}). Vent-dependent like
  * {@link BiomassHuntingPartyDispatch}. Fires the campaign's scheduled waves: wave 1 one MC day after the intrusion,
  * wave 2 one cooldown period after wave 1. Wave sequencing lives on the per-player {@code AttackCampaign} in
  * {@code HiveLocation#attackCampaigns}.

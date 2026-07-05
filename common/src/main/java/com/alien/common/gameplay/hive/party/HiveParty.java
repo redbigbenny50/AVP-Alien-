@@ -68,8 +68,8 @@ public sealed interface HiveParty {
      * targeting hook is needed or present.</li>
      * <li>{@link EconomyBias#HARVEST} while {@code AlienPredicates.isLocationLowOnBiomass(location)} is true (the same
      * 25%-of-cap ratio the hive-wide threat gate uses — single source of truth, no separate party threshold) —
-     * currently a no-op state (reserved for a future party-specific behavior if one is ever needed); combat
-     * aggression already comes from the hive-wide gate above.</li>
+     * currently a no-op state (reserved for a future party-specific behavior if one is ever needed); combat aggression
+     * already comes from the hive-wide gate above.</li>
      * <li>{@link EconomyBias#EXPAND} otherwise — may opportunistically claim the chunk a member currently occupies
      * (subject to the normal claim-cost and territory-radius gates every other claim path already respects). This is
      * the one bias value with real behavior attached.</li>
@@ -100,24 +100,24 @@ public sealed interface HiveParty {
         private long lastEconomyCheckTick;
 
         public SurfaceSpawn(
-                HivePartyId id,
-                HiveLocationId sourceLocationId,
-                ResourceKey<Level> dimension,
-                EntityReserves composition,
-                long dispatchedTick
+            HivePartyId id,
+            HiveLocationId sourceLocationId,
+            ResourceKey<Level> dimension,
+            EntityReserves composition,
+            long dispatchedTick
         ) {
             this(id, sourceLocationId, dimension, composition, new HashMap<>(), dispatchedTick, EconomyBias.HARVEST, -1L);
         }
 
         public SurfaceSpawn(
-                HivePartyId id,
-                HiveLocationId sourceLocationId,
-                ResourceKey<Level> dimension,
-                EntityReserves composition,
-                Map<UUID, EntityType<?>> materializedMembers,
-                long dispatchedTick,
-                EconomyBias economyBias,
-                long lastEconomyCheckTick
+            HivePartyId id,
+            HiveLocationId sourceLocationId,
+            ResourceKey<Level> dimension,
+            EntityReserves composition,
+            Map<UUID, EntityType<?>> materializedMembers,
+            long dispatchedTick,
+            EconomyBias economyBias,
+            long lastEconomyCheckTick
         ) {
             this.id = id;
             this.sourceLocationId = sourceLocationId;
@@ -204,10 +204,10 @@ public sealed interface HiveParty {
      * pipeline — no bespoke economy code needed here.
      * <p>
      * Unlike {@link SurfaceSpawn}, this party's members are tagged with a {@link PartyMembership} so
-     * {@code AlienPredicates#isTargetThreatAllowed} can recognize them and bypass the hive-wide biomass-gated
-     * THREAT_2 restriction — the party's whole purpose is proactively hunting low-danger targets, not just an
-     * emergency response when the hive is already struggling, so it needs a genuine eligibility override rather than
-     * inheriting the hive-wide gate.
+     * {@code AlienPredicates#isTargetThreatAllowed} can recognize them and bypass the hive-wide biomass-gated THREAT_2
+     * restriction — the party's whole purpose is proactively hunting low-danger targets, not just an emergency response
+     * when the hive is already struggling, so it needs a genuine eligibility override rather than inheriting the
+     * hive-wide gate.
      * <p>
      * No day/night restriction (unspecified in design, unlike {@link SurfaceSpawn}) — runs on a fixed
      * {@code config.biomassHuntingPartyDurationTicks()} active duration instead, tracked via {@link #dispatchedTick()}.
@@ -312,8 +312,8 @@ public sealed interface HiveParty {
      * across and between wave dispatches.
      * <p>
      * Separate from empress-gated raids by design — {@code AVP_Party_System_Design.md} § 4 notes it can reinforce an
-     * active raid, but that cross-system hook (hive-level party topping up a lineage-level raid convoy) is
-     * deliberately deferred; not implemented here.
+     * active raid, but that cross-system hook (hive-level party topping up a lineage-level raid convoy) is deliberately
+     * deferred; not implemented here.
      * <p>
      * Resolves the same way as {@link BiomassHunting}: a fixed active duration, then instant vent-teleport home and
      * refund — see {@code AttackPartyLifecycleTask}. Also resolves early if {@link #targetPlayerId} is confirmed dead.
@@ -421,8 +421,8 @@ public sealed interface HiveParty {
 
     /**
      * Dynamic, periodically re-evaluated economic posture for {@link SurfaceSpawn} (not locked in at dispatch).
-     * {@code HARVEST} = source hive biomass at/below 25% of cap (per {@code AlienPredicates.isLocationLowOnBiomass})
-     * — currently a no-op state; killing weak targets already happens hive-wide via {@code AlienPredicates}'s
+     * {@code HARVEST} = source hive biomass at/below 25% of cap (per {@code AlienPredicates.isLocationLowOnBiomass}) —
+     * currently a no-op state; killing weak targets already happens hive-wide via {@code AlienPredicates}'s
      * biomass-gated threat tiers, no party-specific behavior needed. {@code EXPAND} = otherwise, may opportunistically
      * claim.
      */

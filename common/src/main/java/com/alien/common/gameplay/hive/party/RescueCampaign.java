@@ -8,16 +8,16 @@ import java.util.UUID;
  * Per-lost-queen recovery campaign state, stored on the queen's <b>original</b> {@code HiveLocation} (the one she
  * founded, now queenless-but-alive after inhibition severed her out). Drives the Part 4 recovery pipeline:
  * <ul>
- * <li><b>Pending</b> ({@code queenUuid} set, {@code active} false): recorded at inhibition time, before the campaign
- * is confirmed — she may be contained in-place (frenzy, not rescue). Promoted to active once she's detected contained
- * AND carried outside this location's claim.</li>
+ * <li><b>Pending</b> ({@code queenUuid} set, {@code active} false): recorded at inhibition time, before the campaign is
+ * confirmed — she may be contained in-place (frenzy, not rescue). Promoted to active once she's detected contained AND
+ * carried outside this location's claim.</li>
  * <li><b>Active</b>: a rescue raid is (or should be) tracking the player holding her. Each raid that ends without
  * freeing her, or a failure to even form a party, increments {@code attemptsFailed}.</li>
  * <li><b>Resolved</b>: she's freed (success — campaign removed), 3 attempts failed (firewall crowns a replacement), or
  * she dies mid-recovery (converts to a revenge raid carrying {@code attemptsFailed}, campaign removed).</li>
  * </ul>
- * While a campaign is unresolved, {@code QueenlessMaturationTask} holds off crowning a replacement — the hive holds
- * out hope until rescue gives up at 3 failures.
+ * While a campaign is unresolved, {@code QueenlessMaturationTask} holds off crowning a replacement — the hive holds out
+ * hope until rescue gives up at 3 failures.
  */
 public final class RescueCampaign {
 

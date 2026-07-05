@@ -21,10 +21,10 @@ import java.util.ArrayList;
  * detected {@link Queen#isContained() contained} AND physically outside this location's claimed chunks (per design:
  * capture-in-place is frenzy, not rescue).</li>
  * <li><b>Dispatch / track</b> — while active with attempts remaining and no raid in flight, dispatch a rescue raid at
- * the captor. A raid that ends (returns home / disappears) without freeing her counts as a failed attempt; a failure
- * to even form a party also counts.</li>
- * <li><b>Success</b> — if the queen is freed (no longer contained, or gone/reunited), the campaign clears; the raid,
- * if any, is left to return home on its own.</li>
+ * the captor. A raid that ends (returns home / disappears) without freeing her counts as a failed attempt; a failure to
+ * even form a party also counts.</li>
+ * <li><b>Success</b> — if the queen is freed (no longer contained, or gone/reunited), the campaign clears; the raid, if
+ * any, is left to return home on its own.</li>
  * <li><b>Exhaustion</b> — at {@link RescueCampaign#MAX_ATTEMPTS} failures, the campaign clears and stops blocking the
  * firewall, which then crowns a replacement.</li>
  * </ol>

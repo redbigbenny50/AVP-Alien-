@@ -17,46 +17,46 @@ import java.util.List;
 public final class XenomorphTargetSensors {
 
     public static final Sensor.Mono<Xenomorph, List<LivingEntity>> NEARBY_ATTACKABLE_TARGETS = Sensors.map(
-            GOAPSensors.NEARBY_ATTACKABLE_TARGETS_KEY,
-            xenomorph -> {
-                var targets = new ArrayList<LivingEntity>();
-                var currentTarget = xenomorph.getTarget();
+        GOAPSensors.NEARBY_ATTACKABLE_TARGETS_KEY,
+        xenomorph -> {
+            var targets = new ArrayList<LivingEntity>();
+            var currentTarget = xenomorph.getTarget();
 
-                for (var livingEntity : xenomorph.getEntitySenseCache().getByClass(LivingEntity.class)) {
-                    if (
-                            canKeepCurrentTarget(xenomorph, currentTarget, livingEntity)
-                                    || AlienPredicates.canAcquireTarget(xenomorph, livingEntity)
-                    ) {
-                        targets.add(livingEntity);
-                    }
-                }
-
+            for (var livingEntity : xenomorph.getEntitySenseCache().getByClass(LivingEntity.class)) {
                 if (
-                        currentTarget != null
-                                && !targets.contains(currentTarget)
-                                && AlienPredicates.canContinueTargeting(xenomorph, currentTarget)
+                    canKeepCurrentTarget(xenomorph, currentTarget, livingEntity)
+                        || AlienPredicates.canAcquireTarget(xenomorph, livingEntity)
                 ) {
-                    targets.add(currentTarget);
+                    targets.add(livingEntity);
                 }
-
-                var hiveIntruderTarget = xenomorph.getHiveIntruderTargetOrNull();
-
-                if (
-                        hiveIntruderTarget != null
-                                && !targets.contains(hiveIntruderTarget)
-                                && (hiveIntruderTarget == currentTarget || AlienPredicates.canAcquireTarget(xenomorph, hiveIntruderTarget))
-                ) {
-                    targets.add(hiveIntruderTarget);
-                }
-
-                // Founding leash (Option B): a queen who is still founding her hive (location exists but not yet
-                // reproductive) must not pursue targets OUTSIDE her claimed chunks. This keeps her from chasing prey out of
-                // her territory and abandoning the founding ritual (or walking into hazards en route). She can still defend
-                // against intruders standing INSIDE her claim. No-op for everything except a founding queen.
-                applyFoundingLeash(xenomorph, targets);
-
-                return targets;
             }
+
+            if (
+                currentTarget != null
+                    && !targets.contains(currentTarget)
+                    && AlienPredicates.canContinueTargeting(xenomorph, currentTarget)
+            ) {
+                targets.add(currentTarget);
+            }
+
+            var hiveIntruderTarget = xenomorph.getHiveIntruderTargetOrNull();
+
+            if (
+                hiveIntruderTarget != null
+                    && !targets.contains(hiveIntruderTarget)
+                    && (hiveIntruderTarget == currentTarget || AlienPredicates.canAcquireTarget(xenomorph, hiveIntruderTarget))
+            ) {
+                targets.add(hiveIntruderTarget);
+            }
+
+            // Founding leash (Option B): a queen who is still founding her hive (location exists but not yet
+            // reproductive) must not pursue targets OUTSIDE her claimed chunks. This keeps her from chasing prey out of
+            // her territory and abandoning the founding ritual (or walking into hazards en route). She can still defend
+            // against intruders standing INSIDE her claim. No-op for everything except a founding queen.
+            applyFoundingLeash(xenomorph, targets);
+
+            return targets;
+        }
     );
 
     /**
@@ -79,8 +79,8 @@ public final class XenomorphTargetSensors {
      */
     private static HiveLocation foundingLocationOrNull(Xenomorph xenomorph) {
         var location = HiveLocationRegistry.INSTANCE.getByChunk(
-                xenomorph.level().dimension(),
-                new ChunkPos(xenomorph.blockPosition())
+            xenomorph.level().dimension(),
+            new ChunkPos(xenomorph.blockPosition())
         );
         if (location != null && location.founderId() != null && !location.reproductiveEstablished()) {
             return location;
@@ -89,9 +89,9 @@ public final class XenomorphTargetSensors {
     }
 
     private static boolean canKeepCurrentTarget(
-            Xenomorph xenomorph,
-            LivingEntity currentTarget,
-            LivingEntity potentialTarget
+        Xenomorph xenomorph,
+        LivingEntity currentTarget,
+        LivingEntity potentialTarget
     ) {
         return potentialTarget == currentTarget && AlienPredicates.canContinueTargeting(xenomorph, potentialTarget);
     }

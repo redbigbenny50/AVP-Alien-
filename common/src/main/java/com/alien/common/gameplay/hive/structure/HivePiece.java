@@ -10,22 +10,23 @@ import java.util.List;
  * reused for every placement decision.
  * <p>
  * Holds the piece's footprint (in chunks), its typed doorway sockets, and its functional positions (egg beds, jelly
- * vats, vents). The assembler queries {@link #socketsRotated} to test each of the four orientations against a
- * frontier when deciding whether and how this piece can attach.
+ * vats, vents). The assembler queries {@link #socketsRotated} to test each of the four orientations against a frontier
+ * when deciding whether and how this piece can attach.
  *
- * @param id the piece's resource id (e.g. avp_alien:hive/hallway/hallway_corner_1x1)
+ * @param id               the piece's resource id (e.g. avp_alien:hive/hallway/hallway_corner_1x1)
  * @param footprintChunksX footprint width in chunks (blockSizeX / 16)
  * @param footprintChunksZ footprint depth in chunks (blockSizeZ / 16)
- * @param sockets the piece's doorway sockets in its authored (unrotated) orientation
- * @param functional egg beds, jelly vats, and vents found inside the piece
+ * @param sockets          the piece's doorway sockets in its authored (unrotated) orientation
+ * @param functional       egg beds, jelly vats, and vents found inside the piece
  */
 public record HivePiece(
-        ResourceLocation id,
-        int footprintChunksX,
-        int footprintChunksZ,
-        List<DoorwaySocket> sockets,
-        FunctionalPositions functional
+    ResourceLocation id,
+    int footprintChunksX,
+    int footprintChunksZ,
+    List<DoorwaySocket> sockets,
+    FunctionalPositions functional
 ) {
+
     /** Total footprint area in chunks (e.g. a 2x2 chamber = 4). */
     public int footprintChunks() {
         return footprintChunksX * footprintChunksZ;
@@ -39,8 +40,8 @@ public record HivePiece(
     /** This piece's sockets as they sit after the given rotation - used to test orientations against a frontier. */
     public List<DoorwaySocket> socketsRotated(Rotation rotation) {
         return sockets.stream()
-                .map(s -> s.rotated(rotation, footprintChunksX, footprintChunksZ))
-                .toList();
+            .map(s -> s.rotated(rotation, footprintChunksX, footprintChunksZ))
+            .toList();
     }
 
     /** Count of sockets of a given door type (in any rotation - rotation doesn't change counts). */

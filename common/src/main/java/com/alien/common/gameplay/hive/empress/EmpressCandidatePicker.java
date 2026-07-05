@@ -9,7 +9,6 @@ import com.alien.common.registry.tag.AlienEntityTypeTags;
 import net.minecraft.server.MinecraftServer;
 import org.jetbrains.annotations.Nullable;
 
-import java.util.Comparator;
 import java.util.UUID;
 
 /**
@@ -130,5 +129,9 @@ public final class EmpressCandidatePicker {
     }
 
     /** Cached per-candidate metrics so comparisons don't repeatedly re-walk {@link HiveLocation} lookups. */
-    private record Candidate(Queen queen, int claimCount, long locationAgeTicks) {}
+    private record Candidate(
+        Queen queen,
+        int claimCount,
+        long locationAgeTicks
+    ) {}
 }

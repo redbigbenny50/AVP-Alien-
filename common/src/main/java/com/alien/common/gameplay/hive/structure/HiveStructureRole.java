@@ -24,6 +24,7 @@ import org.jetbrains.annotations.Nullable;
  * </ul>
  */
 public enum HiveStructureRole {
+
     UNASSIGNED,
     QUEEN_CHAMBER_CENTER,
     QUEEN_CHAMBER_PART,

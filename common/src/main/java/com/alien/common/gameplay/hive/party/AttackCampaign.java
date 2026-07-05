@@ -3,8 +3,8 @@ package com.alien.common.gameplay.hive.party;
 import net.minecraft.nbt.CompoundTag;
 
 /**
- * Per-player retribution campaign state for {@link HiveParty.AttackParty}, driven by the territorial-intrusion model:
- * a player who breaches a hive location's claim, fights its members, and lingers past a dwell threshold earns a fixed
+ * Per-player retribution campaign state for {@link HiveParty.AttackParty}, driven by the territorial-intrusion model: a
+ * player who breaches a hive location's claim, fights its members, and lingers past a dwell threshold earns a fixed
  * two-wave offense response — wave 1 a full MC day after the intrusion, wave 2 one cooldown period after wave 1.
  * <p>
  * Lifecycle:
@@ -12,9 +12,9 @@ import net.minecraft.nbt.CompoundTag;
  * <li>Created / reset when {@code dwellTicks} crosses the intrusion threshold in {@code HiveTerritoryAggroTask} — a
  * re-intrusion after a prior campaign cleared wipes the old state and starts fresh.</li>
  * <li>{@code wavesSent} advances 0 → 1 → 2 as {@code AttackPartyDispatch} fires each wave on schedule.</li>
- * <li>{@code cleared} is set when either wave's party kills the player, or the player survives wave 2's full
- * duration ({@code AttackPartyLifecycleTask}). A cleared campaign dispatches nothing further; the hive leaves the
- * player alone until they intrude again.</li>
+ * <li>{@code cleared} is set when either wave's party kills the player, or the player survives wave 2's full duration
+ * ({@code AttackPartyLifecycleTask}). A cleared campaign dispatches nothing further; the hive leaves the player alone
+ * until they intrude again.</li>
  * </ul>
  * <p>
  * {@code dwellTicks} is the accrued in-claim-while-recently-hostile time used only <em>before</em> a campaign begins;

@@ -17,28 +17,28 @@ import java.util.ArrayList;
  * Royal-replacement "firewall" fund tracker. Runs on the slow-scan cadence (5 min, same call site as
  * {@link QueenlessMaturationTask}) from {@link com.alien.common.gameplay.hive.faction.LineageInvariantTask}.
  * <p>
- * Only evaluates locations whose fund is currently spent ({@code !location.firewallFundAvailable()}) — a location
- * that has never lost a queen through {@link QueenlessMaturationTask}, or whose fund already refilled, needs no
- * tracking. For each such location, checks all four stability conditions per {@code AVP_Queen_Lifecycle_Design.md} §
- * 6:
+ * Only evaluates locations whose fund is currently spent ({@code !location.firewallFundAvailable()}) — a location that
+ * has never lost a queen through {@link QueenlessMaturationTask}, or whose fund already refilled, needs no tracking.
+ * For each such location, checks all four stability conditions per {@code AVP_Queen_Lifecycle_Design.md} § 6:
  * <ol>
  * <li>Has eggs — a live, loaded queen with an active ovipositor.</li>
  * <li>Jelly reserves — {@link HiveLocation#royalJelly()} at or above {@code config.firewallJellyFloor()}.</li>
  * <li>Positive biomass income rate — sampled each scan against the previous sample
  * ({@link HiveLocation#firewallBiomassSampleTick()} / {@link HiveLocation#firewallBiomassSampleValue()}), not just a
- * positive balance. A hive coasting on a fat reserve while actively being drained reads as unstable here, correctly.</li>
+ * positive balance. A hive coasting on a fat reserve while actively being drained reads as unstable here,
+ * correctly.</li>
  * <li>Room to grow — current tracked population below {@code populationPerChunk * claimedChunks().size()}.</li>
  * </ol>
  * <p>
  * When all four hold, {@link HiveLocation#firewallStableAccruedTicks()} accrues by the elapsed time since the last
- * sample. When any fail, accrual <b>pauses</b> (holds its progress, does not reset) — sustained pressure denies
- * refill without erasing prior progress the moment stability briefly returns. Reaching
- * {@code config.firewallCooldownTicks()} refills the fund and clears the sample state for the next spend cycle.
+ * sample. When any fail, accrual <b>pauses</b> (holds its progress, does not reset) — sustained pressure denies refill
+ * without erasing prior progress the moment stability briefly returns. Reaching {@code config.firewallCooldownTicks()}
+ * refills the fund and clears the sample state for the next spend cycle.
  * <p>
  * A location whose fund stays spent simply remains unable to crown a new queen (see
- * {@link QueenlessMaturationTask#advanceLocation}) — no separate "permanently dead" state is introduced here; a
- * denied location eventually dies through the existing {@link LocationDormancyTask} population/no-contact rules as
- * its economy withers on its own.
+ * {@link QueenlessMaturationTask#advanceLocation}) — no separate "permanently dead" state is introduced here; a denied
+ * location eventually dies through the existing {@link LocationDormancyTask} population/no-contact rules as its economy
+ * withers on its own.
  */
 public final class FirewallStabilityTask {
 
@@ -91,8 +91,8 @@ public final class FirewallStabilityTask {
 
         var hasEggs = hasActiveOvipositor(serverLevel, location);
         var jellyOk = location.royalJelly() >= config.firewallJellyFloor();
-        var populationRoomOk = CastePopulation.totalTrackedPopulation(location)
-                < config.populationPerChunk() * location.claimedChunks().size();
+        var populationRoomOk = CastePopulation.totalTrackedPopulation(location) < config.populationPerChunk() * location.claimedChunks()
+            .size();
 
         if (!(hasEggs && jellyOk && biomassIncomeOk && populationRoomOk)) {
             // Unstable — pause. Progress already accrued is preserved, we just don't add to it this cycle.
@@ -107,9 +107,9 @@ public final class FirewallStabilityTask {
             location.setFirewallBiomassSampleTick(Long.MIN_VALUE);
             location.setFirewallBiomassSampleValue(0);
             Alien.LOGGER.info(
-                    "Hive: firewall fund refilled for location {} after {} stable ticks",
-                    location.id(),
-                    accrued
+                "Hive: firewall fund refilled for location {} after {} stable ticks",
+                location.id(),
+                accrued
             );
             return;
         }

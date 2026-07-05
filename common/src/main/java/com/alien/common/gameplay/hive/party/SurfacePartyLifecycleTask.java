@@ -21,12 +21,12 @@ import java.util.ArrayList;
  * Per-tick (piggybacking {@code HiveLocationLoadedTickTask}'s 20-tick cadence) resolution for
  * {@link HiveParty.SurfaceSpawn} parties on a location:
  * <ul>
- * <li>While active at night — periodically re-evaluates {@link HiveParty.EconomyBias} against the source hive's
- * current biomass (dynamic, not locked in at dispatch), and while {@code EXPAND}, attempts to claim the chunk a live
- * member currently occupies (subject to the same frontier-adjacency, territory-radius, and biomass-cost gates every
- * other claim path already respects).</li>
- * <li>On the day transition — surviving members refund to the source hive's reserves, a vent+resin drop is rolled
- * (10% by default, capped against near-surface vents in that chunk only), and the party is removed.</li>
+ * <li>While active at night — periodically re-evaluates {@link HiveParty.EconomyBias} against the source hive's current
+ * biomass (dynamic, not locked in at dispatch), and while {@code EXPAND}, attempts to claim the chunk a live member
+ * currently occupies (subject to the same frontier-adjacency, territory-radius, and biomass-cost gates every other
+ * claim path already respects).</li>
+ * <li>On the day transition — surviving members refund to the source hive's reserves, a vent+resin drop is rolled (10%
+ * by default, capped against near-surface vents in that chunk only), and the party is removed.</li>
  * </ul>
  */
 public final class SurfacePartyLifecycleTask {
@@ -66,11 +66,11 @@ public final class SurfacePartyLifecycleTask {
     }
 
     private static void tickActive(
-            ServerLevel serverLevel,
-            HiveLocation location,
-            HiveParty.SurfaceSpawn party,
-            HiveConfig config,
-            long currentTick
+        ServerLevel serverLevel,
+        HiveLocation location,
+        HiveParty.SurfaceSpawn party,
+        HiveConfig config,
+        long currentTick
     ) {
         if (currentTick - party.lastEconomyCheckTick() < ECONOMY_RECHECK_INTERVAL_TICKS) {
             return;
@@ -78,8 +78,8 @@ public final class SurfacePartyLifecycleTask {
         party.setLastEconomyCheckTick(currentTick);
 
         var bias = com.alien.common.util.AlienPredicates.isLocationLowOnBiomass(location)
-                ? HiveParty.EconomyBias.HARVEST
-                : HiveParty.EconomyBias.EXPAND;
+            ? HiveParty.EconomyBias.HARVEST
+            : HiveParty.EconomyBias.EXPAND;
         party.setEconomyBias(bias);
 
         if (bias != HiveParty.EconomyBias.EXPAND) {
@@ -105,11 +105,11 @@ public final class SurfacePartyLifecycleTask {
     }
 
     private static void tryOpportunisticClaim(
-            ServerLevel serverLevel,
-            HiveLocation location,
-            HiveConfig config,
-            ChunkPos candidate,
-            long currentTick
+        ServerLevel serverLevel,
+        HiveLocation location,
+        HiveConfig config,
+        ChunkPos candidate,
+        long currentTick
     ) {
         if (location.claimedChunks().contains(candidate)) {
             return;
@@ -134,10 +134,10 @@ public final class SurfacePartyLifecycleTask {
         if (HiveLocationClaims.claim(serverLevel, location, candidate, currentTick)) {
             location.setBiomass(location.biomass() - cost);
             Alien.LOGGER.info(
-                    "Hive: surface party opportunistic claim at {} for location {} (cost {})",
-                    candidate,
-                    location.id(),
-                    cost
+                "Hive: surface party opportunistic claim at {} for location {} (cost {})",
+                candidate,
+                location.id(),
+                cost
             );
         }
     }
@@ -158,10 +158,10 @@ public final class SurfacePartyLifecycleTask {
     }
 
     private static void resolveAtDawn(
-            ServerLevel serverLevel,
-            HiveLocation location,
-            HiveParty.SurfaceSpawn party,
-            HiveConfig config
+        ServerLevel serverLevel,
+        HiveLocation location,
+        HiveParty.SurfaceSpawn party,
+        HiveConfig config
     ) {
         ChunkPos lastKnownChunk = null;
 
@@ -195,10 +195,10 @@ public final class SurfacePartyLifecycleTask {
     }
 
     private static void maybeDropVentAndResin(
-            ServerLevel serverLevel,
-            HiveLocation location,
-            HiveConfig config,
-            ChunkPos chunk
+        ServerLevel serverLevel,
+        HiveLocation location,
+        HiveConfig config,
+        ChunkPos chunk
     ) {
         if (serverLevel.random.nextDouble() >= config.surfacePartyVentDropChance()) {
             return;

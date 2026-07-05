@@ -8,8 +8,8 @@ import net.minecraft.server.MinecraftServer;
 /**
  * Periodic scan that fires {@link EmpressEmergenceRitual#start} when conditions are met:
  * <ul>
- * <li>Lineage has 4+ locations (the design's "needs an empress" trigger — raised from an earlier 2+ per updated
- * design; a lineage caps at 8 member hives total).</li>
+ * <li>Lineage has 4+ locations (the design's "needs an empress" trigger — raised from an earlier 2+ per updated design;
+ * a lineage caps at 8 member hives total).</li>
  * <li>Lineage has no empress.</li>
  * <li>No emergence is already in flight for this lineage.</li>
  * <li>At least one queen is loaded somewhere in the lineage's locations.</li>
