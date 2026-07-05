@@ -153,9 +153,9 @@ public abstract class Alien extends Monster implements DataUser {
 
     private EntityType<? extends Entity> getDefaultHostType(EntityType<? extends Alien> entityType) {
         if (
-                entityType.is(AlienEntityTypeTags.RUNNERS)
-                        || entityType.is(AlienEntityTypeTags.PROWLERS)
-                        || entityType.is(AlienEntityTypeTags.CRUSHERS)
+            entityType.is(AlienEntityTypeTags.RUNNERS)
+                || entityType.is(AlienEntityTypeTags.PROWLERS)
+                || entityType.is(AlienEntityTypeTags.CRUSHERS)
         ) {
             return EntityType.PIG;
         } else if (entityType.is(AlienEntityTypeTags.SPITTERS)) {
@@ -263,10 +263,10 @@ public abstract class Alien extends Monster implements DataUser {
 
     @Override
     public @Nullable SpawnGroupData finalizeSpawn(
-            @NotNull ServerLevelAccessor level,
-            @NotNull DifficultyInstance difficulty,
-            @NotNull MobSpawnType spawnType,
-            @Nullable SpawnGroupData spawnGroupData
+        @NotNull ServerLevelAccessor level,
+        @NotNull DifficultyInstance difficulty,
+        @NotNull MobSpawnType spawnType,
+        @Nullable SpawnGroupData spawnGroupData
     ) {
         // Hive: variant-faction join is event-driven. finalizeSpawn fires once per fresh-spawned alien
         // (natural, spawn egg, command). Idempotent — see HiveManager.ensureVariantFactionMembership.
@@ -276,8 +276,8 @@ public abstract class Alien extends Monster implements DataUser {
         // copy genes from the location's leader (preserves the legacy "spawned alien inherits leader's genes"
         // behavior).
         var locationAtPos = HiveLocationRegistry.INSTANCE.getByChunk(
-                level.getLevel().dimension(),
-                new net.minecraft.world.level.ChunkPos(blockPosition())
+            level.getLevel().dimension(),
+            new net.minecraft.world.level.ChunkPos(blockPosition())
         );
         if (locationAtPos != null && locationAtPos.isAlive()) {
             if (locationAtPos.localReserves().getCount(getType()) > 0) {
@@ -336,8 +336,8 @@ public abstract class Alien extends Monster implements DataUser {
 
             if (!getPassengers().isEmpty()) {
                 var passengersToRemove = getPassengers().stream()
-                        .filter(Predicate.not(this::canEntityRideAlien))
-                        .toList();
+                    .filter(Predicate.not(this::canEntityRideAlien))
+                    .toList();
 
                 passengersToRemove.forEach(Entity::stopRiding);
             }
@@ -367,8 +367,8 @@ public abstract class Alien extends Monster implements DataUser {
         lastAnimationMovementSampleZ = currentZ;
 
         var speedThreshold = Math.max(
-                0.01D,
-                getAttributeValue(Attributes.MOVEMENT_SPEED) * RUN_ANIMATION_SPEED_THRESHOLD_MULTIPLIER
+            0.01D,
+            getAttributeValue(Attributes.MOVEMENT_SPEED) * RUN_ANIMATION_SPEED_THRESHOLD_MULTIPLIER
         );
 
         return deltaX * deltaX + deltaZ * deltaZ >= speedThreshold * speedThreshold;
@@ -435,11 +435,11 @@ public abstract class Alien extends Monster implements DataUser {
 
         if (
             // If entity was successfully killed...
-                killedEntity
-                        // AND this alien type can reproduce...
-                        && AlienVariantTypes.getFor(getVariant()).canReproduce()
-                        // AND the entity killed was not an alien (hive wars shouldn't result in endless growth)...
-                        && !entity.getType().is(AlienEntityTypeTags.ALIENS)
+            killedEntity
+                // AND this alien type can reproduce...
+                && AlienVariantTypes.getFor(getVariant()).canReproduce()
+                // AND the entity killed was not an alien (hive wars shouldn't result in endless growth)...
+                && !entity.getType().is(AlienEntityTypeTags.ALIENS)
         ) {
             // Hive: add a bonus drone or runner (depending on host type) to the reserves of the location whose
             // chunk this alien is standing in. No-op when the alien is outside any claimed chunk — feral aliens
@@ -451,14 +451,14 @@ public abstract class Alien extends Monster implements DataUser {
                 var bonusCount = switch (getGeneManager()) {
                     case GeneManagerProxy.EMPTY ignored -> 1;
                     case GeneManagerProxy.Wrapper geneManagerProxy -> (int) geneManagerProxy.geneManager()
-                            .getGeneContainer()
-                            .getActiveGeneMap()
-                            .getValue(Genes.BONUS_EMBRYO_COUNT);
+                        .getGeneContainer()
+                        .getActiveGeneMap()
+                        .getValue(Genes.BONUS_EMBRYO_COUNT);
                 };
 
                 var alienEntityType = wasRunnerHostKilled
-                        ? Runner.getType(getVariant())
-                        : Drone.getType(getVariant());
+                    ? Runner.getType(getVariant())
+                    : Drone.getType(getVariant());
 
                 location.localReserves().tryAdd((EntityType<?>) alienEntityType, bonusCount);
             }
@@ -497,9 +497,9 @@ public abstract class Alien extends Monster implements DataUser {
             var alienVariantType = AlienVariantTypes.getFor(this);
 
             if (
-                    isNetherAfflicted()
-                            && !damageSource.is(DamageTypeTags.AVOIDS_GUARDIAN_THORNS)
-                            && damageSource.getDirectEntity() instanceof LivingEntity livingEntity
+                isNetherAfflicted()
+                    && !damageSource.is(DamageTypeTags.AVOIDS_GUARDIAN_THORNS)
+                    && damageSource.getDirectEntity() instanceof LivingEntity livingEntity
             ) {
                 livingEntity.igniteForSeconds(4);
             }
@@ -573,9 +573,9 @@ public abstract class Alien extends Monster implements DataUser {
         var maxHealth = getMaxHealth();
         var damageRatio = maxHealth > 0F ? Mth.clamp(damageDealt / maxHealth, 0F, 1F) : 0F;
         var perLimbChance = Mth.clamp(
-                EXPLOSION_LIMB_BASE_CHANCE + EXPLOSION_LIMB_DAMAGE_BONUS * damageRatio,
-                0F,
-                1F
+            EXPLOSION_LIMB_BASE_CHANCE + EXPLOSION_LIMB_DAMAGE_BONUS * damageRatio,
+            0F,
+            1F
         );
 
         var canLoseLegs = !(this instanceof Xenomorph xeno) || xeno.getCrawlingManager().canCrawl();
@@ -639,11 +639,11 @@ public abstract class Alien extends Monster implements DataUser {
         var damageRatio = Mth.clamp(damageDealt / maxHealth, 0F, 1F);
         var lowHealthRatio = Mth.clamp(1F - getHealth() / maxHealth, 0F, 1F);
         var perLegChance = Mth.clamp(
-                FALL_LEG_BASE_CHANCE
-                        + FALL_LEG_DAMAGE_BONUS * damageRatio
-                        + FALL_LEG_LOW_HEALTH_BONUS * lowHealthRatio,
-                0F,
-                1F
+            FALL_LEG_BASE_CHANCE
+                + FALL_LEG_DAMAGE_BONUS * damageRatio
+                + FALL_LEG_LOW_HEALTH_BONUS * lowHealthRatio,
+            0F,
+            1F
         );
 
         for (var definition : legDefinitions) {
@@ -728,8 +728,8 @@ public abstract class Alien extends Monster implements DataUser {
     public void checkDespawn() {
         var wasAlive = isAlive() && !isRemoved();
         var returnLocation = wasAlive && getType().is(AlienEntityTypeTags.XENOMORPHS)
-                ? reserveReturnLocation()
-                : null;
+            ? reserveReturnLocation()
+            : null;
 
         super.checkDespawn();
 
@@ -769,32 +769,32 @@ public abstract class Alien extends Monster implements DataUser {
 
     private void onStrainLeak() {
         StrainLeakData.getOrCreate(level())
-                .ifSome(strainLeakData -> {
-                    var alienVariant = getVariant();
-                    var wasAlienVariantAlreadyPresent = strainLeakData.hasVariant(alienVariant);
-                    var alienVariantType = AlienVariantTypes.getFor(this);
+            .ifSome(strainLeakData -> {
+                var alienVariant = getVariant();
+                var wasAlienVariantAlreadyPresent = strainLeakData.hasVariant(alienVariant);
+                var alienVariantType = AlienVariantTypes.getFor(this);
 
-                    if (!(level() instanceof ServerLevel serverLevel)) {
-                        return;
+                if (!(level() instanceof ServerLevel serverLevel)) {
+                    return;
+                }
+
+                var strainBasedLeakMessage = getStrainLeakMessageForVariant(alienVariant);
+
+                if (strainBasedLeakMessage == null) {
+                    return;
+                }
+
+                strainLeakData.add(alienVariant, 1);
+
+                if (!wasAlienVariantAlreadyPresent) {
+                    for (var player : serverLevel.players()) {
+                        player.sendSystemMessage(
+                            Component.literal(strainBasedLeakMessage)
+                                .withStyle(alienVariantType.chatColor(), ChatFormatting.ITALIC)
+                        );
                     }
-
-                    var strainBasedLeakMessage = getStrainLeakMessageForVariant(alienVariant);
-
-                    if (strainBasedLeakMessage == null) {
-                        return;
-                    }
-
-                    strainLeakData.add(alienVariant, 1);
-
-                    if (!wasAlienVariantAlreadyPresent) {
-                        for (var player : serverLevel.players()) {
-                            player.sendSystemMessage(
-                                    Component.literal(strainBasedLeakMessage)
-                                            .withStyle(alienVariantType.chatColor(), ChatFormatting.ITALIC)
-                            );
-                        }
-                    }
-                });
+                }
+            });
     }
 
     @Override
@@ -812,9 +812,9 @@ public abstract class Alien extends Monster implements DataUser {
         if (getType().is(AlienEntityTypeTags.XENOMORPHS)) {
             var killer = getKillCredit();
             if (
-                    !ConvoyMemberTracker.isRaidMember(this)
-                            && killer instanceof ServerPlayer player
-                            && level() instanceof ServerLevel serverLevel
+                !ConvoyMemberTracker.isRaidMember(this)
+                    && killer instanceof ServerPlayer player
+                    && level() instanceof ServerLevel serverLevel
             ) {
                 attributeKillToLineages(player.getUUID(), serverLevel.getGameTime());
                 recordHiveCombatKill(player);
@@ -827,9 +827,9 @@ public abstract class Alien extends Monster implements DataUser {
             // Queen killed by a player → revenge raid (ungated 3-wave strike against the killer), and mark her
             // location for the post-replacement grudge so the crowned successor prioritizes that player.
             if (
-                    getType().is(AlienEntityTypeTags.QUEENS)
-                            && getKillCredit() instanceof ServerPlayer queenKiller
-                            && level() instanceof ServerLevel queenLevel
+                getType().is(AlienEntityTypeTags.QUEENS)
+                    && getKillCredit() instanceof ServerPlayer queenKiller
+                    && level() instanceof ServerLevel queenLevel
             ) {
                 onQueenKilled(queenKiller, queenLevel);
             }
@@ -840,6 +840,16 @@ public abstract class Alien extends Monster implements DataUser {
 
     private void onQueenKilled(ServerPlayer killer, ServerLevel serverLevel) {
         var server = serverLevel.getServer();
+
+        // Case A — a captured queen (severed into her own inhibited lineage) dies mid-recovery. She's no longer a
+        // member of her original hive, so the ONLY link back is the RescueCampaign holding her UUID. Scan all
+        // locations for it: convert the recovery into a revenge raid carrying the logged failure count, then clear the
+        // campaign so the firewall can finally crown a replacement.
+        if (convertRescueToRevengeOnDeath(server, killer)) {
+            return;
+        }
+
+        // Case B — a normal (in-hive) founder queen killed by a player: grudge + straight revenge raid.
         for (var factionId : com.alien.Alien.MOD.factions().getFactionIds(getUUID())) {
             if (!com.alien.common.gameplay.hive.id.LineageIds.isLineageId(factionId)) {
                 continue;
@@ -864,6 +874,45 @@ public abstract class Alien extends Monster implements DataUser {
         }
     }
 
+    /**
+     * If this dying queen has an open {@link com.alien.common.gameplay.hive.party.RescueCampaign} on some hive
+     * location, converts recovery → revenge: dispatches a revenge raid from that original hive carrying the campaign's
+     * failure count context, stamps the grudge, and clears the campaign (unblocking the firewall). Returns true if a
+     * conversion happened.
+     */
+    private boolean convertRescueToRevengeOnDeath(net.minecraft.server.MinecraftServer server, ServerPlayer killer) {
+        for (var factionId : new java.util.ArrayList<>(com.alien.Alien.MOD.factions().getAllIds())) {
+            if (!com.alien.common.gameplay.hive.id.LineageIds.isLineageId(factionId)) {
+                continue;
+            }
+            var faction = com.alien.Alien.MOD.factions().get(factionId);
+            if (faction == null || !(faction.data() instanceof LineageFactionData lineage)) {
+                continue;
+            }
+            for (var location : lineage.locationsById().values()) {
+                var campaign = location.rescueCampaign();
+                if (campaign == null || !getUUID().equals(campaign.queenUuid())) {
+                    continue;
+                }
+
+                // Convert. The revenge raid fires ungated against the killer; the grudge is stamped so the eventual
+                // replacement also prioritizes them (the 3-strike patience was against the loss, not the method).
+                location.setGrudgePlayerId(killer.getUUID());
+                location.setRescueCampaign(null);
+                lineage.markDirty();
+                com.alien.common.gameplay.hive.convoy.RaidDispatch.onQueenKilled(server, lineage, factionId, killer);
+                com.alien.Alien.LOGGER.info(
+                    "Hive: recovery converted to revenge — captured queen {} killed by {}; {} rescue attempts had failed",
+                    getUUID(),
+                    killer.getUUID(),
+                    campaign.attemptsFailed()
+                );
+                return true;
+            }
+        }
+        return false;
+    }
+
     private void onEmpressDied() {
         for (var factionId : com.alien.Alien.MOD.factions().getFactionIds(getUUID())) {
             if (!com.alien.common.gameplay.hive.id.LineageIds.isLineageId(factionId)) {
@@ -877,10 +926,10 @@ public abstract class Alien extends Monster implements DataUser {
                 lineage.setEmpressId(null);
             }
             com.alien.Alien.LOGGER.info(
-                    "Hive: empress {} died — lineage {} has {} location(s); empress slot cleared",
-                    getUUID(),
-                    factionId,
-                    lineage.locationsById().size()
+                "Hive: empress {} died — lineage {} has {} location(s); empress slot cleared",
+                getUUID(),
+                factionId,
+                lineage.locationsById().size()
             );
         }
     }
@@ -1011,14 +1060,14 @@ public abstract class Alien extends Monster implements DataUser {
         }
         if (membershipTag.hasUUID("ConvoyId")) {
             return new ConvoyMembership(
-                    ResourceLocation.parse(membershipTag.getString("LineageFactionId")),
-                    new ConvoyId(membershipTag.getUUID("ConvoyId"))
+                ResourceLocation.parse(membershipTag.getString("LineageFactionId")),
+                new ConvoyId(membershipTag.getUUID("ConvoyId"))
             );
         }
         if (membershipTag.hasUUID("RaidId")) {
             return new ConvoyMembership(
-                    ResourceLocation.parse(membershipTag.getString("LineageFactionId")),
-                    new ConvoyId(membershipTag.getUUID("RaidId"))
+                ResourceLocation.parse(membershipTag.getString("LineageFactionId")),
+                new ConvoyId(membershipTag.getUUID("RaidId"))
             );
         }
         return null;

@@ -171,6 +171,18 @@ public final class QueenlessMaturationTask {
             // final step is.
             var config = HiveLocationRegistry.INSTANCE.config();
 
+            // Rescue hold: while this location has an unresolved rescue campaign for its captured queen, the hive
+            // holds out hope and won't crown a replacement. RescueCampaignTask clears the campaign on success, on
+            // conversion (queen died), or on exhaustion (3 failed attempts) — only then does crowning proceed.
+            if (location.rescueCampaign() != null) {
+                Alien.LOGGER.info(
+                        "Hive: crowning held for leader {} (lineage {}) — rescue campaign still active for the lost queen",
+                        leaderId,
+                        lineageId
+                );
+                return;
+            }
+
             if (!location.firewallFundAvailable()) {
                 Alien.LOGGER.info(
                         "Hive: crowning denied for leader {} (lineage {}) — firewall fund still spent, {}/{} stable ticks accrued",

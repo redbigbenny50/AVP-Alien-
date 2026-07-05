@@ -17,6 +17,8 @@ public final class RaidWaveProfileRegistry {
 
     public static final ResourceLocation REVENGE_ID = AlienResources.location("revenge");
 
+    public static final ResourceLocation RESCUE_ID = AlienResources.location("rescue");
+
     private static final Map<ResourceLocation, RaidWaveProfile> PROFILES = new LinkedHashMap<>();
 
     private RaidWaveProfileRegistry() {}
@@ -56,6 +58,18 @@ public final class RaidWaveProfileRegistry {
             return profile;
         }
         return RaidWaveProfile.revengeFallback();
+    }
+
+    /**
+     * The rescue raid profile (queen captured/lost): a datapack-registered {@code rescue} profile if present, else the
+     * built-in {@link RaidWaveProfile#rescueFallback}.
+     */
+    public static RaidWaveProfile rescue() {
+        var profile = PROFILES.get(RESCUE_ID);
+        if (profile != null) {
+            return profile;
+        }
+        return RaidWaveProfile.rescueFallback();
     }
 
     public static ResourceLocation profileIdFor(AlienVariant variant) {

@@ -134,6 +134,8 @@ public final class HiveLocation {
 
     private static final String NBT_GRUDGE_PLAYER_ID = "GrudgePlayerId";
 
+    private static final String NBT_RESCUE_CAMPAIGN = "RescueCampaign";
+
     private static final String NBT_KNOWN_MEMBERS_BY_TYPE = "KnownMembersByType";
 
     private static final String NBT_LEADERSHIP = "Leadership";
@@ -280,6 +282,9 @@ public final class HiveLocation {
     /** Post-replacement grudge: set when this location's founder queen is killed by a player; the crowned successor prioritizes raiding this player on her first raid, then it clears. Null = no grudge. */
     private @Nullable UUID grudgePlayerId;
 
+    /** Recovery campaign for this location's lost (captured) founder queen. Null = no queen currently lost. See {@link com.alien.common.gameplay.hive.party.RescueCampaign}. */
+    private @Nullable com.alien.common.gameplay.hive.party.RescueCampaign rescueCampaign;
+
     private final HiveLocationLeadership leadership;
 
     private final com.alien.common.gameplay.hive.vent.HiveVentManager ventManager;
@@ -343,6 +348,7 @@ public final class HiveLocation {
         this.parties = new java.util.ArrayList<>();
         this.attackCampaigns = new java.util.HashMap<>();
         this.grudgePlayerId = null;
+        this.rescueCampaign = null;
         this.leadership = new HiveLocationLeadership();
         this.ventManager = new com.alien.common.gameplay.hive.vent.HiveVentManager();
         this.knownMembersByType = new HashMap<>();
@@ -703,6 +709,14 @@ public final class HiveLocation {
         this.grudgePlayerId = grudgePlayerId;
     }
 
+    public @Nullable com.alien.common.gameplay.hive.party.RescueCampaign rescueCampaign() {
+        return rescueCampaign;
+    }
+
+    public void setRescueCampaign(@Nullable com.alien.common.gameplay.hive.party.RescueCampaign rescueCampaign) {
+        this.rescueCampaign = rescueCampaign;
+    }
+
     public HiveLocationLeadership leadership() {
         return leadership;
     }
@@ -900,6 +914,10 @@ public final class HiveLocation {
             tag.putUUID(NBT_GRUDGE_PLAYER_ID, grudgePlayerId);
         }
 
+        if (rescueCampaign != null) {
+            tag.put(NBT_RESCUE_CAMPAIGN, rescueCampaign.save());
+        }
+
         var knownMembersTag = new ListTag();
         for (var entry : knownMembersByType.entrySet()) {
             var members = entry.getValue();
@@ -1031,6 +1049,9 @@ public final class HiveLocation {
         }
 
         location.grudgePlayerId = tag.hasUUID(NBT_GRUDGE_PLAYER_ID) ? tag.getUUID(NBT_GRUDGE_PLAYER_ID) : null;
+        location.rescueCampaign = tag.contains(NBT_RESCUE_CAMPAIGN)
+                ? com.alien.common.gameplay.hive.party.RescueCampaign.load(tag.getCompound(NBT_RESCUE_CAMPAIGN))
+                : null;
 
         location.attackCampaigns.clear();
         if (tag.contains(NBT_ATTACK_CAMPAIGNS)) {

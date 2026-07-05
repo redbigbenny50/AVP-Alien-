@@ -42,6 +42,10 @@ public final class LineageInvariantTask {
         // 1. Variant invariants — evict variant-mismatched members.
         scanVariantInvariants();
 
+        // 1b. Rescue campaigns — promote/dispatch/resolve recovery for captured queens BEFORE maturation, so a
+        // resolved-or-exhausted campaign no longer blocks the firewall crowning this same scan.
+        com.alien.common.gameplay.hive.party.RescueCampaignTask.scanAll(server);
+
         // 2. Queenless lineage maturation — lets queenless lineages advance their leader through the queen-track
         // growth stages over time.
         QueenlessMaturationTask.scanAll(server);

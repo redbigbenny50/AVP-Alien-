@@ -17,6 +17,7 @@ import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.util.RandomSource;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.phys.Vec3;
+import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -89,11 +90,11 @@ public final class RaidDispatch {
      * permanent vendetta.
      */
     private static void scanGrudge(
-            MinecraftServer server,
-            ResourceLocation factionId,
-            LineageFactionData lineage,
-            long currentTick,
-            HiveConfig config
+        MinecraftServer server,
+        ResourceLocation factionId,
+        LineageFactionData lineage,
+        long currentTick,
+        HiveConfig config
     ) {
         for (var location : lineage.locationsById().values()) {
             var grudgePlayerId = location.grudgePlayerId();
@@ -110,15 +111,15 @@ public final class RaidDispatch {
             }
 
             var dispatched = tryDispatchAgainstPlayer(
-                    server,
-                    lineage,
-                    factionId,
-                    grudgePlayerId,
-                    targetPlayer,
-                    currentTick,
-                    config,
-                    false,
-                    true
+                server,
+                lineage,
+                factionId,
+                grudgePlayerId,
+                targetPlayer,
+                currentTick,
+                config,
+                false,
+                true
             );
             // Clear the grudge whether or not a party formed — it's a one-shot intent, not a retry loop.
             location.setGrudgePlayerId(null);
@@ -150,23 +151,23 @@ public final class RaidDispatch {
 
     /** Admin trigger entry. Forces a raid against {@code targetPlayer} from the lineage's largest location. */
     public static boolean forceRaid(
-            MinecraftServer server,
-            LineageFactionData lineage,
-            ResourceLocation lineageFactionId,
-            ServerPlayer targetPlayer
+        MinecraftServer server,
+        LineageFactionData lineage,
+        ResourceLocation lineageFactionId,
+        ServerPlayer targetPlayer
     ) {
         var currentTick = server.overworld().getGameTime();
         var config = HiveLocationRegistry.INSTANCE.config();
         return tryDispatchAgainstPlayer(
-                server,
-                lineage,
-                lineageFactionId,
-                targetPlayer.getUUID(),
-                targetPlayer,
-                currentTick,
-                config,
-                false,
-                false
+            server,
+            lineage,
+            lineageFactionId,
+            targetPlayer.getUUID(),
+            targetPlayer,
+            currentTick,
+            config,
+            false,
+            false
         );
     }
 
@@ -176,33 +177,93 @@ public final class RaidDispatch {
      * kill-threshold auto-raid — this fires on the single event of a queen's death, not accumulated kills.
      */
     public static boolean onQueenKilled(
-            MinecraftServer server,
-            LineageFactionData lineage,
-            ResourceLocation lineageFactionId,
-            ServerPlayer killer
+        MinecraftServer server,
+        LineageFactionData lineage,
+        ResourceLocation lineageFactionId,
+        ServerPlayer killer
     ) {
         var currentTick = server.overworld().getGameTime();
         var config = HiveLocationRegistry.INSTANCE.config();
         return tryDispatchAgainstPlayer(
-                server,
-                lineage,
-                lineageFactionId,
-                killer.getUUID(),
-                killer,
-                currentTick,
-                config,
-                false,
-                true,
-                true
+            server,
+            lineage,
+            lineageFactionId,
+            killer.getUUID(),
+            killer,
+            currentTick,
+            config,
+            false,
+            true,
+            true
         );
     }
 
+    /**
+     * Rescue trigger: {@code source}'s founder queen was captured and carried off. Dispatches an ungated rescue raid
+     * from {@code source} against the player holding her ({@code captor}). Returns the dispatched raid's id so the
+     * {@code RescueCampaign} can track this attempt, or {@code null} if no party could form (which the caller counts as
+     * a failed attempt).
+     */
+    public static @Nullable ConvoyId dispatchRescue(
+        MinecraftServer server,
+        LineageFactionData lineage,
+        ResourceLocation lineageFactionId,
+        HiveLocation source,
+        ServerPlayer captor
+    ) {
+        var currentTick = server.overworld().getGameTime();
+        if (hasActiveOutboundRaidAgainst(lineage, captor.getUUID())) {
+            return null;
+        }
+
+        var waveProfile = RaidWaveProfileRegistry.rescue();
+        var composition = drainComposition(source.localReserves(), waveProfile, server.overworld().random);
+        if (composition.getCount() < waveProfile.totalSize()) {
+            refundComposition(source.localReserves(), composition);
+            return null;
+        }
+
+        var sourceCenter = new Vec3(
+            source.centerPos().getX() + 0.5,
+            source.centerPos().getY() + 0.5,
+            source.centerPos().getZ() + 0.5
+        );
+
+        var raidId = ConvoyId.fresh();
+        var raid = new Convoy.Raid(
+            raidId,
+            lineageFactionId,
+            source.dimension(),
+            source.id(),
+            captor.getUUID(),
+            sourceCenter,
+            captor.blockPosition(),
+            composition,
+            currentTick,
+            Long.MAX_VALUE
+        );
+        raid.markRescue();
+        raid.setWaveCount(waveProfile.waves().size());
+
+        lineage.convoys().add(raid);
+        lineage.markDirty();
+
+        Alien.LOGGER.info(
+            "Hive: rescue raid {} dispatched from {} at captor {} ({} members)",
+            raidId,
+            source.id(),
+            captor.getUUID(),
+            composition.getCount()
+        );
+        return raidId;
+    }
+
     private static void scanLineage(
-            MinecraftServer server,
-            ResourceLocation lineageFactionId,
-            LineageFactionData lineage,
-            long currentTick,
-            HiveConfig config
+        MinecraftServer server,
+        ResourceLocation lineageFactionId,
+        LineageFactionData lineage,
+        long currentTick,
+        HiveConfig config
     ) {
         // Snapshot since recordKillByPlayer mutates lists during iteration via prune.
         var attribution = new HashMap<>(lineage.killAttributionByPlayer());
@@ -224,31 +285,6 @@ public final class RaidDispatch {
             }
 
             tryDispatchAgainstPlayer(
-                    server,
-                    lineage,
-                    lineageFactionId,
-                    playerId,
-                    targetPlayer,
-                    currentTick,
-                    config,
-                    true,
-                    true
-            );
-        }
-    }
-
-    private static boolean tryDispatchAgainstPlayer(
-            MinecraftServer server,
-            LineageFactionData lineage,
-            ResourceLocation lineageFactionId,
-            UUID playerId,
-            ServerPlayer targetPlayer,
-            long currentTick,
-            HiveConfig config,
-            boolean consumeKillAttribution,
-            boolean blockExistingTargetRaid
-    ) {
-        return tryDispatchAgainstPlayer(
                 server,
                 lineage,
                 lineageFactionId,
@@ -256,39 +292,64 @@ public final class RaidDispatch {
                 targetPlayer,
                 currentTick,
                 config,
-                consumeKillAttribution,
-                blockExistingTargetRaid,
-                false
+                true,
+                true
+            );
+        }
+    }
+
+    private static boolean tryDispatchAgainstPlayer(
+        MinecraftServer server,
+        LineageFactionData lineage,
+        ResourceLocation lineageFactionId,
+        UUID playerId,
+        ServerPlayer targetPlayer,
+        long currentTick,
+        HiveConfig config,
+        boolean consumeKillAttribution,
+        boolean blockExistingTargetRaid
+    ) {
+        return tryDispatchAgainstPlayer(
+            server,
+            lineage,
+            lineageFactionId,
+            playerId,
+            targetPlayer,
+            currentTick,
+            config,
+            consumeKillAttribution,
+            blockExistingTargetRaid,
+            false
         );
     }
 
     private static boolean tryDispatchAgainstPlayer(
-            MinecraftServer server,
-            LineageFactionData lineage,
-            ResourceLocation lineageFactionId,
-            UUID playerId,
-            ServerPlayer targetPlayer,
-            long currentTick,
-            HiveConfig config,
-            boolean consumeKillAttribution,
-            boolean blockExistingTargetRaid,
-            boolean revenge
+        MinecraftServer server,
+        LineageFactionData lineage,
+        ResourceLocation lineageFactionId,
+        UUID playerId,
+        ServerPlayer targetPlayer,
+        long currentTick,
+        HiveConfig config,
+        boolean consumeKillAttribution,
+        boolean blockExistingTargetRaid,
+        boolean revenge
     ) {
         if (blockExistingTargetRaid && hasActiveOutboundRaidAgainst(lineage, playerId)) {
             return false;
         }
 
         var waveProfile = revenge
-                ? RaidWaveProfileRegistry.revenge()
-                : RaidWaveProfileRegistry.forVariant(lineage.variant());
+            ? RaidWaveProfileRegistry.revenge()
+            : RaidWaveProfileRegistry.forVariant(lineage.variant());
         HiveLocation source = null;
         EntityReserves composition = null;
 
         for (var candidate : eligibleSources(lineage, currentTick, config, waveProfile)) {
             var candidateComposition = drainComposition(
-                    candidate.localReserves(),
-                    waveProfile,
-                    server.overworld().random
+                candidate.localReserves(),
+                waveProfile,
+                server.overworld().random
             );
             if (candidateComposition.getCount() >= waveProfile.totalSize()) {
                 source = candidate;
@@ -303,22 +364,22 @@ public final class RaidDispatch {
         }
 
         var sourceCenter = new Vec3(
-                source.centerPos().getX() + 0.5,
-                source.centerPos().getY() + 0.5,
-                source.centerPos().getZ() + 0.5
+            source.centerPos().getX() + 0.5,
+            source.centerPos().getY() + 0.5,
+            source.centerPos().getZ() + 0.5
         );
 
         var raid = new Convoy.Raid(
-                ConvoyId.fresh(),
-                lineageFactionId,
-                source.dimension(),
-                source.id(),
-                playerId,
-                sourceCenter,
-                targetPlayer.blockPosition(),
-                composition,
-                currentTick,
-                Long.MAX_VALUE
+            ConvoyId.fresh(),
+            lineageFactionId,
+            source.dimension(),
+            source.id(),
+            playerId,
+            sourceCenter,
+            targetPlayer.blockPosition(),
+            composition,
+            currentTick,
+            Long.MAX_VALUE
         );
         if (revenge) {
             raid.markRevenge();
@@ -333,11 +394,11 @@ public final class RaidDispatch {
         lastDispatchTickByLocation.put(source.id(), currentTick);
 
         Alien.LOGGER.info(
-                "Hive: raid dispatched: {} → player {} from source {} ({} members, no expiry)",
-                raid.id(),
-                playerId,
-                source.id(),
-                composition.getCount()
+            "Hive: raid dispatched: {} → player {} from source {} ({} members, no expiry)",
+            raid.id(),
+            playerId,
+            source.id(),
+            composition.getCount()
         );
 
         return true;
@@ -346,9 +407,9 @@ public final class RaidDispatch {
     private static boolean hasActiveOutboundRaidAgainst(LineageFactionData lineage, UUID playerId) {
         for (var convoy : lineage.convoys()) {
             if (
-                    convoy instanceof Convoy.Raid raid
-                            && !raid.returningHome()
-                            && raid.targetPlayerId().equals(playerId)
+                convoy instanceof Convoy.Raid raid
+                    && !raid.returningHome()
+                    && raid.targetPlayerId().equals(playerId)
             ) {
                 return true;
             }
@@ -357,10 +418,10 @@ public final class RaidDispatch {
     }
 
     private static List<HiveLocation> eligibleSources(
-            LineageFactionData lineage,
-            long currentTick,
-            HiveConfig config,
-            RaidWaveProfile waveProfile
+        LineageFactionData lineage,
+        long currentTick,
+        HiveConfig config,
+        RaidWaveProfile waveProfile
     ) {
         var candidates = new ArrayList<HiveLocation>();
 
@@ -392,9 +453,9 @@ public final class RaidDispatch {
     }
 
     private static EntityReserves drainComposition(
-            HiveLocationReserves donorReserves,
-            RaidWaveProfile waveProfile,
-            RandomSource random
+        HiveLocationReserves donorReserves,
+        RaidWaveProfile waveProfile,
+        RandomSource random
     ) {
         var composition = new EntityReserves();
 
@@ -408,10 +469,10 @@ public final class RaidDispatch {
     }
 
     private static boolean drainWave(
-            HiveLocationReserves donorReserves,
-            EntityReserves composition,
-            RaidWaveProfile.Wave wave,
-            RandomSource random
+        HiveLocationReserves donorReserves,
+        EntityReserves composition,
+        RaidWaveProfile.Wave wave,
+        RandomSource random
     ) {
         var inventory = new RaidWaveSelection.Inventory() {
 
@@ -433,22 +494,22 @@ public final class RaidDispatch {
         }
 
         return drainFromPools(
-                donorReserves,
-                composition,
-                inventory,
-                wave.pools(),
-                wave.size() - wave.guaranteedSize(),
-                random
+            donorReserves,
+            composition,
+            inventory,
+            wave.pools(),
+            wave.size() - wave.guaranteedSize(),
+            random
         );
     }
 
     private static boolean drainFromPools(
-            HiveLocationReserves donorReserves,
-            EntityReserves composition,
-            RaidWaveSelection.Inventory inventory,
-            List<RaidWaveProfile.PoolEntry> pools,
-            int count,
-            RandomSource random
+        HiveLocationReserves donorReserves,
+        EntityReserves composition,
+        RaidWaveSelection.Inventory inventory,
+        List<RaidWaveProfile.PoolEntry> pools,
+        int count,
+        RandomSource random
     ) {
         var selectedByPool = new HashMap<Integer, Integer>();
         for (var i = 0; i < count; i++) {

@@ -84,41 +84,41 @@ public sealed interface Convoy {
         private Vec3 currentPos;
 
         public Reinforcement(
-                ConvoyId id,
-                ResourceLocation lineageFactionId,
-                ResourceKey<Level> dimension,
-                HiveLocationId sourceLocationId,
-                HiveLocationId destinationLocationId,
-                Vec3 currentPos,
-                BlockPos destinationPos,
-                EntityReserves composition,
-                long dispatchedTick
+            ConvoyId id,
+            ResourceLocation lineageFactionId,
+            ResourceKey<Level> dimension,
+            HiveLocationId sourceLocationId,
+            HiveLocationId destinationLocationId,
+            Vec3 currentPos,
+            BlockPos destinationPos,
+            EntityReserves composition,
+            long dispatchedTick
         ) {
             this(
-                    id,
-                    lineageFactionId,
-                    dimension,
-                    sourceLocationId,
-                    destinationLocationId,
-                    currentPos,
-                    destinationPos,
-                    composition,
-                    Map.of(),
-                    dispatchedTick
+                id,
+                lineageFactionId,
+                dimension,
+                sourceLocationId,
+                destinationLocationId,
+                currentPos,
+                destinationPos,
+                composition,
+                Map.of(),
+                dispatchedTick
             );
         }
 
         public Reinforcement(
-                ConvoyId id,
-                ResourceLocation lineageFactionId,
-                ResourceKey<Level> dimension,
-                HiveLocationId sourceLocationId,
-                HiveLocationId destinationLocationId,
-                Vec3 currentPos,
-                BlockPos destinationPos,
-                EntityReserves composition,
-                Map<UUID, EntityType<?>> materializedMembers,
-                long dispatchedTick
+            ConvoyId id,
+            ResourceLocation lineageFactionId,
+            ResourceKey<Level> dimension,
+            HiveLocationId sourceLocationId,
+            HiveLocationId destinationLocationId,
+            Vec3 currentPos,
+            BlockPos destinationPos,
+            EntityReserves composition,
+            Map<UUID, EntityType<?>> materializedMembers,
+            long dispatchedTick
         ) {
             this.id = id;
             this.lineageFactionId = lineageFactionId;
@@ -231,47 +231,47 @@ public sealed interface Convoy {
         private Vec3 currentPos;
 
         public Migration(
-                ConvoyId id,
-                ResourceLocation lineageFactionId,
-                ResourceKey<Level> dimension,
-                HiveLocationId sourceLocationId,
-                HiveLocationId destinationLocationId,
-                Vec3 currentPos,
-                BlockPos destinationPos,
-                EntityReserves composition,
-                int biomassPayload,
-                boolean carriesEmpress,
-                long dispatchedTick
+            ConvoyId id,
+            ResourceLocation lineageFactionId,
+            ResourceKey<Level> dimension,
+            HiveLocationId sourceLocationId,
+            HiveLocationId destinationLocationId,
+            Vec3 currentPos,
+            BlockPos destinationPos,
+            EntityReserves composition,
+            int biomassPayload,
+            boolean carriesEmpress,
+            long dispatchedTick
         ) {
             this(
-                    id,
-                    lineageFactionId,
-                    dimension,
-                    sourceLocationId,
-                    destinationLocationId,
-                    currentPos,
-                    destinationPos,
-                    composition,
-                    Map.of(),
-                    biomassPayload,
-                    carriesEmpress,
-                    dispatchedTick
+                id,
+                lineageFactionId,
+                dimension,
+                sourceLocationId,
+                destinationLocationId,
+                currentPos,
+                destinationPos,
+                composition,
+                Map.of(),
+                biomassPayload,
+                carriesEmpress,
+                dispatchedTick
             );
         }
 
         public Migration(
-                ConvoyId id,
-                ResourceLocation lineageFactionId,
-                ResourceKey<Level> dimension,
-                HiveLocationId sourceLocationId,
-                HiveLocationId destinationLocationId,
-                Vec3 currentPos,
-                BlockPos destinationPos,
-                EntityReserves composition,
-                Map<UUID, EntityType<?>> materializedMembers,
-                int biomassPayload,
-                boolean carriesEmpress,
-                long dispatchedTick
+            ConvoyId id,
+            ResourceLocation lineageFactionId,
+            ResourceKey<Level> dimension,
+            HiveLocationId sourceLocationId,
+            HiveLocationId destinationLocationId,
+            Vec3 currentPos,
+            BlockPos destinationPos,
+            EntityReserves composition,
+            Map<UUID, EntityType<?>> materializedMembers,
+            int biomassPayload,
+            boolean carriesEmpress,
+            long dispatchedTick
         ) {
             this.id = id;
             this.lineageFactionId = lineageFactionId;
@@ -467,286 +467,292 @@ public sealed interface Convoy {
          */
         private boolean revenge = false;
 
+        /**
+         * True if this is a rescue raid (queen captured/lost) — tracks the player holding her; success = she's freed,
+         * not the target's death. Uses the rescue wave profile. Set via {@link #markRescue} at dispatch.
+         */
+        private boolean rescue = false;
+
         public Raid(
-                ConvoyId id,
-                ResourceLocation lineageFactionId,
-                ResourceKey<Level> dimension,
-                HiveLocationId sourceLocationId,
-                UUID targetPlayerId,
-                Vec3 currentPos,
-                BlockPos lastKnownTargetPos,
-                EntityReserves composition,
-                long dispatchedTick,
-                long expiresAtTick
+            ConvoyId id,
+            ResourceLocation lineageFactionId,
+            ResourceKey<Level> dimension,
+            HiveLocationId sourceLocationId,
+            UUID targetPlayerId,
+            Vec3 currentPos,
+            BlockPos lastKnownTargetPos,
+            EntityReserves composition,
+            long dispatchedTick,
+            long expiresAtTick
         ) {
             this(
-                    id,
-                    lineageFactionId,
-                    dimension,
-                    sourceLocationId,
-                    targetPlayerId,
-                    currentPos,
-                    lastKnownTargetPos,
-                    composition,
-                    Map.of(),
-                    dispatchedTick,
-                    expiresAtTick
+                id,
+                lineageFactionId,
+                dimension,
+                sourceLocationId,
+                targetPlayerId,
+                currentPos,
+                lastKnownTargetPos,
+                composition,
+                Map.of(),
+                dispatchedTick,
+                expiresAtTick
             );
         }
 
         public Raid(
-                ConvoyId id,
-                ResourceLocation lineageFactionId,
-                ResourceKey<Level> dimension,
-                HiveLocationId sourceLocationId,
-                UUID targetPlayerId,
-                Vec3 currentPos,
-                BlockPos lastKnownTargetPos,
-                EntityReserves composition,
-                Map<UUID, EntityType<?>> materializedMembers,
-                long dispatchedTick,
-                long expiresAtTick
+            ConvoyId id,
+            ResourceLocation lineageFactionId,
+            ResourceKey<Level> dimension,
+            HiveLocationId sourceLocationId,
+            UUID targetPlayerId,
+            Vec3 currentPos,
+            BlockPos lastKnownTargetPos,
+            EntityReserves composition,
+            Map<UUID, EntityType<?>> materializedMembers,
+            long dispatchedTick,
+            long expiresAtTick
         ) {
             this(
-                    id,
-                    lineageFactionId,
-                    dimension,
-                    sourceLocationId,
-                    targetPlayerId,
-                    currentPos,
-                    lastKnownTargetPos,
-                    composition,
-                    materializedMembers,
-                    false,
-                    0,
-                    -1,
-                    0,
-                    -1L,
-                    false,
-                    null,
-                    null,
-                    dispatchedTick,
-                    expiresAtTick
+                id,
+                lineageFactionId,
+                dimension,
+                sourceLocationId,
+                targetPlayerId,
+                currentPos,
+                lastKnownTargetPos,
+                composition,
+                materializedMembers,
+                false,
+                0,
+                -1,
+                0,
+                -1L,
+                false,
+                null,
+                null,
+                dispatchedTick,
+                expiresAtTick
             );
         }
 
         public Raid(
-                ConvoyId id,
-                ResourceLocation lineageFactionId,
-                ResourceKey<Level> dimension,
-                HiveLocationId sourceLocationId,
-                UUID targetPlayerId,
-                Vec3 currentPos,
-                BlockPos lastKnownTargetPos,
-                EntityReserves composition,
-                Map<UUID, EntityType<?>> materializedMembers,
-                boolean warningIssued,
-                long dispatchedTick,
-                long expiresAtTick
+            ConvoyId id,
+            ResourceLocation lineageFactionId,
+            ResourceKey<Level> dimension,
+            HiveLocationId sourceLocationId,
+            UUID targetPlayerId,
+            Vec3 currentPos,
+            BlockPos lastKnownTargetPos,
+            EntityReserves composition,
+            Map<UUID, EntityType<?>> materializedMembers,
+            boolean warningIssued,
+            long dispatchedTick,
+            long expiresAtTick
         ) {
             this(
-                    id,
-                    lineageFactionId,
-                    dimension,
-                    sourceLocationId,
-                    targetPlayerId,
-                    currentPos,
-                    lastKnownTargetPos,
-                    composition,
-                    materializedMembers,
-                    warningIssued,
-                    0,
-                    -1,
-                    0,
-                    -1L,
-                    false,
-                    null,
-                    null,
-                    dispatchedTick,
-                    expiresAtTick
+                id,
+                lineageFactionId,
+                dimension,
+                sourceLocationId,
+                targetPlayerId,
+                currentPos,
+                lastKnownTargetPos,
+                composition,
+                materializedMembers,
+                warningIssued,
+                0,
+                -1,
+                0,
+                -1L,
+                false,
+                null,
+                null,
+                dispatchedTick,
+                expiresAtTick
             );
         }
 
         public Raid(
-                ConvoyId id,
-                ResourceLocation lineageFactionId,
-                ResourceKey<Level> dimension,
-                HiveLocationId sourceLocationId,
-                UUID targetPlayerId,
-                Vec3 currentPos,
-                BlockPos lastKnownTargetPos,
-                EntityReserves composition,
-                Map<UUID, EntityType<?>> materializedMembers,
-                boolean warningIssued,
-                int nextWaveIndex,
-                int activeWaveIndex,
-                int activeWaveInitialCount,
-                long waveBreakStartedTick,
-                boolean returningHome,
-                @Nullable HiveLocationId returnLocationId,
-                @Nullable BlockPos returnPos,
-                long dispatchedTick,
-                long expiresAtTick
+            ConvoyId id,
+            ResourceLocation lineageFactionId,
+            ResourceKey<Level> dimension,
+            HiveLocationId sourceLocationId,
+            UUID targetPlayerId,
+            Vec3 currentPos,
+            BlockPos lastKnownTargetPos,
+            EntityReserves composition,
+            Map<UUID, EntityType<?>> materializedMembers,
+            boolean warningIssued,
+            int nextWaveIndex,
+            int activeWaveIndex,
+            int activeWaveInitialCount,
+            long waveBreakStartedTick,
+            boolean returningHome,
+            @Nullable HiveLocationId returnLocationId,
+            @Nullable BlockPos returnPos,
+            long dispatchedTick,
+            long expiresAtTick
         ) {
             this(
-                    id,
-                    lineageFactionId,
-                    dimension,
-                    sourceLocationId,
-                    targetPlayerId,
-                    currentPos,
-                    lastKnownTargetPos,
-                    composition,
-                    materializedMembers,
-                    warningIssued,
-                    nextWaveIndex,
-                    activeWaveIndex,
-                    activeWaveInitialCount,
-                    waveBreakStartedTick,
-                    returningHome,
-                    returningHome ? ReturnHomeReason.TARGET_DEFEATED : ReturnHomeReason.NONE,
-                    returnLocationId,
-                    returnPos,
-                    dispatchedTick,
-                    expiresAtTick
+                id,
+                lineageFactionId,
+                dimension,
+                sourceLocationId,
+                targetPlayerId,
+                currentPos,
+                lastKnownTargetPos,
+                composition,
+                materializedMembers,
+                warningIssued,
+                nextWaveIndex,
+                activeWaveIndex,
+                activeWaveInitialCount,
+                waveBreakStartedTick,
+                returningHome,
+                returningHome ? ReturnHomeReason.TARGET_DEFEATED : ReturnHomeReason.NONE,
+                returnLocationId,
+                returnPos,
+                dispatchedTick,
+                expiresAtTick
             );
         }
 
         public Raid(
-                ConvoyId id,
-                ResourceLocation lineageFactionId,
-                ResourceKey<Level> dimension,
-                HiveLocationId sourceLocationId,
-                UUID targetPlayerId,
-                Vec3 currentPos,
-                BlockPos lastKnownTargetPos,
-                EntityReserves composition,
-                Map<UUID, EntityType<?>> materializedMembers,
-                boolean warningIssued,
-                int nextWaveIndex,
-                int activeWaveIndex,
-                int activeWaveInitialCount,
-                long waveBreakStartedTick,
-                boolean returningHome,
-                ReturnHomeReason returnHomeReason,
-                @Nullable HiveLocationId returnLocationId,
-                @Nullable BlockPos returnPos,
-                long dispatchedTick,
-                long expiresAtTick
+            ConvoyId id,
+            ResourceLocation lineageFactionId,
+            ResourceKey<Level> dimension,
+            HiveLocationId sourceLocationId,
+            UUID targetPlayerId,
+            Vec3 currentPos,
+            BlockPos lastKnownTargetPos,
+            EntityReserves composition,
+            Map<UUID, EntityType<?>> materializedMembers,
+            boolean warningIssued,
+            int nextWaveIndex,
+            int activeWaveIndex,
+            int activeWaveInitialCount,
+            long waveBreakStartedTick,
+            boolean returningHome,
+            ReturnHomeReason returnHomeReason,
+            @Nullable HiveLocationId returnLocationId,
+            @Nullable BlockPos returnPos,
+            long dispatchedTick,
+            long expiresAtTick
         ) {
             this(
-                    id,
-                    lineageFactionId,
-                    dimension,
-                    sourceLocationId,
-                    targetPlayerId,
-                    currentPos,
-                    lastKnownTargetPos,
-                    composition,
-                    materializedMembers,
-                    warningIssued,
-                    nextWaveIndex,
-                    activeWaveIndex,
-                    activeWaveInitialCount,
-                    waveBreakStartedTick,
-                    0,
-                    0,
-                    -1L,
-                    -1L,
-                    -1L,
-                    -1L,
-                    false,
-                    returningHome,
-                    returnHomeReason,
-                    returnLocationId,
-                    returnPos,
-                    dispatchedTick,
-                    expiresAtTick
+                id,
+                lineageFactionId,
+                dimension,
+                sourceLocationId,
+                targetPlayerId,
+                currentPos,
+                lastKnownTargetPos,
+                composition,
+                materializedMembers,
+                warningIssued,
+                nextWaveIndex,
+                activeWaveIndex,
+                activeWaveInitialCount,
+                waveBreakStartedTick,
+                0,
+                0,
+                -1L,
+                -1L,
+                -1L,
+                -1L,
+                false,
+                returningHome,
+                returnHomeReason,
+                returnLocationId,
+                returnPos,
+                dispatchedTick,
+                expiresAtTick
             );
         }
 
         public Raid(
-                ConvoyId id,
-                ResourceLocation lineageFactionId,
-                ResourceKey<Level> dimension,
-                HiveLocationId sourceLocationId,
-                UUID targetPlayerId,
-                Vec3 currentPos,
-                BlockPos lastKnownTargetPos,
-                EntityReserves composition,
-                Map<UUID, EntityType<?>> materializedMembers,
-                boolean warningIssued,
-                int nextWaveIndex,
-                int activeWaveIndex,
-                int activeWaveInitialCount,
-                long waveBreakStartedTick,
-                int frenziedJoinCount,
-                boolean returningHome,
-                ReturnHomeReason returnHomeReason,
-                @Nullable HiveLocationId returnLocationId,
-                @Nullable BlockPos returnPos,
-                long dispatchedTick,
-                long expiresAtTick
+            ConvoyId id,
+            ResourceLocation lineageFactionId,
+            ResourceKey<Level> dimension,
+            HiveLocationId sourceLocationId,
+            UUID targetPlayerId,
+            Vec3 currentPos,
+            BlockPos lastKnownTargetPos,
+            EntityReserves composition,
+            Map<UUID, EntityType<?>> materializedMembers,
+            boolean warningIssued,
+            int nextWaveIndex,
+            int activeWaveIndex,
+            int activeWaveInitialCount,
+            long waveBreakStartedTick,
+            int frenziedJoinCount,
+            boolean returningHome,
+            ReturnHomeReason returnHomeReason,
+            @Nullable HiveLocationId returnLocationId,
+            @Nullable BlockPos returnPos,
+            long dispatchedTick,
+            long expiresAtTick
         ) {
             this(
-                    id,
-                    lineageFactionId,
-                    dimension,
-                    sourceLocationId,
-                    targetPlayerId,
-                    currentPos,
-                    lastKnownTargetPos,
-                    composition,
-                    materializedMembers,
-                    warningIssued,
-                    nextWaveIndex,
-                    activeWaveIndex,
-                    activeWaveInitialCount,
-                    waveBreakStartedTick,
-                    frenziedJoinCount,
-                    0,
-                    -1L,
-                    -1L,
-                    -1L,
-                    -1L,
-                    false,
-                    returningHome,
-                    returnHomeReason,
-                    returnLocationId,
-                    returnPos,
-                    dispatchedTick,
-                    expiresAtTick
+                id,
+                lineageFactionId,
+                dimension,
+                sourceLocationId,
+                targetPlayerId,
+                currentPos,
+                lastKnownTargetPos,
+                composition,
+                materializedMembers,
+                warningIssued,
+                nextWaveIndex,
+                activeWaveIndex,
+                activeWaveInitialCount,
+                waveBreakStartedTick,
+                frenziedJoinCount,
+                0,
+                -1L,
+                -1L,
+                -1L,
+                -1L,
+                false,
+                returningHome,
+                returnHomeReason,
+                returnLocationId,
+                returnPos,
+                dispatchedTick,
+                expiresAtTick
             );
         }
 
         public Raid(
-                ConvoyId id,
-                ResourceLocation lineageFactionId,
-                ResourceKey<Level> dimension,
-                HiveLocationId sourceLocationId,
-                UUID targetPlayerId,
-                Vec3 currentPos,
-                BlockPos lastKnownTargetPos,
-                EntityReserves composition,
-                Map<UUID, EntityType<?>> materializedMembers,
-                boolean warningIssued,
-                int nextWaveIndex,
-                int activeWaveIndex,
-                int activeWaveInitialCount,
-                long waveBreakStartedTick,
-                int frenziedJoinCount,
-                int targetDeathCount,
-                long deathWindowStartedTick,
-                long lastTargetDeathTick,
-                long targetDownSinceTick,
-                long lossConfirmedTick,
-                boolean targetWasAlive,
-                boolean returningHome,
-                ReturnHomeReason returnHomeReason,
-                @Nullable HiveLocationId returnLocationId,
-                @Nullable BlockPos returnPos,
-                long dispatchedTick,
-                long expiresAtTick
+            ConvoyId id,
+            ResourceLocation lineageFactionId,
+            ResourceKey<Level> dimension,
+            HiveLocationId sourceLocationId,
+            UUID targetPlayerId,
+            Vec3 currentPos,
+            BlockPos lastKnownTargetPos,
+            EntityReserves composition,
+            Map<UUID, EntityType<?>> materializedMembers,
+            boolean warningIssued,
+            int nextWaveIndex,
+            int activeWaveIndex,
+            int activeWaveInitialCount,
+            long waveBreakStartedTick,
+            int frenziedJoinCount,
+            int targetDeathCount,
+            long deathWindowStartedTick,
+            long lastTargetDeathTick,
+            long targetDownSinceTick,
+            long lossConfirmedTick,
+            boolean targetWasAlive,
+            boolean returningHome,
+            ReturnHomeReason returnHomeReason,
+            @Nullable HiveLocationId returnLocationId,
+            @Nullable BlockPos returnPos,
+            long dispatchedTick,
+            long expiresAtTick
         ) {
             this.id = id;
             this.lineageFactionId = lineageFactionId;
@@ -884,6 +890,14 @@ public sealed interface Convoy {
             this.revenge = true;
         }
 
+        public boolean isRescue() {
+            return rescue;
+        }
+
+        public void markRescue() {
+            this.rescue = true;
+        }
+
         public void advanceWave() {
             nextWaveIndex++;
         }
@@ -978,9 +992,9 @@ public sealed interface Convoy {
 
         public boolean shouldStartWaveBreak() {
             return activeWaveIndex >= 0
-                    && waveBreakStartedTick < 0L
-                    && materializedMembers().isEmpty()
-                    && composition().getCount() > 0;
+                && waveBreakStartedTick < 0L
+                && materializedMembers().isEmpty()
+                && composition().getCount() > 0;
         }
 
         public void startWaveBreak(long currentTick) {
@@ -989,8 +1003,8 @@ public sealed interface Convoy {
 
         public boolean isWaveBreakActive(long currentTick, long bufferTicks) {
             return bufferTicks > 0L
-                    && waveBreakStartedTick >= 0L
-                    && currentTick < waveBreakStartedTick + bufferTicks;
+                && waveBreakStartedTick >= 0L
+                && currentTick < waveBreakStartedTick + bufferTicks;
         }
 
         public float waveBreakProgress(long currentTick, long bufferTicks) {
@@ -1039,9 +1053,9 @@ public sealed interface Convoy {
         }
 
         public void beginReturnHome(
-                @Nullable HiveLocationId locationId,
-                @Nullable BlockPos locationPos,
-                ReturnHomeReason reason
+            @Nullable HiveLocationId locationId,
+            @Nullable BlockPos locationPos,
+            ReturnHomeReason reason
         ) {
             this.returningHome = true;
             this.returnHomeReason = normalizeReturnHomeReason(reason);

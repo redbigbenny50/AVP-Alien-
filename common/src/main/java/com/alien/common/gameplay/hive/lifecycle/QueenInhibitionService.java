@@ -67,6 +67,14 @@ public final class QueenInhibitionService {
             for (var location : new ArrayList<>(lineage.locationsById().values())) {
                 if (queen.getUUID().equals(location.founderId())) {
                     location.setFounderId(null); // null founder == queenless; the growth/economy tasks expect this
+                    // Record a PENDING rescue campaign on her original hive before the link is fully lost. It stays
+                    // pending (dispatches nothing) until RescueCampaignTask sees her contained AND carried outside this
+                    // claim — capture-in-place stays frenzy, not rescue. Captor is stamped later from her damage source.
+                    if (location.rescueCampaign() == null) {
+                        location.setRescueCampaign(
+                            new com.alien.common.gameplay.hive.party.RescueCampaign(queen.getUUID())
+                        );
+                    }
                 }
                 var locationFaction = Alien.MOD.factions().get(location.id().value());
                 if (locationFaction != null) {
