@@ -92,7 +92,7 @@ public final class FirewallStabilityTask {
         var hasEggs = hasActiveOvipositor(serverLevel, location);
         var jellyOk = location.royalJelly() >= config.firewallJellyFloor();
         var populationRoomOk = CastePopulation.totalTrackedPopulation(location) < config.populationPerChunk() * location.claimedChunks()
-                .size();
+            .size();
 
         if (!(hasEggs && jellyOk && biomassIncomeOk && populationRoomOk)) {
             // Unstable — pause. Progress already accrued is preserved, we just don't add to it this cycle.
@@ -107,9 +107,9 @@ public final class FirewallStabilityTask {
             location.setFirewallBiomassSampleTick(Long.MIN_VALUE);
             location.setFirewallBiomassSampleValue(0);
             Alien.LOGGER.info(
-                    "Hive: firewall fund refilled for location {} after {} stable ticks",
-                    location.id(),
-                    accrued
+                "Hive: firewall fund refilled for location {} after {} stable ticks",
+                location.id(),
+                accrued
             );
             return;
         }

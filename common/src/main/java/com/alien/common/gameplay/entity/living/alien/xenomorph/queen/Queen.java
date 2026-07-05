@@ -89,6 +89,13 @@ public class Queen extends Xenomorph implements GOAPUser<Queen>, EggLayer {
         .canCrawl(false)
         .build();
 
+    /**
+     * Must match {@code QueenLifecyclePhaseManager}'s phase tag — its absence in a save marks a pre-lifecycle queen.
+     */
+    private static final String LIFECYCLE_PHASE_TAG = "lifecyclePhase";
+
+    private static final String LEGACY_DORMANT_TAG = "legacyDormant";
+
     public static AttributeSupplier.Builder createQueenAttributes() {
         return Alien.createAlienAttributes()
             .add(Attributes.ARMOR, 16.0F)
@@ -128,6 +135,17 @@ public class Queen extends Xenomorph implements GOAPUser<Queen>, EggLayer {
      * Transient: true while clip-digging to her location anchor (Stage 2b). Not saved — a reload never stays noclip.
      */
     private boolean digging;
+
+    /**
+     * Legacy-recovery state. A queen saved before the lifecycle system existed loads without a {@code lifecyclePhase}
+     * tag; {@link #wasLoadedWithoutLifecycleState()} reports that so {@code LegacyHiveRecovery} can treat her as a
+     * legacy queen. She is parked {@link #isLegacyDormant() legacy-dormant} until recovery wakes her via
+     * {@link #wakeFromLegacyDormantRecovery()}, which hands her back to the normal lifecycle (LOCATION phase).
+     */
+    private boolean legacyDormant;
+
+    /** Transient: set at load time when the save carried no lifecycle-phase state (a pre-lifecycle-system queen). */
+    private boolean loadedWithoutLifecycleState;
 
     public Queen(EntityType<? extends Queen> entityType, Level level) {
         super(entityType, level, CONFIG);
@@ -322,6 +340,37 @@ public class Queen extends Xenomorph implements GOAPUser<Queen>, EggLayer {
         return lifecyclePhaseManager;
     }
 
+    /**
+     * True if this queen was loaded from a save that predates the lifecycle system (no lifecycle-phase tag was
+     * present). Used by {@code LegacyHiveRecovery} to identify queens that need migrating into the current lifecycle.
+     */
+    public boolean wasLoadedWithoutLifecycleState() {
+        return loadedWithoutLifecycleState;
+    }
+
+    /** True while this queen is parked as a legacy-dormant queen awaiting recovery. */
+    public boolean isLegacyDormant() {
+        return legacyDormant;
+    }
+
+    /**
+     * Marks (or clears) this queen's legacy-dormant state. Persisted so she stays parked across reloads until woken.
+     */
+    public void setLegacyDormant(boolean dormant) {
+        this.legacyDormant = dormant;
+    }
+
+    /**
+     * Wakes a legacy-dormant queen and hands her back to the normal lifecycle: clears the dormant flag and the
+     * loaded-without-state marker, then restarts her LOCATION phase so she resumes founding/holding a hive under the
+     * current system. Safe to call on an already-awake queen (the flags simply clear and the phase restarts).
+     */
+    public void wakeFromLegacyDormantRecovery() {
+        this.legacyDormant = false;
+        this.loadedWithoutLifecycleState = false;
+        lifecyclePhaseManager.restartLocationPhase();
+    }
+
     public QueenBindManager getBindManager() {
         return bindManager;
     }
@@ -476,6 +525,12 @@ public class Queen extends Xenomorph implements GOAPUser<Queen>, EggLayer {
     @Override
     public void readAdditionalSaveData(@NotNull CompoundTag compoundTag) {
         super.readAdditionalSaveData(compoundTag);
+        // A pre-lifecycle-system save carries neither the lifecycle-phase tag nor the legacy-dormant marker. Detect
+        // that
+        // BEFORE loading the managers so LegacyHiveRecovery can migrate her.
+        this.loadedWithoutLifecycleState =
+            !compoundTag.contains(LIFECYCLE_PHASE_TAG) && !compoundTag.contains(LEGACY_DORMANT_TAG);
+        this.legacyDormant = compoundTag.getBoolean(LEGACY_DORMANT_TAG);
         ovipositorManager.load(compoundTag);
         queenData.load(compoundTag);
         lifecyclePhaseManager.load(compoundTag);
@@ -485,6 +540,7 @@ public class Queen extends Xenomorph implements GOAPUser<Queen>, EggLayer {
     @Override
     public void addAdditionalSaveData(@NotNull CompoundTag compoundTag) {
         super.addAdditionalSaveData(compoundTag);
+        compoundTag.putBoolean(LEGACY_DORMANT_TAG, legacyDormant);
         ovipositorManager.save(compoundTag);
         queenData.save(compoundTag);
         lifecyclePhaseManager.save(compoundTag);

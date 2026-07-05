@@ -59,6 +59,11 @@ public record HiveConfig(
     int baseRaidSize,
     double raidSizePerClaimedChunk,
     int raidEngageRadiusBlocks,
+    int raidFrenzyExtraMemberCap,
+    long raidLossDeathWindowTicks,
+    int raidLossDeathThreshold,
+    long raidLossDownGraceTicks,
+    long raidLossAftermathTicks,
 
     // ---------- § 8 Leadership ----------
     long empressMoltDurationTicks,
@@ -204,6 +209,11 @@ public record HiveConfig(
             4, // baseRaidSize
             0.25, // raidSizePerClaimedChunk
             32, // raidEngageRadiusBlocks
+            6, // raidFrenzyExtraMemberCap: max extra members that can frenzy-join an in-progress raid
+            30L * TICKS_PER_SECOND, // raidLossDeathWindowTicks: window for counting repeated target deaths
+            3, // raidLossDeathThreshold: target deaths within the window that confirm a raid loss
+            60L * TICKS_PER_SECOND, // raidLossDownGraceTicks: how long the target stays down before loss is confirmed
+            5L * TICKS_PER_MINUTE, // raidLossAftermathTicks: aftermath duration after a raid loss is confirmed
 
             // § 8 Leadership
             30L * TICKS_PER_SECOND, // empressMoltDurationTicks
