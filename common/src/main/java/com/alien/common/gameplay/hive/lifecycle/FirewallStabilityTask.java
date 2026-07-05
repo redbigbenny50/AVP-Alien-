@@ -36,7 +36,7 @@ import java.util.ArrayList;
  * refills the fund and clears the sample state for the next spend cycle.
  * <p>
  * A location whose fund stays spent simply remains unable to crown a new queen (see
- * {@link QueenlessMaturationTask#advanceLocation}) — no separate "permanently dead" state is introduced here; a denied
+ * {@code QueenlessMaturationTask#advanceLocation}) — no separate "permanently dead" state is introduced here; a denied
  * location eventually dies through the existing {@link LocationDormancyTask} population/no-contact rules as its economy
  * withers on its own.
  */
@@ -92,7 +92,7 @@ public final class FirewallStabilityTask {
         var hasEggs = hasActiveOvipositor(serverLevel, location);
         var jellyOk = location.royalJelly() >= config.firewallJellyFloor();
         var populationRoomOk = CastePopulation.totalTrackedPopulation(location) < config.populationPerChunk() * location.claimedChunks()
-            .size();
+                .size();
 
         if (!(hasEggs && jellyOk && biomassIncomeOk && populationRoomOk)) {
             // Unstable — pause. Progress already accrued is preserved, we just don't add to it this cycle.
@@ -107,9 +107,9 @@ public final class FirewallStabilityTask {
             location.setFirewallBiomassSampleTick(Long.MIN_VALUE);
             location.setFirewallBiomassSampleValue(0);
             Alien.LOGGER.info(
-                "Hive: firewall fund refilled for location {} after {} stable ticks",
-                location.id(),
-                accrued
+                    "Hive: firewall fund refilled for location {} after {} stable ticks",
+                    location.id(),
+                    accrued
             );
             return;
         }

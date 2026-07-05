@@ -26,8 +26,8 @@ import org.jetbrains.annotations.Nullable;
  * <li>Reads the location's current leader via
  * {@link com.alien.common.gameplay.hive.location.HiveLocationLeadership}.</li>
  * <li>If the leader UUID has changed since the last advance — either first time or because a cocoon transition produced
- * a fresh entity — resets {@link HiveLocation#queenlessLeaderSnapshot} and
- * {@link HiveLocation#queenlessMaturationLastAdvanceTick}, then waits one full interval before advancing.</li>
+ * a fresh entity — resets {@code queenlessLeaderSnapshot} and
+ * {@code queenlessMaturationLastAdvanceTick}, then waits one full interval before advancing.</li>
  * <li>Otherwise, when {@code currentTick - lastAdvanceTick >= protoHiveStageInterval}, picks the queen-track growth
  * stage and calls {@link com.alien.common.gameplay.entity.living.alien.GrowthManager#forceGrow} on the leader.</li>
  * <li>Skips while the leader is currently cocooning (let the in-flight molt finish).</li>
@@ -100,13 +100,13 @@ public final class QueenlessMaturationTask {
     }
 
     private static void advanceLocation(
-        net.minecraft.server.level.ServerLevel serverLevel,
-        com.blib.api.common.faction.v1.Faction<?> faction,
-        LineageFactionData lineage,
-        ResourceLocation lineageId,
-        HiveLocation location,
-        long currentTick,
-        long stageInterval
+            net.minecraft.server.level.ServerLevel serverLevel,
+            com.blib.api.common.faction.v1.Faction<?> faction,
+            LineageFactionData lineage,
+            ResourceLocation lineageId,
+            HiveLocation location,
+            long currentTick,
+            long stageInterval
     ) {
         var leaderId = location.leadership().getLeaderIdOrNull();
         if (leaderId == null) {
@@ -131,9 +131,9 @@ public final class QueenlessMaturationTask {
             if (entity != null && !faction.membership().hasMember(com.blib.api.common.faction.v1.FactionMember.entity(entity))) {
                 faction.membership().addEntity(entity);
                 Alien.LOGGER.info(
-                    "Hive: queenless leader {} re-joined lineage {} after cocoon transition",
-                    leaderId,
-                    lineageId
+                        "Hive: queenless leader {} re-joined lineage {} after cocoon transition",
+                        leaderId,
+                        lineageId
                 );
             }
             return;
@@ -176,20 +176,20 @@ public final class QueenlessMaturationTask {
             // conversion (queen died), or on exhaustion (3 failed attempts) — only then does crowning proceed.
             if (location.rescueCampaign() != null) {
                 Alien.LOGGER.info(
-                    "Hive: crowning held for leader {} (lineage {}) — rescue campaign still active for the lost queen",
-                    leaderId,
-                    lineageId
+                        "Hive: crowning held for leader {} (lineage {}) — rescue campaign still active for the lost queen",
+                        leaderId,
+                        lineageId
                 );
                 return;
             }
 
             if (!location.firewallFundAvailable()) {
                 Alien.LOGGER.info(
-                    "Hive: crowning denied for leader {} (lineage {}) — firewall fund still spent, {}/{} stable ticks accrued",
-                    leaderId,
-                    lineageId,
-                    location.firewallStableAccruedTicks(),
-                    config.firewallCooldownTicks()
+                        "Hive: crowning denied for leader {} (lineage {}) — firewall fund still spent, {}/{} stable ticks accrued",
+                        leaderId,
+                        lineageId,
+                        location.firewallStableAccruedTicks(),
+                        config.firewallCooldownTicks()
                 );
                 return;
             }
@@ -197,11 +197,11 @@ public final class QueenlessMaturationTask {
             var jellyCost = config.firewallCrowningJellyCost();
             if (location.royalJelly() < jellyCost) {
                 Alien.LOGGER.info(
-                    "Hive: crowning denied for leader {} (lineage {}) — insufficient royal jelly ({}/{})",
-                    leaderId,
-                    lineageId,
-                    location.royalJelly(),
-                    jellyCost
+                        "Hive: crowning denied for leader {} (lineage {}) — insufficient royal jelly ({}/{})",
+                        leaderId,
+                        lineageId,
+                        location.royalJelly(),
+                        jellyCost
                 );
                 return;
             }
@@ -216,12 +216,12 @@ public final class QueenlessMaturationTask {
         var result = xenomorph.getGrowthManager().forceGrow(stage);
         location.setQueenlessMaturationLastAdvanceTick(currentTick);
         Alien.LOGGER.info(
-            "Hive: queenless maturation advanced leader {} ({}) → {} (lineage {}); growth result {}",
-            leaderId,
-            entity.getType().builtInRegistryHolder().key().location(),
-            stage.to().builtInRegistryHolder().key().location(),
-            lineageId,
-            result.getClass().getSimpleName()
+                "Hive: queenless maturation advanced leader {} ({}) → {} (lineage {}); growth result {}",
+                leaderId,
+                entity.getType().builtInRegistryHolder().key().location(),
+                stage.to().builtInRegistryHolder().key().location(),
+                lineageId,
+                result.getClass().getSimpleName()
         );
     }
 
@@ -236,12 +236,12 @@ public final class QueenlessMaturationTask {
             return null;
         }
         return pickByPriority(
-            candidates,
-            AlienEntityTypeTags.QUEENS,
-            AlienEntityTypeTags.PRAETORIANS,
-            AlienEntityTypeTags.CRUSHERS,
-            AlienEntityTypeTags.WARRIORS,
-            AlienEntityTypeTags.PROWLERS
+                candidates,
+                AlienEntityTypeTags.QUEENS,
+                AlienEntityTypeTags.PRAETORIANS,
+                AlienEntityTypeTags.CRUSHERS,
+                AlienEntityTypeTags.WARRIORS,
+                AlienEntityTypeTags.PROWLERS
         );
     }
 
