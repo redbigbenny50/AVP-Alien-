@@ -116,15 +116,13 @@ public class Queen extends Xenomorph implements GOAPUser<Queen>, EggLayer {
 
     private final QueenBindManager bindManager;
 
-    private static final String NBT_LEGACY_DORMANT = "LegacyDormant";
+    private static final String LEGACY_DORMANT_TAG = "legacyDormant";
 
-    private static final String NBT_LEGACY_DORMANT_PREVIOUS_NO_AI = "LegacyDormantPreviousNoAi";
+    private static final String LEGACY_DORMANT_COMPAT_TAG = "LegacyDormant";
 
-    private static final String NBT_LIFECYCLE_PHASE = "lifecyclePhase";
+    private static final String LIFECYCLE_PHASE_TAG = "lifecyclePhase";
 
     private boolean legacyDormant;
-
-    private boolean legacyDormantPreviousNoAi;
 
     private boolean loadedWithoutLifecycleState;
 
@@ -152,7 +150,6 @@ public class Queen extends Xenomorph implements GOAPUser<Queen>, EggLayer {
         this.hasInhibitor = new DataAccessor<>(this, AlienDataSyncKeys.QUEEN_HAS_INHIBITOR.get());
         this.tracked = new DataAccessor<>(this, AlienDataSyncKeys.QUEEN_IS_TRACKED.get());
         this.legacyDormant = false;
-        this.legacyDormantPreviousNoAi = false;
         this.loadedWithoutLifecycleState = false;
     }
 
@@ -172,11 +169,6 @@ public class Queen extends Xenomorph implements GOAPUser<Queen>, EggLayer {
 
     @Override
     public void tick() {
-        if (legacyDormant) {
-            tickLegacyDormant();
-            return;
-        }
-
         super.tick();
         ovipositorManager.tick();
         queenData.tick();
@@ -201,19 +193,6 @@ public class Queen extends Xenomorph implements GOAPUser<Queen>, EggLayer {
                 }
             });
         }
-    }
-
-    private void tickLegacyDormant() {
-        if (!level().isClientSide) {
-            setLegacyDormantNoAi();
-            setTarget(null);
-            getNavigation().stop();
-            setDeltaMovement(Vec3.ZERO);
-            isHibernating.set(true);
-            ovipositorManager.abandonOvipositor();
-        }
-
-        super.tick();
     }
 
     @Override
@@ -427,37 +406,14 @@ public class Queen extends Xenomorph implements GOAPUser<Queen>, EggLayer {
         return loadedWithoutLifecycleState;
     }
 
-    public void setLegacyDormant(boolean legacyDormant) {
-        if (this.legacyDormant == legacyDormant) {
-            return;
-        }
-
-        if (legacyDormant) {
-            this.legacyDormantPreviousNoAi = isNoAi();
-            this.legacyDormant = true;
-            setLegacyDormantNoAi();
-            setTarget(null);
-            stopRiding();
-            isHibernating.set(true);
-            ovipositorManager.abandonOvipositor();
-            return;
-        }
-
-        this.legacyDormant = false;
-        ovipositorManager.abandonOvipositor();
-        setNoAi(legacyDormantPreviousNoAi);
-        isHibernating.set(false);
+    public void setLegacyDormant(boolean dormant) {
+        this.legacyDormant = dormant;
     }
 
     public void wakeFromLegacyDormantRecovery() {
-        setLegacyDormant(false);
-        com.alien.common.gameplay.hive.migration.LegacyHiveRecovery.onLegacyQueenAwakened(this);
-    }
-
-    private void setLegacyDormantNoAi() {
-        if (!isNoAi()) {
-            setNoAi(true);
-        }
+        this.legacyDormant = false;
+        this.loadedWithoutLifecycleState = false;
+        lifecyclePhaseManager.restartLocationPhase();
     }
 
     /**
@@ -467,7 +423,7 @@ public class Queen extends Xenomorph implements GOAPUser<Queen>, EggLayer {
      * below picks it up automatically.
      */
     public boolean isIncapacitated() {
-        return legacyDormant; // TODO(Part 2 incapacitation): include the real downed-state flag once it exists.
+        return false; // TODO(Part 2 incapacitation): return the real downed-state flag once it exists.
     }
 
     /**
@@ -524,9 +480,6 @@ public class Queen extends Xenomorph implements GOAPUser<Queen>, EggLayer {
             if (!level().isClientSide) {
                 ovipositorManager.abandonOvipositor();
             }
-            if (legacyDormant) {
-                wakeFromLegacyDormantRecovery();
-            }
             // Stage 3b: a solid hit rouses a hibernating queen (the manager filters by phase + damage threshold).
             getLifecyclePhaseManager().onHibernationDamage(amount);
         }
@@ -563,11 +516,13 @@ public class Queen extends Xenomorph implements GOAPUser<Queen>, EggLayer {
         super.readAdditionalSaveData(compoundTag);
         ovipositorManager.load(compoundTag);
         queenData.load(compoundTag);
-        loadedWithoutLifecycleState = !compoundTag.contains(NBT_LIFECYCLE_PHASE);
+        loadedWithoutLifecycleState = !compoundTag.contains(LIFECYCLE_PHASE_TAG)
+            && !compoundTag.contains(LEGACY_DORMANT_TAG)
+            && !compoundTag.contains(LEGACY_DORMANT_COMPAT_TAG);
         lifecyclePhaseManager.load(compoundTag);
         bindManager.load(compoundTag);
-        legacyDormant = compoundTag.getBoolean(NBT_LEGACY_DORMANT);
-        legacyDormantPreviousNoAi = compoundTag.getBoolean(NBT_LEGACY_DORMANT_PREVIOUS_NO_AI);
+        legacyDormant = compoundTag.getBoolean(LEGACY_DORMANT_TAG)
+            || compoundTag.getBoolean(LEGACY_DORMANT_COMPAT_TAG);
     }
 
     @Override
@@ -577,8 +532,7 @@ public class Queen extends Xenomorph implements GOAPUser<Queen>, EggLayer {
         queenData.save(compoundTag);
         lifecyclePhaseManager.save(compoundTag);
         bindManager.save(compoundTag);
-        compoundTag.putBoolean(NBT_LEGACY_DORMANT, legacyDormant);
-        compoundTag.putBoolean(NBT_LEGACY_DORMANT_PREVIOUS_NO_AI, legacyDormantPreviousNoAi);
+        compoundTag.putBoolean(LEGACY_DORMANT_TAG, legacyDormant);
     }
 
     public static EntityType<? extends Alien> getType(AlienVariant alienVariant) {
