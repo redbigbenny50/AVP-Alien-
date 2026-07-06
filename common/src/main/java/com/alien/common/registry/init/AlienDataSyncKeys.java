@@ -208,6 +208,12 @@ public class AlienDataSyncKeys {
             .build(false)
     );
 
+    public static final BLibHolder<DataSyncKey<Boolean>> XENOMORPH_IS_DIGGING = create(
+        "xenomorph_is_digging",
+        builder -> builder.networkSynchronized(StreamCodecs.BOOLEAN)
+            .build(false)
+    );
+
     public static final BLibHolder<DataSyncKey<Boolean>> XENOMORPH_IS_CRAWLING = create(
         "xenomorph_is_crawling",
         builder -> builder.networkSynchronized(StreamCodecs.BOOLEAN)

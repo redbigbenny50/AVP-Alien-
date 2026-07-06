@@ -184,6 +184,14 @@ public final class HiveLocationFoundingService {
                 );
             }
         }
+
+        // Structure system: stamp queen-chamber roles onto the claimed core and register its royal exits as frontier
+        // sockets for the growth planner to grow from.
+        com.alien.common.gameplay.hive.structure.HiveStructureFounding.establishQueenChamber(
+            level.getServer(),
+            location,
+            centerChunk
+        );
     }
 
     private static void addInitialCoreOffline(HiveLocation location, ChunkPos centerChunk, long currentGameTime) {

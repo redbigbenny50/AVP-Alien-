@@ -145,6 +145,9 @@ public abstract class Xenomorph extends Alien implements ResinProducer, EntitySe
     /** Queen-only in use: true while she is hibernating (front-end Stage 3); drives the client hibernate pose. */
     public final DataAccessor<Boolean> isHibernating;
 
+    /** Queen-only in use: true while she is clip-digging to her anchor; drives the client dig animation. */
+    public final DataAccessor<Boolean> isDiggingSynced;
+
     public final DataAccessor<Integer> cocoonAnimationId;
 
     protected final CrawlingManager crawlingManager;
@@ -200,6 +203,7 @@ public abstract class Xenomorph extends Alien implements ResinProducer, EntitySe
         this.cocoonState = new DataAccessor<>(this, AlienDataSyncKeys.XENOMORPH_COCOON_STATE.get());
         this.cocoonSourceForm = new DataAccessor<>(this, AlienDataSyncKeys.XENOMORPH_COCOON_SOURCE_FORM.get());
         this.isHibernating = new DataAccessor<>(this, AlienDataSyncKeys.XENOMORPH_IS_HIBERNATING.get());
+        this.isDiggingSynced = new DataAccessor<>(this, AlienDataSyncKeys.XENOMORPH_IS_DIGGING.get());
         this.cocoonAnimationId = new DataAccessor<>(this, AlienDataSyncKeys.XENOMORPH_COCOON_ANIMATION_ID.get());
 
         this.crawlingManager = new CrawlingManager(this, isCrawling, config.canCrawl());

@@ -30,6 +30,9 @@ public class QueenAnimator extends AzEntityAnimator<Queen> {
 
     private int previousAttackId = Integer.MIN_VALUE;
 
+    /** Edge-detects the digging state so digdown/digup one-shots fire once on start/stop. */
+    private boolean previousDigging = false;
+
     private final CocoonAnimationStateTracker<Queen> cocoonAnimationStateTracker =
         new CocoonAnimationStateTracker<>(QueenAnimator::selectLoopAnimation, QueenAnimator::selectEmergeAnimation);
 
@@ -125,6 +128,25 @@ public class QueenAnimator extends AzEntityAnimator<Queen> {
         // synced flag because the lifecycle phase is server-only state — animation dispatch must happen client-side.
         if (queen.isHibernating.get()) {
             dispatcher.hibernate();
+            return;
+        }
+
+        // Vertical dig (Stage 2b clip-dig to anchor): digdown one-shot on start, digging loop while descending, digup
+        // one-shot on stop. Driven off the synced flag since the digging state is server-only. The one-shots fire on
+        // the rising/falling edge; the loop holds in between.
+        boolean diggingNow = queen.isDiggingSynced.get();
+        if (diggingNow && !previousDigging) {
+            dispatcher.digDown();
+            previousDigging = true;
+            return;
+        }
+        if (!diggingNow && previousDigging) {
+            dispatcher.digUp();
+            previousDigging = false;
+            return;
+        }
+        if (diggingNow) {
+            dispatcher.digging();
             return;
         }
 

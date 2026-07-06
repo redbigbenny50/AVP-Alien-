@@ -7,6 +7,9 @@ import com.blib.api.client.animation.v1.command.policy.AzDispatchMode;
 
 public class QueenAnimationDispatcher {
 
+    /** Dig loops (digging, stand_digging) play at 70% speed per design - slowed in-game, not in the model. */
+    private static final float DIG_ANIMATION_SPEED = 0.7F;
+
     private static final AzCommand<Queen> IDLE = AzCommand.<Queen>idempotent()
         .play(AzAlienAnimationUtil.BODY, QueenAnimationRefs.IDLE_ANIMATION_NAME, AzPlayBehaviors.LOOP)
         .build();
@@ -95,6 +98,91 @@ public class QueenAnimationDispatcher {
 
     public void walk() {
         WALK.dispatchForEntity(queen);
+    }
+
+    // ---- Vertical dig sequence (descend to anchor Y): digdown (once, hold) -> digging (loop @70%) -> digup (once)
+    // ----
+
+    /** One-shot: she plants and starts burrowing straight down. Holds on the last frame into the digging loop. */
+    public void digDown() {
+        AzCommand.<Queen>replay()
+            .play(AzAlienAnimationUtil.BODY, QueenAnimationRefs.DIG_DOWN_ANIMATION_NAME, AzPlayBehaviors.HOLD_ON_LAST_FRAME)
+            .build()
+            .dispatchForEntity(queen);
+    }
+
+    /** Looping vertical dig, played at 70% speed per design. Idempotent so it isn't restarted every tick. */
+    public void digging() {
+        AzAlienAnimationUtil.singleWithSpeed(
+            AzAlienAnimationUtil.BODY,
+            QueenAnimationRefs.DIGGING_ANIMATION_NAME,
+            AzPlayBehaviors.LOOP,
+            AzDispatchMode.PLAY_IF_NOT_PLAYING,
+            DIG_ANIMATION_SPEED
+        ).dispatchForEntity(queen);
+    }
+
+    /** One-shot: she pulls up out of the dig and returns toward idle. */
+    public void digUp() {
+        AzCommand.<Queen>replay()
+            .play(AzAlienAnimationUtil.BODY, QueenAnimationRefs.DIG_UP_ANIMATION_NAME, AzPlayBehaviors.PLAY_ONCE)
+            .build()
+            .dispatchForEntity(queen);
+    }
+
+    // ---- Standing/horizontal dig (also room carving): start (once) -> stand_digging (loop @70%) -> stop (once) ----
+
+    /** One-shot: she raises her hands to begin a horizontal dig. */
+    public void digStandStart() {
+        AzCommand.<Queen>replay()
+            .play(AzAlienAnimationUtil.BODY, QueenAnimationRefs.DIG_STAND_START_ANIMATION_NAME, AzPlayBehaviors.PLAY_ONCE)
+            .build()
+            .dispatchForEntity(queen);
+    }
+
+    /** Looping horizontal dig (digging outward / carving a room), played at 70% speed per design. */
+    public void standDigging() {
+        AzAlienAnimationUtil.singleWithSpeed(
+            AzAlienAnimationUtil.BODY,
+            QueenAnimationRefs.STAND_DIGGING_ANIMATION_NAME,
+            AzPlayBehaviors.LOOP,
+            AzDispatchMode.PLAY_IF_NOT_PLAYING,
+            DIG_ANIMATION_SPEED
+        ).dispatchForEntity(queen);
+    }
+
+    /** One-shot: she lowers her arms back to idle after a horizontal dig. */
+    public void digStandStop() {
+        AzCommand.<Queen>replay()
+            .play(AzAlienAnimationUtil.BODY, QueenAnimationRefs.DIG_STAND_STOP_ANIMATION_NAME, AzPlayBehaviors.PLAY_ONCE)
+            .build()
+            .dispatchForEntity(queen);
+    }
+
+    // ---- Incapacitated sequence: drop (once) -> incapacitated (loop) -> rise (once) ----
+
+    /** One-shot: 0-hp collapse into the incapacitated pose. */
+    public void incapacitatedDrop() {
+        AzCommand.<Queen>replay()
+            .play(AzAlienAnimationUtil.BODY, QueenAnimationRefs.INCAPACITATED_DROP_ANIMATION_NAME, AzPlayBehaviors.PLAY_ONCE)
+            .build()
+            .dispatchForEntity(queen);
+    }
+
+    /** One-shot: she awakens from incapacitation back toward idle. */
+    public void incapacitatedRise() {
+        AzCommand.<Queen>replay()
+            .play(AzAlienAnimationUtil.BODY, QueenAnimationRefs.INCAPACITATED_RISE_ANIMATION_NAME, AzPlayBehaviors.PLAY_ONCE)
+            .build()
+            .dispatchForEntity(queen);
+    }
+
+    /** Looping struggle while fully chained (4 chains) but not yet inhibited (no eggsack). */
+    public void boundStruggle() {
+        AzCommand.<Queen>idempotent()
+            .play(AzAlienAnimationUtil.BODY, QueenAnimationRefs.BOUND_STRUGGLE_ANIMATION_NAME, AzPlayBehaviors.LOOP)
+            .build()
+            .dispatchForEntity(queen);
     }
 
     public void backhandAttack() {

@@ -104,7 +104,7 @@ public class Queen extends Xenomorph implements GOAPUser<Queen>, EggLayer {
             .add(Attributes.FOLLOW_RANGE, 35F)
             .add(Attributes.KNOCKBACK_RESISTANCE, 1f)
             .add(Attributes.MAX_HEALTH, PlayerStatConstants.BASE_HEALTH * 10F)
-            .add(Attributes.MOVEMENT_SPEED, PlayerStatConstants.BASE_WALK_SPEED * 0.9F);
+            .add(Attributes.MOVEMENT_SPEED, PlayerStatConstants.BASE_WALK_SPEED * 1.1F);
     }
 
     private final QueenAnimationDispatcher animationDispatcher;
@@ -477,6 +477,7 @@ public class Queen extends Xenomorph implements GOAPUser<Queen>, EggLayer {
         this.digging = digging;
         this.noPhysics = digging;
         setNoGravity(digging);
+        isDiggingSynced.set(digging);
     }
 
     @Override

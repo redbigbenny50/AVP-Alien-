@@ -32,7 +32,23 @@ public class JellyVatBlockEntity extends BlockEntity {
 
     private static final String TAG_FILL_LEVEL = "FillLevel";
 
+    private static final String TAG_COMMITTED = "TypeCommitted";
+
+    private static final String TAG_HIVE_VISIBLE = "HiveVisible";
+
     private int fillLevel;
+
+    /**
+     * Whether this vat's jelly type is locked in. A freshly player-placed vat starts uncommitted and accepts either
+     * royal or scourge on its first fill; that first fill commits the type. Emptying the vat (player withdrawal) clears
+     * the commitment so it can be re-typed. Structure-placed vats are committed the moment they hold jelly.
+     */
+    private boolean typeCommitted;
+
+    /**
+     * Whether the hive may see this vat as jelly storage. Set for player-placed vats; consumed by the (future) economy.
+     */
+    private boolean hiveVisible;
 
     public JellyVatBlockEntity(BlockPos pos, BlockState state) {
         super(AlienBlockEntityTypes.JELLY_VAT.get(), pos, state);
@@ -40,6 +56,20 @@ public class JellyVatBlockEntity extends BlockEntity {
 
     public int getFillLevel() {
         return fillLevel;
+    }
+
+    public boolean isTypeCommitted() {
+        return typeCommitted;
+    }
+
+    public boolean isHiveVisible() {
+        return hiveVisible;
+    }
+
+    /** Marks this vat as hive-visible storage (groundwork; the jelly economy will consume this later). */
+    public void setHiveVisible(boolean hiveVisible) {
+        this.hiveVisible = hiveVisible;
+        setChanged();
     }
 
     /** The jelly type this vat holds, read from its block state. */
@@ -85,16 +115,48 @@ public class JellyVatBlockEntity extends BlockEntity {
         return fillLevel <= 0;
     }
 
+    /**
+     * Commits this vat to a jelly type (updates the block-state property and locks it). Called on the first fill of an
+     * uncommitted vat. No-op if already committed to that type; ignored if the requested type differs from a committed
+     * one (callers should check {@link #canAccept(JellyType)} first).
+     */
+    public void commitType(JellyType type) {
+        if (typeCommitted && getJellyType() == type) {
+            return;
+        }
+        this.typeCommitted = true;
+        if (level != null && getJellyType() != type) {
+            level.setBlock(getBlockPos(), getBlockState().setValue(JellyVatBlock.JELLY_TYPE, type), Block.UPDATE_CLIENTS);
+        }
+        setChanged();
+    }
+
+    /** True if this vat can accept the given jelly type: either uncommitted, or committed to that same type. */
+    public boolean canAccept(JellyType type) {
+        return !typeCommitted || getJellyType() == type;
+    }
+
+    /** Empties the vat and clears its type commitment so it can be re-typed. Plays the drain sound if it held jelly. */
+    public void emptyAndUncommit() {
+        setFillLevel(0);
+        this.typeCommitted = false;
+        setChanged();
+    }
+
     @Override
     protected void loadAdditional(@NotNull CompoundTag tag, @NotNull HolderLookup.Provider registries) {
         super.loadAdditional(tag, registries);
         this.fillLevel = Math.max(0, Math.min(MAX_FILL, tag.getInt(TAG_FILL_LEVEL)));
+        this.typeCommitted = tag.getBoolean(TAG_COMMITTED);
+        this.hiveVisible = tag.getBoolean(TAG_HIVE_VISIBLE);
     }
 
     @Override
     protected void saveAdditional(@NotNull CompoundTag tag, @NotNull HolderLookup.Provider registries) {
         super.saveAdditional(tag, registries);
         tag.putInt(TAG_FILL_LEVEL, fillLevel);
+        tag.putBoolean(TAG_COMMITTED, typeCommitted);
+        tag.putBoolean(TAG_HIVE_VISIBLE, hiveVisible);
     }
 
     @Override

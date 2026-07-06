@@ -37,6 +37,20 @@ public record HivePiece(
         return footprintChunksX == 1 && footprintChunksZ == 1;
     }
 
+    /** Footprint width (chunks) after the given rotation - X and Z swap under a 90 or 270 degree turn. */
+    public int rotatedFootprintX(Rotation rotation) {
+        return swapsAxes(rotation) ? footprintChunksZ : footprintChunksX;
+    }
+
+    /** Footprint depth (chunks) after the given rotation - X and Z swap under a 90 or 270 degree turn. */
+    public int rotatedFootprintZ(Rotation rotation) {
+        return swapsAxes(rotation) ? footprintChunksX : footprintChunksZ;
+    }
+
+    private static boolean swapsAxes(Rotation rotation) {
+        return rotation == Rotation.CLOCKWISE_90 || rotation == Rotation.COUNTERCLOCKWISE_90;
+    }
+
     /** This piece's sockets as they sit after the given rotation - used to test orientations against a frontier. */
     public List<DoorwaySocket> socketsRotated(Rotation rotation) {
         return sockets.stream()
