@@ -23,6 +23,7 @@ public class EnUsBlockProvider {
         addBlock(builder, AlienBlocks.ROYAL_JELLY_BLOCK, "Royal Jelly Block");
         addBlock(builder, AlienBlocks.SCOURGE_JELLY_BLOCK, "Scourge Jelly Block");
         addBlock(builder, AlienBlocks.ANCHOR, "Anchor");
+        addBlock(builder, AlienBlocks.JELLY_VAT, "Jelly Vat");
 
         addBlock(builder, AberrantAlienResinBlocks.ABERRANT_RESIN, "Aberrant Resin");
         addBlock(builder, AberrantAlienResinBlocks.ABERRANT_RESIN_BRICKS, "Aberrant Resin Bricks");
@@ -156,9 +157,9 @@ public class EnUsBlockProvider {
     };
 
     private static void addBlock(
-        FabricLanguageProvider.TranslationBuilder translationBuilder,
-        Supplier<? extends Block> blockSupplier,
-        String value
+            FabricLanguageProvider.TranslationBuilder translationBuilder,
+            Supplier<? extends Block> blockSupplier,
+            String value
     ) {
         addBlock(translationBuilder, blockSupplier.get(), value);
     }

@@ -28,9 +28,11 @@ import java.util.List;
  */
 public final class HivePieceParser {
 
-    private static final String JELLY_ROYAL_VAT_BLOCK = "avp_alien:royal_jelly_vat";
+    private static final String JELLY_VAT_BLOCK = "avp_alien:jelly_vat";
 
-    private static final String JELLY_SCOURGE_VAT_BLOCK = "avp_alien:scourge_jelly_vat";
+    private static final String JELLY_TYPE_PROPERTY = "jelly_type";
+
+    private static final String JELLY_TYPE_SCOURGE = "scourge";
 
     private static final String TENDRIL_BLOCK = "avp_alien:resin_tendril";
 
@@ -85,8 +87,14 @@ public final class HivePieceParser {
                     }
                 }
                 case VENT_BLOCK -> vents.add(pos);
-                case JELLY_ROYAL_VAT_BLOCK -> royalVats.add(pos);
-                case JELLY_SCOURGE_VAT_BLOCK -> scourgeVats.add(pos);
+                case JELLY_VAT_BLOCK -> {
+                    // One vat block; its jelly_type palette property sorts it into royal vs scourge.
+                    if (JELLY_TYPE_SCOURGE.equals(paletteProperty(palette, stateIdx, JELLY_TYPE_PROPERTY))) {
+                        scourgeVats.add(pos);
+                    } else {
+                        royalVats.add(pos);
+                    }
+                }
                 default -> { /* structural block - ignored */ }
             }
         }
@@ -109,6 +117,18 @@ public final class HivePieceParser {
             return "";
         }
         return palette.getCompound(stateIdx).getString("Name");
+    }
+
+    /** A palette entry's block-state property value, or "" if absent. */
+    private static String paletteProperty(ListTag palette, int stateIdx, String property) {
+        if (stateIdx < 0 || stateIdx >= palette.size()) {
+            return "";
+        }
+        var entry = palette.getCompound(stateIdx);
+        if (!entry.contains("Properties", net.minecraft.nbt.Tag.TAG_COMPOUND)) {
+            return "";
+        }
+        return entry.getCompound("Properties").getString(property);
     }
 
     /**
