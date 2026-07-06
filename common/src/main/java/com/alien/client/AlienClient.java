@@ -15,6 +15,7 @@ import com.alien.client.render.armor.PlatedIrradiatedChitinArmorRenderer;
 import com.alien.client.render.armor.PlatedNetherChitinArmorRenderer;
 import com.alien.client.render.block.AnchorBlockEntityRenderer;
 import com.alien.client.render.block.CrusherHeadBlockEntityRenderer;
+import com.alien.client.render.block.JellyVatBlockEntityRenderer;
 import com.alien.client.render.block.QueenHeadBlockEntityRenderer;
 import com.alien.client.render.block.XenomorphHeadBlockEntityRenderer;
 import com.alien.client.render.entity.AcidRenderer;
@@ -413,6 +414,11 @@ public class AlienClient {
             .registerBlockEntityRenderer(
                 AlienBlockEntityTypes.ANCHOR,
                 ctx -> new AnchorBlockEntityRenderer()
+            );
+        MOD.registries()
+            .registerBlockEntityRenderer(
+                AlienBlockEntityTypes.JELLY_VAT,
+                ctx -> new JellyVatBlockEntityRenderer()
             );
     }
 

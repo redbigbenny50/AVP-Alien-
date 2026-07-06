@@ -157,9 +157,9 @@ public class EnUsBlockProvider {
     };
 
     private static void addBlock(
-            FabricLanguageProvider.TranslationBuilder translationBuilder,
-            Supplier<? extends Block> blockSupplier,
-            String value
+        FabricLanguageProvider.TranslationBuilder translationBuilder,
+        Supplier<? extends Block> blockSupplier,
+        String value
     ) {
         addBlock(translationBuilder, blockSupplier.get(), value);
     }

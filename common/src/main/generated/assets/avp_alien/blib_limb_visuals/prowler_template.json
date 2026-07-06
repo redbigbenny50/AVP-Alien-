@@ -62,11 +62,6 @@
     },
     "avp_alien:prowler_tail": {
       "root_bone": "gTail1",
-      "render_offset": [
-        0,
-        0.45,
-        0
-      ],
       "bone_transforms": {
         "gTail1": {
           "rotation": [

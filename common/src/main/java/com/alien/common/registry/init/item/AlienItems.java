@@ -34,26 +34,26 @@ public class AlienItems {
     public static final BLibRegistry<Item> REGISTRY = Alien.MOD.registries().create(BuiltInRegistries.ITEM);
 
     private static final BLibDecoratedPotPatternRegistry DECORATED_POT_PATTERN_REGISTRY = Alien.MOD.registries()
-            .createDecoratedPotPatternRegistry();
+        .createDecoratedPotPatternRegistry();
 
     public static final BLibHolder<Item> ABERRANT_CHITIN = create(
-            "aberrant_chitin",
-            new Item.Properties()
+        "aberrant_chitin",
+        new Item.Properties()
     );
 
     public static final BLibHolder<Item> ABERRANT_RESIN_BALL = create(
-            "aberrant_resin_ball",
-            new Item.Properties()
+        "aberrant_resin_ball",
+        new Item.Properties()
     );
 
     public static final BLibHolder<Item> ALIEN_MUSIC_DISC_1 = create(
-            "alien_music_disc_1",
-            new Item.Properties().stacksTo(1).rarity(Rarity.RARE).jukeboxPlayable(AlienJukeboxSongKeys.ALIEN_MUSIC_1)
+        "alien_music_disc_1",
+        new Item.Properties().stacksTo(1).rarity(Rarity.RARE).jukeboxPlayable(AlienJukeboxSongKeys.ALIEN_MUSIC_1)
     );
 
     public static final BLibHolder<Item> ALIEN_MUSIC_DISC_1_FRAGMENT = create(
-            "alien_music_disc_1_fragment",
-            () -> new DiscFragmentItem(new Item.Properties())
+        "alien_music_disc_1_fragment",
+        () -> new DiscFragmentItem(new Item.Properties())
     );
 
     public static final BLibHolder<Item> CHITIN = create("chitin");
@@ -65,8 +65,8 @@ public class AlienItems {
     public static final BLibHolder<Item> NETHER_CHITIN = create("nether_chitin", new Item.Properties().fireResistant());
 
     public static final BLibHolder<Item> NETHER_RESIN_BALL = create(
-            "nether_resin_ball",
-            new Item.Properties().fireResistant()
+        "nether_resin_ball",
+        new Item.Properties().fireResistant()
     );
 
     public static final BLibHolder<Item> OVOID_POTTERY_SHERD = create("ovoid_pottery_sherd");
@@ -76,159 +76,159 @@ public class AlienItems {
     public static final BLibHolder<Item> PLATED_CHITIN = create("plated_chitin");
 
     public static final BLibHolder<Item> PLATED_ABERRANT_CHITIN = create(
-            "plated_aberrant_chitin",
-            new Item.Properties()
+        "plated_aberrant_chitin",
+        new Item.Properties()
     );
 
     public static final BLibHolder<Item> PLATED_IRRADIATED_CHITIN = create("plated_irradiated_chitin");
 
     public static final BLibHolder<Item> PLATED_NETHER_CHITIN = create(
-            "plated_nether_chitin",
-            new Item.Properties().fireResistant()
+        "plated_nether_chitin",
+        new Item.Properties().fireResistant()
     );
 
     public static final BLibHolder<Item> POISON_JELLY = create("poison_jelly", PoisonJellyItem::new);
 
     public static final BLibHolder<Item> ANCHOR = create(
-            "anchor",
-            () -> new BlockItem(AlienBlocks.ANCHOR.get(), new Item.Properties())
+        "anchor",
+        () -> new BlockItem(AlienBlocks.ANCHOR.get(), new Item.Properties())
     );
 
     public static final BLibHolder<Item> JELLY_VAT = create(
-            "jelly_vat",
-            () -> new BlockItem(AlienBlocks.JELLY_VAT.get(), new Item.Properties())
+        "jelly_vat",
+        () -> new BlockItem(AlienBlocks.JELLY_VAT.get(), new Item.Properties())
     );
 
     public static final BLibHolder<Item> CAPTURE_CHAIN = create(
-            "capture_chain",
-            () -> new CaptureChainItem(new Item.Properties())
+        "capture_chain",
+        () -> new CaptureChainItem(new Item.Properties())
     );
 
     public static final BLibHolder<Item> INHIBITOR = create(
-            "inhibitor",
-            () -> new InhibitorItem(new Item.Properties().stacksTo(16))
+        "inhibitor",
+        () -> new InhibitorItem(new Item.Properties().stacksTo(16))
     );
 
     public static final BLibHolder<Item> TRACKER = create(
-            "tracker",
-            () -> new TrackerItem(new Item.Properties().stacksTo(16))
+        "tracker",
+        () -> new TrackerItem(new Item.Properties().stacksTo(16))
     );
 
     public static final BLibHolder<Item> TRACKING_PDA = create(
-            "tracking_pda",
-            () -> new TrackingPdaItem(new Item.Properties().stacksTo(1))
+        "tracking_pda",
+        () -> new TrackingPdaItem(new Item.Properties().stacksTo(1))
     );
 
     public static final BLibHolder<Item> QUEEN_HEAD = create(
-            "queen_head",
-            () -> new QueenHeadItem(
-                    AlienBlocks.QUEEN_HEAD.get(),
-                    AlienBlocks.QUEEN_WALL_HEAD.get(),
-                    new Item.Properties().stacksTo(1)
-            )
+        "queen_head",
+        () -> new QueenHeadItem(
+            AlienBlocks.QUEEN_HEAD.get(),
+            AlienBlocks.QUEEN_WALL_HEAD.get(),
+            new Item.Properties().stacksTo(1)
+        )
     );
 
     public static final BLibHolder<Item> ABERRANT_QUEEN_HEAD = create(
-            "aberrant_queen_head",
-            () -> new QueenHeadItem(
-                    AlienBlocks.ABERRANT_QUEEN_HEAD.get(),
-                    AlienBlocks.ABERRANT_QUEEN_WALL_HEAD.get(),
-                    new Item.Properties().stacksTo(1)
-            )
+        "aberrant_queen_head",
+        () -> new QueenHeadItem(
+            AlienBlocks.ABERRANT_QUEEN_HEAD.get(),
+            AlienBlocks.ABERRANT_QUEEN_WALL_HEAD.get(),
+            new Item.Properties().stacksTo(1)
+        )
     );
 
     public static final BLibHolder<Item> IRRADIATED_QUEEN_HEAD = create(
-            "irradiated_queen_head",
-            () -> new QueenHeadItem(
-                    AlienBlocks.IRRADIATED_QUEEN_HEAD.get(),
-                    AlienBlocks.IRRADIATED_QUEEN_WALL_HEAD.get(),
-                    new Item.Properties().stacksTo(1)
-            )
+        "irradiated_queen_head",
+        () -> new QueenHeadItem(
+            AlienBlocks.IRRADIATED_QUEEN_HEAD.get(),
+            AlienBlocks.IRRADIATED_QUEEN_WALL_HEAD.get(),
+            new Item.Properties().stacksTo(1)
+        )
     );
 
     public static final BLibHolder<Item> NETHER_QUEEN_HEAD = create(
-            "nether_queen_head",
-            () -> new QueenHeadItem(
-                    AlienBlocks.NETHER_QUEEN_HEAD.get(),
-                    AlienBlocks.NETHER_QUEEN_WALL_HEAD.get(),
-                    new Item.Properties().stacksTo(1).fireResistant()
-            )
+        "nether_queen_head",
+        () -> new QueenHeadItem(
+            AlienBlocks.NETHER_QUEEN_HEAD.get(),
+            AlienBlocks.NETHER_QUEEN_WALL_HEAD.get(),
+            new Item.Properties().stacksTo(1).fireResistant()
+        )
     );
 
     public static final BLibHolder<Item> QUEEN_HEAD_SHIELD = create(
-            "queen_head_shield",
-            () -> new QueenHeadShieldItem(new Item.Properties().stacksTo(1).durability(512))
+        "queen_head_shield",
+        () -> new QueenHeadShieldItem(new Item.Properties().stacksTo(1).durability(512))
     );
 
     public static final BLibHolder<Item> ABERRANT_QUEEN_HEAD_SHIELD = create(
-            "aberrant_queen_head_shield",
-            () -> new QueenHeadShieldItem(new Item.Properties().stacksTo(1).durability(512))
+        "aberrant_queen_head_shield",
+        () -> new QueenHeadShieldItem(new Item.Properties().stacksTo(1).durability(512))
     );
 
     public static final BLibHolder<Item> IRRADIATED_QUEEN_HEAD_SHIELD = create(
-            "irradiated_queen_head_shield",
-            () -> new QueenHeadShieldItem(new Item.Properties().stacksTo(1).durability(512))
+        "irradiated_queen_head_shield",
+        () -> new QueenHeadShieldItem(new Item.Properties().stacksTo(1).durability(512))
     );
 
     public static final BLibHolder<Item> NETHER_QUEEN_HEAD_SHIELD = create(
-            "nether_queen_head_shield",
-            () -> new QueenHeadShieldItem(new Item.Properties().stacksTo(1).durability(512).fireResistant())
+        "nether_queen_head_shield",
+        () -> new QueenHeadShieldItem(new Item.Properties().stacksTo(1).durability(512).fireResistant())
     );
 
     public static final BLibHolder<Item> CRUSHER_HEAD = create(
-            "crusher_head",
-            () -> new CrusherHeadItem(
-                    AlienBlocks.CRUSHER_HEAD.get(),
-                    AlienBlocks.CRUSHER_WALL_HEAD.get(),
-                    new Item.Properties().stacksTo(1)
-            )
+        "crusher_head",
+        () -> new CrusherHeadItem(
+            AlienBlocks.CRUSHER_HEAD.get(),
+            AlienBlocks.CRUSHER_WALL_HEAD.get(),
+            new Item.Properties().stacksTo(1)
+        )
     );
 
     public static final BLibHolder<Item> ABERRANT_CRUSHER_HEAD = create(
-            "aberrant_crusher_head",
-            () -> new CrusherHeadItem(
-                    AlienBlocks.ABERRANT_CRUSHER_HEAD.get(),
-                    AlienBlocks.ABERRANT_CRUSHER_WALL_HEAD.get(),
-                    new Item.Properties().stacksTo(1)
-            )
+        "aberrant_crusher_head",
+        () -> new CrusherHeadItem(
+            AlienBlocks.ABERRANT_CRUSHER_HEAD.get(),
+            AlienBlocks.ABERRANT_CRUSHER_WALL_HEAD.get(),
+            new Item.Properties().stacksTo(1)
+        )
     );
 
     public static final BLibHolder<Item> IRRADIATED_CRUSHER_HEAD = create(
-            "irradiated_crusher_head",
-            () -> new CrusherHeadItem(
-                    AlienBlocks.IRRADIATED_CRUSHER_HEAD.get(),
-                    AlienBlocks.IRRADIATED_CRUSHER_WALL_HEAD.get(),
-                    new Item.Properties().stacksTo(1)
-            )
+        "irradiated_crusher_head",
+        () -> new CrusherHeadItem(
+            AlienBlocks.IRRADIATED_CRUSHER_HEAD.get(),
+            AlienBlocks.IRRADIATED_CRUSHER_WALL_HEAD.get(),
+            new Item.Properties().stacksTo(1)
+        )
     );
 
     public static final BLibHolder<Item> NETHER_CRUSHER_HEAD = create(
-            "nether_crusher_head",
-            () -> new CrusherHeadItem(
-                    AlienBlocks.NETHER_CRUSHER_HEAD.get(),
-                    AlienBlocks.NETHER_CRUSHER_WALL_HEAD.get(),
-                    new Item.Properties().stacksTo(1).fireResistant()
-            )
+        "nether_crusher_head",
+        () -> new CrusherHeadItem(
+            AlienBlocks.NETHER_CRUSHER_HEAD.get(),
+            AlienBlocks.NETHER_CRUSHER_WALL_HEAD.get(),
+            new Item.Properties().stacksTo(1).fireResistant()
+        )
     );
 
     public static final BLibHolder<Item> CRUSHER_HEAD_SHIELD = create(
-            "crusher_head_shield",
-            () -> new CrusherHeadShieldItem(new Item.Properties().stacksTo(1).durability(512))
+        "crusher_head_shield",
+        () -> new CrusherHeadShieldItem(new Item.Properties().stacksTo(1).durability(512))
     );
 
     public static final BLibHolder<Item> ABERRANT_CRUSHER_HEAD_SHIELD = create(
-            "aberrant_crusher_head_shield",
-            () -> new CrusherHeadShieldItem(new Item.Properties().stacksTo(1).durability(512))
+        "aberrant_crusher_head_shield",
+        () -> new CrusherHeadShieldItem(new Item.Properties().stacksTo(1).durability(512))
     );
 
     public static final BLibHolder<Item> IRRADIATED_CRUSHER_HEAD_SHIELD = create(
-            "irradiated_crusher_head_shield",
-            () -> new CrusherHeadShieldItem(new Item.Properties().stacksTo(1).durability(512))
+        "irradiated_crusher_head_shield",
+        () -> new CrusherHeadShieldItem(new Item.Properties().stacksTo(1).durability(512))
     );
 
     public static final BLibHolder<Item> NETHER_CRUSHER_HEAD_SHIELD = create(
-            "nether_crusher_head_shield",
-            () -> new CrusherHeadShieldItem(new Item.Properties().stacksTo(1).durability(512).fireResistant())
+        "nether_crusher_head_shield",
+        () -> new CrusherHeadShieldItem(new Item.Properties().stacksTo(1).durability(512).fireResistant())
     );
 
     public static final BLibHolder<Item> RAW_ROYAL_JELLY = create("raw_royal_jelly");
@@ -246,18 +246,18 @@ public class AlienItems {
     }
 
     static BLibHolder<Item> createXenomorphHead(
-            String name,
-            Supplier<? extends Block> standingBlock,
-            Supplier<? extends Block> wallBlock,
-            boolean fireResistant
+        String name,
+        Supplier<? extends Block> standingBlock,
+        Supplier<? extends Block> wallBlock,
+        boolean fireResistant
     ) {
         return create(
-                name,
-                () -> new XenomorphHeadItem(
-                        standingBlock.get(),
-                        wallBlock.get(),
-                        xenomorphHeadProperties(fireResistant)
-                )
+            name,
+            () -> new XenomorphHeadItem(
+                standingBlock.get(),
+                wallBlock.get(),
+                xenomorphHeadProperties(fireResistant)
+            )
         );
     }
 
