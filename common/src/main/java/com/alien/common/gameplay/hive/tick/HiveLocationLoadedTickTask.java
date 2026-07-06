@@ -97,6 +97,13 @@ public final class HiveLocationLoadedTickTask {
             AttackPartyDispatch.tryRun(server, location, config);
             AttackPartyLifecycleTask.run(server, location, config);
         }
+
+        // Structure growth: grow one hive piece off an open frontier socket on a coarse cadence (every 200 ticks / 10s)
+        // so the hive expands gradually and visibly rather than all at once. Bounded and event-driven off the frontier
+        // set; does nothing when there are no open sockets.
+        if (currentTick % 200L == 0L) {
+            com.alien.common.gameplay.hive.structure.HiveStructurePlanner.tryGrow(server, serverLevel, location);
+        }
     }
 
     public static boolean hasLoadedClaimedChunk(ServerLevel level, HiveLocation location) {
