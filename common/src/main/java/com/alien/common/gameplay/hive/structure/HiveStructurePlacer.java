@@ -7,6 +7,7 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.util.RandomSource;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.block.Rotation;
+import net.minecraft.world.level.levelgen.structure.templatesystem.JigsawReplacementProcessor;
 import net.minecraft.world.level.levelgen.structure.templatesystem.StructurePlaceSettings;
 import net.minecraft.world.level.levelgen.structure.templatesystem.StructureTemplate;
 
@@ -68,7 +69,10 @@ public final class HiveStructurePlacer {
         );
         var settings = new StructurePlaceSettings()
             .setRotation(match.rotation())
-            .setIgnoreEntities(true);
+            .setIgnoreEntities(true)
+            // Replace each authored jigsaw block with its final_state (air, for these pieces) so no raw gray jigsaw
+            // blocks are left in the world at doorway seams.
+            .addProcessor(JigsawReplacementProcessor.INSTANCE);
         boolean placed = template.placeInWorld(level, placeAt, placeAt, settings, RandomSource.create(), 2);
         if (!placed) {
             Alien.LOGGER.warn("Structure placement returned false for hive piece {}.", match.piece().id());
@@ -85,7 +89,11 @@ public final class HiveStructurePlacer {
         // and its facing is the mate of the frontier's facing. Exclude it from the new open sockets.
         int connectedCellX = connectedTo.chunk().x + connectedTo.facing().getStepX() - originChunk.x;
         int connectedCellZ = connectedTo.chunk().z + connectedTo.facing().getStepZ() - originChunk.z;
-        var newSockets = match.openFrontierSockets(connectedCellX, connectedCellZ, connectedTo.facing().getOpposite());
+        // A corner extends the corridor's corner run; anything else resets it. The piece's new doorways carry that
+        // run so the planner can cap how many corners chain in a row.
+        int cornerRun = match.piece().id().getPath().contains("corner") ? connectedTo.cornerRun() + 1 : 0;
+        var newSockets =
+            match.openFrontierSockets(connectedCellX, connectedCellZ, connectedTo.facing().getOpposite(), cornerRun);
 
         // The frontier we just consumed is no longer open; remove it and add the piece's remaining doorways.
         location.frontierSockets().remove(connectedTo);

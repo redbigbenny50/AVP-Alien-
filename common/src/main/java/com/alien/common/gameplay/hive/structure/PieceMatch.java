@@ -40,7 +40,12 @@ public record PieceMatch(
      * to. Each becomes a new {@link FrontierSocket} the planner can grow from. The excluded socket is the one whose
      * cell is {@code connectedCell} and whose facing is {@code connectedFacing} (the mate of the frontier).
      */
-    public List<FrontierSocket> openFrontierSockets(int connectedCellX, int connectedCellZ, Direction connectedFacing) {
+    public List<FrontierSocket> openFrontierSockets(
+        int connectedCellX,
+        int connectedCellZ,
+        Direction connectedFacing,
+        int cornerRun
+    ) {
         var result = new ArrayList<FrontierSocket>();
         for (DoorwaySocket s : piece.socketsRotated(rotation)) {
             boolean isTheConnection = s.edgeChunkX() == connectedCellX
@@ -50,7 +55,7 @@ public record PieceMatch(
                 continue;
             }
             var chunk = new ChunkPos(originChunk.x + s.edgeChunkX(), originChunk.z + s.edgeChunkZ());
-            result.add(new FrontierSocket(chunk, s.facing(), s.doorType()));
+            result.add(new FrontierSocket(chunk, s.facing(), s.doorType(), cornerRun));
         }
         return result;
     }

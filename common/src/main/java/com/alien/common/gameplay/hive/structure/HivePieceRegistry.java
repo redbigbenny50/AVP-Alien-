@@ -80,7 +80,13 @@ public final class HivePieceRegistry {
 
     /** All loaded pieces that expose at least one socket of the given door type (in their authored orientation). */
     public List<HivePiece> piecesWithDoorType(String doorType) {
-        return pieces.values().stream().filter(p -> p.hasSocketType(doorType)).toList();
+        return pieces.values()
+            .stream()
+            // The queen chamber is the founding seed only - it must never be selected as a growth piece, or the
+            // planner would stamp a second core off an open royal socket.
+            .filter(p -> !p.id().equals(HivePieceCatalog.QUEEN_CHAMBER))
+            .filter(p -> p.hasSocketType(doorType))
+            .toList();
     }
 
     public boolean isLoaded() {

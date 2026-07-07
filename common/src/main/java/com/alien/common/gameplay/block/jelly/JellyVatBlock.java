@@ -128,6 +128,12 @@ public class JellyVatBlock extends BaseEntityBlock {
         if (vat.isFull()) {
             return ItemInteractionResult.FAIL;
         }
+        // A jelly block does a clean empty->full fill, so it's only accepted when the vat is empty. If any layers are
+        // already present, reject it - otherwise the block would overwrite (and destroy) those layers, returning only
+        // one block for what was several levels of jelly. Raw jelly still tops up one level at a time.
+        if (blockType != null && vat.getFillLevel() > 0) {
+            return ItemInteractionResult.FAIL;
+        }
 
         if (!level.isClientSide) {
             vat.commitType(incoming);

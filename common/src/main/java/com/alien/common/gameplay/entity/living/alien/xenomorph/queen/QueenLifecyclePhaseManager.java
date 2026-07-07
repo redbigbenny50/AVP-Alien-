@@ -261,6 +261,10 @@ public class QueenLifecyclePhaseManager implements NBTSerializable {
     private void enterLocation() {
         var chunk = pickAnchorChunk();
         var targetY = pickTargetY();
+        // She digs down or settles level - never rises. If she is already at or below the rolled depth
+        // (spawned below her whole band on a deep/flat world, or in a cave), there is nowhere to dig down
+        // to, so anchor at her current Y and she settles in place instead of floating up to the band.
+        targetY = Math.min(targetY, queen.blockPosition().getY());
         this.anchor = chunk.getMiddleBlockPosition(targetY);
         this.phase = QueenLifecyclePhase.LOCATION;
 

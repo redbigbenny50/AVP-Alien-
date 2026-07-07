@@ -1,29 +1,37 @@
 package com.alien.common.gameplay.hive.structure;
 
 import com.alien.Alien;
+import com.alien.common.gameplay.hive.growth.HiveLocationClaims;
 import com.alien.common.gameplay.hive.location.HiveLocation;
+import net.minecraft.core.BlockPos;
 import net.minecraft.server.MinecraftServer;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.util.RandomSource;
 import net.minecraft.world.level.ChunkPos;
+import net.minecraft.world.level.block.Rotation;
+import net.minecraft.world.level.levelgen.structure.templatesystem.JigsawReplacementProcessor;
+import net.minecraft.world.level.levelgen.structure.templatesystem.StructurePlaceSettings;
 
 /**
- * Wires the structure system into hive founding: when a queen founds a location, this stamps the queen-chamber roles
- * onto the claimed core chunks and registers the chamber's royal-door exits as frontier sockets - the seeds the growth
- * planner later grows hallways and chambers from.
+ * Wires the structure system into hive founding. When a queen founds a location this: assigns the queen-chamber roles
+ * onto the claimed core chunks, physically stamps the chamber at the hive floor, and builds the <b>royal ring</b> - one
+ * royal hallway stamped on each of the chamber's royal exits, right here at founding.
  * <p>
- * It reads the parsed queen-chamber piece from {@link HivePieceRegistry} so the exits come straight from the authored
- * .nbt (re-author the chamber and founding follows). The chamber's footprint is assumed centered on the founding center
- * chunk, matching how {@code claimInitialCore} claims a symmetric core around that center.
+ * Stamping the royals with the core (rather than growing them later) guarantees the four-hall ring always exists,
+ * claims their chunks together with the core, and means the growth planner only ever has to grow the general warren off
+ * the royals' downstream doors. Royal variant per exit is picked at random (any mix, repeats allowed). Any non-royal
+ * chamber doorway (there normally aren't any) is left as an open frontier socket for the planner instead.
  */
 public final class HiveStructureFounding {
 
     private HiveStructureFounding() {}
 
     /**
-     * Assigns queen-chamber structure roles across the core and registers the chamber's royal exits as frontier
-     * sockets. No-op (with a warning) if the queen-chamber piece failed to load. Safe to call once at founding.
+     * Establishes the queen chamber and its royal ring at founding. No-op (with a warning) if the queen-chamber piece
+     * failed to load or the dimension isn't available. Safe to call once at founding.
      *
-     * @param server      the server (to reach the parsed piece registry)
-     * @param location    the freshly founded location
+     * @param server      the server (to reach the parsed piece registry and structure templates)
+     * @param location    the freshly founded location (its core chunks are already claimed by the caller)
      * @param centerChunk the founding center chunk (the chamber's center cell)
      */
     public static void establishQueenChamber(MinecraftServer server, HiveLocation location, ChunkPos centerChunk) {
@@ -55,21 +63,114 @@ public final class HiveStructureFounding {
             }
         }
 
-        // Frontier sockets: each authored doorway on the chamber becomes an open frontier at its edge chunk, facing
-        // out.
-        int registered = 0;
-        for (DoorwaySocket socket : chamber.sockets()) {
-            var chunk = new ChunkPos(originChunk.x + socket.edgeChunkX(), originChunk.z + socket.edgeChunkZ());
-            location.frontierSockets().add(new FrontierSocket(chunk, socket.facing(), socket.doorType()));
-            registered++;
+        ServerLevel level = server.getLevel(location.dimension());
+        if (level == null) {
+            // No level to stamp/place into: fall back to just registering the chamber doorways as open sockets so the
+            // planner can grow from them once the dimension is available.
+            Alien.LOGGER.warn(
+                "Queen chamber dimension {} not loaded; registering doorways as sockets only.",
+                location.dimension().location()
+            );
+            for (DoorwaySocket doorway : chamber.sockets()) {
+                var edgeChunk = new ChunkPos(originChunk.x + doorway.edgeChunkX(), originChunk.z + doorway.edgeChunkZ());
+                location.frontierSockets().add(new FrontierSocket(edgeChunk, doorway.facing(), doorway.doorType(), 0));
+            }
+            return;
+        }
+
+        // Physically stamp the chamber blocks at the hive floor (rotation NONE; jigsaws replaced with air).
+        stampQueenChamber(level, server, location, originChunk);
+
+        // Royal ring: stamp a royal hallway on each royal exit now. Non-royal doorways (normally none) stay open.
+        var random = level.getRandom();
+        long currentTick = level.getGameTime();
+        int royalsPlaced = 0;
+        int socketsRegistered = 0;
+        for (DoorwaySocket doorway : chamber.sockets()) {
+            var edgeChunk = new ChunkPos(originChunk.x + doorway.edgeChunkX(), originChunk.z + doorway.edgeChunkZ());
+            var socket = new FrontierSocket(edgeChunk, doorway.facing(), doorway.doorType(), 0);
+
+            if (isRoyalDoor(socket.doorType()) && placeRoyalHallway(level, location, registry, socket, random, currentTick)) {
+                royalsPlaced++;
+            } else {
+                // Not a royal door, or the royal hall couldn't fit here (blocked): leave it open for the planner.
+                location.frontierSockets().add(socket);
+                socketsRegistered++;
+            }
         }
 
         Alien.LOGGER.info(
-            "Queen chamber established at {} ({}x{} chunks): {} frontier sockets registered.",
+            "Queen chamber established at {} ({}x{} chunks): {} royal hallways stamped, {} open sockets.",
             centerChunk,
             chamber.footprintChunksX(),
             chamber.footprintChunksZ(),
-            registered
+            royalsPlaced,
+            socketsRegistered
         );
+    }
+
+    /** A royal-door socket is the only place a royal hallway attaches (and only the core chamber has them). */
+    private static boolean isRoyalDoor(String doorType) {
+        return doorType != null && doorType.contains("royal");
+    }
+
+    /**
+     * Picks a random royal-hallway variant that fits {@code socket} in free chunks (any mix, repeats allowed), stamps
+     * it via the shared placer (which registers its downstream doors as new frontier sockets), and claims its chunks.
+     * Returns false if no royal fits or placement failed.
+     */
+    private static boolean placeRoyalHallway(
+        ServerLevel level,
+        HiveLocation location,
+        HivePieceRegistry registry,
+        FrontierSocket socket,
+        RandomSource random,
+        long currentTick
+    ) {
+        var matches = HivePieceMatcher.matchesFromRegistry(
+            socket,
+            registry,
+            chunk -> !location.claimedChunks().contains(chunk)
+        );
+        if (matches.isEmpty()) {
+            return false;
+        }
+        var match = matches.get(random.nextInt(matches.size()));
+        if (!HiveStructurePlacer.place(level, location, match, socket)) {
+            return false;
+        }
+        for (ChunkPos chunk : match.occupiedChunks()) {
+            HiveLocationClaims.claim(level, location, chunk, currentTick);
+        }
+        return true;
+    }
+
+    /**
+     * Places the queen-chamber template with its (0,0,0) corner at {@code originChunk}'s min-block corner and its floor
+     * on the hive floor row - the same origin/floor convention {@link HiveStructurePlacer} uses for grown pieces, so
+     * the chamber and everything grown from it line up. Rotation NONE; jigsaw blocks replaced with their air
+     * final_state.
+     */
+    private static void stampQueenChamber(
+        ServerLevel level,
+        MinecraftServer server,
+        HiveLocation location,
+        ChunkPos originChunk
+    ) {
+        var templateOpt = server.getStructureManager().get(HivePieceCatalog.QUEEN_CHAMBER);
+        if (templateOpt.isEmpty()) {
+            Alien.LOGGER.warn("Queen chamber not stamped: template {} not found.", HivePieceCatalog.QUEEN_CHAMBER);
+            return;
+        }
+
+        var placeAt = new BlockPos(originChunk.getMinBlockX(), location.hiveFloorY(), originChunk.getMinBlockZ());
+        var settings = new StructurePlaceSettings()
+            .setRotation(Rotation.NONE)
+            .setIgnoreEntities(true)
+            .addProcessor(JigsawReplacementProcessor.INSTANCE);
+        boolean placed = templateOpt.get().placeInWorld(level, placeAt, placeAt, settings, RandomSource.create(), 2);
+        if (!placed) {
+            Alien.LOGGER.warn("Queen chamber placement returned false at {}.", placeAt);
+        }
     }
 }

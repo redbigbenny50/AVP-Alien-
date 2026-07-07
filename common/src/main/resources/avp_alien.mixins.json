@@ -11,6 +11,7 @@
     "MixinLivingEntity_HiveBiomass",
     "MixinLivingEntity_Host",
     "MixinMob_IncapacitateHost",
+    "MixinNaturalSpawner_HiveSlabSpawnDeny",
     "MixinPersistentEntitySectionManager_ConvoyUnload",
     "MixinProjectileUtil_AllowHittingVehicle",
     "MixinVillagerHostilesSensor_RunAwayFromAVPMonsters",

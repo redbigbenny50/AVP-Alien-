@@ -386,6 +386,7 @@ public class AlienClient {
             registerAsset(entry.headShield(), entry.shieldItemPath());
         });
         registerAsset(AlienItems.ANCHOR, "anchor");
+        registerAsset(AlienItems.JELLY_VAT, "jelly_vat");
         registerAsset(AlienItems.INHIBITOR, "inhibitor");
         registerAsset(AlienItems.TRACKER, "tracker");
     }

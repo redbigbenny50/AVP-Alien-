@@ -142,6 +142,7 @@ public class Alien {
 
         MOD.events().onFactionsLoaded().register(Alien::rebuildHiveRegistryFromFactions);
         MOD.events().onServerStopped().register(server -> HiveLocationRegistry.INSTANCE.clear());
+        MOD.events().onServerStopped().register(server -> com.alien.common.gameplay.hive.structure.HivePieceRegistry.INSTANCE.clear());
 
         // Hive: defensive cleanup when any lineage faction is removed.
         MOD.events()
