@@ -4,6 +4,7 @@ import com.alien.common.data.AlienVariantTypes;
 import com.alien.common.gameplay.entity.living.alien.ovomorph.Ovomorph;
 import com.alien.common.gameplay.hive.location.HiveLocation;
 import com.alien.common.gameplay.hive.location.HiveLocationRegistry;
+import com.alien.common.gameplay.hive.structure.HiveChamberSlots;
 import com.alien.common.gameplay.hive.spawning.HiveLocationSpawnGate;
 import com.alien.common.model.alien.variant.AlienVariant;
 import com.alien.common.registry.tag.AlienEntityTypeTags;
@@ -23,36 +24,69 @@ public class EggLayingSensors {
 
     public static <T extends EggLayer> Sensor.Mono<T, Boolean> canLayEgg() {
         return Sensors.map(
-            CAN_LAY_EGG,
-            eggLayer -> {
-                if (!eggLayer.isEggLayCooldownReady()) {
-                    return false;
-                }
+                CAN_LAY_EGG,
+                eggLayer -> {
+                    if (!eggLayer.isEggLayCooldownReady()) {
+                        return false;
+                    }
 
-                if (
-                    !eggLayer.asEntity().isAlive()
-                        || !eggLayer.hasOvipositor()
-                        || !AlienVariantTypes.getFor(eggLayer.getVariant()).canReproduce()
-                ) {
-                    return false;
-                }
+                    if (
+                            !eggLayer.asEntity().isAlive()
+                                    || !eggLayer.hasOvipositor()
+                                    || !AlienVariantTypes.getFor(eggLayer.getVariant()).canReproduce()
+                    ) {
+                        return false;
+                    }
 
-                var location = HiveLocationSpawnGate.locationContaining(eggLayer.asEntity().level(), eggLayer.asEntity().blockPosition());
-                if (location == null) {
-                    return false;
-                }
-                if (!hasOvomorphCapacity(eggLayer, location)) {
-                    return false;
-                }
+                    var location = HiveLocationSpawnGate.locationContaining(eggLayer.asEntity().level(), eggLayer.asEntity().blockPosition());
+                    if (location == null) {
+                        return false;
+                    }
+                    if (!hasOvomorphCapacity(eggLayer, location)) {
+                        return false;
+                    }
 
-                return noEggsNearby(eggLayer);
-            }
+                    return noEggsNearby(eggLayer);
+                }
         );
     }
 
+    /** Eggs the queen keeps producing INTO THE RESERVE once the hive is physically saturated. */
+    public static final int RESERVE_EGG_CAP = 100;
+
+    /** Physical eggs allowed around the queen herself, on top of the nursery beds. */
+    public static final int QUEEN_RING_EGG_CAP = 10;
+
     private static boolean hasOvomorphCapacity(EggLayer eggLayer, HiveLocation location) {
-        var cap = HiveLocationRegistry.INSTANCE.config().maxOvomorphsPerHiveLocation();
-        return cap > 0 && countSameVariantOvomorphs(eggLayer.asEntity().level(), location, eggLayer.getVariant()) < cap;
+        // She lays while there is room for a PHYSICAL egg, or - once the world is saturated - while the reserve
+        // egg bank is below its cap (the lay action diverts those into the reserve instead of spawning).
+        return hasPhysicalOvomorphCapacity(eggLayer, location) || hasReserveOvomorphCapacity(eggLayer, location);
+    }
+
+    /**
+     * Whether another PHYSICAL egg fits. The capacity is dynamic - what the hive actually built: the queen's own
+     * ring plus a bedful per existing egg chamber (a full 5-chamber hive holds 10 + 5x6 = 40; a 3-chamber hive 28).
+     * Used by the lay action to decide between spawning an egg and banking a reserve one.
+     */
+    public static boolean hasPhysicalOvomorphCapacity(EggLayer eggLayer, HiveLocation location) {
+        int chambers = 0;
+        for (var pieceId : location.structurePieceByChunk().values()) {
+            if (pieceId.contains("chamber_egg")) {
+                chambers++;
+            }
+        }
+        int cap = QUEEN_RING_EGG_CAP + HiveChamberSlots.EGG_BEDS_PER_CHAMBER * chambers;
+        return countSameVariantOvomorphs(eggLayer.asEntity().level(), location, eggLayer.getVariant()) < cap;
+    }
+
+    /** Whether the reserve egg bank is below {@link #RESERVE_EGG_CAP}. */
+    public static boolean hasReserveOvomorphCapacity(EggLayer eggLayer, HiveLocation location) {
+        var variant = location.lineageVariantOrNull();
+        if (variant == null) {
+            variant = eggLayer.getVariant();
+        }
+        var type = Ovomorph.getType(variant, false);
+        return type != null && location.localReserves().getCount(type) < RESERVE_EGG_CAP;
     }
 
     private static int countSameVariantOvomorphs(Level level, HiveLocation location, AlienVariant fallbackVariant) {
@@ -73,10 +107,10 @@ public class EggLayingSensors {
 
         var bounds = claimedChunkBounds(level, location);
         return level.getEntitiesOfClass(
-            Ovomorph.class,
-            bounds,
-            entity -> isSameVariantOvomorph(entity.getType(), normalType, royalType)
-                && location.claimedChunks().contains(new ChunkPos(entity.blockPosition()))
+                Ovomorph.class,
+                bounds,
+                entity -> isSameVariantOvomorph(entity.getType(), normalType, royalType)
+                        && location.claimedChunks().contains(new ChunkPos(entity.blockPosition()))
         ).size();
     }
 
@@ -99,9 +133,9 @@ public class EggLayingSensors {
     }
 
     private static boolean isSameVariantOvomorph(
-        EntityType<?> type,
-        EntityType<? extends Ovomorph> normalType,
-        EntityType<? extends Ovomorph> royalType
+            EntityType<?> type,
+            EntityType<? extends Ovomorph> normalType,
+            EntityType<? extends Ovomorph> royalType
     ) {
         return type == normalType || type == royalType;
     }
@@ -111,22 +145,22 @@ public class EggLayingSensors {
         var halfSize = MIN_HORIZONTAL_OVOMORPH_SPACING_BLOCKS;
 
         var searchBox = new AABB(
-            eggPos.x - halfSize,
-            eggPos.y - eggLayer.asEntity().level().dimensionType().height(),
-            eggPos.z - halfSize,
-            eggPos.x + halfSize,
-            eggPos.y + 5,
-            eggPos.z + halfSize
+                eggPos.x - halfSize,
+                eggPos.y - eggLayer.asEntity().level().dimensionType().height(),
+                eggPos.z - halfSize,
+                eggPos.x + halfSize,
+                eggPos.y + 5,
+                eggPos.z + halfSize
         );
 
         return eggLayer.asEntity()
-            .level()
-            .getEntitiesOfClass(
-                Ovomorph.class,
-                searchBox,
-                entity -> entity.getType().is(AlienEntityTypeTags.OVOMORPHS) && entity.isRooted.get()
-            )
-            .isEmpty();
+                .level()
+                .getEntitiesOfClass(
+                        Ovomorph.class,
+                        searchBox,
+                        entity -> entity.getType().is(AlienEntityTypeTags.OVOMORPHS) && entity.isRooted.get()
+                )
+                .isEmpty();
     }
 
     private EggLayingSensors() {

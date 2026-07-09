@@ -1,6 +1,6 @@
 {
-  "biomass": 40,
-  "output_entity": "avp_alien:nether_runner",
+  "biomass": 50,
+  "output_entity": "avp_alien:nether_spitter",
   "population_biomass_cost_scale": 0.05,
   "input_entities": [
     {

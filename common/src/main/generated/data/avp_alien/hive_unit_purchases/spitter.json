@@ -1,6 +1,6 @@
 {
   "biomass": 50,
-  "output_entity": "avp_alien:drone",
+  "output_entity": "avp_alien:spitter",
   "population_biomass_cost_scale": 0.05,
   "input_entities": [
     {

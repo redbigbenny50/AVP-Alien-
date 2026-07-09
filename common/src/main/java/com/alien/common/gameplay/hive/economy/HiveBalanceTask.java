@@ -29,11 +29,15 @@ import java.util.Map;
 public final class HiveBalanceTask {
 
     private static final TagKey<EntityType<?>>[] POPULATION_FILL_CASTES = new TagKey[] {
-        AlienEntityTypeTags.RUNNERS,
-        AlienEntityTypeTags.DRONES
+            AlienEntityTypeTags.RUNNERS,
+            AlienEntityTypeTags.DRONES
     };
 
     private HiveBalanceTask() {}
+
+    /** Hard non-queen member ceiling - keeps hive fights reasonable. Raised while under empress influence. */
+    private static final int MEMBER_CAP = 250;
+    private static final int EMPRESS_MEMBER_CAP = 400;
 
     public static void scanAll(MinecraftServer server) {
         var config = HiveLocationRegistry.INSTANCE.config();
@@ -67,6 +71,20 @@ public final class HiveBalanceTask {
         }
         var pop = CastePopulation.popByCaste(location);
         var totalPop = pop.values().stream().mapToInt(Integer::intValue).sum();
+
+        // Hard ceiling on the WORKING adult population - the reserve-bred adults used for parties and hive
+        // defense: 250, raised to 400 under empress influence. Exempt: the queen, eggs (never tracked), and
+        // the queen's founding retinue (1 praetorian + 2 drones). Members from other sources currently count
+        // too (origin isn't tagged); if convoy bonuses visibly eat cap space, origin tagging is the fix.
+        var memberCap = com.alien.common.gameplay.hive.structure.HiveRouter.isEmpressInfluenced(location)
+                ? EMPRESS_MEMBER_CAP
+                : MEMBER_CAP;
+        var retinueAllowance = Math.min(1, pop.getOrDefault(AlienEntityTypeTags.PRAETORIANS, 0))
+                + Math.min(2, pop.getOrDefault(AlienEntityTypeTags.DRONES, 0));
+        var workingAdults = totalPop - pop.getOrDefault(AlienEntityTypeTags.QUEENS, 0) - retinueAllowance;
+        if (workingAdults >= memberCap) {
+            return;
+        }
         var chunks = location.claimedChunks().size();
         var cap = populationPerChunk * chunks;
         if (cap <= 0 || totalPop > cap) {
@@ -85,15 +103,22 @@ public final class HiveBalanceTask {
     }
 
     private static boolean tryFillPopulation(
-        MinecraftServer server,
-        HiveLocation location,
-        LineageFactionData lineage,
-        Map<TagKey<EntityType<?>>, Integer> pop,
-        int chunks,
-        int totalPop
+            MinecraftServer server,
+            HiveLocation location,
+            LineageFactionData lineage,
+            Map<TagKey<EntityType<?>>, Integer> pop,
+            int chunks,
+            int totalPop
     ) {
         var ordered = populationFillOrder(pop, chunks);
         for (var caste : ordered) {
+            // Basic egg-born production rolls a 1-in-4 chance to yield a SPITTER instead of the drone/runner it was
+            // making; if the spitter can't commit, the intended caste still gets its normal attempt.
+            var substituted = rollSpitterSubstitution(server, caste);
+            if (substituted != caste
+                    && tryCommitCaste(server, location, lineage, substituted, totalPop, PurchasePopulationMode.NET_GAIN)) {
+                return true;
+            }
             if (tryCommitCaste(server, location, lineage, caste, totalPop, PurchasePopulationMode.NET_GAIN)) {
                 return true;
             }
@@ -102,8 +127,8 @@ public final class HiveBalanceTask {
     }
 
     private static ArrayList<TagKey<EntityType<?>>> populationFillOrder(
-        Map<TagKey<EntityType<?>>, Integer> pop,
-        int chunks
+            Map<TagKey<EntityType<?>>, Integer> pop,
+            int chunks
     ) {
         var ordered = new ArrayList<TagKey<EntityType<?>>>();
         var drones = pop.getOrDefault(AlienEntityTypeTags.DRONES, 0);
@@ -135,12 +160,12 @@ public final class HiveBalanceTask {
     }
 
     private static boolean tryBalanceComposition(
-        MinecraftServer server,
-        HiveLocation location,
-        LineageFactionData lineage,
-        Map<TagKey<EntityType<?>>, Integer> pop,
-        int chunks,
-        int totalPop
+            MinecraftServer server,
+            HiveLocation location,
+            LineageFactionData lineage,
+            Map<TagKey<EntityType<?>>, Integer> pop,
+            int chunks,
+            int totalPop
     ) {
         var deficits = computeDeficits(pop, chunks, totalPop);
         if (deficits.isEmpty()) {
@@ -163,22 +188,31 @@ public final class HiveBalanceTask {
         return false;
     }
 
+    /** Basic egg-born castes (drones, runners) have a 1-in-4 chance of producing a spitter instead. */
+    private static TagKey<EntityType<?>> rollSpitterSubstitution(MinecraftServer server, TagKey<EntityType<?>> caste) {
+        if ((caste == AlienEntityTypeTags.DRONES || caste == AlienEntityTypeTags.RUNNERS)
+                && server.overworld().getRandom().nextInt(4) == 0) {
+            return AlienEntityTypeTags.SPITTERS;
+        }
+        return caste;
+    }
+
     private static boolean tryCommitCaste(
-        MinecraftServer server,
-        HiveLocation location,
-        LineageFactionData lineage,
-        TagKey<EntityType<?>> caste,
-        int totalPop,
-        PurchasePopulationMode populationMode
+            MinecraftServer server,
+            HiveLocation location,
+            LineageFactionData lineage,
+            TagKey<EntityType<?>> caste,
+            int totalPop,
+            PurchasePopulationMode populationMode
     ) {
         var outputType = CasteResolver.entityTypeForCaste(lineage.variant(), caste);
         if (outputType == null) {
             return false;
         }
         if (
-            outputType.is(AlienEntityTypeTags.HARBINGERS)
-                && (CastePopulation.countCaste(location, AlienEntityTypeTags.HARBINGERS) >= 1
-                    || hasHarbingerAwayInRaid(location, lineage))
+                outputType.is(AlienEntityTypeTags.HARBINGERS)
+                        && (CastePopulation.countCaste(location, AlienEntityTypeTags.HARBINGERS) >= 1
+                        || hasHarbingerAwayInRaid(location, lineage))
         ) {
             return false;
         }
@@ -202,9 +236,9 @@ public final class HiveBalanceTask {
 
         var biomassCost = biomassCost(purchase, location);
         if (
-            location.biomass() < biomassCost
-                || location.royalJelly() < purchase.royalJelly()
-                || location.scourgeJelly() < purchase.scourgeJelly()
+                location.biomass() < biomassCost
+                        || location.royalJelly() < purchase.royalJelly()
+                        || location.scourgeJelly() < purchase.scourgeJelly()
         ) {
             return false;
         }
@@ -213,6 +247,8 @@ public final class HiveBalanceTask {
         var inputTypes = new ArrayList<EntityType<?>>(purchase.inputEntities().size());
         for (var input : purchase.inputEntities()) {
             var type = input.entity();
+            // Stored nursery eggs back the ovomorph reserve: consume chamber stock when the reserve runs short.
+            EggStock.coverInputShortfall(server, location, type, input.count());
             if (location.localReserves().getCount(type) < input.count()) {
                 return false;
             }
@@ -270,9 +306,9 @@ public final class HiveBalanceTask {
     }
 
     private static Map<TagKey<EntityType<?>>, Integer> computeDeficits(
-        Map<TagKey<EntityType<?>>, Integer> pop,
-        int chunks,
-        int totalPop
+            Map<TagKey<EntityType<?>>, Integer> pop,
+            int chunks,
+            int totalPop
     ) {
         var drone = pop.getOrDefault(AlienEntityTypeTags.DRONES, 0);
         var runner = pop.getOrDefault(AlienEntityTypeTags.RUNNERS, 0);
@@ -305,9 +341,9 @@ public final class HiveBalanceTask {
     }
 
     private static boolean conditionsHold(
-        HiveUnitPurchase purchase,
-        HiveLocation location,
-        int totalPop
+            HiveUnitPurchase purchase,
+            HiveLocation location,
+            int totalPop
     ) {
         for (var condition : purchase.conditions()) {
             switch (condition) {

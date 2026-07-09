@@ -2,6 +2,8 @@ package com.alien.common.gameplay.entity.living.alien.xenomorph.ai.egg_laying.ac
 
 import com.alien.common.gameplay.entity.living.alien.ovomorph.Ovomorph;
 import com.alien.common.gameplay.entity.living.alien.xenomorph.ai.egg_laying.EggLayer;
+import com.alien.common.gameplay.entity.living.alien.xenomorph.ai.egg_laying.EggLayingSensors;
+import com.alien.common.gameplay.hive.spawning.HiveLocationSpawnGate;
 import com.alien.common.model.alien.variant.AlienVariant;
 import com.alien.common.registry.init.AlienSoundEvents;
 import com.alien.compatibility.avp_human.AVPHuman;
@@ -22,6 +24,16 @@ public class LayEggAction {
         var variant = shouldBeAberrant(eggLayer) ? AlienVariant.ABERRANT : eggLayer.getVariant();
         var ovomorphType = Ovomorph.getType(variant, false);
 
+        // Physically saturated hive: the queen keeps producing, but the egg goes into the RESERVE bank (up to
+        // RESERVE_EGG_CAP) instead of the world - the abstract stock purchases draw on before touching the nurseries.
+        var location = HiveLocationSpawnGate.locationContaining(level, eggLayer.asEntity().blockPosition());
+        if (location != null && ovomorphType != null && !EggLayingSensors.hasPhysicalOvomorphCapacity(eggLayer, location)) {
+            if (location.localReserves().addReturningMember(ovomorphType, 1)) {
+                level.playSound(null, eggLayer.asEntity(), AlienSoundEvents.ENTITY_OVOMORPH_LAID.get(), SoundSource.HOSTILE, 1.0F, 1.0F);
+                return Action.Signal.CONTINUE;
+            }
+        }
+
         var ovomorph = ovomorphType == null ? null : ovomorphType.create(level);
 
         if (ovomorph == null) {
@@ -39,6 +51,13 @@ public class LayEggAction {
 
         level.playSound(null, eggLayer.asEntity(), AlienSoundEvents.ENTITY_OVOMORPH_LAID.get(), SoundSource.HOSTILE, 1.0F, 1.0F);
         level.addFreshEntity(ovomorph);
+
+        // Parallel banking: every physical lay banks a reserve egg too, so the working stock grows alongside
+        // the visible eggs from the very first lay (the first drone has to come from somewhere). Once the
+        // physical spots are full, the divert branch above takes over and lays go reserve-only.
+        if (location != null && EggLayingSensors.hasReserveOvomorphCapacity(eggLayer, location)) {
+            location.localReserves().addReturningMember(ovomorphType, 1);
+        }
 
         return Action.Signal.CONTINUE;
     }

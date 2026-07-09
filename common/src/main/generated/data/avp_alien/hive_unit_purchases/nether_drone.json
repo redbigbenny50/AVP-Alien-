@@ -1,5 +1,11 @@
 {
   "biomass": 50,
   "output_entity": "avp_alien:nether_drone",
-  "population_biomass_cost_scale": 0.05
+  "population_biomass_cost_scale": 0.05,
+  "input_entities": [
+    {
+      "entity": "avp_alien:nether_ovomorph",
+      "count": 1
+    }
+  ]
 }

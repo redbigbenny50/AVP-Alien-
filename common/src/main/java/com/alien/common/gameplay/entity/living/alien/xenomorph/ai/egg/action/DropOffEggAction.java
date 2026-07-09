@@ -1,6 +1,8 @@
 package com.alien.common.gameplay.entity.living.alien.xenomorph.ai.egg.action;
 
 import com.alien.common.gameplay.entity.living.alien.ovomorph.Ovomorph;
+import com.alien.common.gameplay.hive.location.HiveLocationRegistry;
+import com.alien.common.gameplay.hive.structure.HiveChamberSlots;
 import com.alien.common.gameplay.entity.living.alien.xenomorph.Xenomorph;
 import com.alien.common.registry.init.AlienSoundEvents;
 import com.alien.common.registry.tag.AlienEntityTypeTags;
@@ -9,6 +11,8 @@ import com.just.ai.goap.StateKey;
 import com.just.ai.goap.action.Action;
 import com.just.ai.goap.state.Blackboard;
 import net.minecraft.core.BlockPos;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.level.ChunkPos;
 import net.minecraft.sounds.SoundSource;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.AABB;
@@ -67,13 +71,18 @@ public class DropOffEggAction {
             blackboard.set(KEY_HAS_SEARCHED, true);
 
             var failedSpots = getFailedSpots(blackboard);
-            var freeSpot = findFreeEggSpot(
-                xenomorph,
-                xenomorph.level(),
-                xenomorph.blockPosition(),
-                pos -> xenomorph.level().getBlockState(pos).entityCanStandOn(xenomorph.level(), pos, xenomorph),
-                failedSpots
-            );
+            // STORAGE FIRST: haul the egg to a free bed in an egg chamber while any exists - eggs only accumulate
+            // around the queen (the original spiral search below) once the nursery chambers are full or unreachable.
+            var freeSpot = findChamberBedSpot(xenomorph, failedSpots);
+            if (freeSpot.isEmpty()) {
+                freeSpot = findFreeEggSpot(
+                        xenomorph,
+                        xenomorph.level(),
+                        xenomorph.blockPosition(),
+                        pos -> xenomorph.level().getBlockState(pos).entityCanStandOn(xenomorph.level(), pos, xenomorph),
+                        failedSpots
+                );
+            }
             setFailedSpots(blackboard, failedSpots);
 
             if (freeSpot.isEmpty()) {
@@ -122,7 +131,7 @@ public class DropOffEggAction {
     private static void placeEggs(Xenomorph xenomorph, Vec3 center) {
         getPassengerOvomorphs(xenomorph).forEach(ovomorph -> {
             xenomorph.level()
-                .playSound(null, ovomorph, AlienSoundEvents.ENTITY_OVOMORPH_ROOT.get(), SoundSource.HOSTILE, 1.0F, 1.0F);
+                    .playSound(null, ovomorph, AlienSoundEvents.ENTITY_OVOMORPH_ROOT.get(), SoundSource.HOSTILE, 1.0F, 1.0F);
             ovomorph.isRooted.set(true);
             ovomorph.stopRiding();
             ovomorph.setPos(center.x, center.y, center.z);
@@ -144,18 +153,73 @@ public class DropOffEggAction {
 
     private static List<Ovomorph> getPassengerOvomorphs(Xenomorph xenomorph) {
         return xenomorph.getPassengers()
-            .stream()
-            .filter(passenger -> passenger instanceof Ovomorph)
-            .map(passenger -> (Ovomorph) passenger)
-            .toList();
+                .stream()
+                .filter(passenger -> passenger instanceof Ovomorph)
+                .map(passenger -> (Ovomorph) passenger)
+                .toList();
+    }
+
+    /**
+     * The nearest free, reachable egg-chamber bed in the drone's hive: chambers sorted by distance, beds read from
+     * the tendril-floor slots, a bed counting as free when no rooted ovomorph sits on it. Unreachable beds join the
+     * failed-spot memory so retries skip them; empty result means the nursery is full/absent and the caller falls
+     * back to the around-the-queen spiral.
+     */
+    private static Optional<BlockPos> findChamberBedSpot(Xenomorph xenomorph, Set<BlockPos> failedSpots) {
+        if (!(xenomorph.level() instanceof ServerLevel serverLevel)) {
+            return Optional.empty();
+        }
+        var location = HiveLocationRegistry.INSTANCE.getByChunk(serverLevel.dimension(), xenomorph.chunkPosition());
+        if (location == null) {
+            return Optional.empty();
+        }
+        var chambers = new ArrayList<ChunkPos>();
+        for (var entry : location.structurePieceByChunk().entrySet()) {
+            if (entry.getValue().contains("chamber_egg")) {
+                chambers.add(entry.getKey());
+            }
+        }
+        if (chambers.isEmpty()) {
+            return Optional.empty();
+        }
+        var here = xenomorph.chunkPosition();
+        chambers.sort(Comparator.comparingInt(c -> Math.max(Math.abs(c.x - here.x), Math.abs(c.z - here.z))));
+
+        for (var chamber : chambers) {
+            if (!serverLevel.isLoaded(chamber.getWorldPosition())) {
+                continue;
+            }
+            for (var bed : HiveChamberSlots.eggBedSlots(serverLevel, location, chamber)) {
+                if (failedSpots.contains(bed) || isBedOccupied(serverLevel, bed)) {
+                    continue;
+                }
+                var path = xenomorph.getNavigation().createPath(bed, 0);
+                if (path != null && path.canReach()) {
+                    return Optional.of(bed);
+                }
+                failedSpots.add(bed);
+            }
+        }
+        return Optional.empty();
+    }
+
+    /** A bed is occupied while a rooted ovomorph sits within a block of it. */
+    private static boolean isBedOccupied(ServerLevel level, BlockPos bed) {
+        var center = bed.getCenter();
+        var box = new AABB(center.x - 1.0, bed.getY() - 1.0, center.z - 1.0, center.x + 1.0, bed.getY() + 2.0, center.z + 1.0);
+        return !level.getEntitiesOfClass(
+                Ovomorph.class,
+                box,
+                entity -> entity.getType().is(AlienEntityTypeTags.OVOMORPHS) && entity.isRooted.get()
+        ).isEmpty();
     }
 
     private static Optional<BlockPos> findFreeEggSpot(
-        Xenomorph xenomorph,
-        Level level,
-        BlockPos center,
-        Predicate<BlockPos> isWalkable,
-        Set<BlockPos> failedSpots
+            Xenomorph xenomorph,
+            Level level,
+            BlockPos center,
+            Predicate<BlockPos> isWalkable,
+            Set<BlockPos> failedSpots
     ) {
         var gridAlignedCenter = alignToEggGrid(center);
 
@@ -183,10 +247,10 @@ public class DropOffEggAction {
                 var aboveState = level.getBlockState(adjustedPos.above());
 
                 if (
-                    (state.isAir() || state.canBeReplaced())
-                        && (aboveState.isAir() || aboveState.canBeReplaced())
-                        && level.getEntities(null, new AABB(adjustedPos)).isEmpty()
-                        && hasOvomorphSpacing(level, adjustedPos)
+                        (state.isAir() || state.canBeReplaced())
+                                && (aboveState.isAir() || aboveState.canBeReplaced())
+                                && level.getEntities(null, new AABB(adjustedPos)).isEmpty()
+                                && hasOvomorphSpacing(level, adjustedPos)
                 ) {
                     viable.add(adjustedPos.immutable());
                 }
@@ -219,18 +283,18 @@ public class DropOffEggAction {
         var center = pos.getCenter();
         var halfSize = MIN_HORIZONTAL_OVOMORPH_SPACING_BLOCKS;
         var searchBox = new AABB(
-            center.x - halfSize,
-            pos.getY() - level.dimensionType().height(),
-            center.z - halfSize,
-            center.x + halfSize,
-            pos.getY() + 5,
-            center.z + halfSize
+                center.x - halfSize,
+                pos.getY() - level.dimensionType().height(),
+                center.z - halfSize,
+                center.x + halfSize,
+                pos.getY() + 5,
+                center.z + halfSize
         );
 
         return level.getEntitiesOfClass(
-            Ovomorph.class,
-            searchBox,
-            entity -> entity.getType().is(AlienEntityTypeTags.OVOMORPHS) && entity.isRooted.get()
+                Ovomorph.class,
+                searchBox,
+                entity -> entity.getType().is(AlienEntityTypeTags.OVOMORPHS) && entity.isRooted.get()
         ).isEmpty();
     }
 
@@ -246,10 +310,10 @@ public class DropOffEggAction {
 
     private static void setFailedSpots(Blackboard blackboard, Set<BlockPos> failedSpots) {
         blackboard.set(
-            KEY_FAILED_SPOTS,
-            failedSpots.stream()
-                .limit(MAX_REMEMBERED_FAILED_SPOTS)
-                .toList()
+                KEY_FAILED_SPOTS,
+                failedSpots.stream()
+                        .limit(MAX_REMEMBERED_FAILED_SPOTS)
+                        .toList()
         );
     }
 
