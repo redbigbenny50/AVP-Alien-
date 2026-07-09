@@ -58,19 +58,24 @@ public final class HiveStructurePlanner {
     // Corner-run cap: at most this many corner pieces may chain back-to-back before a non-corner must break the run.
     private static final int MAX_CORNER_RUN = 3;
 
+    // Straight-run cap: at most this many straights in a row before a corridor must turn, branch, or hit a room.
+    private static final int MAX_STRAIGHT_RUN = 2;
+
+    // Hive doors are a fixed square opening, centred on the chunk's wall, from floor level up (used by the cap).
+    private static final int DOOR_SIZE = 8;
+
     /**
      * A hive's build plan: how big it grows and how many of each room it targets. Kept in one place so a future empress
      * tier can expand a hive - bigger extent, higher room budgets, even new room types - by returning a different plan
      * from {@link #planFor}. Egg / host / jelly-vault / raid are hive_door chamber CAPS; minHost, minRaid and
-     * minJunctions are FLOORS the hive is guaranteed to reach; junctionSpacing / functionalSpacing keep hubs, and
-     * host/raid combat rooms, from sitting next to their own kind. Jelly-royal and scourge aren't listed - they hang
-     * off their own special doors and are limited by those.
+     * minJunctions are FLOORS the hive is guaranteed to reach; roomSpacing keeps every room (hub or chamber) from
+     * sitting next to another room, so rooms disperse across the footprint. Jelly-royal and scourge aren't listed -
+     * they hang off their own special doors and are limited by those.
      */
     private record BuildPlan(
         int maxExtentChunks,
         int minJunctions,
-        int junctionSpacing,
-        int functionalSpacing,
+        int roomSpacing,
         int minHost,
         int minRaid,
         float chamberChance,
@@ -81,7 +86,7 @@ public final class HiveStructurePlanner {
     ) {}
 
     // 3-chunk core + maxExtentChunks out per side -> (2 * maxExtentChunks + 1) square: 9 -> 19x19.
-    private static final BuildPlan BASE_PLAN = new BuildPlan(9, 3, 4, 4, 1, 1, 0.25f, 4, 2, 5, 1);
+    private static final BuildPlan BASE_PLAN = new BuildPlan(9, 3, 4, 1, 1, 0.25f, 4, 2, 5, 1);
 
     /**
      * The build plan for a hive. Hook: once the empress system is wired, detect an empress here and return an expanded
@@ -133,8 +138,10 @@ public final class HiveStructurePlanner {
 
             boolean royalSocket = isRoyalDoor(socket.doorType());
             boolean cornerCapped = socket.cornerRun() >= MAX_CORNER_RUN;
+            boolean straightCapped = socket.straightRun() >= MAX_STRAIGHT_RUN;
 
             var eligible = new ArrayList<PieceMatch>(matches.size());
+            var viable = new ArrayList<PieceMatch>(matches.size());
             for (PieceMatch match : matches) {
                 // Royal hallways are grand entrances: only ever off a royal socket (which only the core has), never on
                 // the general corridor network. This caps them at the four core exits and stops royal-to-royal chains.
@@ -145,16 +152,28 @@ public final class HiveStructurePlanner {
                 if (cornerCapped && isCorner(match)) {
                     continue;
                 }
+                // Straight-run cap: never a straight once this run has hit the max (breaks up long straight arms).
+                if (straightCapped && isStraight(match)) {
+                    continue;
+                }
                 // Extent cap: drop any candidate that would place a chunk outside the hive's allowed square.
-                if (withinExtent(match, centerChunk, plan.maxExtentChunks())) {
-                    eligible.add(match);
+                if (!withinExtent(match, centerChunk, plan.maxExtentChunks())) {
+                    continue;
+                }
+                eligible.add(match);
+                // Look-ahead: a viable piece is one whose new doorways don't open straight into a claimed chunk (an
+                // immediate dead end). Preferring these stops multi-door pieces like hubs being placed where they
+                // strand doors, and stops arms growing into each other.
+                if (!createsDeadEnd(match, socket, claimed, centerChunk, plan.maxExtentChunks())) {
+                    viable.add(match);
                 }
             }
             if (eligible.isEmpty()) {
                 continue;
             }
 
-            var chosen = selectPiece(eligible, location, plan, random);
+            // Prefer viable candidates; fall back to all eligible only if every option would strand a door.
+            var chosen = selectPiece(viable.isEmpty() ? eligible : viable, location, plan, random);
             boolean placed = HiveStructurePlacer.place(level, location, chosen, socket);
             if (placed) {
                 // Claim the newly occupied chunks through HiveLocationClaims so all three sources of truth stay
@@ -223,10 +242,13 @@ public final class HiveStructurePlanner {
                 socket.chunk().x + socket.facing().getStepX(),
                 socket.chunk().z + socket.facing().getStepZ()
             );
-            boolean canGrow = !claimed.contains(faced) && withinExtentChunk(faced, centerChunk, plan.maxExtentChunks());
-            if (canGrow) {
-                continue; // live growth point - leave it
+            if (!withinExtentChunk(faced, centerChunk, plan.maxExtentChunks())) {
+                continue; // faces beyond the hive bound - an outer entrance/exit, leave it open
             }
+            if (!claimed.contains(faced)) {
+                continue; // faced chunk is free and in-bounds - a live growth point
+            }
+            // faced chunk is claimed and in-bounds: a real interior dead end - connect or cap below.
 
             var aligned = findAlignedSocket(socket, faced, frontier, handled);
             if (aligned != null) {
@@ -276,17 +298,21 @@ public final class HiveStructurePlanner {
      * piece in that plane fills too, so a cap can read a little tall.
      */
     private static void capDoorway(ServerLevel level, HiveLocation location, FrontierSocket socket) {
+        // A hive door is a fixed DOOR_SIZE x DOOR_SIZE opening centred on the chunk's wall, from the floor up. Fill
+        // just that region's air with resin; the wall around it and the terrain-blend cells (open air on an
+        // above-ground hive) are left alone.
         var resin = AlienResinBlocks.RIBBED_RESIN.get().defaultBlockState();
         var chunk = socket.chunk();
         var facing = socket.facing();
         int floorY = location.hiveFloorY();
-        int ceilingY = location.hiveCeilingY();
+        int start = (16 - DOOR_SIZE) / 2; // centre the DOOR_SIZE-wide opening on the 16-wide edge
         var pos = new BlockPos.MutableBlockPos();
 
         if (facing == Direction.NORTH || facing == Direction.SOUTH) {
             int z = (facing == Direction.NORTH) ? chunk.getMinBlockZ() : chunk.getMaxBlockZ();
-            for (int x = chunk.getMinBlockX(); x <= chunk.getMaxBlockX(); x++) {
-                for (int y = floorY; y < ceilingY; y++) {
+            int x0 = chunk.getMinBlockX() + start;
+            for (int x = x0; x < x0 + DOOR_SIZE; x++) {
+                for (int y = floorY; y < floorY + DOOR_SIZE; y++) {
                     pos.set(x, y, z);
                     if (level.getBlockState(pos).isAir()) {
                         level.setBlock(pos, resin, 3);
@@ -295,8 +321,9 @@ public final class HiveStructurePlanner {
             }
         } else {
             int x = (facing == Direction.WEST) ? chunk.getMinBlockX() : chunk.getMaxBlockX();
-            for (int z = chunk.getMinBlockZ(); z <= chunk.getMaxBlockZ(); z++) {
-                for (int y = floorY; y < ceilingY; y++) {
+            int z0 = chunk.getMinBlockZ() + start;
+            for (int z = z0; z < z0 + DOOR_SIZE; z++) {
+                for (int y = floorY; y < floorY + DOOR_SIZE; y++) {
                     pos.set(x, y, z);
                     if (level.getBlockState(pos).isAir()) {
                         level.setBlock(pos, resin, 3);
@@ -351,16 +378,23 @@ public final class HiveStructurePlanner {
      * distributed set of destinations while corridors carry the rest of the footprint.
      */
     private static PieceMatch selectPiece(List<PieceMatch> eligible, HiveLocation location, BuildPlan plan, RandomSource random) {
-        // Spacing: keep hubs apart from other hubs, and host/raid combat rooms apart from each other.
+        // Spacing: every room (hub or chamber) must sit at least roomSpacing chunks from every other room, so rooms
+        // disperse across the footprint instead of clustering at the core.
         var pool = new ArrayList<PieceMatch>(eligible.size());
         for (PieceMatch match : eligible) {
-            if (isHub(match) && !spacedFrom(location, match, plan.junctionSpacing(), "hub")) {
+            // Every room (hub or chamber) spaces off every other room; hubs additionally space off royal hallways
+            // (a hub jammed against a royal entrance tangles the doorways and strands dead ends).
+            if (
+                isRoom(match) && !spacedFromPieces(
+                    location,
+                    match,
+                    plan.roomSpacing(),
+                    id -> id.contains("hub") || (id.contains("chamber") && !id.contains("queen_chamber"))
+                )
+            ) {
                 continue;
             }
-            if (
-                isFunctionalRoom(match)
-                    && !spacedFrom(location, match, plan.functionalSpacing(), "chamber_host", "chamber_raid")
-            ) {
+            if (isHub(match) && !spacedFromPieces(location, match, plan.roomSpacing(), id -> id.contains("hallway_royal"))) {
                 continue;
             }
             pool.add(match);
@@ -427,6 +461,11 @@ public final class HiveStructurePlanner {
         return match.piece().id().getPath().contains("corner");
     }
 
+    /** True if the candidate is a straight corridor piece (for the straight-run cap). */
+    private static boolean isStraight(PieceMatch match) {
+        return match.piece().id().getPath().contains("straight");
+    }
+
     /** True if the candidate is a hub - a 2x2 junction room, the fast-travel node type. */
     private static boolean isHub(PieceMatch match) {
         return match.piece().id().getPath().contains("hub");
@@ -437,22 +476,27 @@ public final class HiveStructurePlanner {
         return countChamberPlacements(location, "hub", 4);
     }
 
-    /**
-     * True if every chunk of the match sits at least {@code spacing} chunks (Chebyshev) from every existing hub chunk.
-     */
-    /** True if the candidate is a host or raid combat room (spaced from other combat rooms). */
-    private static boolean isFunctionalRoom(PieceMatch match) {
-        String path = match.piece().id().getPath();
-        return path.contains("chamber_host") || path.contains("chamber_raid");
+    /** True if the candidate is a room (a hub or any chamber) - the pieces that space off one another. */
+    private static boolean isRoom(PieceMatch match) {
+        return isHub(match) || isChamber(match);
     }
 
     /**
-     * True if every chunk of the match sits at least {@code spacing} chunks (Chebyshev) from every recorded chunk whose
-     * piece id contains any of {@code idSubstrings}. Keeps like rooms (hubs; host/raid) from clustering.
+     * True if every chunk of the match sits at least {@code spacing} chunks (Chebyshev) from every existing room chunk
+     * (any hub or grown chamber; the queen core is excluded). Keeps rooms dispersed across the footprint.
      */
-    private static boolean spacedFrom(HiveLocation location, PieceMatch match, int spacing, String... idSubstrings) {
+    /**
+     * True if every chunk of the match sits at least {@code spacing} chunks (Chebyshev) from every existing chunk whose
+     * piece id passes {@code isBlocker}. Spaces rooms off other rooms, and hubs off royal hallways.
+     */
+    private static boolean spacedFromPieces(
+        HiveLocation location,
+        PieceMatch match,
+        int spacing,
+        java.util.function.Predicate<String> isBlocker
+    ) {
         for (var entry : location.structurePieceByChunk().entrySet()) {
-            if (!containsAny(entry.getValue(), idSubstrings)) {
+            if (!isBlocker.test(entry.getValue())) {
                 continue;
             }
             ChunkPos other = entry.getKey();
@@ -465,9 +509,23 @@ public final class HiveStructurePlanner {
         return true;
     }
 
-    private static boolean containsAny(String value, String... subs) {
-        for (String sub : subs) {
-            if (value.contains(sub)) {
+    /**
+     * Look-ahead: true if placing {@code match} off {@code socket} would open a new doorway straight into an already
+     * claimed in-bounds chunk - an immediate dead end. Out-of-bounds doorways are entrances and free ones are live, so
+     * neither counts against the piece.
+     */
+    private static boolean createsDeadEnd(
+        PieceMatch match,
+        FrontierSocket socket,
+        java.util.Set<ChunkPos> claimed,
+        ChunkPos centerChunk,
+        int maxExtent
+    ) {
+        int connectedCellX = socket.chunk().x + socket.facing().getStepX() - match.originChunk().x;
+        int connectedCellZ = socket.chunk().z + socket.facing().getStepZ() - match.originChunk().z;
+        for (FrontierSocket ns : match.openFrontierSockets(connectedCellX, connectedCellZ, socket.facing().getOpposite(), 0, 0)) {
+            var faced = new ChunkPos(ns.chunk().x + ns.facing().getStepX(), ns.chunk().z + ns.facing().getStepZ());
+            if (withinExtentChunk(faced, centerChunk, maxExtent) && claimed.contains(faced)) {
                 return true;
             }
         }

@@ -12,16 +12,18 @@ import net.minecraft.world.level.ChunkPos;
  * planner only connects matching socket types. Step 2.3 registers the queen chamber's N/S/E/W exits as frontier
  * sockets; Phase 3 consumes them when placing hallways/rooms and registers the new piece's open exits in turn.
  *
- * @param chunk     the chunk on whose edge this doorway sits
- * @param facing    the direction the doorway faces (toward the chunk a new attached piece would occupy)
- * @param doorType  the door type label this socket matches against (only same-label sockets connect)
- * @param cornerRun how many corner pieces chain in a row up to this socket (for the corner-run cap; 0 to reset)
+ * @param chunk       the chunk on whose edge this doorway sits
+ * @param facing      the direction the doorway faces (toward the chunk a new attached piece would occupy)
+ * @param doorType    the door type label this socket matches against (only same-label sockets connect)
+ * @param cornerRun   how many corner pieces chain in a row up to this socket (for the corner-run cap; 0 to reset)
+ * @param straightRun how many straight pieces chain in a row up to this socket (for the straight-run cap; 0 resets)
  */
 public record FrontierSocket(
     ChunkPos chunk,
     Direction facing,
     String doorType,
-    int cornerRun
+    int cornerRun,
+    int straightRun
 ) {
 
     private static final String NBT_X = "X";
@@ -34,6 +36,8 @@ public record FrontierSocket(
 
     private static final String NBT_CORNER_RUN = "CornerRun";
 
+    private static final String NBT_STRAIGHT_RUN = "StraightRun";
+
     public CompoundTag toTag() {
         var tag = new CompoundTag();
         tag.putInt(NBT_X, chunk.x);
@@ -41,6 +45,7 @@ public record FrontierSocket(
         tag.putString(NBT_FACING, facing.getName());
         tag.putString(NBT_DOOR_TYPE, doorType);
         tag.putInt(NBT_CORNER_RUN, cornerRun);
+        tag.putInt(NBT_STRAIGHT_RUN, straightRun);
         return tag;
     }
 
@@ -50,6 +55,12 @@ public record FrontierSocket(
         if (facing == null) {
             facing = Direction.NORTH;
         }
-        return new FrontierSocket(chunk, facing, tag.getString(NBT_DOOR_TYPE), tag.getInt(NBT_CORNER_RUN));
+        return new FrontierSocket(
+            chunk,
+            facing,
+            tag.getString(NBT_DOOR_TYPE),
+            tag.getInt(NBT_CORNER_RUN),
+            tag.getInt(NBT_STRAIGHT_RUN)
+        );
     }
 }

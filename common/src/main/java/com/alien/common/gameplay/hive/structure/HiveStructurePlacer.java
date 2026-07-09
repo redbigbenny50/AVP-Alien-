@@ -92,8 +92,15 @@ public final class HiveStructurePlacer {
         // A corner extends the corridor's corner run; anything else resets it. The piece's new doorways carry that
         // run so the planner can cap how many corners chain in a row.
         int cornerRun = match.piece().id().getPath().contains("corner") ? connectedTo.cornerRun() + 1 : 0;
+        int straightRun = match.piece().id().getPath().contains("straight") ? connectedTo.straightRun() + 1 : 0;
         var newSockets =
-            match.openFrontierSockets(connectedCellX, connectedCellZ, connectedTo.facing().getOpposite(), cornerRun);
+            match.openFrontierSockets(
+                connectedCellX,
+                connectedCellZ,
+                connectedTo.facing().getOpposite(),
+                cornerRun,
+                straightRun
+            );
 
         // The frontier we just consumed is no longer open; remove it and add the piece's remaining doorways.
         location.frontierSockets().remove(connectedTo);

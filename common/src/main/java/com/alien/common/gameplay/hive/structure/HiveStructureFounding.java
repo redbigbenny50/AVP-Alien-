@@ -73,7 +73,7 @@ public final class HiveStructureFounding {
             );
             for (DoorwaySocket doorway : chamber.sockets()) {
                 var edgeChunk = new ChunkPos(originChunk.x + doorway.edgeChunkX(), originChunk.z + doorway.edgeChunkZ());
-                location.frontierSockets().add(new FrontierSocket(edgeChunk, doorway.facing(), doorway.doorType(), 0));
+                location.frontierSockets().add(new FrontierSocket(edgeChunk, doorway.facing(), doorway.doorType(), 0, 0));
             }
             return;
         }
@@ -88,7 +88,7 @@ public final class HiveStructureFounding {
         int socketsRegistered = 0;
         for (DoorwaySocket doorway : chamber.sockets()) {
             var edgeChunk = new ChunkPos(originChunk.x + doorway.edgeChunkX(), originChunk.z + doorway.edgeChunkZ());
-            var socket = new FrontierSocket(edgeChunk, doorway.facing(), doorway.doorType(), 0);
+            var socket = new FrontierSocket(edgeChunk, doorway.facing(), doorway.doorType(), 0, 0);
 
             if (isRoyalDoor(socket.doorType()) && placeRoyalHallway(level, location, registry, socket, random, currentTick)) {
                 royalsPlaced++;
@@ -106,6 +106,19 @@ public final class HiveStructureFounding {
             chamber.footprintChunksZ(),
             royalsPlaced,
             socketsRegistered
+        );
+
+        // Goal-based planner, stage 1: roll this hive's blueprint (spaced room goals + per-side exits) and log it as a
+        // map so the dispersion can be eyeballed. Seeded from the founding chunk, so each hive differs and the same
+        // spot regenerates the same plan. Nothing is built from it yet - the router that carves to these goals is next.
+        int blueprintExtent = 9; // matches the planner's base footprint radius (19x19)
+        var blueprint = HiveBlueprintGenerator.generate(centerChunk, blueprintExtent, centerChunk.toLong());
+        Alien.LOGGER.info(
+            "Hive blueprint for {} ({} room goals, {} exits):{}",
+            centerChunk,
+            blueprint.goals().size(),
+            blueprint.exits().size(),
+            HiveBlueprintGenerator.toAsciiMap(blueprint, centerChunk, blueprintExtent)
         );
     }
 

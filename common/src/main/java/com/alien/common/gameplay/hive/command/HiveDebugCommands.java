@@ -202,6 +202,11 @@ public final class HiveDebugCommands {
                     .requires(CommandSourceStack::isPlayer)
                     .executes(HiveDebugCommands::toggleRender)
             )
+            .then(
+                Commands.literal("router")
+                    .requires(CommandSourceStack::isPlayer)
+                    .executes(HiveDebugCommands::toggleRouter)
+            )
             .then(Commands.literal("force_emergence_scan").executes(HiveDebugCommands::forceEmergenceScan))
             .then(Commands.literal("inspect_settlement").executes(HiveDebugCommands::inspectSettlement))
             .then(
@@ -1484,6 +1489,20 @@ public final class HiveDebugCommands {
      * Toggles {@link com.alien.common.gameplay.hive.spawning.HiveLoadedSpawner#DEBUG_SPAWN_REJECTS}. While on, every
      * spawn attempt rejected for being outside a hive's slab is logged to the server console. Phase 1 debug aid.
      */
+    private static int toggleRouter(com.mojang.brigadier.context.CommandContext<CommandSourceStack> ctx) {
+        com.alien.common.gameplay.hive.structure.HiveRouter.ENABLED =
+            !com.alien.common.gameplay.hive.structure.HiveRouter.ENABLED;
+        boolean now = com.alien.common.gameplay.hive.structure.HiveRouter.ENABLED;
+        ctx.getSource()
+            .sendSuccess(
+                () -> Component.literal(
+                    "Blueprint router is now " + (now ? "ON (goal-based)" : "OFF (greedy planner)") + "."
+                ),
+                false
+            );
+        return now ? 1 : 0;
+    }
+
     private static int toggleRender(com.mojang.brigadier.context.CommandContext<CommandSourceStack> ctx) {
         var player = Objects.requireNonNull(ctx.getSource().getPlayer());
         var now = !com.alien.common.network.handler.HiveRenderToggleHandler.isEnabled(player.getUUID());

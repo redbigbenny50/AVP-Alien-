@@ -235,7 +235,11 @@ public abstract class Xenomorph extends Alien implements ResinProducer, EntitySe
     private PathNavigator createPathNavigator(Level level, XenomorphPathConfig pathConfig) {
         var followRange = (float) getAttributeValue(Attributes.FOLLOW_RANGE);
 
-        return createPathNavigator(level, pathConfig, SearchConfig.fromFollowRange(followRange));
+        return createPathNavigator(
+            level,
+            pathConfig,
+            SearchConfig.fromFollowRange(followRange).withElevationWeight(0.5f)
+        );
     }
 
     private PathNavigator createPathNavigator(Level level, XenomorphPathConfig pathConfig, SearchConfig searchConfig) {
@@ -327,7 +331,7 @@ public abstract class Xenomorph extends Alien implements ResinProducer, EntitySe
             searchConfig.maxSearchNodes(),
             searchConfig.heuristicWeight(),
             HIVE_INTRUDER_MAX_PATH_LENGTH,
-            searchConfig.elevationWeight()
+            0.5f
         );
     }
 

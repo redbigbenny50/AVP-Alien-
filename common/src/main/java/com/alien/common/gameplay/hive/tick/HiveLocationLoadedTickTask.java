@@ -102,7 +102,13 @@ public final class HiveLocationLoadedTickTask {
         // so the hive expands gradually and visibly rather than all at once. Bounded and event-driven off the frontier
         // set; does nothing when there are no open sockets.
         if (currentTick % 200L == 0L) {
-            com.alien.common.gameplay.hive.structure.HiveStructurePlanner.tryGrow(server, serverLevel, location);
+            if (com.alien.common.gameplay.hive.structure.HiveRouter.ENABLED) {
+                com.alien.common.gameplay.hive.structure.HiveRouter.route(server, serverLevel, location);
+            } else {
+                com.alien.common.gameplay.hive.structure.HiveStructurePlanner.tryGrow(server, serverLevel, location);
+            }
+            // Pour the jelly bank into the placed vats for display (royal chambers first, then vaults).
+            com.alien.common.gameplay.hive.economy.JellyVatDisplay.sync(serverLevel, location);
         }
     }
 

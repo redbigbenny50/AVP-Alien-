@@ -44,7 +44,8 @@ public record PieceMatch(
         int connectedCellX,
         int connectedCellZ,
         Direction connectedFacing,
-        int cornerRun
+        int cornerRun,
+        int straightRun
     ) {
         var result = new ArrayList<FrontierSocket>();
         for (DoorwaySocket s : piece.socketsRotated(rotation)) {
@@ -55,7 +56,7 @@ public record PieceMatch(
                 continue;
             }
             var chunk = new ChunkPos(originChunk.x + s.edgeChunkX(), originChunk.z + s.edgeChunkZ());
-            result.add(new FrontierSocket(chunk, s.facing(), s.doorType(), cornerRun));
+            result.add(new FrontierSocket(chunk, s.facing(), s.doorType(), cornerRun, straightRun));
         }
         return result;
     }

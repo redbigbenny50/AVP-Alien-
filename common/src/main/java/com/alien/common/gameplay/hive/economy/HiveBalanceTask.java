@@ -51,12 +51,12 @@ public final class HiveBalanceTask {
                 if (!location.isAlive() || location.isInhibited()) {
                     continue; // inhibited locations run no economy — no biomass spend, no jelly, no purchases.
                 }
-                evaluate(location, lineage, populationPerChunk);
+                evaluate(server, location, lineage, populationPerChunk);
             }
         }
     }
 
-    private static void evaluate(HiveLocation location, LineageFactionData lineage, int populationPerChunk) {
+    private static void evaluate(MinecraftServer server, HiveLocation location, LineageFactionData lineage, int populationPerChunk) {
         // Founding lockout: a queen-founded hive buys NO population units until its queen is reproductive. Otherwise
         // this
         // task spends biomass on drones/runners the instant the hive can afford them, draining the pool the queen needs
@@ -77,14 +77,15 @@ public final class HiveBalanceTask {
         }
 
         if (totalPop < cap) {
-            tryFillPopulation(location, lineage, pop, chunks, totalPop);
+            tryFillPopulation(server, location, lineage, pop, chunks, totalPop);
             return;
         }
 
-        tryBalanceComposition(location, lineage, pop, chunks, totalPop);
+        tryBalanceComposition(server, location, lineage, pop, chunks, totalPop);
     }
 
     private static boolean tryFillPopulation(
+        MinecraftServer server,
         HiveLocation location,
         LineageFactionData lineage,
         Map<TagKey<EntityType<?>>, Integer> pop,
@@ -93,7 +94,7 @@ public final class HiveBalanceTask {
     ) {
         var ordered = populationFillOrder(pop, chunks);
         for (var caste : ordered) {
-            if (tryCommitCaste(location, lineage, caste, totalPop, PurchasePopulationMode.NET_GAIN)) {
+            if (tryCommitCaste(server, location, lineage, caste, totalPop, PurchasePopulationMode.NET_GAIN)) {
                 return true;
             }
         }
@@ -134,6 +135,7 @@ public final class HiveBalanceTask {
     }
 
     private static boolean tryBalanceComposition(
+        MinecraftServer server,
         HiveLocation location,
         LineageFactionData lineage,
         Map<TagKey<EntityType<?>>, Integer> pop,
@@ -154,7 +156,7 @@ public final class HiveBalanceTask {
         candidates.sort((left, right) -> Integer.compare(deficits.get(right), deficits.get(left)));
 
         for (var caste : candidates) {
-            if (tryCommitCaste(location, lineage, caste, totalPop, PurchasePopulationMode.NEUTRAL)) {
+            if (tryCommitCaste(server, location, lineage, caste, totalPop, PurchasePopulationMode.NEUTRAL)) {
                 return true;
             }
         }
@@ -162,6 +164,7 @@ public final class HiveBalanceTask {
     }
 
     private static boolean tryCommitCaste(
+        MinecraftServer server,
         HiveLocation location,
         LineageFactionData lineage,
         TagKey<EntityType<?>> caste,
@@ -193,6 +196,9 @@ public final class HiveBalanceTask {
         if (!conditionsHold(purchase, location, totalPop)) {
             return false;
         }
+
+        // Vats are the hive's savings: tap them only when the bank alone can't cover the jelly cost.
+        JellyVatDisplay.coverShortfall(server, location, purchase.royalJelly());
 
         var biomassCost = biomassCost(purchase, location);
         if (

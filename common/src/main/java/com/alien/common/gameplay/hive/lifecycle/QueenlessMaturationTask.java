@@ -195,6 +195,8 @@ public final class QueenlessMaturationTask {
             }
 
             var jellyCost = config.firewallCrowningJellyCost();
+            // Crowning may tap the vat stores when the bank alone can't cover it (vats are the last resort).
+            com.alien.common.gameplay.hive.economy.JellyVatDisplay.coverShortfall(serverLevel, location, jellyCost);
             if (location.royalJelly() < jellyCost) {
                 Alien.LOGGER.info(
                     "Hive: crowning denied for leader {} (lineage {}) — insufficient royal jelly ({}/{})",
