@@ -77,10 +77,10 @@ public final class HiveLoadedSpawner {
             if (loadedCount >= config.hiveSpawnerMinimumLoadedXenomorphs()) {
                 if (DEBUG_SPAWN_REJECTS) {
                     com.alien.Alien.LOGGER.info(
-                        "[hive-spawn] {} skipped: at loaded cap ({} >= {})",
-                        location.id(),
-                        loadedCount,
-                        config.hiveSpawnerMinimumLoadedXenomorphs()
+                            "[hive-spawn] {} skipped: at loaded cap ({} >= {})",
+                            location.id(),
+                            loadedCount,
+                            config.hiveSpawnerMinimumLoadedXenomorphs()
                     );
                 }
                 continue;
@@ -90,8 +90,8 @@ public final class HiveLoadedSpawner {
             if (players.isEmpty()) {
                 if (DEBUG_SPAWN_REJECTS) {
                     com.alien.Alien.LOGGER.info(
-                        "[hive-spawn] {} skipped: no players within boss-bar radius",
-                        location.id()
+                            "[hive-spawn] {} skipped: no players within boss-bar radius",
+                            location.id()
                     );
                 }
                 continue;
@@ -100,9 +100,9 @@ public final class HiveLoadedSpawner {
             var spawned = 0;
             var attempts = 0;
             while (
-                loadedCount + spawned < config.hiveSpawnerMinimumLoadedXenomorphs()
-                    && spawned < config.hiveSpawnerMaxSpawnsPerLocation()
-                    && attempts < config.hiveSpawnerMaxSpawnAttemptsPerLocation()
+                    loadedCount + spawned < config.hiveSpawnerMinimumLoadedXenomorphs()
+                            && spawned < config.hiveSpawnerMaxSpawnsPerLocation()
+                            && attempts < config.hiveSpawnerMaxSpawnAttemptsPerLocation()
             ) {
                 attempts++;
 
@@ -117,13 +117,13 @@ public final class HiveLoadedSpawner {
             // out-of-distance, unclaimed, no reserve type, etc.) — read the per-attempt slab lines for the slab case.
             if (DEBUG_SPAWN_REJECTS && attempts > 0 && spawned < config.hiveSpawnerMaxSpawnsPerLocation()) {
                 com.alien.Alien.LOGGER.info(
-                    "[hive-spawn] {} pass: {} attempts, {} spawned, {} rejected (loaded={}, target={})",
-                    location.id(),
-                    attempts,
-                    spawned,
-                    attempts - spawned,
-                    loadedCount,
-                    config.hiveSpawnerMinimumLoadedXenomorphs()
+                        "[hive-spawn] {} pass: {} attempts, {} spawned, {} rejected (loaded={}, target={})",
+                        location.id(),
+                        attempts,
+                        spawned,
+                        attempts - spawned,
+                        loadedCount,
+                        config.hiveSpawnerMinimumLoadedXenomorphs()
                 );
             }
         }
@@ -143,15 +143,15 @@ public final class HiveLoadedSpawner {
         var radius = HiveLocationRegistry.INSTANCE.config().bossBarDisplayRadiusBlocks();
         var radiusSqr = (double) radius * radius;
         return level.players()
-            .stream()
-            .filter(player -> player.blockPosition().distSqr(location.centerPos()) <= radiusSqr)
-            .toList();
+                .stream()
+                .filter(player -> player.blockPosition().distSqr(location.centerPos()) <= radiusSqr)
+                .toList();
     }
 
     private static @Nullable Entity trySpawnLocalReserve(
-        ServerLevel level,
-        HiveLocation location,
-        List<ServerPlayer> players
+            ServerLevel level,
+            HiveLocation location,
+            List<ServerPlayer> players
     ) {
         var type = pickWeightedReserveType(level, location);
         if (type == null) {
@@ -181,11 +181,12 @@ public final class HiveLoadedSpawner {
         return entity;
     }
 
-    private static @Nullable Entity trySpawnIdentityReserve(
-        ServerLevel level,
-        HiveLocation location,
-        EntityType<?> type,
-        BlockPos pos
+    /** Public: the vent-defense dispatcher materializes defenders through this exact path. */
+    public static @Nullable Entity trySpawnIdentityReserve(
+            ServerLevel level,
+            HiveLocation location,
+            EntityType<?> type,
+            BlockPos pos
     ) {
         var entry = location.localReserves().removeIdentity(type);
         if (entry == null) {
@@ -194,9 +195,9 @@ public final class HiveLoadedSpawner {
 
         if (level.getEntity(entry.uuid()) != null) {
             com.alien.Alien.LOGGER.warn(
-                "Hive: discarded duplicate identity reserve {} ({}) because an entity with that UUID is already loaded.",
-                entry.uuid(),
-                net.minecraft.core.registries.BuiltInRegistries.ENTITY_TYPE.getKey(type)
+                    "Hive: discarded duplicate identity reserve {} ({}) because an entity with that UUID is already loaded.",
+                    entry.uuid(),
+                    net.minecraft.core.registries.BuiltInRegistries.ENTITY_TYPE.getKey(type)
             );
             return null;
         }
@@ -204,19 +205,19 @@ public final class HiveLoadedSpawner {
         var entity = entry.createEntity(level);
         if (entity == null || !entity.getType().equals(type)) {
             com.alien.Alien.LOGGER.warn(
-                "Hive: discarded invalid identity reserve {} ({}) because it could not be restored.",
-                entry.uuid(),
-                net.minecraft.core.registries.BuiltInRegistries.ENTITY_TYPE.getKey(type)
+                    "Hive: discarded invalid identity reserve {} ({}) because it could not be restored.",
+                    entry.uuid(),
+                    net.minecraft.core.registries.BuiltInRegistries.ENTITY_TYPE.getKey(type)
             );
             return null;
         }
 
         entity.moveTo(
-            pos.getX() + 0.5,
-            pos.getY(),
-            pos.getZ() + 0.5,
-            level.random.nextFloat() * 360.0F,
-            0.0F
+                pos.getX() + 0.5,
+                pos.getY(),
+                pos.getZ() + 0.5,
+                level.random.nextFloat() * 360.0F,
+                0.0F
         );
         if (!level.addFreshEntity(entity)) {
             location.localReserves().restoreIdentity(entry);
@@ -283,9 +284,9 @@ public final class HiveLoadedSpawner {
 
     private static int weightFor(EntityType<?> type) {
         if (
-            type.is(AlienEntityTypeTags.CHESTBURSTERS)
-                || type.is(AlienEntityTypeTags.ADOLESCENTS)
-                || type.is(AlienEntityTypeTags.BURSTERS)
+                type.is(AlienEntityTypeTags.CHESTBURSTERS)
+                        || type.is(AlienEntityTypeTags.ADOLESCENTS)
+                        || type.is(AlienEntityTypeTags.BURSTERS)
         ) {
             return 14;
         }
@@ -293,18 +294,18 @@ public final class HiveLoadedSpawner {
             return 12;
         }
         if (
-            type.is(AlienEntityTypeTags.WARRIORS)
-                || type.is(AlienEntityTypeTags.PROWLERS)
-                || type.is(AlienEntityTypeTags.SPITTERS)
+                type.is(AlienEntityTypeTags.WARRIORS)
+                        || type.is(AlienEntityTypeTags.PROWLERS)
+                        || type.is(AlienEntityTypeTags.SPITTERS)
         ) {
             return 8;
         }
         if (
-            type.is(AlienEntityTypeTags.CARRIERS)
-                || type.is(AlienEntityTypeTags.RAVAGERS)
-                || type.is(AlienEntityTypeTags.RAZOR_CLAWS)
-                || type.is(AlienEntityTypeTags.PREDALIENS)
-                || type.is(AlienEntityTypeTags.CHRYSALISES)
+                type.is(AlienEntityTypeTags.CARRIERS)
+                        || type.is(AlienEntityTypeTags.RAVAGERS)
+                        || type.is(AlienEntityTypeTags.RAZOR_CLAWS)
+                        || type.is(AlienEntityTypeTags.PREDALIENS)
+                        || type.is(AlienEntityTypeTags.CHRYSALISES)
         ) {
             return 3;
         }
@@ -312,10 +313,10 @@ public final class HiveLoadedSpawner {
     }
 
     private static @Nullable BlockPos pickSpawnPosition(
-        ServerLevel level,
-        HiveLocation location,
-        ServerPlayer player,
-        EntityType<?> type
+            ServerLevel level,
+            HiveLocation location,
+            ServerPlayer player,
+            EntityType<?> type
     ) {
         var candidateChunks = candidateChunks(location, player, requiresCoreSpawn(type));
         if (candidateChunks.isEmpty()) {
@@ -350,17 +351,17 @@ public final class HiveLoadedSpawner {
         var coreRadius = HiveLocationRegistry.INSTANCE.config().initialHiveLocationClaimRadiusChunks();
 
         return location.claimedChunks()
-            .stream()
-            .filter(chunk -> !requiresCoreSpawn || HiveLocationSpacing.chunkDistance(chunk, centerChunk) <= coreRadius)
-            .filter(chunk -> HiveLocationSpacing.chunkDistance(chunk, playerChunk) <= PLAYER_CHUNK_RANGE)
-            .toList();
+                .stream()
+                .filter(chunk -> !requiresCoreSpawn || HiveLocationSpacing.chunkDistance(chunk, centerChunk) <= coreRadius)
+                .filter(chunk -> HiveLocationSpacing.chunkDistance(chunk, playerChunk) <= PLAYER_CHUNK_RANGE)
+                .toList();
     }
 
     private static boolean requiresCoreSpawn(EntityType<?> type) {
         return type.is(AlienEntityTypeTags.QUEENS)
-            || type.is(AlienEntityTypeTags.HARBINGERS)
-            || type.is(AlienEntityTypeTags.PRAETORIANS)
-            || type.is(AlienEntityTypeTags.CRUSHERS);
+                || type.is(AlienEntityTypeTags.HARBINGERS)
+                || type.is(AlienEntityTypeTags.PRAETORIANS)
+                || type.is(AlienEntityTypeTags.CRUSHERS);
     }
 
     @SuppressWarnings("unchecked")
@@ -371,11 +372,11 @@ public final class HiveLoadedSpawner {
         if (!location.withinSlab(pos.getY())) {
             if (DEBUG_SPAWN_REJECTS_VERBOSE) {
                 com.alien.Alien.LOGGER.info(
-                    "[hive-slab] rejected spawn at Y={} (slab {}..{}) for location {}",
-                    pos.getY(),
-                    location.hiveFloorY(),
-                    location.hiveCeilingY(),
-                    location.id()
+                        "[hive-slab] rejected spawn at Y={} (slab {}..{}) for location {}",
+                        pos.getY(),
+                        location.hiveFloorY(),
+                        location.hiveCeilingY(),
+                        location.id()
                 );
             }
             return false;
@@ -388,11 +389,11 @@ public final class HiveLoadedSpawner {
         }
         if (HivePolicies.reserveSpawnsCanIgnoreResin(level.getServer(), location)) {
             return AlienSpawning.checkSpawnRules(
-                (EntityType<? extends Alien>) rawType,
-                level,
-                MobSpawnType.NATURAL,
-                pos,
-                level.random
+                    (EntityType<? extends Alien>) rawType,
+                    level,
+                    MobSpawnType.NATURAL,
+                    pos,
+                    level.random
             );
         }
         return AlienSpawning.canSpawnAt((EntityType<? extends Alien>) rawType, level, MobSpawnType.NATURAL, pos, level.random);
@@ -417,7 +418,7 @@ public final class HiveLoadedSpawner {
     }
 
     private record WeightedType(
-        EntityType<?> type,
-        int weight
+            EntityType<?> type,
+            int weight
     ) {}
 }

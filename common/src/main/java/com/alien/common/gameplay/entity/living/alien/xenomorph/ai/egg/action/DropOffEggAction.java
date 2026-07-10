@@ -3,6 +3,7 @@ package com.alien.common.gameplay.entity.living.alien.xenomorph.ai.egg.action;
 import com.alien.common.gameplay.entity.living.alien.ovomorph.Ovomorph;
 import com.alien.common.gameplay.hive.location.HiveLocationRegistry;
 import com.alien.common.gameplay.hive.structure.HiveChamberSlots;
+import com.alien.common.gameplay.hive.vent.HiveVents;
 import com.alien.common.gameplay.entity.living.alien.xenomorph.Xenomorph;
 import com.alien.common.registry.init.AlienSoundEvents;
 import com.alien.common.registry.tag.AlienEntityTypeTags;
@@ -36,7 +37,17 @@ public class DropOffEggAction {
 
     private static final StateKey<Integer> KEY_NEXT_SEARCH_TICK = StateKey.sensed("egg_drop_next_search_tick");
 
+    private static final StateKey<BlockPos> KEY_VENT_ENTRY = StateKey.sensed("egg_drop_vent_entry");
+
+    private static final StateKey<BlockPos> KEY_VENT_EXIT = StateKey.sensed("egg_drop_vent_exit");
+
     private static final double DROP_OFF_RANGE_SQUARED = 2.0 * 2.0;
+
+    private static final double VENT_REACH_SQUARED = 2.5 * 2.5;              // close enough to slip into a vent
+
+    private static final double VENT_WORTHWHILE_DIST_SQUARED = 32.0 * 32.0;  // shorter hauls just walk
+
+    private static final int VENT_SEARCH_RADIUS_CHUNKS = 1;                  // vents within ~a chunk of each endpoint
 
     private static final int SEARCH_RETRY_DELAY_TICKS = 20;
 
@@ -74,6 +85,7 @@ public class DropOffEggAction {
             // STORAGE FIRST: haul the egg to a free bed in an egg chamber while any exists - eggs only accumulate
             // around the queen (the original spiral search below) once the nursery chambers are full or unreachable.
             var freeSpot = findChamberBedSpot(xenomorph, failedSpots);
+            var isChamberBed = freeSpot.isPresent();
             if (freeSpot.isEmpty()) {
                 freeSpot = findFreeEggSpot(
                         xenomorph,
@@ -92,10 +104,41 @@ public class DropOffEggAction {
 
             targetPos = freeSpot.get().getCenter();
             blackboard.set(KEY_TARGET_POS, targetPos);
+            if (isChamberBed) {
+                planVentLeg(xenomorph, freeSpot.get(), blackboard);
+            }
         }
 
         if (targetPos == null) {
             return Action.Signal.ABORT;
+        }
+
+        // Duct leg: while an entry vent is planned, head there first; on reaching it the drone (egg riding
+        // along) duct-travels to the exit vent near the chamber, and the normal walk to the bed resumes from
+        // there. Any pathing trouble on this leg just abandons the duct and walks the whole way.
+        var ventEntry = blackboard.getOrDefault(KEY_VENT_ENTRY, (BlockPos) null);
+        if (ventEntry != null) {
+            var ventTarget = Vec3.atCenterOf(ventEntry);
+            var ventResult = NeoMoveToPosAction.perform(context, ventTarget, 0.5);
+            if (xenomorph.distanceToSqr(ventTarget) <= VENT_REACH_SQUARED) {
+                var ventExit = blackboard.getOrDefault(KEY_VENT_EXIT, (BlockPos) null);
+                blackboard.set(KEY_VENT_ENTRY, (BlockPos) null);
+                blackboard.set(KEY_VENT_EXIT, (BlockPos) null);
+                NeoMoveToPosAction.onFinish(context);
+                if (ventExit != null) {
+                    HiveVents.ductTravel(xenomorph, ventEntry, ventExit);
+                }
+                return Action.Signal.CONTINUE;
+            }
+            switch (ventResult) {
+                case FINISHED, MOVING -> { /* still walking to the vent */ }
+                default -> {
+                    blackboard.set(KEY_VENT_ENTRY, (BlockPos) null);
+                    blackboard.set(KEY_VENT_EXIT, (BlockPos) null);
+                    NeoMoveToPosAction.onFinish(context);
+                }
+            }
+            return Action.Signal.CONTINUE;
         }
 
         var result = NeoMoveToPosAction.perform(context, targetPos, 0.5);
@@ -157,6 +200,38 @@ public class DropOffEggAction {
                 .filter(passenger -> passenger instanceof Ovomorph)
                 .map(passenger -> (Ovomorph) passenger)
                 .toList();
+    }
+
+    /**
+     * Plans the duct leg for a long chamber haul: nearest vent to the drone as entry, nearest vent to the bed
+     * as exit - only when both exist, differ, the walk is long enough to be worth it, and the exit genuinely
+     * shortens the remaining trip.
+     */
+    private static void planVentLeg(Xenomorph xenomorph, BlockPos bed, Blackboard blackboard) {
+        if (!(xenomorph.level() instanceof ServerLevel serverLevel)) {
+            return;
+        }
+        if (xenomorph.blockPosition().distSqr(bed) < VENT_WORTHWHILE_DIST_SQUARED) {
+            return;
+        }
+        var location = HiveLocationRegistry.INSTANCE.getByChunk(serverLevel.dimension(), xenomorph.chunkPosition());
+        if (location == null) {
+            return;
+        }
+        var vents = location.ventManager();
+        // Egg carriers NEVER use surface vents - those are the hive's defensive/party mouths. Interior only.
+        var band = HiveLocationRegistry.INSTANCE.config().surfacePartySurfaceBandBlocks();
+        java.util.function.Predicate<BlockPos> interiorOnly = v -> !HiveVents.isNearSurface(serverLevel, v, band);
+        var entry = HiveVents.nearestVent(vents, xenomorph.blockPosition(), VENT_SEARCH_RADIUS_CHUNKS, interiorOnly);
+        var exit = HiveVents.nearestVent(vents, bed, VENT_SEARCH_RADIUS_CHUNKS, interiorOnly);
+        if (entry == null || exit == null || entry.equals(exit)) {
+            return;
+        }
+        if (exit.distSqr(bed) >= xenomorph.blockPosition().distSqr(bed)) {
+            return; // the duct wouldn't shorten the trip
+        }
+        blackboard.set(KEY_VENT_ENTRY, entry);
+        blackboard.set(KEY_VENT_EXIT, exit);
     }
 
     /**

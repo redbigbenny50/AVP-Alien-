@@ -68,6 +68,9 @@ public final class HiveLocationLoadedTickTask {
         if (HiveTerritoryAggroTask.shouldFire(currentTick)) {
             HiveTerritoryAggroTask.run(serverLevel, location);
         }
+        if (com.alien.common.gameplay.hive.defense.VentDefenseTask.shouldFire(currentTick)) {
+            com.alien.common.gameplay.hive.defense.VentDefenseTask.run(serverLevel, location);
+        }
 
         // Inhibited (severed contained-breeder) locations run no autonomy below this line — no biomass income, no
         // claim expansion, no abstract spread. Defense (aggro, above) and her own combat / egg-laying are unaffected.
