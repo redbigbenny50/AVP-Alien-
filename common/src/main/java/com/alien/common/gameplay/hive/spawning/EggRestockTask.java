@@ -2,8 +2,8 @@ package com.alien.common.gameplay.hive.spawning;
 
 import com.alien.Alien;
 import com.alien.common.gameplay.entity.living.alien.ovomorph.Ovomorph;
-import com.alien.common.gameplay.hive.location.HiveLocation;
 import com.alien.common.gameplay.hive.faction.LocationMembership;
+import com.alien.common.gameplay.hive.location.HiveLocation;
 import com.alien.common.gameplay.hive.structure.HiveChamberSlots;
 import com.alien.common.registry.init.AlienSoundEvents;
 import com.alien.common.registry.tag.AlienEntityTypeTags;
@@ -15,10 +15,10 @@ import net.minecraft.world.phys.AABB;
 import javax.annotation.Nullable;
 
 /**
- * Stage 4 of the egg logistics: the RESERVE egg bank restocks the physical nurseries. When free chamber beds exist
- * and no loose egg is already awaiting a hauler, one banked egg materializes at the queen (or the hive core when she
- * is absent - a raided, queenless hive can still restock from its savings) and the normal pickup/haul pipeline
- * carries it to a bed, visibly. One egg per growth cycle, and the bank keeps a floor so purchases stay funded.
+ * Stage 4 of the egg logistics: the RESERVE egg bank restocks the physical nurseries. When free chamber beds exist and
+ * no loose egg is already awaiting a hauler, one banked egg materializes at the queen (or the hive core when she is
+ * absent - a raided, queenless hive can still restock from its savings) and the normal pickup/haul pipeline carries it
+ * to a bed, visibly. One egg per growth cycle, and the bank keeps a floor so purchases stay funded.
  */
 public final class EggRestockTask {
 
@@ -51,8 +51,11 @@ public final class EggRestockTask {
 
         // One in flight at a time: a loose egg near the anchor means a hauler is (or will be) on it already.
         var pendingBox = new AABB(anchor).inflate(PENDING_EGG_RADIUS);
-        boolean pending = !level.getEntitiesOfClass(Ovomorph.class, pendingBox,
-                e -> e.getType() == eggType && !e.isRooted.get() && !e.isPassenger() && e.isAlive()).isEmpty();
+        boolean pending = !level.getEntitiesOfClass(
+            Ovomorph.class,
+            pendingBox,
+            e -> e.getType() == eggType && !e.isRooted.get() && !e.isPassenger() && e.isAlive()
+        ).isEmpty();
         if (pending) {
             return;
         }
@@ -64,16 +67,24 @@ public final class EggRestockTask {
         if (egg == null) {
             return; // reserve count already decremented; vanishingly rare, self-corrects via banking
         }
-        egg.moveTo(anchor.getX() + 0.5, anchor.getY(), anchor.getZ() + 0.5,
-                level.random.nextFloat() * 360.0F, 0.0F);
+        egg.moveTo(
+            anchor.getX() + 0.5,
+            anchor.getY(),
+            anchor.getZ() + 0.5,
+            level.random.nextFloat() * 360.0F,
+            0.0F
+        );
         if (!level.addFreshEntity(egg)) {
             location.localReserves().tryAdd(eggType, 1); // put it back
             return;
         }
         LocationMembership.join(location, egg);
         level.playSound(null, egg, AlienSoundEvents.ENTITY_OVOMORPH_LAID.get(), SoundSource.HOSTILE, 1.0F, 1.1F);
-        Alien.LOGGER.info("Hive at {}: materialized a banked egg for nursery restock ({} left in reserve).",
-                location.centerPos(), location.localReserves().getCount(eggType));
+        Alien.LOGGER.info(
+            "Hive at {}: materialized a banked egg for nursery restock ({} left in reserve).",
+            location.centerPos(),
+            location.localReserves().getCount(eggType)
+        );
     }
 
     /** Whether any loaded egg chamber has a bed without a rooted ovomorph on it. */
@@ -87,10 +98,19 @@ public final class EggRestockTask {
                 continue;
             }
             for (var bed : HiveChamberSlots.eggBedSlots(level, location, chamber)) {
-                var box = new AABB(bed.getCenter().x - 1.0, bed.getY() - 1.0, bed.getCenter().z - 1.0,
-                        bed.getCenter().x + 1.0, bed.getY() + 2.0, bed.getCenter().z + 1.0);
-                boolean occupied = !level.getEntitiesOfClass(Ovomorph.class, box,
-                        e -> e.isRooted.get() && e.isAlive()).isEmpty();
+                var box = new AABB(
+                    bed.getCenter().x - 1.0,
+                    bed.getY() - 1.0,
+                    bed.getCenter().z - 1.0,
+                    bed.getCenter().x + 1.0,
+                    bed.getY() + 2.0,
+                    bed.getCenter().z + 1.0
+                );
+                boolean occupied = !level.getEntitiesOfClass(
+                    Ovomorph.class,
+                    box,
+                    e -> e.isRooted.get() && e.isAlive()
+                ).isEmpty();
                 if (!occupied) {
                     return true;
                 }

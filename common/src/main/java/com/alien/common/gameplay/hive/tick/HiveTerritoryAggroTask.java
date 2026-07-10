@@ -103,9 +103,9 @@ public final class HiveTerritoryAggroTask {
             if (campaign.dwellTicks() >= dwellThreshold) {
                 campaign.beginCampaign(currentTick);
                 com.alien.Alien.LOGGER.info(
-                        "Hive: player {} intrusion threshold crossed at location {} — retribution campaign armed",
-                        player.getUUID(),
-                        location.id()
+                    "Hive: player {} intrusion threshold crossed at location {} — retribution campaign armed",
+                    player.getUUID(),
+                    location.id()
                 );
             }
         }
@@ -125,12 +125,12 @@ public final class HiveTerritoryAggroTask {
         // Hated non-player enemies (marines, predators, etc.) — scan each claimed chunk's column for tagged threats.
         for (var chunk : location.claimedChunks()) {
             var box = new AABB(
-                    chunk.getMinBlockX(),
-                    level.getMinBuildHeight(),
-                    chunk.getMinBlockZ(),
-                    chunk.getMaxBlockX() + 1,
-                    level.getMaxBuildHeight(),
-                    chunk.getMaxBlockZ() + 1
+                chunk.getMinBlockX(),
+                level.getMinBuildHeight(),
+                chunk.getMinBlockZ(),
+                chunk.getMaxBlockX() + 1,
+                level.getMaxBuildHeight(),
+                chunk.getMaxBlockZ() + 1
             );
             for (var entity : level.getEntitiesOfClass(LivingEntity.class, box, HiveTerritoryAggroTask::isHatedNonPlayer)) {
                 intruders.add(entity);
@@ -145,7 +145,7 @@ public final class HiveTerritoryAggroTask {
             return false;
         }
         return entity.getType().is(AlienEntityTypeTags.HATED_BY_XENOMORPHS)
-                || entity.getType().is(AlienEntityTypeTags.XENOMORPH_THREAT_3_HIGH_DANGER);
+            || entity.getType().is(AlienEntityTypeTags.XENOMORPH_THREAT_3_HIGH_DANGER);
     }
 
     private static void aggroMembers(ServerLevel level, Set<UUID> memberIds, List<LivingEntity> intruders) {

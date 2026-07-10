@@ -18,12 +18,12 @@ import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.level.levelgen.Heightmap;
 
-import javax.annotation.Nullable;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import javax.annotation.Nullable;
 
 /**
  * The hive's vent-defense response: when intruders (the same hated/high-threat set the territory aggro task targets)
@@ -35,27 +35,32 @@ import java.util.UUID;
  */
 public final class VentDefenseTask {
 
-    private static final long INTERVAL_TICKS = 100L;         // check cadence while the hive ticks
-    private static final int DEFENDER_TARGET = 4;            // defenders wanted near an interior intruder
-    private static final int DEFENDER_RADIUS = 32;           // "near" the intruder, in blocks
-    private static final int VENT_RANGE_CHUNKS = 3;          // vents this close to the intruder can be used
-    private static final long WAVE_COOLDOWN_TICKS = 200L;    // min ticks between emergence waves per hive
-    private static final int INCIDENT_EMERGE_CAP = 8;        // max defenders emerged per intruder incident
+    private static final long INTERVAL_TICKS = 100L; // check cadence while the hive ticks
+
+    private static final int DEFENDER_TARGET = 4; // defenders wanted near an interior intruder
+
+    private static final int DEFENDER_RADIUS = 32; // "near" the intruder, in blocks
+
+    private static final int VENT_RANGE_CHUNKS = 3; // vents this close to the intruder can be used
+
+    private static final long WAVE_COOLDOWN_TICKS = 200L; // min ticks between emergence waves per hive
+
+    private static final int INCIDENT_EMERGE_CAP = 8; // max defenders emerged per intruder incident
 
     /** Combat castes first when drawing defenders from the reserves. */
     private static final List<net.minecraft.tags.TagKey<EntityType<?>>> DRAW_ORDER = List.of(
-            AlienEntityTypeTags.WARRIORS,
-            AlienEntityTypeTags.PROWLERS,
-            AlienEntityTypeTags.RUNNERS,
-            AlienEntityTypeTags.DRONES
+        AlienEntityTypeTags.WARRIORS,
+        AlienEntityTypeTags.PROWLERS,
+        AlienEntityTypeTags.RUNNERS,
+        AlienEntityTypeTags.DRONES
     );
 
     private static final Map<HiveLocation, Long> LAST_WAVE =
-            java.util.Collections.synchronizedMap(new java.util.WeakHashMap<>());
+        java.util.Collections.synchronizedMap(new java.util.WeakHashMap<>());
 
     /** Defenders emerged per intruder (by UUID) for the current incident; cleared when the intruder is gone. */
     private static final Map<HiveLocation, Map<UUID, Integer>> EMERGED =
-            java.util.Collections.synchronizedMap(new java.util.WeakHashMap<>());
+        java.util.Collections.synchronizedMap(new java.util.WeakHashMap<>());
 
     private VentDefenseTask() {}
 
@@ -125,22 +130,27 @@ public final class VentDefenseTask {
         if (spawnedThisWave > 0) {
             LAST_WAVE.put(location, now);
             Alien.LOGGER.info(
-                    "Hive at {}: {} defender(s) emerged from the vents against intruders.",
-                    location.centerPos(), spawnedThisWave);
+                "Hive at {}: {} defender(s) emerged from the vents against intruders.",
+                location.centerPos(),
+                spawnedThisWave
+            );
         }
     }
 
     /**
-     * Full strength for interior intruders; 2/3 strength for surface intruders UNLESS they've escalated into an
-     * active retribution campaign - an escalated enemy gets the full response wherever they stand.
+     * Full strength for interior intruders; 2/3 strength for surface intruders UNLESS they've escalated into an active
+     * retribution campaign - an escalated enemy gets the full response wherever they stand.
      */
     private static int defenderTarget(ServerLevel level, HiveLocation location, LivingEntity intruder) {
         int band = HiveLocationRegistry.INSTANCE.config().surfacePartySurfaceBandBlocks();
         int surfaceY = level.getHeight(
-                Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, intruder.getBlockX(), intruder.getBlockZ());
+            Heightmap.Types.MOTION_BLOCKING_NO_LEAVES,
+            intruder.getBlockX(),
+            intruder.getBlockZ()
+        );
         boolean onSurface = intruder.getY() >= surfaceY - band;
         boolean escalated = intruder instanceof Player player
-                && location.attackCampaigns().containsKey(player.getUUID());
+            && location.attackCampaigns().containsKey(player.getUUID());
         if (onSurface && !escalated) {
             return (DEFENDER_TARGET * 2 + 2) / 3; // 2/3 strength, rounded up
         }

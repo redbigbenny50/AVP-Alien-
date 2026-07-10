@@ -1,10 +1,10 @@
 package com.alien.common.gameplay.entity.living.alien.xenomorph.ai.egg.action;
 
 import com.alien.common.gameplay.entity.living.alien.ovomorph.Ovomorph;
+import com.alien.common.gameplay.entity.living.alien.xenomorph.Xenomorph;
 import com.alien.common.gameplay.hive.location.HiveLocationRegistry;
 import com.alien.common.gameplay.hive.structure.HiveChamberSlots;
 import com.alien.common.gameplay.hive.vent.HiveVents;
-import com.alien.common.gameplay.entity.living.alien.xenomorph.Xenomorph;
 import com.alien.common.registry.init.AlienSoundEvents;
 import com.alien.common.registry.tag.AlienEntityTypeTags;
 import com.blib.api.common.goap.v1.action.impl.NeoMoveToPosAction;
@@ -13,8 +13,8 @@ import com.just.ai.goap.action.Action;
 import com.just.ai.goap.state.Blackboard;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
-import net.minecraft.world.level.ChunkPos;
 import net.minecraft.sounds.SoundSource;
+import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
@@ -43,11 +43,11 @@ public class DropOffEggAction {
 
     private static final double DROP_OFF_RANGE_SQUARED = 2.0 * 2.0;
 
-    private static final double VENT_REACH_SQUARED = 2.5 * 2.5;              // close enough to slip into a vent
+    private static final double VENT_REACH_SQUARED = 2.5 * 2.5; // close enough to slip into a vent
 
-    private static final double VENT_WORTHWHILE_DIST_SQUARED = 32.0 * 32.0;  // shorter hauls just walk
+    private static final double VENT_WORTHWHILE_DIST_SQUARED = 32.0 * 32.0; // shorter hauls just walk
 
-    private static final int VENT_SEARCH_RADIUS_CHUNKS = 1;                  // vents within ~a chunk of each endpoint
+    private static final int VENT_SEARCH_RADIUS_CHUNKS = 1; // vents within ~a chunk of each endpoint
 
     private static final int SEARCH_RETRY_DELAY_TICKS = 20;
 
@@ -88,11 +88,11 @@ public class DropOffEggAction {
             var isChamberBed = freeSpot.isPresent();
             if (freeSpot.isEmpty()) {
                 freeSpot = findFreeEggSpot(
-                        xenomorph,
-                        xenomorph.level(),
-                        xenomorph.blockPosition(),
-                        pos -> xenomorph.level().getBlockState(pos).entityCanStandOn(xenomorph.level(), pos, xenomorph),
-                        failedSpots
+                    xenomorph,
+                    xenomorph.level(),
+                    xenomorph.blockPosition(),
+                    pos -> xenomorph.level().getBlockState(pos).entityCanStandOn(xenomorph.level(), pos, xenomorph),
+                    failedSpots
                 );
             }
             setFailedSpots(blackboard, failedSpots);
@@ -174,7 +174,7 @@ public class DropOffEggAction {
     private static void placeEggs(Xenomorph xenomorph, Vec3 center) {
         getPassengerOvomorphs(xenomorph).forEach(ovomorph -> {
             xenomorph.level()
-                    .playSound(null, ovomorph, AlienSoundEvents.ENTITY_OVOMORPH_ROOT.get(), SoundSource.HOSTILE, 1.0F, 1.0F);
+                .playSound(null, ovomorph, AlienSoundEvents.ENTITY_OVOMORPH_ROOT.get(), SoundSource.HOSTILE, 1.0F, 1.0F);
             ovomorph.isRooted.set(true);
             ovomorph.stopRiding();
             ovomorph.setPos(center.x, center.y, center.z);
@@ -196,16 +196,16 @@ public class DropOffEggAction {
 
     private static List<Ovomorph> getPassengerOvomorphs(Xenomorph xenomorph) {
         return xenomorph.getPassengers()
-                .stream()
-                .filter(passenger -> passenger instanceof Ovomorph)
-                .map(passenger -> (Ovomorph) passenger)
-                .toList();
+            .stream()
+            .filter(passenger -> passenger instanceof Ovomorph)
+            .map(passenger -> (Ovomorph) passenger)
+            .toList();
     }
 
     /**
-     * Plans the duct leg for a long chamber haul: nearest vent to the drone as entry, nearest vent to the bed
-     * as exit - only when both exist, differ, the walk is long enough to be worth it, and the exit genuinely
-     * shortens the remaining trip.
+     * Plans the duct leg for a long chamber haul: nearest vent to the drone as entry, nearest vent to the bed as exit -
+     * only when both exist, differ, the walk is long enough to be worth it, and the exit genuinely shortens the
+     * remaining trip.
      */
     private static void planVentLeg(Xenomorph xenomorph, BlockPos bed, Blackboard blackboard) {
         if (!(xenomorph.level() instanceof ServerLevel serverLevel)) {
@@ -235,10 +235,10 @@ public class DropOffEggAction {
     }
 
     /**
-     * The nearest free, reachable egg-chamber bed in the drone's hive: chambers sorted by distance, beds read from
-     * the tendril-floor slots, a bed counting as free when no rooted ovomorph sits on it. Unreachable beds join the
-     * failed-spot memory so retries skip them; empty result means the nursery is full/absent and the caller falls
-     * back to the around-the-queen spiral.
+     * The nearest free, reachable egg-chamber bed in the drone's hive: chambers sorted by distance, beds read from the
+     * tendril-floor slots, a bed counting as free when no rooted ovomorph sits on it. Unreachable beds join the
+     * failed-spot memory so retries skip them; empty result means the nursery is full/absent and the caller falls back
+     * to the around-the-queen spiral.
      */
     private static Optional<BlockPos> findChamberBedSpot(Xenomorph xenomorph, Set<BlockPos> failedSpots) {
         if (!(xenomorph.level() instanceof ServerLevel serverLevel)) {
@@ -283,18 +283,18 @@ public class DropOffEggAction {
         var center = bed.getCenter();
         var box = new AABB(center.x - 1.0, bed.getY() - 1.0, center.z - 1.0, center.x + 1.0, bed.getY() + 2.0, center.z + 1.0);
         return !level.getEntitiesOfClass(
-                Ovomorph.class,
-                box,
-                entity -> entity.getType().is(AlienEntityTypeTags.OVOMORPHS) && entity.isRooted.get()
+            Ovomorph.class,
+            box,
+            entity -> entity.getType().is(AlienEntityTypeTags.OVOMORPHS) && entity.isRooted.get()
         ).isEmpty();
     }
 
     private static Optional<BlockPos> findFreeEggSpot(
-            Xenomorph xenomorph,
-            Level level,
-            BlockPos center,
-            Predicate<BlockPos> isWalkable,
-            Set<BlockPos> failedSpots
+        Xenomorph xenomorph,
+        Level level,
+        BlockPos center,
+        Predicate<BlockPos> isWalkable,
+        Set<BlockPos> failedSpots
     ) {
         var gridAlignedCenter = alignToEggGrid(center);
 
@@ -322,10 +322,10 @@ public class DropOffEggAction {
                 var aboveState = level.getBlockState(adjustedPos.above());
 
                 if (
-                        (state.isAir() || state.canBeReplaced())
-                                && (aboveState.isAir() || aboveState.canBeReplaced())
-                                && level.getEntities(null, new AABB(adjustedPos)).isEmpty()
-                                && hasOvomorphSpacing(level, adjustedPos)
+                    (state.isAir() || state.canBeReplaced())
+                        && (aboveState.isAir() || aboveState.canBeReplaced())
+                        && level.getEntities(null, new AABB(adjustedPos)).isEmpty()
+                        && hasOvomorphSpacing(level, adjustedPos)
                 ) {
                     viable.add(adjustedPos.immutable());
                 }
@@ -358,18 +358,18 @@ public class DropOffEggAction {
         var center = pos.getCenter();
         var halfSize = MIN_HORIZONTAL_OVOMORPH_SPACING_BLOCKS;
         var searchBox = new AABB(
-                center.x - halfSize,
-                pos.getY() - level.dimensionType().height(),
-                center.z - halfSize,
-                center.x + halfSize,
-                pos.getY() + 5,
-                center.z + halfSize
+            center.x - halfSize,
+            pos.getY() - level.dimensionType().height(),
+            center.z - halfSize,
+            center.x + halfSize,
+            pos.getY() + 5,
+            center.z + halfSize
         );
 
         return level.getEntitiesOfClass(
-                Ovomorph.class,
-                searchBox,
-                entity -> entity.getType().is(AlienEntityTypeTags.OVOMORPHS) && entity.isRooted.get()
+            Ovomorph.class,
+            searchBox,
+            entity -> entity.getType().is(AlienEntityTypeTags.OVOMORPHS) && entity.isRooted.get()
         ).isEmpty();
     }
 
@@ -385,10 +385,10 @@ public class DropOffEggAction {
 
     private static void setFailedSpots(Blackboard blackboard, Set<BlockPos> failedSpots) {
         blackboard.set(
-                KEY_FAILED_SPOTS,
-                failedSpots.stream()
-                        .limit(MAX_REMEMBERED_FAILED_SPOTS)
-                        .toList()
+            KEY_FAILED_SPOTS,
+            failedSpots.stream()
+                .limit(MAX_REMEMBERED_FAILED_SPOTS)
+                .toList()
         );
     }
 

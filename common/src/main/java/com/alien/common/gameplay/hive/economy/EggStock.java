@@ -10,18 +10,18 @@ import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.phys.AABB;
 
 /**
- * The stored eggs in the hive's egg chambers back the ovomorph RESERVE the same way the jelly vats back the jelly
- * bank: when a unit purchase needs an ovomorph input and the reserve has none, a rooted egg is consumed from a
- * nursery chamber to cover it. Eggs around the queen are her clutch and are never taken - only chamber stock is
- * spent, which is exactly what makes raiding a hive's nurseries starve its growth.
+ * The stored eggs in the hive's egg chambers back the ovomorph RESERVE the same way the jelly vats back the jelly bank:
+ * when a unit purchase needs an ovomorph input and the reserve has none, a rooted egg is consumed from a nursery
+ * chamber to cover it. Eggs around the queen are her clutch and are never taken - only chamber stock is spent, which is
+ * exactly what makes raiding a hive's nurseries starve its growth.
  */
 public final class EggStock {
 
     private EggStock() {}
 
     /**
-     * Covers a purchase-input shortfall of {@code type} (an ovomorph variant) by consuming rooted eggs from the
-     * hive's egg chambers into the reserve. No-op for non-egg inputs, absent shortfalls, or unloaded chambers.
+     * Covers a purchase-input shortfall of {@code type} (an ovomorph variant) by consuming rooted eggs from the hive's
+     * egg chambers into the reserve. No-op for non-egg inputs, absent shortfalls, or unloaded chambers.
      */
     public static void coverInputShortfall(MinecraftServer server, HiveLocation location, EntityType<?> type, int needed) {
         if (!type.is(AlienEntityTypeTags.OVOMORPHS)) {
@@ -46,11 +46,20 @@ public final class EggStock {
                 continue;
             }
             var box = new AABB(
-                    chamber.getMinBlockX(), floorY - 1, chamber.getMinBlockZ(),
-                    chamber.getMaxBlockX() + 1, floorY + 6, chamber.getMaxBlockZ() + 1
+                chamber.getMinBlockX(),
+                floorY - 1,
+                chamber.getMinBlockZ(),
+                chamber.getMaxBlockX() + 1,
+                floorY + 6,
+                chamber.getMaxBlockZ() + 1
             );
-            for (var egg : level.getEntitiesOfClass(Ovomorph.class, box,
-                    e -> e.getType() == type && e.isRooted.get() && e.isAlive())) {
+            for (
+                var egg : level.getEntitiesOfClass(
+                    Ovomorph.class,
+                    box,
+                    e -> e.getType() == type && e.isRooted.get() && e.isAlive()
+                )
+            ) {
                 if (covered >= missing) {
                     break;
                 }
@@ -61,8 +70,11 @@ public final class EggStock {
             }
         }
         if (covered > 0) {
-            Alien.LOGGER.info("Hive at {}: consumed {} stored egg(s) from the nurseries to fund a purchase.",
-                    location.centerPos(), covered);
+            Alien.LOGGER.info(
+                "Hive at {}: consumed {} stored egg(s) from the nurseries to fund a purchase.",
+                location.centerPos(),
+                covered
+            );
         }
     }
 }

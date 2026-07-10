@@ -10,11 +10,11 @@ import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.levelgen.Heightmap;
 
-import javax.annotation.Nullable;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.function.Predicate;
+import javax.annotation.Nullable;
 
 /**
  * Vent travel for hive AI: the resin vents (tracked per-location by {@link HiveVentManager}) form the hive's duct
@@ -39,7 +39,9 @@ public final class HiveVents {
         return found.isEmpty() ? null : found.get(0);
     }
 
-    /** All known vents within {@code radiusChunks} chunk columns of {@code from}, nearest first, optionally filtered. */
+    /**
+     * All known vents within {@code radiusChunks} chunk columns of {@code from}, nearest first, optionally filtered.
+     */
     public static List<BlockPos> ventsNear(HiveVentManager vents, BlockPos from, int radiusChunks, @Nullable Predicate<BlockPos> filter) {
         var center = new ChunkPos(from);
         var found = new ArrayList<BlockPos>();
@@ -94,9 +96,11 @@ public final class HiveVents {
             candidates.add(vent.below(down));
         }
         for (var pos : candidates) {
-            if (passable(level, pos)
+            if (
+                passable(level, pos)
                     && passable(level, pos.above())
-                    && level.getBlockState(pos.below()).entityCanStandOn(level, pos.below(), null)) {
+                    && level.getBlockState(pos.below()).entityCanStandOn(level, pos.below(), null)
+            ) {
                 return pos;
             }
         }
@@ -109,7 +113,9 @@ public final class HiveVents {
         return state.isAir() || state.is(AlienResinBlocks.RESIN_WEB.get());
     }
 
-    /** The vent's "front": the horizontal direction toward its chunk's centre, null when it sits on the centre column. */
+    /**
+     * The vent's "front": the horizontal direction toward its chunk's centre, null when it sits on the centre column.
+     */
     @Nullable
     private static Direction towardChunkCenter(BlockPos vent) {
         var chunk = new ChunkPos(vent);
@@ -119,14 +125,14 @@ public final class HiveVents {
             return null;
         }
         return Math.abs(dx) >= Math.abs(dz)
-                ? (dx > 0 ? Direction.EAST : Direction.WEST)
-                : (dz > 0 ? Direction.SOUTH : Direction.NORTH);
+            ? (dx > 0 ? Direction.EAST : Direction.WEST)
+            : (dz > 0 ? Direction.SOUTH : Direction.NORTH);
     }
 
     /**
      * Executes the duct hop: squelch at the entry, teleport {@code traveller} (re-seating any riders, e.g. a carried
-     * egg) to the emergence spot at {@code exitVent}, squelch there. Returns false - and moves nothing - when the
-     * exit has no standable spot.
+     * egg) to the emergence spot at {@code exitVent}, squelch there. Returns false - and moves nothing - when the exit
+     * has no standable spot.
      */
     public static boolean ductTravel(LivingEntity traveller, BlockPos entryVent, BlockPos exitVent) {
         var level = traveller.level();

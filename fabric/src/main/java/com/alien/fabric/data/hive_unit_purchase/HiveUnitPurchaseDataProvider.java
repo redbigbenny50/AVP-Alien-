@@ -34,179 +34,193 @@ public class HiveUnitPurchaseDataProvider implements DataProvider {
 
     private void generate() {
         addVariantPurchases(
-                new VariantEntities(
-                        AlienEntityTypes.DRONE.get(),
-                        AlienEntityTypes.RUNNER.get(),
-                        AlienEntityTypes.WARRIOR.get(),
-                        AlienEntityTypes.PRAETORIAN.get(),
-                        AlienEntityTypes.PROWLER.get(),
-                        AlienEntityTypes.CRUSHER.get(),
-                        AlienEntityTypes.RAVAGER.get(),
-                        AlienEntityTypes.RAZOR_CLAW.get(),
-                        AlienEntityTypes.BURSTER.get(),
-                        AlienEntityTypes.CARRIER.get(),
-                        AlienEntityTypes.CHRYSALIS.get(),
-                        AlienEntityTypes.HARBINGER.get(),
-                        AlienEntityTypes.OVOMORPH.get(),
-                        AlienEntityTypes.SPITTER.get()
-                )
+            new VariantEntities(
+                AlienEntityTypes.DRONE.get(),
+                AlienEntityTypes.RUNNER.get(),
+                AlienEntityTypes.WARRIOR.get(),
+                AlienEntityTypes.PRAETORIAN.get(),
+                AlienEntityTypes.PROWLER.get(),
+                AlienEntityTypes.CRUSHER.get(),
+                AlienEntityTypes.RAVAGER.get(),
+                AlienEntityTypes.RAZOR_CLAW.get(),
+                AlienEntityTypes.BURSTER.get(),
+                AlienEntityTypes.CARRIER.get(),
+                AlienEntityTypes.CHRYSALIS.get(),
+                AlienEntityTypes.HARBINGER.get(),
+                AlienEntityTypes.OVOMORPH.get(),
+                AlienEntityTypes.SPITTER.get()
+            )
         );
         addVariantPurchases(
-                new VariantEntities(
-                        AlienEntityTypes.ABERRANT_DRONE.get(),
-                        AlienEntityTypes.ABERRANT_RUNNER.get(),
-                        AlienEntityTypes.ABERRANT_WARRIOR.get(),
-                        AlienEntityTypes.ABERRANT_PRAETORIAN.get(),
-                        AlienEntityTypes.ABERRANT_PROWLER.get(),
-                        AlienEntityTypes.ABERRANT_CRUSHER.get(),
-                        AlienEntityTypes.ABERRANT_RAVAGER.get(),
-                        AlienEntityTypes.ABERRANT_RAZOR_CLAW.get(),
-                        AlienEntityTypes.ABERRANT_BURSTER.get(),
-                        AlienEntityTypes.ABERRANT_CARRIER.get(),
-                        AlienEntityTypes.ABERRANT_CHRYSALIS.get(),
-                        AlienEntityTypes.ABERRANT_HARBINGER.get(),
-                        AlienEntityTypes.ABERRANT_OVOMORPH.get(),
-                        AlienEntityTypes.ABERRANT_SPITTER.get()
-                )
+            new VariantEntities(
+                AlienEntityTypes.ABERRANT_DRONE.get(),
+                AlienEntityTypes.ABERRANT_RUNNER.get(),
+                AlienEntityTypes.ABERRANT_WARRIOR.get(),
+                AlienEntityTypes.ABERRANT_PRAETORIAN.get(),
+                AlienEntityTypes.ABERRANT_PROWLER.get(),
+                AlienEntityTypes.ABERRANT_CRUSHER.get(),
+                AlienEntityTypes.ABERRANT_RAVAGER.get(),
+                AlienEntityTypes.ABERRANT_RAZOR_CLAW.get(),
+                AlienEntityTypes.ABERRANT_BURSTER.get(),
+                AlienEntityTypes.ABERRANT_CARRIER.get(),
+                AlienEntityTypes.ABERRANT_CHRYSALIS.get(),
+                AlienEntityTypes.ABERRANT_HARBINGER.get(),
+                AlienEntityTypes.ABERRANT_OVOMORPH.get(),
+                AlienEntityTypes.ABERRANT_SPITTER.get()
+            )
         );
         addVariantPurchases(
-                new VariantEntities(
-                        AlienEntityTypes.NETHER_DRONE.get(),
-                        AlienEntityTypes.NETHER_RUNNER.get(),
-                        AlienEntityTypes.NETHER_WARRIOR.get(),
-                        AlienEntityTypes.NETHER_PRAETORIAN.get(),
-                        AlienEntityTypes.NETHER_PROWLER.get(),
-                        AlienEntityTypes.NETHER_CRUSHER.get(),
-                        AlienEntityTypes.NETHER_RAVAGER.get(),
-                        AlienEntityTypes.NETHER_RAZOR_CLAW.get(),
-                        AlienEntityTypes.NETHER_BURSTER.get(),
-                        AlienEntityTypes.NETHER_CARRIER.get(),
-                        AlienEntityTypes.NETHER_CHRYSALIS.get(),
-                        AlienEntityTypes.NETHER_HARBINGER.get(),
-                        AlienEntityTypes.NETHER_OVOMORPH.get(),
-                        AlienEntityTypes.NETHER_SPITTER.get()
-                )
+            new VariantEntities(
+                AlienEntityTypes.NETHER_DRONE.get(),
+                AlienEntityTypes.NETHER_RUNNER.get(),
+                AlienEntityTypes.NETHER_WARRIOR.get(),
+                AlienEntityTypes.NETHER_PRAETORIAN.get(),
+                AlienEntityTypes.NETHER_PROWLER.get(),
+                AlienEntityTypes.NETHER_CRUSHER.get(),
+                AlienEntityTypes.NETHER_RAVAGER.get(),
+                AlienEntityTypes.NETHER_RAZOR_CLAW.get(),
+                AlienEntityTypes.NETHER_BURSTER.get(),
+                AlienEntityTypes.NETHER_CARRIER.get(),
+                AlienEntityTypes.NETHER_CHRYSALIS.get(),
+                AlienEntityTypes.NETHER_HARBINGER.get(),
+                AlienEntityTypes.NETHER_OVOMORPH.get(),
+                AlienEntityTypes.NETHER_SPITTER.get()
+            )
         );
     }
 
     private void addVariantPurchases(VariantEntities entities) {
         // Basic egg-born castes: each consumes one of its variant's ovomorphs (reserve first; stored nursery
         // eggs cover shortfalls). The spitter is the rarer third basic - production substitutes it 1-in-4.
-        add(new HiveUnitPurchase(entities.drone(), 50, POPULATION_BIOMASS_COST_SCALE, 0, 0, List.of(input(entities.ovomorph())), List.of()));
-        add(new HiveUnitPurchase(entities.runner(), 40, POPULATION_BIOMASS_COST_SCALE, 0, 0, List.of(input(entities.ovomorph())), List.of()));
-        add(new HiveUnitPurchase(entities.spitter(), 50, POPULATION_BIOMASS_COST_SCALE, 0, 0, List.of(input(entities.ovomorph())), List.of()));
         add(
-                new HiveUnitPurchase(
-                        entities.warrior(),
-                        0,
-                        POPULATION_BIOMASS_COST_SCALE,
-                        1,
-                        0,
-                        List.of(input(entities.drone())),
-                        List.of()
-                )
+            new HiveUnitPurchase(entities.drone(), 50, POPULATION_BIOMASS_COST_SCALE, 0, 0, List.of(input(entities.ovomorph())), List.of())
         );
         add(
-                new HiveUnitPurchase(
-                        entities.praetorian(),
-                        0,
-                        POPULATION_BIOMASS_COST_SCALE,
-                        1,
-                        0,
-                        List.of(input(entities.warrior())),
-                        List.of()
-                )
+            new HiveUnitPurchase(entities.runner(), 40, POPULATION_BIOMASS_COST_SCALE, 0, 0, List.of(input(entities.ovomorph())), List.of())
         );
         add(
-                new HiveUnitPurchase(
-                        entities.prowler(),
-                        0,
-                        POPULATION_BIOMASS_COST_SCALE,
-                        1,
-                        0,
-                        List.of(input(entities.runner())),
-                        List.of()
-                )
+            new HiveUnitPurchase(
+                entities.spitter(),
+                50,
+                POPULATION_BIOMASS_COST_SCALE,
+                0,
+                0,
+                List.of(input(entities.ovomorph())),
+                List.of()
+            )
         );
         add(
-                new HiveUnitPurchase(
-                        entities.crusher(),
-                        0,
-                        POPULATION_BIOMASS_COST_SCALE,
-                        1,
-                        0,
-                        List.of(input(entities.prowler())),
-                        List.of()
-                )
+            new HiveUnitPurchase(
+                entities.warrior(),
+                0,
+                POPULATION_BIOMASS_COST_SCALE,
+                1,
+                0,
+                List.of(input(entities.drone())),
+                List.of()
+            )
         );
         add(
-                new HiveUnitPurchase(
-                        entities.ravager(),
-                        0,
-                        POPULATION_BIOMASS_COST_SCALE,
-                        0,
-                        1,
-                        List.of(input(entities.warrior())),
-                        List.of(harbingerRequired(entities))
-                )
+            new HiveUnitPurchase(
+                entities.praetorian(),
+                0,
+                POPULATION_BIOMASS_COST_SCALE,
+                1,
+                0,
+                List.of(input(entities.warrior())),
+                List.of()
+            )
         );
         add(
-                new HiveUnitPurchase(
-                        entities.razorClaw(),
-                        0,
-                        POPULATION_BIOMASS_COST_SCALE,
-                        0,
-                        2,
-                        List.of(input(entities.runner())),
-                        List.of(harbingerRequired(entities))
-                )
+            new HiveUnitPurchase(
+                entities.prowler(),
+                0,
+                POPULATION_BIOMASS_COST_SCALE,
+                1,
+                0,
+                List.of(input(entities.runner())),
+                List.of()
+            )
         );
         add(
-                new HiveUnitPurchase(
-                        entities.burster(),
-                        0,
-                        POPULATION_BIOMASS_COST_SCALE,
-                        0,
-                        1,
-                        List.of(input(entities.runner())),
-                        List.of(harbingerRequired(entities))
-                )
+            new HiveUnitPurchase(
+                entities.crusher(),
+                0,
+                POPULATION_BIOMASS_COST_SCALE,
+                1,
+                0,
+                List.of(input(entities.prowler())),
+                List.of()
+            )
         );
         add(
-                new HiveUnitPurchase(
-                        entities.carrier(),
-                        0,
-                        POPULATION_BIOMASS_COST_SCALE,
-                        0,
-                        1,
-                        List.of(input(entities.drone())),
-                        List.of(harbingerRequired(entities))
-                )
+            new HiveUnitPurchase(
+                entities.ravager(),
+                0,
+                POPULATION_BIOMASS_COST_SCALE,
+                0,
+                1,
+                List.of(input(entities.warrior())),
+                List.of(harbingerRequired(entities))
+            )
         );
         add(
-                new HiveUnitPurchase(
-                        entities.chrysalis(),
-                        0,
-                        POPULATION_BIOMASS_COST_SCALE,
-                        0,
-                        1,
-                        List.of(input(entities.prowler())),
-                        List.of(harbingerRequired(entities))
-                )
+            new HiveUnitPurchase(
+                entities.razorClaw(),
+                0,
+                POPULATION_BIOMASS_COST_SCALE,
+                0,
+                2,
+                List.of(input(entities.runner())),
+                List.of(harbingerRequired(entities))
+            )
         );
         add(
-                new HiveUnitPurchase(
-                        entities.harbinger(),
-                        200,
-                        POPULATION_BIOMASS_COST_SCALE,
-                        0,
-                        1,
-                        List.of(input(entities.praetorian())),
-                        List.of(
-                                new HiveUnitPurchaseCondition.MinPopulation(100),
-                                new HiveUnitPurchaseCondition.MaxEntityCountInLocation(entities.harbinger(), 1)
-                        )
+            new HiveUnitPurchase(
+                entities.burster(),
+                0,
+                POPULATION_BIOMASS_COST_SCALE,
+                0,
+                1,
+                List.of(input(entities.runner())),
+                List.of(harbingerRequired(entities))
+            )
+        );
+        add(
+            new HiveUnitPurchase(
+                entities.carrier(),
+                0,
+                POPULATION_BIOMASS_COST_SCALE,
+                0,
+                1,
+                List.of(input(entities.drone())),
+                List.of(harbingerRequired(entities))
+            )
+        );
+        add(
+            new HiveUnitPurchase(
+                entities.chrysalis(),
+                0,
+                POPULATION_BIOMASS_COST_SCALE,
+                0,
+                1,
+                List.of(input(entities.prowler())),
+                List.of(harbingerRequired(entities))
+            )
+        );
+        add(
+            new HiveUnitPurchase(
+                entities.harbinger(),
+                200,
+                POPULATION_BIOMASS_COST_SCALE,
+                0,
+                1,
+                List.of(input(entities.praetorian())),
+                List.of(
+                    new HiveUnitPurchaseCondition.MinPopulation(100),
+                    new HiveUnitPurchaseCondition.MaxEntityCountInLocation(entities.harbinger(), 1)
                 )
+            )
         );
     }
 
@@ -227,8 +241,8 @@ public class HiveUnitPurchaseDataProvider implements DataProvider {
         generate();
 
         var pathProvider = output.createPathProvider(
-                PackOutput.Target.DATA_PACK,
-                HiveUnitPurchaseReloadListener.DIRECTORY_NAME
+            PackOutput.Target.DATA_PACK,
+            HiveUnitPurchaseReloadListener.DIRECTORY_NAME
         );
         var futures = new ArrayList<CompletableFuture<?>>();
 
@@ -247,19 +261,19 @@ public class HiveUnitPurchaseDataProvider implements DataProvider {
     }
 
     private record VariantEntities(
-            EntityType<?> drone,
-            EntityType<?> runner,
-            EntityType<?> warrior,
-            EntityType<?> praetorian,
-            EntityType<?> prowler,
-            EntityType<?> crusher,
-            EntityType<?> ravager,
-            EntityType<?> razorClaw,
-            EntityType<?> burster,
-            EntityType<?> carrier,
-            EntityType<?> chrysalis,
-            EntityType<?> harbinger,
-            EntityType<?> ovomorph,
-            EntityType<?> spitter
+        EntityType<?> drone,
+        EntityType<?> runner,
+        EntityType<?> warrior,
+        EntityType<?> praetorian,
+        EntityType<?> prowler,
+        EntityType<?> crusher,
+        EntityType<?> ravager,
+        EntityType<?> razorClaw,
+        EntityType<?> burster,
+        EntityType<?> carrier,
+        EntityType<?> chrysalis,
+        EntityType<?> harbinger,
+        EntityType<?> ovomorph,
+        EntityType<?> spitter
     ) {}
 }
