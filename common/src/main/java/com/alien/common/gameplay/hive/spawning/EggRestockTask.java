@@ -11,8 +11,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.sounds.SoundSource;
 import net.minecraft.world.phys.AABB;
-
-import javax.annotation.Nullable;
+import org.jetbrains.annotations.Nullable;
 
 /**
  * Stage 4 of the egg logistics: the RESERVE egg bank restocks the physical nurseries. When free chamber beds exist and

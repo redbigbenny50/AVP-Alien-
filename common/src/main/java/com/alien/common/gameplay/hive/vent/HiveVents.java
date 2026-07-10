@@ -9,12 +9,12 @@ import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.levelgen.Heightmap;
+import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.function.Predicate;
-import javax.annotation.Nullable;
 
 /**
  * Vent travel for hive AI: the resin vents (tracked per-location by {@link HiveVentManager}) form the hive's duct
