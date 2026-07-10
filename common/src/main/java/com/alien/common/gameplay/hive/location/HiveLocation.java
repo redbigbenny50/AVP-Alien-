@@ -112,6 +112,8 @@ public final class HiveLocation {
 
     private static final String NBT_SCOURGE_JELLY = "ScourgeJelly";
 
+    private static final String NBT_PENDING_HARVEST_SPAWNERS = "PendingHarvestSpawners";
+
     private static final String NBT_ROYAL_JELLY_ACCUMULATOR = "RoyalJellyAccumulator";
 
     private static final String NBT_QUEEN_SCOURGE_ACCUMULATOR = "QueenScourgeAccumulator";
@@ -259,6 +261,12 @@ public final class HiveLocation {
 
     /** Rare resource produced by queens (1/100min) and harbingers (1/min). Powers high-tier caste purchases. */
     private int scourgeJelly;
+
+    /**
+     * Mob spawners captured from terrain during building (already converted to zombie/skeleton types), waiting for a
+     * harvest chamber with a free slot. Persisted.
+     */
+    private final java.util.List<EntityType<?>> pendingHarvestSpawners = new java.util.ArrayList<>();
 
     /**
      * Tick accumulator: incremented once per loaded queen per tick. At {@code royalJellyTicksPerProduction}, +1 royal.
@@ -688,6 +696,11 @@ public final class HiveLocation {
         this.scourgeJelly = Math.max(0, scourgeJelly);
     }
 
+    /** Live mutable list of captured, unhoused harvest spawners (their converted monster types). */
+    public java.util.List<EntityType<?>> pendingHarvestSpawners() {
+        return pendingHarvestSpawners;
+    }
+
     public long royalJellyAccumulator() {
         return royalJellyAccumulator;
     }
@@ -926,6 +939,17 @@ public final class HiveLocation {
         if (scourgeJelly > 0) {
             tag.putInt(NBT_SCOURGE_JELLY, scourgeJelly);
         }
+        if (!pendingHarvestSpawners.isEmpty()) {
+            var pendingHarvestTag = new ListTag();
+            for (var type : pendingHarvestSpawners) {
+                pendingHarvestTag.add(
+                    net.minecraft.nbt.StringTag.valueOf(
+                        net.minecraft.core.registries.BuiltInRegistries.ENTITY_TYPE.getKey(type).toString()
+                    )
+                );
+            }
+            tag.put(NBT_PENDING_HARVEST_SPAWNERS, pendingHarvestTag);
+        }
         if (royalJellyAccumulator > 0L) {
             tag.putLong(NBT_ROYAL_JELLY_ACCUMULATOR, royalJellyAccumulator);
         }
@@ -1108,6 +1132,16 @@ public final class HiveLocation {
         location.inhibited = tag.getBoolean(NBT_INHIBITED);
         location.royalJelly = Math.max(0, tag.getInt(NBT_ROYAL_JELLY));
         location.scourgeJelly = Math.max(0, tag.getInt(NBT_SCOURGE_JELLY));
+        if (tag.contains(NBT_PENDING_HARVEST_SPAWNERS)) {
+            var pendingHarvestTag = tag.getList(NBT_PENDING_HARVEST_SPAWNERS, Tag.TAG_STRING);
+            for (var i = 0; i < pendingHarvestTag.size(); i++) {
+                var typeId = net.minecraft.resources.ResourceLocation.tryParse(pendingHarvestTag.getString(i));
+                if (typeId != null) {
+                    net.minecraft.core.registries.BuiltInRegistries.ENTITY_TYPE.getOptional(typeId)
+                        .ifPresent(location.pendingHarvestSpawners::add);
+                }
+            }
+        }
         location.royalJellyAccumulator = Math.max(0L, tag.getLong(NBT_ROYAL_JELLY_ACCUMULATOR));
         location.queenScourgeAccumulator = Math.max(0L, tag.getLong(NBT_QUEEN_SCOURGE_ACCUMULATOR));
         location.harbingerScourgeAccumulator = Math.max(0L, tag.getLong(NBT_HARBINGER_SCOURGE_ACCUMULATOR));

@@ -99,7 +99,7 @@ public final class HiveVents {
             if (
                 passable(level, pos)
                     && passable(level, pos.above())
-                    && level.getBlockState(pos.below()).entityCanStandOn(level, pos.below(), null)
+                    && level.getBlockState(pos.below()).isFaceSturdy(level, pos.below(), Direction.UP)
             ) {
                 return pos;
             }

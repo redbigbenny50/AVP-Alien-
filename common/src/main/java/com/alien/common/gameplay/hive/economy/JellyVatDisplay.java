@@ -16,36 +16,46 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * The hive's PHYSICAL jelly store - the agreed bank+vats model. Production and spending live on the invisible bank;
- * each growth cycle a TRICKLE moves surplus (above a working reserve) from the bank into the vats, with a bulk catch-up
- * on the first cycle after load. The vats are a SIDE ACCOUNT the hive does not touch unless the bank cannot cover a
- * cost ({@link #coverShortfall} - vaults drain before the royal chambers; the queen's stores go last). Jelly raided
- * from a vat is genuinely stolen from the hive's savings; jelly poured in genuinely adds to them. The class also
- * maintains the furniture: missing vats regrow on their slots, strays are pruned (contents salvaged to the bank).
+ * Keeps the physical jelly vats in step with the hive's jelly BANKS. Generalized over both jellies: the ROYAL bank
+ * displays in the jelly vaults and royal chambers (royal chambers fill first, drain last - the queen's premium stores),
+ * and the SCOURGE bank displays in the scourge chamber's vats. Bank surplus above a working reserve trickles into vats
+ * each growth cycle (bulk catch-up on the first sync after load); stray vats are pruned with their contents salvaged
+ * into the bank (jelly is never destroyed); missing vats regrow on their slots; and slot vats are kept typed to their
+ * chamber's jelly. When a spend site's bank cannot cover a cost ({@link #coverShortfall} /
+ * {@link #coverScourgeShortfall}), the shortfall is withdrawn from the physical store back into the bank (for royal:
+ * vaults drain before the royal chambers). Jelly raided from vats is genuinely stolen from the hive.
  */
 public final class JellyVatDisplay {
 
     private static final int TRICKLE_PER_CYCLE = 3; // bank -> vats per growth cycle (the "interest" pacing)
 
-    private static final int BANK_WORKING_RESERVE = 20; // liquid jelly the bank keeps; only surplus goes to storage
+    // Liquid jelly the bank keeps; only surplus goes to storage. Kept SMALL: coverShortfall pulls jelly back
+    // from vats on demand, and slow early production (~1 jelly per few minutes) never cleared the old 20 -
+    // vats sat visibly empty for hours while the hive was in fact accruing jelly.
+    private static final int BANK_WORKING_RESERVE = 5;
 
-    /** Hives whose vats have caught up since load - the first sync bulk-fills what accrued while unloaded. */
-    private static final java.util.Map<HiveLocation, Boolean> CAUGHT_UP =
+    /** Per-hive, per-bank: whether the first-sync bulk catch-up fill has run since load. */
+    private static final java.util.Map<HiveLocation, java.util.Set<JellyType>> CAUGHT_UP =
         java.util.Collections.synchronizedMap(new java.util.WeakHashMap<>());
 
     private JellyVatDisplay() {}
 
-    /** Maintains vats and trickles bank surplus into them. Runs on the growth cadence. */
+    /** Maintains vats and trickles bank surplus into them, for BOTH banks. Runs on the growth cadence. */
     public static void sync(ServerLevel level, HiveLocation location) {
-        var chambers = chambersRoyalFirst(location);
+        syncBank(level, location, JellyType.ROYAL);
+        syncBank(level, location, JellyType.SCOURGE);
+    }
+
+    private static void syncBank(ServerLevel level, HiveLocation location, JellyType type) {
+        var chambers = chambersFor(location, type);
         if (chambers.isEmpty()) {
             return;
         }
         var vatBlock = AlienBlocks.JELLY_VAT.get();
         int slotRow = location.hiveFloorY() + 1;
 
-        // Furniture maintenance: prune stray vats (salvaging their contents into the bank - never destroy jelly),
-        // regrow missing vats on their slots, and keep slot vats typed royal.
+        // Furniture maintenance: prune stray vats (salvaging their contents into this bank - never destroy jelly),
+        // regrow missing vats on their slots, and keep slot vats typed to the chamber's jelly.
         for (ChunkPos chamber : chambers) {
             if (!level.isLoaded(chamber.getWorldPosition())) {
                 continue;
@@ -57,7 +67,7 @@ public final class JellyVatDisplay {
                     scan.set(x, slotRow, z);
                     if (level.getBlockState(scan).is(vatBlock) && !slots.contains(scan)) {
                         if (level.getBlockEntity(scan) instanceof JellyVatBlockEntity stray && stray.getFillLevel() > 0) {
-                            location.setRoyalJelly(location.royalJelly() + stray.getFillLevel());
+                            bankSet(location, type, bankGet(location, type) + stray.getFillLevel());
                         }
                         level.setBlock(scan.immutable(), Blocks.AIR.defaultBlockState(), 3);
                     }
@@ -69,17 +79,19 @@ public final class JellyVatDisplay {
                     level.setBlock(slot, vatBlock.defaultBlockState(), 3);
                     state = level.getBlockState(slot);
                 }
-                if (state.is(vatBlock) && state.getValue(JellyVatBlock.JELLY_TYPE) != JellyType.ROYAL) {
-                    level.setBlock(slot, state.setValue(JellyVatBlock.JELLY_TYPE, JellyType.ROYAL), 3);
+                if (state.is(vatBlock) && state.getValue(JellyVatBlock.JELLY_TYPE) != type) {
+                    level.setBlock(slot, state.setValue(JellyVatBlock.JELLY_TYPE, type), 3);
                 }
             }
         }
 
-        // Trickle: surplus above the working reserve flows into vats with free space, royal chambers first. The first
-        // sync after load has no budget cap - the catch-up fill for everything that accrued while unloaded.
-        boolean catchUp = CAUGHT_UP.putIfAbsent(location, Boolean.TRUE) == null;
+        // Trickle: surplus above the working reserve flows into vats with free space (royal: royal chambers first).
+        // The first sync after load has no budget cap - the catch-up fill for what accrued while unloaded.
+        boolean catchUp = CAUGHT_UP
+            .computeIfAbsent(location, $ -> java.util.Collections.synchronizedSet(java.util.EnumSet.noneOf(JellyType.class)))
+            .add(type);
         int budget = catchUp ? Integer.MAX_VALUE : TRICKLE_PER_CYCLE;
-        int surplus = location.royalJelly() - BANK_WORKING_RESERVE;
+        int surplus = bankGet(location, type) - BANK_WORKING_RESERVE;
         if (surplus <= 0) {
             return;
         }
@@ -106,15 +118,10 @@ public final class JellyVatDisplay {
             }
         }
         if (moved > 0) {
-            location.setRoyalJelly(location.royalJelly() - moved);
+            bankSet(location, type, bankGet(location, type) - moved);
         }
     }
 
-    /**
-     * The vats are the hive's LAST RESORT: when the bank cannot cover {@code needed}, withdraw the shortfall from the
-     * physical store back into the bank. Vaults drain before royal chambers - the queen's stores go last. Withdrawn
-     * amounts are limited to loaded chambers; a fully unloaded store cannot be tapped.
-     */
     /** Overload resolving the location's level from the server (spend sites often lack a level in scope). */
     public static void coverShortfall(MinecraftServer server, HiveLocation location, int needed) {
         var level = server.getLevel(location.dimension());
@@ -123,13 +130,26 @@ public final class JellyVatDisplay {
         }
     }
 
+    /** Royal-bank shortfall cover: vaults drain before royal chambers - the queen's stores go last. */
     public static void coverShortfall(ServerLevel level, HiveLocation location, int needed) {
-        int missing = needed - location.royalJelly();
+        cover(level, location, needed, JellyType.ROYAL);
+    }
+
+    /** Scourge-bank shortfall cover from the scourge chamber's vats. */
+    public static void coverScourgeShortfall(MinecraftServer server, HiveLocation location, int needed) {
+        var level = server.getLevel(location.dimension());
+        if (level != null) {
+            cover(level, location, needed, JellyType.SCOURGE);
+        }
+    }
+
+    private static void cover(ServerLevel level, HiveLocation location, int needed, JellyType type) {
+        int missing = needed - bankGet(location, type);
         if (missing <= 0) {
             return;
         }
-        var chambers = chambersRoyalFirst(location);
-        java.util.Collections.reverse(chambers); // vaults first, royal chambers last
+        var chambers = chambersFor(location, type);
+        java.util.Collections.reverse(chambers); // royal: vaults first, royal chambers last
         int withdrawn = 0;
         for (ChunkPos chamber : chambers) {
             if (withdrawn >= missing) {
@@ -151,24 +171,43 @@ public final class JellyVatDisplay {
             }
         }
         if (withdrawn > 0) {
-            location.setRoyalJelly(location.royalJelly() + withdrawn);
+            bankSet(location, type, bankGet(location, type) + withdrawn);
         }
     }
 
-    /** Royal chambers first (the queen's premium stores fill first, drain last), then vaults; stable order. */
-    private static List<ChunkPos> chambersRoyalFirst(HiveLocation location) {
-        var royals = new ArrayList<ChunkPos>();
-        var vaults = new ArrayList<ChunkPos>();
+    private static int bankGet(HiveLocation location, JellyType type) {
+        return type == JellyType.ROYAL ? location.royalJelly() : location.scourgeJelly();
+    }
+
+    private static void bankSet(HiveLocation location, JellyType type, int value) {
+        if (type == JellyType.ROYAL) {
+            location.setRoyalJelly(value);
+        } else {
+            location.setScourgeJelly(value);
+        }
+    }
+
+    /**
+     * The chambers displaying a bank. ROYAL: royal chambers first (fill first, drain last), then vaults. SCOURGE: the
+     * scourge chamber(s). Stable order.
+     */
+    private static List<ChunkPos> chambersFor(HiveLocation location, JellyType type) {
+        var primary = new ArrayList<ChunkPos>();
+        var secondary = new ArrayList<ChunkPos>();
         for (var entry : location.structurePieceByChunk().entrySet()) {
-            if (entry.getValue().contains("chamber_jelly_royal")) {
-                royals.add(entry.getKey());
-            } else if (entry.getValue().contains("chamber_jelly_vault")) {
-                vaults.add(entry.getKey());
+            if (type == JellyType.ROYAL) {
+                if (entry.getValue().contains("chamber_jelly_royal")) {
+                    primary.add(entry.getKey());
+                } else if (entry.getValue().contains("chamber_jelly_vault")) {
+                    secondary.add(entry.getKey());
+                }
+            } else if (entry.getValue().contains("chamber_scourge")) {
+                primary.add(entry.getKey());
             }
         }
-        royals.sort((a, b) -> Long.compare(a.toLong(), b.toLong()));
-        vaults.sort((a, b) -> Long.compare(a.toLong(), b.toLong()));
-        royals.addAll(vaults);
-        return royals;
+        primary.sort((a, b) -> Long.compare(a.toLong(), b.toLong()));
+        secondary.sort((a, b) -> Long.compare(a.toLong(), b.toLong()));
+        primary.addAll(secondary);
+        return primary;
     }
 }

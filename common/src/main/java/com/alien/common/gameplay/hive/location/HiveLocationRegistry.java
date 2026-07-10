@@ -530,8 +530,32 @@ public final class HiveLocationRegistry {
         }
 
         for (var lineageId : orphanLineages) {
+            // REPAIR FIRST, delete last: a hard crash can roll the BLib faction store and the hive-location
+            // store back to different moments, leaving real, structure-bearing hives "orphaned". Deleting them
+            // amplifies a one-tick save race into permanent hive loss (a queen left seated on her ovipositor
+            // with no claim under her). If any location of the lineage still has substance (structure or
+            // claims), the missing lineage faction is RECREATED instead; only true husks are removed.
+            boolean substance = false;
+            for (var orphan : byLineage.get(lineageId)) {
+                var orphanLocation = byId.get(orphan);
+                if (
+                    orphanLocation != null
+                        && (!orphanLocation.structurePieceByChunk().isEmpty() || !orphanLocation.claimedChunks().isEmpty())
+                ) {
+                    substance = true;
+                    break;
+                }
+            }
+            if (substance) {
+                Alien.LOGGER.warn(
+                    "HiveLocationRegistry.validate: lineage {} missing but its locations still have substance - recreating the lineage faction.",
+                    lineageId
+                );
+                Alien.MOD.factions().getOrCreate(lineageId, com.alien.common.registry.init.AlienFactionDataTypes.LINEAGE);
+                continue;
+            }
             Alien.LOGGER.warn(
-                "HiveLocationRegistry.validate: lineage {} has {} orphaned locations; cleaning up.",
+                "HiveLocationRegistry.validate: lineage {} has {} orphaned husk locations; cleaning up.",
                 lineageId,
                 byLineage.get(lineageId).size()
             );

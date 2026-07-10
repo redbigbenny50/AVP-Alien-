@@ -112,6 +112,10 @@ public final class HiveLocationLoadedTickTask {
             }
             // Pour the jelly bank into the placed vats for display (royal chambers first, then vaults).
             com.alien.common.gameplay.hive.economy.JellyVatDisplay.sync(serverLevel, location);
+            // Banked reserve eggs restock free nursery beds (one per cycle, hauled by the drones).
+            com.alien.common.gameplay.hive.spawning.EggRestockTask.run(serverLevel, location);
+            // Captured terrain spawners move into harvest-chamber slots as chambers and slots free up.
+            com.alien.common.gameplay.hive.structure.HarvestChamberTask.run(serverLevel, location);
         }
     }
 

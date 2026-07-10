@@ -13,6 +13,7 @@ import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.block.Rotation;
 import net.minecraft.world.level.levelgen.structure.templatesystem.JigsawReplacementProcessor;
 import net.minecraft.world.level.levelgen.structure.templatesystem.StructurePlaceSettings;
+import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
 import java.util.EnumSet;
@@ -126,6 +127,19 @@ public final class HiveRouter {
             blueprint = HiveBlueprintGenerator.expand(blueprint, center, BASE_EXTENT, EMPRESS_EXTENT, center.toLong());
         }
 
+        // REPAIR (live worlds): older foundings recorded the queen chamber's outer cells with a role but no
+        // piece id, leaving them out of structurePieceByChunk - the occupancy map routing checks. Re-assert them
+        // so corridors can never carve into the queen's chamber on existing hives either.
+        for (var roleEntry : location.structureRoleByChunk().entrySet()) {
+            var role = roleEntry.getValue();
+            if (
+                (role == HiveStructureRole.QUEEN_CHAMBER_CENTER || role == HiveStructureRole.QUEEN_CHAMBER_PART)
+                    && !location.structurePieceByChunk().containsKey(roleEntry.getKey())
+            ) {
+                location.structurePieceByChunk().put(roleEntry.getKey(), HivePieceCatalog.QUEEN_CHAMBER.toString());
+            }
+        }
+
         // Every tick, wherever two open doors have grown to meet head-on, join them into a passage - so routes that
         // approach each other link up into loops as they build, giving an interconnected mesh rather than lone lines.
         connectAlignedSockets(location, center);
@@ -164,6 +178,27 @@ public final class HiveRouter {
                 }
             }
         }
+        // CONDITIONAL room: harvest chambers exist only when terrain mob spawners were captured during building.
+        // One chamber while any spawner is pending; another when every existing chamber's four slots are already
+        // filled and spawners still wait (overflow, per spec: 4 per chamber, second chamber past that).
+        if (!location.pendingHarvestSpawners().isEmpty()) {
+            int builtHarvest = countRoomsOfType(location, "chamber_harvest");
+            int wantedHarvest = HarvestChamberTask.isCapacityFull(location)
+                ? builtHarvest + 1
+                : Math.max(1, builtHarvest);
+            if (wantedHarvest > builtHarvest) {
+                var harvestTarget = harvestGoalChunk(location, center);
+                if (harvestTarget != null) {
+                    pending.add(new HiveBlueprint.Goal("chamber_harvest", harvestTarget));
+                    for (int dx = -1; dx <= 1; dx++) {
+                        for (int dz = -1; dz <= 1; dz++) {
+                            reserved.add(new ChunkPos(harvestTarget.x + dx, harvestTarget.z + dz));
+                        }
+                    }
+                }
+            }
+        }
+
         // Mandatory rooms route FIRST, onto pristine ground: nearest-first ordering sent far raids/hosts into a map
         // already cluttered with reserves and corridors, and they kept boxing out. Priority class, then distance.
         pending.sort(
@@ -601,6 +636,10 @@ public final class HiveRouter {
     }
 
     private static boolean place(ServerLevel level, HiveLocation location, PieceMatch match, FrontierSocket socket, long tick) {
+        // Capture terrain mob spawners BEFORE the stamp destroys them - they become pending harvest-chamber stock.
+        HarvestSpawnerCapture.captureBeforeStamp(level, location, match.occupiedChunks());
+        // And evict any hostile vermin standing in the footprint - construction does not leave cave mobs inside.
+        HiveStampEviction.evict(level, location, match.occupiedChunks());
         if (!HiveStructurePlacer.place(level, location, match, socket)) {
             return false;
         }
@@ -610,12 +649,15 @@ public final class HiveRouter {
         // Functional furniture, stage 1 of the egg/jelly systems: a completed jelly chamber (vault OR the royal
         // chamber off its special door) grows its vats on its tendril-floor slots immediately. The vats are the
         // physical storage; the jelly FILL stays with the economy.
-        if (match.piece().id().getPath().contains("chamber_jelly")) {
+        if (
+            match.piece().id().getPath().contains("chamber_jelly")
+                || match.piece().id().getPath().contains("chamber_scourge")
+        ) {
             var vats = HiveChamberSlots.vatSlots(level, location, match.originChunk());
             for (BlockPos slot : vats) {
                 level.setBlock(slot, AlienBlocks.JELLY_VAT.get().defaultBlockState(), 3);
             }
-            Alien.LOGGER.info("Hive: jelly vault at {} grew {} vats.", match.originChunk(), vats.size());
+            Alien.LOGGER.info("Hive: jelly chamber at {} grew {} vats.", match.originChunk(), vats.size());
         }
         return true;
     }
@@ -670,6 +712,45 @@ public final class HiveRouter {
     }
 
     /** Routing priority class: mandatory / hard-to-place rooms first, filler last. Lower routes earlier. */
+    /**
+     * A stable target chunk for a synthesized harvest-chamber goal: ring-scan outward from radius 3 in a
+     * seed-deterministic order, first spot whose 2x2 footprint holds no structure. The router's normal relocation
+     * machinery handles any later conflicts. Null when the map is unexpectedly full.
+     */
+    private static @Nullable ChunkPos harvestGoalChunk(HiveLocation location, ChunkPos center) {
+        var built = location.structurePieceByChunk();
+        long seed = center.toLong() ^ 0x4A57BEEFL;
+        int startDir = (int) Math.floorMod(seed, 4L);
+        for (int radius = 3; radius <= 6; radius++) {
+            for (int i = 0; i < 4; i++) {
+                int dir = (startDir + i) % 4;
+                int dx = switch (dir) {
+                    case 0 -> radius;
+                    case 1 -> -radius;
+                    case 2 -> 0;
+                    default -> 0;
+                };
+                int dz = switch (dir) {
+                    case 0 -> 0;
+                    case 1 -> 0;
+                    case 2 -> radius;
+                    default -> -radius;
+                };
+                var candidate = new ChunkPos(center.x + dx, center.z + dz);
+                boolean clear = true;
+                for (int cx = 0; cx <= 1 && clear; cx++) {
+                    for (int cz = 0; cz <= 1 && clear; cz++) {
+                        clear = !built.containsKey(new ChunkPos(candidate.x + cx, candidate.z + cz));
+                    }
+                }
+                if (clear) {
+                    return candidate;
+                }
+            }
+        }
+        return null;
+    }
+
     private static int goalPriority(String roomType) {
         if (roomType.contains("chamber_raid")) {
             return 0; // mandatory, 2x2, needs its scourge companion beside it - gets the emptiest map
@@ -679,6 +760,9 @@ public final class HiveRouter {
         }
         if (roomType.contains("hub")) {
             return 2; // 2x2 junctions
+        }
+        if (roomType.contains("chamber_harvest")) {
+            return 2; // conditional 2x2, routed with the junctions once spawners are pending
         }
         return 3; // eggs, jelly - 1x1 rooms that fit almost anywhere
     }
@@ -693,7 +777,8 @@ public final class HiveRouter {
                 chunks++;
             }
         }
-        boolean twoByTwo = roomType.contains("chamber_host") || roomType.contains("chamber_raid") || roomType.contains("hub");
+        boolean twoByTwo = roomType.contains("chamber_host") || roomType.contains("chamber_raid")
+            || roomType.contains("hub") || roomType.contains("chamber_harvest");
         return twoByTwo ? chunks / 4 : chunks;
     }
 

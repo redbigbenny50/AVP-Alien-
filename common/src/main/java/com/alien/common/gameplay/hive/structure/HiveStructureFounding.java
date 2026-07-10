@@ -58,7 +58,10 @@ public final class HiveStructureFounding {
                 if (isCenter) {
                     location.assignStructure(chunk, HiveStructureRole.QUEEN_CHAMBER_CENTER, pieceId);
                 } else {
-                    location.assignStructure(chunk, HiveStructureRole.QUEEN_CHAMBER_PART, null);
+                    // PART cells must carry the piece id too: a null id keeps them out of structurePieceByChunk,
+                    // and the router (which checks that map for occupancy) would route hallways straight INTO the
+                    // queen's chamber - the "corridor built itself behind her" bug.
+                    location.assignStructure(chunk, HiveStructureRole.QUEEN_CHAMBER_PART, pieceId);
                 }
             }
         }

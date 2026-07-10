@@ -72,6 +72,7 @@
     "avp_alien:smooth_resin",
     "avp_alien:smooth_resin_slab",
     "avp_alien:smooth_resin_stairs",
-    "avp_alien:smooth_resin_wall"
+    "avp_alien:smooth_resin_wall",
+    "avp_alien:jelly_vat"
   ]
 }

@@ -61,6 +61,10 @@ public final class PopulationPressureDecayTask {
         return location.claimedChunks()
             .stream()
             .filter(chunk -> !chunk.equals(centerChunk))
+            // Never decay a chunk holding BUILT STRUCTURE: population pressure shaves abstract territory
+            // only. A population dip (raid losses, economy stalls) must not de-claim the hive's own halls -
+            // the chamber systems (jelly, eggs, vents) all key on claimed structure chunks.
+            .filter(chunk -> !location.structurePieceByChunk().containsKey(chunk))
             .filter(chunk -> HiveLocationClaims.wouldRemainConnectedAfterRelease(location, chunk))
             .max(
                 Comparator.<ChunkPos>comparingInt(chunk -> chebyshev(chunk, centerChunk))

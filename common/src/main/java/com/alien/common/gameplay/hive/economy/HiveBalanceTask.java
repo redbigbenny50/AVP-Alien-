@@ -138,7 +138,10 @@ public final class HiveBalanceTask {
         var runners = pop.getOrDefault(AlienEntityTypeTags.RUNNERS, 0);
         var runnerBaseline = 1 + chunks / 4;
 
-        if (runners < runnerBaseline) {
+        // Early growth INTERLEAVES 2:1 rather than letting the runner baseline monopolize the single purchase
+        // per cycle: with chunks/4 baselines (29-91 runners), a young hive was ALL runners for its whole early
+        // life and drones were never made. Runners lead only while they haven't pulled 2x ahead of drones.
+        if (runners < runnerBaseline && runners <= (drones + 1) * 2) {
             ordered.add(AlienEntityTypeTags.RUNNERS);
         }
 
@@ -238,6 +241,7 @@ public final class HiveBalanceTask {
 
         // Vats are the hive's savings: tap them only when the bank alone can't cover the jelly cost.
         JellyVatDisplay.coverShortfall(server, location, purchase.royalJelly());
+        JellyVatDisplay.coverScourgeShortfall(server, location, purchase.scourgeJelly());
 
         var biomassCost = biomassCost(purchase, location);
         if (
@@ -305,6 +309,13 @@ public final class HiveBalanceTask {
     private static int netPopulationChange(HiveUnitPurchase purchase) {
         var inputs = 0;
         for (var input : purchase.inputEntities()) {
+            // Eggs are STOCK, not population (ovomorphs are not a tracked caste) - consuming one to make an
+            // adult is a net population GAIN. Without this, the egg cost turned every basic purchase neutral
+            // and the fill path (net-gain only) could never buy a drone/runner/spitter: population froze at
+            // the queen forever, with full biomass and a stocked egg bank.
+            if (input.entity().is(AlienEntityTypeTags.OVOMORPHS)) {
+                continue;
+            }
             inputs += input.count();
         }
         return 1 - inputs;

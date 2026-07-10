@@ -1,3 +1,6 @@
 {
-  "parent": "builtin/entity"
+  "parent": "builtin/entity",
+  "textures": {
+    "particle": "avp_alien:block/jelly_vat"
+  }
 }

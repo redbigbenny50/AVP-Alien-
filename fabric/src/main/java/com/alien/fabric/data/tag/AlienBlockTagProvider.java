@@ -732,6 +732,7 @@ public class AlienBlockTagProvider extends FabricTagProvider.BlockTagProvider {
         getOrCreateTagBuilder(BlockTags.MINEABLE_WITH_PICKAXE)
             .addTag(AlienBlockTags.CHITIN)
             .add(
+                com.alien.common.registry.init.block.AlienBlocks.JELLY_VAT.get(),
                 AberrantAlienResinBlocks.ABERRANT_RESIN.get(),
                 AberrantAlienResinBlocks.ABERRANT_RESIN_SLAB.get(),
                 AberrantAlienResinBlocks.ABERRANT_RESIN_STAIRS.get(),

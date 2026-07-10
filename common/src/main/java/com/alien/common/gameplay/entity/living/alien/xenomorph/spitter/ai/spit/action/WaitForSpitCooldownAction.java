@@ -17,8 +17,8 @@ public class WaitForSpitCooldownAction {
         var spitter = context.getActor();
         var worldState = context.getWorldState();
         var attackTargetOption = worldState.getOrDefault(
-            GOAPSensors.NEAREST_ATTACKABLE_TARGET.key(),
-            Option.<LivingEntity>none()
+                GOAPSensors.NEAREST_ATTACKABLE_TARGET.key(),
+                Option.<LivingEntity>none()
         );
 
         if (attackTargetOption.isNone()) {
@@ -31,20 +31,10 @@ public class WaitForSpitCooldownAction {
         spitter.getLookControl().setLookAt(target);
         spitter.getNavigation().stop();
 
-        var lastSpitTick = spitter.getSpitterData().getLastSpitTick();
         var currentTick = spitter.tickCount;
         var cooldownReady = spitter.getSpitterData().isCooldownReady(currentTick);
 
-        // FIXME: Temporary debug logging — remove after fixing spit cooldown issue.
-        System.out.println(
-            "[WaitForSpit] tickCount=" + currentTick
-                + " lastSpitTick=" + lastSpitTick
-                + " diff=" + (currentTick - lastSpitTick)
-                + " cooldownReady=" + cooldownReady
-        );
-
         if (cooldownReady) {
-            System.out.println("[WaitForSpit] Cooldown ready, aborting to replan.");
             return Action.Signal.ABORT;
         }
 

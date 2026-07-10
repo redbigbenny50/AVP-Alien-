@@ -82,6 +82,11 @@ public class DropOffEggAction {
             blackboard.set(KEY_HAS_SEARCHED, true);
 
             var failedSpots = getFailedSpots(blackboard);
+            // Amnesty: a large failed set means the whole nursery got poisoned (range quirks, temporary
+            // blockages). Forget and retry rather than falling back to the queen forever.
+            if (failedSpots.size() > 24) {
+                failedSpots.clear();
+            }
             // STORAGE FIRST: haul the egg to a free bed in an egg chamber while any exists - eggs only accumulate
             // around the queen (the original spiral search below) once the nursery chambers are full or unreachable.
             var freeSpot = findChamberBedSpot(xenomorph, failedSpots);
@@ -146,6 +151,14 @@ public class DropOffEggAction {
         return switch (result) {
             case FINISHED, MOVING -> {
                 if (xenomorph.distanceToSqr(targetPos) <= DROP_OFF_RANGE_SQUARED) {
+                    if (isSpotTaken(xenomorph, targetPos)) {
+                        // Another drone won the race for this spot between search and arrival - remember it
+                        // and re-search instead of stacking eggs on top of each other.
+                        rememberFailedSpot(blackboard, BlockPos.containing(targetPos));
+                        scheduleSearchRetry(blackboard, xenomorph.tickCount);
+                        NeoMoveToPosAction.onFinish(context);
+                        yield Action.Signal.CONTINUE;
+                    }
                     placeEggs(xenomorph, targetPos);
                     yield Action.Signal.CONTINUE;
                 }
@@ -169,6 +182,18 @@ public class DropOffEggAction {
 
     public static void onFinish(Action.Context<? extends Xenomorph> context) {
         NeoMoveToPosAction.onFinish(context);
+    }
+
+    /** True when another ovomorph already occupies (or a race just claimed) the spot - the caller re-searches. */
+    private static boolean isSpotTaken(Xenomorph xenomorph, Vec3 center) {
+        var box = new AABB(center.x - 0.6, center.y - 0.5, center.z - 0.6, center.x + 0.6, center.y + 1.5, center.z + 0.6);
+        return !xenomorph.level()
+            .getEntitiesOfClass(
+                Ovomorph.class,
+                box,
+                e -> e.isAlive() && e.getVehicle() != xenomorph
+            )
+            .isEmpty();
     }
 
     private static void placeEggs(Xenomorph xenomorph, Vec3 center) {
@@ -268,11 +293,11 @@ public class DropOffEggAction {
                 if (failedSpots.contains(bed) || isBedOccupied(serverLevel, bed)) {
                     continue;
                 }
-                var path = xenomorph.getNavigation().createPath(bed, 0);
-                if (path != null && path.canReach()) {
-                    return Optional.of(bed);
-                }
-                failedSpots.add(bed);
+                // NO path pre-check: the navigator's follow-range makes distant beds read "unreachable" at
+                // search time even though the walk (or the vent duct) handles them fine - the pre-check was
+                // poisoning every bed into the failed set and stranding all eggs at the queen. Real navigation
+                // failures still land in failedSpots through the NO_PATH branch.
+                return Optional.of(bed);
             }
         }
         return Optional.empty();

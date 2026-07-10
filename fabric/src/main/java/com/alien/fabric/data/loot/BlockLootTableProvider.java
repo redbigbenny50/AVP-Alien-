@@ -108,6 +108,7 @@ public class BlockLootTableProvider extends FabricBlockLootTableProvider {
         dropSelf(AlienResinBlocks.RESIN_BONE);
         dropSelf(AlienResinBlocks.RESIN_ETCHED);
         dropSelf(AlienResinBlocks.RESIN_STRETCHED);
+        dropWhenSilkTouch(AlienBlocks.JELLY_VAT);
         dropSelf(AlienResinBlocks.RESIN_TENDRIL);
         dropSelf(AlienResinBlocks.RESIN_SPINE);
         dropSelf(AlienResinBlocks.RESIN_DOORWAY);

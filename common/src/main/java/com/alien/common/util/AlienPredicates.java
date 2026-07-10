@@ -29,6 +29,9 @@ public class AlienPredicates {
 
     private static final float LOW_BIOMASS_TARGET_THRESHOLD = 0.25F;
 
+    /** How long an alien holds a retaliation grudge against something that hurt it (10s). */
+    private static final int RETALIATION_GRUDGE_TICKS = 200;
+
     public static boolean canTarget(@NotNull Alien alien, @NotNull LivingEntity potentialTarget) {
         return canContinueTargeting(alien, potentialTarget)
             && isTargetThreatAllowed(alien, potentialTarget);
@@ -54,8 +57,37 @@ public class AlienPredicates {
     }
 
     private static boolean isTargetThreatAllowed(@NotNull Alien alien, @NotNull LivingEntity potentialTarget) {
+        // RETALIATION OVERRIDE: whatever the threat tiers say, something that recently hurt this alien is a
+        // valid target - an iron golem beating on the queen dies, ignore-list or not. The validity/ally rules
+        // in canContinueTargeting still apply on top of this, so friendly fire from the alien's own side never
+        // escalates into a civil war; only the tier gating below is bypassed.
+        if (
+            potentialTarget == alien.getLastHurtByMob()
+                && alien.tickCount - alien.getLastHurtByMobTimestamp() < RETALIATION_GRUDGE_TICKS
+        ) {
+            return true;
+        }
+
         if (isAlienTarget(alien, potentialTarget)) {
             return true;
+        }
+
+        // VERMIN RULE: non-alien monsters INSIDE a hive's slab are always huntable - the hive keeps its own
+        // halls clean (and turns intruding vermin into biomass) regardless of the prey tiers below. Covers
+        // mobs that bypass natural-spawn suppression (event/horde mods, pre-construction cave survivors).
+        if (
+            potentialTarget instanceof net.minecraft.world.entity.monster.Monster
+                && !com.alien.Alien.MOD_ID.equals(
+                    net.minecraft.world.entity.EntityType.getKey(potentialTarget.getType()).getNamespace()
+                )
+        ) {
+            var verminLocation = HiveLocationRegistry.INSTANCE.getByChunk(
+                potentialTarget.level().dimension(),
+                potentialTarget.chunkPosition()
+            );
+            if (verminLocation != null && verminLocation.withinSlab(potentialTarget.blockPosition().getY())) {
+                return true;
+            }
         }
 
         if (isHated(alien, potentialTarget)) {

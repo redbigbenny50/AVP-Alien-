@@ -8,6 +8,7 @@ import net.minecraft.util.RandomSource;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.block.Rotation;
 import net.minecraft.world.level.levelgen.structure.templatesystem.JigsawReplacementProcessor;
+import net.minecraft.world.level.levelgen.structure.templatesystem.LiquidSettings;
 import net.minecraft.world.level.levelgen.structure.templatesystem.StructurePlaceSettings;
 import net.minecraft.world.level.levelgen.structure.templatesystem.StructureTemplate;
 
@@ -70,6 +71,10 @@ public final class HiveStructurePlacer {
         var settings = new StructurePlaceSettings()
             .setRotation(match.rotation())
             .setIgnoreEntities(true)
+            // Vanilla placement preserves liquids by default (shipwrecks spawn flooded). Hive interiors must be
+            // DRY: air cells displace water sources and placed resin never waterlogs, even when the hive is
+            // stamped into an ocean or aquifer.
+            .setLiquidSettings(LiquidSettings.IGNORE_WATERLOGGING)
             // Replace each authored jigsaw block with its final_state (air, for these pieces) so no raw gray jigsaw
             // blocks are left in the world at doorway seams.
             .addProcessor(JigsawReplacementProcessor.INSTANCE);

@@ -265,6 +265,26 @@ public class QueenLifecyclePhaseManager implements NBTSerializable {
         // (spawned below her whole band on a deep/flat world, or in a cave), there is nowhere to dig down
         // to, so anchor at her current Y and she settles in place instead of floating up to the band.
         targetY = Math.min(targetY, queen.blockPosition().getY());
+        // GROUND SAFETY: the weighted band lands squarely in the deepslate lava-lake range. If the chunk is
+        // loaded, walk the anchor column UP from the rolled Y (she only ever digs down, so up is always
+        // reachable) until the anchor cell, its headroom, and its floor are all lava-free. Unloaded chunks are
+        // handled at arrival instead (the pocket carve seals hazards with resin).
+        if (
+            queen.level() instanceof ServerLevel foundingLevel
+                && foundingLevel.isLoaded(chunk.getWorldPosition())
+        ) {
+            var probe = chunk.getMiddleBlockPosition(targetY);
+            int maxY = queen.blockPosition().getY();
+            while (
+                probe.getY() < maxY
+                    && (foundingLevel.getBlockState(probe).liquid()
+                        || foundingLevel.getBlockState(probe.above()).liquid()
+                        || foundingLevel.getBlockState(probe.below()).liquid())
+            ) {
+                probe = probe.above();
+            }
+            targetY = probe.getY();
+        }
         this.anchor = chunk.getMiddleBlockPosition(targetY);
         this.phase = QueenLifecyclePhase.LOCATION;
 
@@ -534,11 +554,28 @@ public class QueenLifecyclePhaseManager implements NBTSerializable {
             return;
         }
 
+        var resin = com.alien.common.data.AlienVariantTypes.getFor(queen.getVariant())
+            .resin()
+            .get()
+            .defaultBlockState();
         for (var dx = -ARRIVAL_POCKET_RADIUS; dx <= ARRIVAL_POCKET_RADIUS; dx++) {
             for (var dz = -ARRIVAL_POCKET_RADIUS; dz <= ARRIVAL_POCKET_RADIUS; dz++) {
+                // FLOOR SEAL: whatever is under each pocket cell, if it is liquid (a lava/water lake edge she
+                // dug into) it becomes her resin - the hive seals hazards rather than hibernating on them.
+                var floorPos = anchor.offset(dx, -1, dz);
+                if (serverLevel.getBlockState(floorPos).liquid()) {
+                    serverLevel.setBlock(floorPos, resin, 3);
+                }
                 for (var dy = 0; dy < ARRIVAL_POCKET_HEIGHT; dy++) {
                     var pos = anchor.offset(dx, dy, dz);
                     var state = serverLevel.getBlockState(pos);
+                    // Liquid in the pocket volume (lake edge) is sealed to resin at the RIM and cleared inside:
+                    // the outermost ring becomes a resin dam so the lake can't re-flood the pocket.
+                    if (state.liquid()) {
+                        boolean rim = Math.abs(dx) == ARRIVAL_POCKET_RADIUS || Math.abs(dz) == ARRIVAL_POCKET_RADIUS;
+                        serverLevel.setBlock(pos, rim ? resin : Blocks.AIR.defaultBlockState(), 3);
+                        continue;
+                    }
                     // Nothing to clear for air; never carve undiggable blocks (immune/unbreakable/block-entities).
                     if (state.isAir() || !isDiggable(serverLevel, pos)) {
                         continue;

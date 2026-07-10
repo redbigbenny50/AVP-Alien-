@@ -47,6 +47,7 @@ public final class HivePieceCatalog {
     /** Functional chambers. */
     public static final List<ResourceLocation> CHAMBERS = List.of(
         hive("chamber/chamber_egg_1x1"),
+        hive("chamber/chamber_harvest_2x2"),
         hive("chamber/chamber_host_2x2"),
         hive("chamber/chamber_jelly_vault_1x1"),
         hive("chamber/chamber_jelly_royal_1x1"),
