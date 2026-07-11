@@ -84,6 +84,12 @@ public final class HiveStructurePlacer {
             return false;
         }
 
+        // Drain any liquid left inside the stamped footprint. placeInWorld + IGNORE_WATERLOGGING stops resin from
+        // waterlogging, but it does NOT empty water sitting in the piece's structure_void cells or that seeped back
+        // during placement - so an ocean/aquifer hive ends up with pooled interiors. Clear it now: the hive is DRY on
+        // build. (Flow-back through still-open doorways/vents over time is the separate submerged-membrane item.)
+        drainLiquids(level, match.occupiedChunks(), floorY, size.getY());
+
         // Record roles for the occupied chunks and register the piece's open doorways as new frontier sockets.
         String pieceId = match.piece().id().toString();
         for (ChunkPos chunk : match.occupiedChunks()) {
@@ -119,6 +125,42 @@ public final class HiveStructurePlacer {
             newSockets.size()
         );
         return true;
+    }
+
+    /** Empties water/lava from the stamped volume so hive interiors are dry even when built into a body of liquid. */
+    private static void drainLiquids(ServerLevel level, Iterable<ChunkPos> chunks, int floorY, int height) {
+        var pos = new BlockPos.MutableBlockPos();
+        int maxY = floorY + height - 1;
+        for (ChunkPos chunk : chunks) {
+            int minX = chunk.getMinBlockX();
+            int minZ = chunk.getMinBlockZ();
+            for (int x = minX; x < minX + 16; x++) {
+                for (int z = minZ; z < minZ + 16; z++) {
+                    for (int y = floorY; y <= maxY; y++) {
+                        pos.set(x, y, z);
+                        var state = level.getBlockState(pos);
+                        if (state.getFluidState().isEmpty()) {
+                            continue;
+                        }
+                        if (
+                            state.hasProperty(net.minecraft.world.level.block.state.properties.BlockStateProperties.WATERLOGGED)
+                                && state.getValue(net.minecraft.world.level.block.state.properties.BlockStateProperties.WATERLOGGED)
+                        ) {
+                            level.setBlock(
+                                pos,
+                                state.setValue(
+                                    net.minecraft.world.level.block.state.properties.BlockStateProperties.WATERLOGGED,
+                                    Boolean.FALSE
+                                ),
+                                2
+                            );
+                        } else {
+                            level.setBlock(pos, net.minecraft.world.level.block.Blocks.AIR.defaultBlockState(), 2);
+                        }
+                    }
+                }
+            }
+        }
     }
 
     /**

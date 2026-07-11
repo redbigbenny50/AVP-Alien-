@@ -1,8 +1,8 @@
 package com.alien.common.gameplay.entity.living.alien.xenomorph.queen;
 
 import com.alien.Alien;
+import com.alien.common.gameplay.hive.lifecycle.SpreadZoneCheck;
 import com.alien.common.gameplay.hive.location.HiveLocationRegistry;
-import com.alien.common.gameplay.hive.location.HiveLocationSpacing;
 import com.alien.common.registry.tag.AlienBlockTags;
 import com.blib.api.common.nbt.v1.model.NBTSerializable;
 import net.minecraft.core.BlockPos;
@@ -598,7 +598,11 @@ public class QueenLifecyclePhaseManager implements NBTSerializable {
         var minimum = HiveLocationRegistry.INSTANCE.config().minimumHiveLocationDistanceChunks();
         var current = queen.chunkPosition();
 
-        if (HiveLocationSpacing.isFarEnoughFromExistingLocations(dimension, current, minimum)) {
+        // Match founding's own foundability test (spacing AND spread-zone), not just LOCATION spacing - otherwise she
+        // parks on a spot that clears spacing but sits inside another lineage's spread zone, founding blocks, and she
+        // re-picks the identical spot every restart. wouldAllow keeps her searching until she finds a spot she can
+        // actually found - i.e. she relocates AWAY before re-hibernating.
+        if (SpreadZoneCheck.wouldAllow(queen, current)) {
             return current;
         }
 
@@ -613,7 +617,7 @@ public class QueenLifecyclePhaseManager implements NBTSerializable {
         return current;
     }
 
-    private static List<ChunkPos> farEnoughChunksInRing(
+    private List<ChunkPos> farEnoughChunksInRing(
         ChunkPos center,
         int radius,
         ResourceKey<Level> dimension,
@@ -626,7 +630,7 @@ public class QueenLifecyclePhaseManager implements NBTSerializable {
                     continue; // border of the ring only
                 }
                 var candidate = new ChunkPos(center.x + dx, center.z + dz);
-                if (HiveLocationSpacing.isFarEnoughFromExistingLocations(dimension, candidate, minimum)) {
+                if (SpreadZoneCheck.wouldAllow(queen, candidate)) {
                     out.add(candidate);
                 }
             }

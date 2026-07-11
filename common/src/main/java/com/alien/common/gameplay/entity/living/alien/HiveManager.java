@@ -85,6 +85,18 @@ public class HiveManager implements NBTSerializable {
      * {@link HiveLocationFoundingService} to mint a new lineage or location.
      */
     private void tryQueenSettlement(Queen queen, long currentGameTime) {
+        // Capture gate: a queen who is being chained, is fully bound, is inhibited, or is incapacitated is a captive -
+        // she must NOT found or raise a queen chamber. While restrained she only grows her chained eggsack (a separate
+        // containment/render state keyed off isContained(), untouched here). Capture states are independent of the
+        // lifecycle phase and can apply in any phase, and the front-end phase machine is off by default (so its own
+        // chained-queen freeze never runs) - hence the gate lives here on the settlement path. forget() also cancels
+        // any
+        // in-progress settlement timer so a queen captured mid-ritual doesn't instantly found the moment she's freed.
+        if (queen.isInhibited() || queen.getBindManager().hasAnyChain() || queen.isIncapacitated()) {
+            QueenSettlementDetector.forget(queen.getUUID());
+            return;
+        }
+
         // Front-end life-cycle gate: a queen must finish developing -> location -> hibernation before she may settle.
         // When the phase machine is disabled this is always true, so the legacy settlement path runs unchanged.
         if (!queen.getLifecyclePhaseManager().isReadyToFound()) {

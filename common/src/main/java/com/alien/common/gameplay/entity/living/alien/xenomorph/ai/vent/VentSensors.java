@@ -15,6 +15,13 @@ public class VentSensors {
 
     private static final int VENT_TARGET_SEARCH_RETRY_COOLDOWN_IN_TICKS = 10 * 20;
 
+    // Vent-network cap. Vents are the hive's duct shortcuts + defense/dispatch points, but creation was UNCAPPED: every
+    // vent-builder bored a fresh vent each cooldown forever (a tester's hive reached 707), so builders never fell
+    // through to hauling and eggs piled up on the queen. Cap the count to the claimed footprint. Tunable.
+    private static final int VENT_CLAIMED_CHUNKS_PER_VENT = 3;
+
+    private static final int MIN_VENTS_PER_LOCATION = 4;
+
     public static final Sensor.Mono<Xenomorph, Boolean> CAN_CREATE_VENT = Sensors.map(
         StateKey.sensed("can_create_vent"),
         xenomorph -> {
@@ -42,6 +49,15 @@ public class VentSensors {
                 new ChunkPos(xenomorph.blockPosition())
             );
             if (owningLocation == null || !owningLocation.isAlive()) {
+                return false;
+            }
+
+            // Enough vents already for this footprint? Stop drilling so builders go do other work (hauling).
+            int ventCap = Math.max(
+                MIN_VENTS_PER_LOCATION,
+                owningLocation.claimedChunks().size() / VENT_CLAIMED_CHUNKS_PER_VENT
+            );
+            if (owningLocation.ventManager().ventCount() >= ventCap) {
                 return false;
             }
             var bossBar = owningLocation.bossBar();

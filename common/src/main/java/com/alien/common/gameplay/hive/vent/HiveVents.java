@@ -1,9 +1,9 @@
 package com.alien.common.gameplay.hive.vent;
 
-import com.alien.common.registry.init.AlienSoundEvents;
 import com.alien.common.registry.init.block.AlienResinBlocks;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
+import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.level.ChunkPos;
@@ -141,13 +141,13 @@ public final class HiveVents {
             return false;
         }
         var riders = new ArrayList<>(traveller.getPassengers());
-        level.playSound(null, entryVent, AlienSoundEvents.BLOCK_RESIN_SPREAD.get(), SoundSource.HOSTILE, 1.0F, 0.8F);
+        level.playSound(null, entryVent, SoundEvents.BEEHIVE_ENTER, SoundSource.HOSTILE, 1.0F, 0.8F);
         traveller.teleportTo(emergence.getX() + 0.5, emergence.getY(), emergence.getZ() + 0.5);
         for (var rider : riders) {
             rider.teleportTo(emergence.getX() + 0.5, emergence.getY(), emergence.getZ() + 0.5);
             rider.startRiding(traveller, true);
         }
-        level.playSound(null, emergence, AlienSoundEvents.BLOCK_RESIN_SPREAD.get(), SoundSource.HOSTILE, 1.0F, 0.8F);
+        level.playSound(null, emergence, SoundEvents.BEEHIVE_EXIT, SoundSource.HOSTILE, 1.0F, 0.8F);
         return true;
     }
 }

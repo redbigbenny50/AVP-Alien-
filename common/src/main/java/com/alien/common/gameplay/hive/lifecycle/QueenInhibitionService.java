@@ -95,7 +95,7 @@ public final class QueenInhibitionService {
     /** Mints her personal single-chunk severed inhibited claim at the chunk she currently stands in. */
     private static void mintPersonalClaim(ServerLevel level, Queen queen) {
         var herChunk = new ChunkPos(queen.blockPosition());
-        var locationId = HiveLocationFoundingService.foundNewLineage(queen, queen.blockPosition());
+        var locationId = HiveLocationFoundingService.foundNewLineage(queen, queen.blockPosition(), false);
         var location = HiveLocationRegistry.INSTANCE.get(locationId);
         if (location == null) {
             Alien.LOGGER.warn(

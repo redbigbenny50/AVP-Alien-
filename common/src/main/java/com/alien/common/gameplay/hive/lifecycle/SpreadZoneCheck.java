@@ -98,6 +98,18 @@ public final class SpreadZoneCheck {
         return new SpreadZoneResult.NewLineage();
     }
 
+    /**
+     * Whether {@link #evaluate} would permit founding in {@code chunk} for this queen (identical spacing + spread-zone
+     * rules). The queen's anchor picker uses this so it only proposes anchors founding will actually accept: otherwise
+     * it can pick a spot that clears the minimum LOCATION spacing yet sits inside another lineage's larger SPREAD zone,
+     * whereupon founding blocks, she restarts LOCATION, re-picks the very same spot, and loops forever. Y is irrelevant
+     * to the spacing/spread rules, so the chunk centre at the queen's Y is used.
+     */
+    public static boolean wouldAllow(Queen queen, ChunkPos chunk) {
+        var probe = chunk.getMiddleBlockPosition(queen.blockPosition().getY());
+        return !(evaluate(queen, probe) instanceof SpreadZoneResult.Blocked);
+    }
+
     private static boolean isWithinSpreadZone(LineageFactionData lineage, ChunkPos candidate, int maxSpread) {
         for (var location : lineage.locationsById().values()) {
             if (chunkDistance(location, candidate) <= maxSpread) {

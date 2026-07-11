@@ -72,6 +72,7 @@ public final class HiveDebugCommands {
             .then(Commands.literal("list_tracked").executes(HiveDebugCommands::listTracked))
             .then(Commands.literal("dump_indexes").executes(HiveDebugCommands::dumpIndexes))
             .then(Commands.literal("inhibit_here").executes(HiveDebugCommands::inhibitHere))
+            .then(Commands.literal("web_host").executes(HiveDebugCommands::webHost))
             .then(
                 Commands.literal("inspect_location")
                     .then(
@@ -289,6 +290,51 @@ public final class HiveDebugCommands {
      * current chunk. An inhibited location runs no autonomy (claims/biomass/spawning/contests) — used to verify the
      * gate before the real queen-driven claim lifecycle (Slice B2) wires it.
      */
+    private static int webHost(com.mojang.brigadier.context.CommandContext<CommandSourceStack> ctx) {
+        var source = ctx.getSource();
+        var player = source.getPlayer();
+        if (player == null) {
+            source.sendFailure(Component.literal("Must be run by a player."));
+            return 0;
+        }
+        if (!(player.level() instanceof net.minecraft.server.level.ServerLevel level)) {
+            source.sendFailure(Component.literal("Server level only."));
+            return 0;
+        }
+        var chunk = new ChunkPos(player.blockPosition());
+        var dimension = player.level().dimension();
+        HiveLocation target = null;
+        for (var location : HiveLocationRegistry.INSTANCE.all()) {
+            if (
+                location.isAlive()
+                    && location.dimension().equals(dimension)
+                    && location.claimedChunks().contains(chunk)
+            ) {
+                target = location;
+                break;
+            }
+        }
+        if (target == null) {
+            source.sendFailure(Component.literal("No hive location claims this chunk."));
+            return 0;
+        }
+        var spot = com.alien.common.gameplay.hive.structure.HostChamberSlots.firstFreeSpot(level, target);
+        if (spot == null) {
+            source.sendFailure(Component.literal("No free host-chamber web spot (is a host chamber built and loaded near you?)."));
+            return 0;
+        }
+        var villager = net.minecraft.world.entity.EntityType.VILLAGER.create(level);
+        if (villager == null) {
+            source.sendFailure(Component.literal("Failed to create test villager."));
+            return 0;
+        }
+        com.alien.common.gameplay.hive.structure.HostParking.embed(level, villager, spot.pos(), spot.facing());
+        level.addFreshEntity(villager);
+        final var placed = spot;
+        source.sendSuccess(() -> Component.literal("Webbed a test villager at " + placed.pos() + " facing " + placed.facing() + "."), true);
+        return 1;
+    }
+
     private static int inhibitHere(com.mojang.brigadier.context.CommandContext<CommandSourceStack> ctx) {
         var source = ctx.getSource();
         var player = source.getPlayer();

@@ -17,8 +17,8 @@ public class WaitForSpitCooldownAction {
         var spitter = context.getActor();
         var worldState = context.getWorldState();
         var attackTargetOption = worldState.getOrDefault(
-                GOAPSensors.NEAREST_ATTACKABLE_TARGET.key(),
-                Option.<LivingEntity>none()
+            GOAPSensors.NEAREST_ATTACKABLE_TARGET.key(),
+            Option.<LivingEntity>none()
         );
 
         if (attackTargetOption.isNone()) {

@@ -21,6 +21,8 @@ public class EggLayingSensors {
 
     private static final double MIN_HORIZONTAL_OVOMORPH_SPACING_BLOCKS = 2.0;
 
+    private static final double VERTICAL_OVOMORPH_CHECK_BLOCKS = 4.0;
+
     public static <T extends EggLayer> Sensor.Mono<T, Boolean> canLayEgg() {
         return Sensors.map(
             CAN_LAY_EGG,
@@ -41,11 +43,13 @@ public class EggLayingSensors {
                 if (location == null) {
                     return false;
                 }
-                if (!hasOvomorphCapacity(eggLayer, location)) {
-                    return false;
-                }
-
-                return noEggsNearby(eggLayer);
+                // She can lay a PHYSICAL egg only if there is bed/ring room AND a clear spot to place it; she can
+                // ALWAYS lay into the RESERVE while the bank has room (a reserve lay spawns no entity, so a clear spot
+                // is irrelevant). This is why a queen ring choked by un-hauled eggs must NOT stop production - it banks
+                // into the reserve instead of shutting the whole lay goal (and its banking) off. [flag for review]
+                boolean physicalRoom = hasPhysicalOvomorphCapacity(eggLayer, location);
+                boolean reserveRoom = hasReserveOvomorphCapacity(eggLayer, location);
+                return (physicalRoom && noEggsNearby(eggLayer)) || reserveRoom;
             }
         );
     }
@@ -55,12 +59,6 @@ public class EggLayingSensors {
 
     /** Physical eggs allowed around the queen herself, on top of the nursery beds. */
     public static final int QUEEN_RING_EGG_CAP = 10;
-
-    private static boolean hasOvomorphCapacity(EggLayer eggLayer, HiveLocation location) {
-        // She lays while there is room for a PHYSICAL egg, or - once the world is saturated - while the reserve
-        // egg bank is below its cap (the lay action diverts those into the reserve instead of spawning).
-        return hasPhysicalOvomorphCapacity(eggLayer, location) || hasReserveOvomorphCapacity(eggLayer, location);
-    }
 
     /**
      * Whether another PHYSICAL egg fits. The capacity is dynamic - what the hive actually built: the queen's own ring
@@ -139,13 +137,13 @@ public class EggLayingSensors {
         return type == normalType || type == royalType;
     }
 
-    private static boolean noEggsNearby(EggLayer eggLayer) {
+    public static boolean noEggsNearby(EggLayer eggLayer) {
         var eggPos = eggLayer.getEggLayingPosition();
         var halfSize = MIN_HORIZONTAL_OVOMORPH_SPACING_BLOCKS;
 
         var searchBox = new AABB(
             eggPos.x - halfSize,
-            eggPos.y - eggLayer.asEntity().level().dimensionType().height(),
+            eggPos.y - VERTICAL_OVOMORPH_CHECK_BLOCKS,
             eggPos.z - halfSize,
             eggPos.x + halfSize,
             eggPos.y + 5,

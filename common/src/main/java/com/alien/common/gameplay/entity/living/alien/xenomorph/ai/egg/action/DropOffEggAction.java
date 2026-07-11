@@ -41,6 +41,8 @@ public class DropOffEggAction {
 
     private static final StateKey<BlockPos> KEY_VENT_EXIT = StateKey.sensed("egg_drop_vent_exit");
 
+    private static final StateKey<Integer> KEY_TARGET_SET_TICK = StateKey.sensed("egg_drop_target_set_tick");
+
     private static final double DROP_OFF_RANGE_SQUARED = 2.0 * 2.0;
 
     private static final double VENT_REACH_SQUARED = 2.5 * 2.5; // close enough to slip into a vent
@@ -54,6 +56,8 @@ public class DropOffEggAction {
     private static final int MAX_REMEMBERED_FAILED_SPOTS = 32;
 
     private static final int MAX_PATH_VALIDATION_ATTEMPTS = 24;
+
+    private static final int STUCK_TIMEOUT_TICKS = 200; // ~10s pursuing one spot without arriving -> re-pick
 
     private static final int EGG_GRID_SPACING_BLOCKS = 3;
 
@@ -109,6 +113,7 @@ public class DropOffEggAction {
 
             targetPos = freeSpot.get().getCenter();
             blackboard.set(KEY_TARGET_POS, targetPos);
+            blackboard.set(KEY_TARGET_SET_TICK, xenomorph.tickCount);
             if (isChamberBed) {
                 planVentLeg(xenomorph, freeSpot.get(), blackboard);
             }
@@ -123,7 +128,11 @@ public class DropOffEggAction {
         // there. Any pathing trouble on this leg just abandons the duct and walks the whole way.
         var ventEntry = blackboard.getOrDefault(KEY_VENT_ENTRY, (BlockPos) null);
         if (ventEntry != null) {
-            var ventTarget = Vec3.atCenterOf(ventEntry);
+            // Approach a STANDABLE spot beside/below the vent, not the vent block itself: vents sit in walls,
+            // often 2-3 up, so the drone can never get within reach of the vent center. emergencePosNear finds
+            // the floor spot the exit side already uses, so elevated vents become usable.
+            var ventApproach = HiveVents.emergencePosNear(xenomorph.level(), ventEntry);
+            var ventTarget = ventApproach != null ? Vec3.atBottomCenterOf(ventApproach) : Vec3.atCenterOf(ventEntry);
             var ventResult = NeoMoveToPosAction.perform(context, ventTarget, 0.5);
             if (xenomorph.distanceToSqr(ventTarget) <= VENT_REACH_SQUARED) {
                 var ventExit = blackboard.getOrDefault(KEY_VENT_EXIT, (BlockPos) null);
@@ -136,7 +145,7 @@ public class DropOffEggAction {
                 return Action.Signal.CONTINUE;
             }
             switch (ventResult) {
-                case FINISHED, MOVING -> { /* still walking to the vent */ }
+                case MOVING -> { /* still walking to the vent */ }
                 default -> {
                     blackboard.set(KEY_VENT_ENTRY, (BlockPos) null);
                     blackboard.set(KEY_VENT_EXIT, (BlockPos) null);
@@ -147,41 +156,69 @@ public class DropOffEggAction {
         }
 
         var result = NeoMoveToPosAction.perform(context, targetPos, 0.5);
+        var arrived = xenomorph.distanceToSqr(targetPos) <= DROP_OFF_RANGE_SQUARED;
 
         return switch (result) {
-            case FINISHED, MOVING -> {
-                if (xenomorph.distanceToSqr(targetPos) <= DROP_OFF_RANGE_SQUARED) {
-                    if (isSpotTaken(xenomorph, targetPos)) {
-                        // Another drone won the race for this spot between search and arrival - remember it
-                        // and re-search instead of stacking eggs on top of each other.
-                        rememberFailedSpot(blackboard, BlockPos.containing(targetPos));
-                        scheduleSearchRetry(blackboard, xenomorph.tickCount);
-                        NeoMoveToPosAction.onFinish(context);
-                        yield Action.Signal.CONTINUE;
-                    }
-                    placeEggs(xenomorph, targetPos);
-                    yield Action.Signal.CONTINUE;
+            case MOVING -> {
+                if (arrived) {
+                    yield arriveAtTarget(context, xenomorph, blackboard, targetPos);
                 }
-
+                // Wedged against another hauler, or orbiting a node it can't quite reach: after a generous window
+                // give up on this spot and pick a different bed instead of freezing here holding the egg forever.
+                if (isTargetStale(blackboard, xenomorph.tickCount)) {
+                    yield abandonTarget(context, blackboard, targetPos, xenomorph.tickCount);
+                }
                 yield Action.Signal.CONTINUE;
             }
-            case NO_PATH -> {
-                rememberFailedSpot(blackboard, BlockPos.containing(targetPos));
-                scheduleSearchRetry(blackboard, xenomorph.tickCount);
-                NeoMoveToPosAction.onFinish(context);
-                yield Action.Signal.CONTINUE;
+            case FINISHED -> {
+                if (arrived) {
+                    yield arriveAtTarget(context, xenomorph, blackboard, targetPos);
+                }
+                // Navigation completed but the drone is still short of the bed - the path was truncated (bed boxed
+                // in, or another drone/egg blocking the final step). Without this branch the drone re-finishes every
+                // tick and freezes holding the egg. Blacklist the spot and re-search.
+                yield abandonTarget(context, blackboard, targetPos, xenomorph.tickCount);
             }
-            default -> {
-                rememberFailedSpot(blackboard, BlockPos.containing(targetPos));
-                scheduleSearchRetry(blackboard, xenomorph.tickCount);
-                NeoMoveToPosAction.onFinish(context);
-                yield Action.Signal.CONTINUE;
-            }
+            case NO_PATH -> abandonTarget(context, blackboard, targetPos, xenomorph.tickCount);
+            default -> abandonTarget(context, blackboard, targetPos, xenomorph.tickCount);
         };
     }
 
     public static void onFinish(Action.Context<? extends Xenomorph> context) {
         NeoMoveToPosAction.onFinish(context);
+    }
+
+    /** Root the carried egg(s) at the target, unless another drone claimed the spot mid-approach (then re-search). */
+    private static Action.Signal arriveAtTarget(
+        Action.Context<? extends Xenomorph> context,
+        Xenomorph xenomorph,
+        Blackboard blackboard,
+        Vec3 targetPos
+    ) {
+        if (isSpotTaken(xenomorph, targetPos)) {
+            return abandonTarget(context, blackboard, targetPos, xenomorph.tickCount);
+        }
+        placeEggs(xenomorph, targetPos);
+        return Action.Signal.CONTINUE;
+    }
+
+    /** Give up on the current target: blacklist it, clear the search so a fresh spot is picked, stop navigating. */
+    private static Action.Signal abandonTarget(
+        Action.Context<? extends Xenomorph> context,
+        Blackboard blackboard,
+        Vec3 targetPos,
+        int currentTick
+    ) {
+        rememberFailedSpot(blackboard, BlockPos.containing(targetPos));
+        scheduleSearchRetry(blackboard, currentTick);
+        NeoMoveToPosAction.onFinish(context);
+        return Action.Signal.CONTINUE;
+    }
+
+    /** True once the drone has been pursuing the current target longer than the stuck window without arriving. */
+    private static boolean isTargetStale(Blackboard blackboard, int currentTick) {
+        var setTick = blackboard.getOrDefault(KEY_TARGET_SET_TICK, currentTick);
+        return currentTick - setTick > STUCK_TIMEOUT_TICKS;
     }
 
     /** True when another ovomorph already occupies (or a race just claimed) the spot - the caller re-searches. */

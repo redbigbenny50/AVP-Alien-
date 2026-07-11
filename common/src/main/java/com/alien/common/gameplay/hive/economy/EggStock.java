@@ -11,9 +11,10 @@ import net.minecraft.world.phys.AABB;
 
 /**
  * The stored eggs in the hive's egg chambers back the ovomorph RESERVE the same way the jelly vats back the jelly bank:
- * when a unit purchase needs an ovomorph input and the reserve has none, a rooted egg is consumed from a nursery
- * chamber to cover it. Eggs around the queen are her clutch and are never taken - only chamber stock is spent, which is
- * exactly what makes raiding a hive's nurseries starve its growth.
+ * the hive spends them only as a LAST RESORT, when it has no living egg layer to replenish the reserve (queen dead,
+ * removed, or inhibited) - while a queen lays, the reserve she banks funds purchases and the nursery stays full. Eggs
+ * around the queen are her clutch and are never taken - only chamber stock is spent, which is exactly what makes
+ * raiding a hive's nurseries starve its growth.
  */
 public final class EggStock {
 
@@ -29,6 +30,14 @@ public final class EggStock {
         }
         int missing = needed - location.localReserves().getCount(type);
         if (missing <= 0) {
+            return;
+        }
+        // The nursery is LAST-RESORT insurance, not the reserve's routine backing: only spend rooted eggs when the
+        // hive has no functional egg layer to replenish the reserve (queen dead, removed, or inhibited). While a queen
+        // lays she banks the reserve, so purchases live off that; an unfunded egg purchase simply waits for her next
+        // lay rather than eating the hive's stored backup - which is exactly why raiding nurseries only bites a hive
+        // that has already lost its queen.
+        if (hasFunctionalEggLayer(location)) {
             return;
         }
         var level = server.getLevel(location.dimension());
@@ -76,5 +85,13 @@ public final class EggStock {
                 covered
             );
         }
+    }
+
+    /**
+     * A living, un-inhibited queen keeps banking reserve eggs; without one the reserve dries up and the nursery pays.
+     */
+    private static boolean hasFunctionalEggLayer(HiveLocation location) {
+        return !location.isInhibited()
+            && CastePopulation.countLoadedCaste(location, AlienEntityTypeTags.QUEENS) > 0;
     }
 }

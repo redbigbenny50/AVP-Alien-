@@ -27,11 +27,23 @@ public class LayEggAction {
         // Physically saturated hive: the queen keeps producing, but the egg goes into the RESERVE bank (up to
         // RESERVE_EGG_CAP) instead of the world - the abstract stock purchases draw on before touching the nurseries.
         var location = HiveLocationSpawnGate.locationContaining(level, eggLayer.asEntity().blockPosition());
-        if (location != null && ovomorphType != null && !EggLayingSensors.hasPhysicalOvomorphCapacity(eggLayer, location)) {
-            if (location.localReserves().addReturningMember(ovomorphType, 1)) {
+
+        // A physical egg needs BOTH bed/ring room AND a clear spot to sit. If the hive is physically saturated OR her
+        // lay spot is choked by un-hauled rooted eggs, produce into the RESERVE bank instead of the world - so a
+        // blocked ring banks stock rather than stopping production (and its banking) outright. If the reserve is also
+        // full there is genuinely nowhere to put it: abort rather than stack an egg onto a choked spot. [flag for
+        // review]
+        var canPlacePhysical = location != null
+            && ovomorphType != null
+            && EggLayingSensors.hasPhysicalOvomorphCapacity(eggLayer, location)
+            && EggLayingSensors.noEggsNearby(eggLayer);
+
+        if (!canPlacePhysical) {
+            if (location != null && ovomorphType != null && location.localReserves().addReturningMember(ovomorphType, 1)) {
                 level.playSound(null, eggLayer.asEntity(), AlienSoundEvents.ENTITY_OVOMORPH_LAID.get(), SoundSource.HOSTILE, 1.0F, 1.0F);
                 return Action.Signal.CONTINUE;
             }
+            return Action.Signal.ABORT;
         }
 
         var ovomorph = ovomorphType == null ? null : ovomorphType.create(level);

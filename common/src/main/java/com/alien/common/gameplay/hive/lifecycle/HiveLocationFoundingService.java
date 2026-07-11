@@ -44,6 +44,12 @@ public final class HiveLocationFoundingService {
      * {@link HiveLocation} at {@code position}. Returns the new location id.
      */
     public static HiveLocationId foundNewLineage(Queen queen, BlockPos position) {
+        // Default: a founding queen raises her physical chamber. The inhibited-claim path passes false - a captive
+        // queen still gets a lineage + claim (for her chained eggsack and the autonomy gate) but NO built hive.
+        return foundNewLineage(queen, position, true);
+    }
+
+    public static HiveLocationId foundNewLineage(Queen queen, BlockPos position, boolean buildStructure) {
         var level = queen.level();
         var dimension = level.dimension();
         var variant = queen.getVariant();
@@ -72,7 +78,7 @@ public final class HiveLocationFoundingService {
         lineageData.setDimension(dimension);
         lineageData.setFounderId(queen.getUUID());
 
-        var location = mintLocation(queen, lineageId, position, level.getGameTime(), lineageData);
+        var location = mintLocation(queen, lineageId, position, level.getGameTime(), lineageData, buildStructure);
 
         // Adds the queen to both the lineage faction (idempotent) and the new location faction.
         LocationMembership.join(location, queen);
@@ -101,7 +107,7 @@ public final class HiveLocationFoundingService {
             throw new IllegalStateException("Lineage " + lineageFactionId + " missing or wrong type at founding time");
         }
 
-        var location = mintLocation(queen, lineageFactionId, position, level.getGameTime(), lineageData);
+        var location = mintLocation(queen, lineageFactionId, position, level.getGameTime(), lineageData, true);
 
         // Adds the queen to both the lineage faction (idempotent) and the new location faction.
         LocationMembership.join(location, queen);
@@ -128,7 +134,8 @@ public final class HiveLocationFoundingService {
         ResourceLocation lineageFactionId,
         BlockPos position,
         long currentGameTime,
-        LineageFactionData lineageData
+        LineageFactionData lineageData,
+        boolean buildStructure
     ) {
         var locationId = HiveLocationIds.create();
         var centerChunk = new ChunkPos(position);
@@ -155,7 +162,7 @@ public final class HiveLocationFoundingService {
         // registry byChunk index, BLib territory map) stay synchronized. Direct claimedChunks().add(...)
         // would miss the BLib territory addClaim and leave the core chunks unclaimed in the UI.
         if (queen.level() instanceof net.minecraft.server.level.ServerLevel serverLevel) {
-            claimInitialCore(serverLevel, location, centerChunk, currentGameTime);
+            claimInitialCore(serverLevel, location, centerChunk, currentGameTime, buildStructure);
         } else {
             addInitialCoreOffline(location, centerChunk, currentGameTime);
         }
@@ -167,7 +174,8 @@ public final class HiveLocationFoundingService {
         net.minecraft.server.level.ServerLevel level,
         HiveLocation location,
         ChunkPos centerChunk,
-        long currentGameTime
+        long currentGameTime,
+        boolean buildStructure
     ) {
         var radius = HiveLocationRegistry.INSTANCE.config().initialHiveLocationClaimRadiusChunks();
         for (var dx = -radius; dx <= radius; dx++) {
@@ -185,13 +193,15 @@ public final class HiveLocationFoundingService {
             }
         }
 
-        // Structure system: stamp queen-chamber roles onto the claimed core and register its royal exits as frontier
-        // sockets for the growth planner to grow from.
-        com.alien.common.gameplay.hive.structure.HiveStructureFounding.establishQueenChamber(
-            level.getServer(),
-            location,
-            centerChunk
-        );
+        // Structure system: stamp queen-chamber roles onto the claimed core and register royal exits as frontier
+        // sockets for the planner. Skipped for logical-only claims (an inhibited captive queen never builds a hive).
+        if (buildStructure) {
+            com.alien.common.gameplay.hive.structure.HiveStructureFounding.establishQueenChamber(
+                level.getServer(),
+                location,
+                centerChunk
+            );
+        }
     }
 
     private static void addInitialCoreOffline(HiveLocation location, ChunkPos centerChunk, long currentGameTime) {
