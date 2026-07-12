@@ -120,6 +120,9 @@ public class DropOffEggAction {
             setFailedSpots(blackboard, failedSpots);
 
             if (freeSpot.isEmpty()) {
+                // Nowhere to put this egg. Report WHY - a hauler frozen holding an egg with no log was the single
+                // hardest thing to troubleshoot in testing.
+                logNoEggDestination(xenomorph, blackboard);
                 scheduleSearchRetry(blackboard, xenomorph.tickCount);
                 return Action.Signal.CONTINUE;
             }
@@ -285,7 +288,7 @@ public class DropOffEggAction {
         if (xenomorph.blockPosition().distSqr(bed) < VENT_WORTHWHILE_DIST_SQUARED) {
             return;
         }
-        var location = HiveLocationRegistry.INSTANCE.getByChunk(serverLevel.dimension(), xenomorph.chunkPosition());
+        var location = resolveLocation(serverLevel, xenomorph);
         if (location == null) {
             return;
         }
@@ -316,7 +319,7 @@ public class DropOffEggAction {
         if (!(xenomorph.level() instanceof ServerLevel serverLevel)) {
             return Optional.empty();
         }
-        var location = HiveLocationRegistry.INSTANCE.getByChunk(serverLevel.dimension(), xenomorph.chunkPosition());
+        var location = resolveLocation(serverLevel, xenomorph);
         if (location == null || location.founderId() == null) {
             return Optional.empty();
         }
@@ -333,11 +336,109 @@ public class DropOffEggAction {
         return Optional.empty();
     }
 
+    /**
+     * The hive this hauler belongs to. getByChunk only resolves CLAIMED chunks, so a hauler standing a chunk outside
+     * the claim (or in a not-yet-claimed pocket) resolved to null - every destination search then came back empty and
+     * the drone froze holding its egg. Fall back to the nearest hive in this dimension.
+     */
+    /** Blackboard key: last tick we logged a "nowhere to put this egg" diagnostic (rate limit). */
+    private static final StateKey<Integer> KEY_LAST_NO_DEST_LOG = StateKey.sensed("egg_no_destination_log_tick");
+
+    private static final int NO_DEST_LOG_INTERVAL_TICKS = 200; // at most once per 10s per hauler
+
+    /**
+     * Explain why a hauler holding an egg has nowhere to put it: which of the three destinations (host drop, nursery
+     * bed, queen clutch zone) refused, and the counts behind each refusal.
+     */
+    private static void logNoEggDestination(Xenomorph xenomorph, Blackboard blackboard) {
+        int now = xenomorph.tickCount;
+        int last = blackboard.getOrDefault(KEY_LAST_NO_DEST_LOG, Integer.MIN_VALUE);
+        if (now - last < NO_DEST_LOG_INTERVAL_TICKS) {
+            return;
+        }
+        blackboard.set(KEY_LAST_NO_DEST_LOG, now);
+
+        if (!(xenomorph.level() instanceof ServerLevel serverLevel)) {
+            return;
+        }
+        var location = resolveLocation(serverLevel, xenomorph);
+        if (location == null) {
+            com.alien.Alien.LOGGER.info(
+                "Egg haul STUCK: {} at {} is holding an egg but belongs to NO hive location.",
+                xenomorph.getType().getDescriptionId(),
+                xenomorph.blockPosition()
+            );
+            return;
+        }
+
+        int eggChambers = 0;
+        int freeBeds = 0;
+        int occupiedBeds = 0;
+        int unloadedChambers = 0;
+        for (var entry : location.structurePieceByChunk().entrySet()) {
+            if (!entry.getValue().contains("chamber_egg")) {
+                continue;
+            }
+            eggChambers++;
+            var chamber = entry.getKey();
+            if (!serverLevel.isLoaded(chamber.getWorldPosition())) {
+                unloadedChambers++;
+                continue;
+            }
+            for (var bed : HiveChamberSlots.eggBedSlots(serverLevel, location, chamber)) {
+                if (isBedOccupied(serverLevel, bed)) {
+                    occupiedBeds++;
+                } else {
+                    freeBeds++;
+                }
+            }
+        }
+
+        var failedSpots = getFailedSpots(blackboard);
+        Queen queen = null;
+        if (location.founderId() != null && serverLevel.getEntity(location.founderId()) instanceof Queen q) {
+            queen = q;
+        }
+        int queenZoneFree = queen == null ? -1 : QueenEggZone.candidates(serverLevel, queen).size();
+
+        com.alien.Alien.LOGGER.info(
+            "Egg haul STUCK at {}: hive {} has {} egg chamber(s) ({} unloaded), {} free bed(s), {} occupied; "
+                + "queen clutch zone has {} free cell(s) (queen {}); {} spot(s) on this hauler's failed list. "
+                + "No destination accepted the egg.",
+            xenomorph.blockPosition(),
+            location.id(),
+            eggChambers,
+            unloadedChambers,
+            freeBeds,
+            occupiedBeds,
+            queenZoneFree,
+            queen == null ? "MISSING" : "alive",
+            failedSpots.size()
+        );
+    }
+
+    private static com.alien.common.gameplay.hive.location.HiveLocation resolveLocation(
+        ServerLevel serverLevel,
+        Xenomorph xenomorph
+    ) {
+        var byChunk = HiveLocationRegistry.INSTANCE.getByChunk(
+            serverLevel.dimension(),
+            xenomorph.chunkPosition()
+        );
+        if (byChunk != null) {
+            return byChunk;
+        }
+        return HiveLocationRegistry.INSTANCE.findNearestInDim(
+            serverLevel.dimension(),
+            xenomorph.blockPosition()
+        );
+    }
+
     private static Optional<BlockPos> findChamberBedSpot(Xenomorph xenomorph, Set<BlockPos> failedSpots) {
         if (!(xenomorph.level() instanceof ServerLevel serverLevel)) {
             return Optional.empty();
         }
-        var location = HiveLocationRegistry.INSTANCE.getByChunk(serverLevel.dimension(), xenomorph.chunkPosition());
+        var location = resolveLocation(serverLevel, xenomorph);
         if (location == null) {
             return Optional.empty();
         }

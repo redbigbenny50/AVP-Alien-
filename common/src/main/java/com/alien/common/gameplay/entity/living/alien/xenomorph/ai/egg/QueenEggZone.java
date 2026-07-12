@@ -41,8 +41,12 @@ public final class QueenEggZone {
     /** Vertical slack when looking for standable ground within the zone. */
     private static final int VERTICAL_SEARCH_RANGE = 4;
 
-    /** Minimum spacing between rooted eggs, so the clutch reads as a nest and stays walkable. */
-    private static final double EGG_SPACING = 1.5;
+    /**
+     * Minimum clear distance to the NEAREST OTHER EGG. Kept below 1 so eggs may sit in adjacent cells: at 1.5 a ring of
+     * ten eggs blanketed the entire zone, every candidate was rejected, and haulers froze holding eggs with nowhere to
+     * put them.
+     */
+    private static final double EGG_SPACING = 0.6;
 
     /**
      * Candidate egg cells in front of {@code queen}, nearest to her first. Empty when the queen is gone or the zone has
@@ -124,9 +128,9 @@ public final class QueenEggZone {
         if (!(state.isAir() || state.canBeReplaced()) || !(above.isAir() || above.canBeReplaced())) {
             return false;
         }
-        if (!level.getEntities(null, new AABB(pos)).isEmpty()) {
-            return false;
-        }
+        // NB: do NOT reject a cell just because some entity overlaps it - the hauler itself (and the queen) stand
+        // in this zone, which rejected nearly every candidate and froze haulers holding eggs. Only an ovomorph
+        // already occupying the cell matters, which hasEggSpacing covers.
         return hasEggSpacing(level, pos);
     }
 

@@ -304,7 +304,9 @@ public record HiveConfig(
             0.15, // surfacePartySizePerClaimedChunk
             5, // surfacePartyMaxSize: hard ceiling - size scaled with claims unbounded (20+ on a big hive)
             8, // surfacePartyMaxSizeEmpress: raised ceiling under empress influence
-            0.10, // surfacePartyVentDropChance: 10% roll on dawn despawn
+            0.35, // surfacePartyVentDropChance: roll on dawn despawn. Was 0.10, which (combined with a placement
+            // bug that silently aborted on sloped ground) meant testers ran party after party and never saw
+            // a vent. Vents gate the whole vent-dependent trio, so a hive that cannot seed one is stuck.
             3, // surfacePartyMaxVentsPerClaim: cap counted against near-surface vents only, not the full column
             6, // surfacePartySurfaceBandBlocks: vertical margin around the terrain heightmap counted as "surface"
                // (also reused by biomass hunting party's vent-spawn-point lookup)

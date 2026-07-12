@@ -206,10 +206,6 @@ public final class SurfacePartyLifecycleTask {
         HiveConfig config,
         ChunkPos chunk
     ) {
-        if (serverLevel.random.nextDouble() >= config.surfacePartyVentDropChance()) {
-            return;
-        }
-
         var centerBlock = chunk.getMiddleBlockPosition(0);
         var surfaceY = serverLevel.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, centerBlock.getX(), centerBlock.getZ());
         var band = config.surfacePartySurfaceBandBlocks();
@@ -221,18 +217,47 @@ public final class SurfacePartyLifecycleTask {
             }
         }
         if (nearSurfaceCount >= config.surfacePartyMaxVentsPerClaim()) {
+            Alien.LOGGER.info(
+                "Hive: surface party made NO vent at {} for {} - already {} near-surface vents there (cap {}).",
+                chunk,
+                location.id(),
+                nearSurfaceCount,
+                config.surfacePartyMaxVentsPerClaim()
+            );
             return;
         }
 
         var variant = location.lineageVariantOrNull();
         if (variant == null) {
+            Alien.LOGGER.info(
+                "Hive: surface party made NO vent at {} for {} - the location has no lineage variant.",
+                chunk,
+                location.id()
+            );
             return;
         }
+        // Roll LAST: burning the 10% chance and THEN bailing on a bad spot wasted the drop entirely.
+        if (serverLevel.random.nextDouble() >= config.surfacePartyVentDropChance()) {
+            Alien.LOGGER.info(
+                "Hive: surface party made NO vent at {} for {} - lost the {}% drop roll.",
+                chunk,
+                location.id(),
+                (int) (config.surfacePartyVentDropChance() * 100)
+            );
+            return;
+        }
+
         var variantType = AlienVariantTypes.getFor(variant);
 
-        var ventPos = new BlockPos(centerBlock.getX(), surfaceY, centerBlock.getZ());
-        var groundPos = ventPos.below();
-        if (!serverLevel.getBlockState(groundPos).isFaceSturdy(serverLevel, groundPos, Direction.UP)) {
+        // Search the whole chunk for a placeable surface column, not just the exact centre block: on a hillside
+        // (or under a tree / in water) the centre column is rarely sturdy, so the drop silently aborted.
+        var ventPos = findSurfaceVentSpot(serverLevel, chunk);
+        if (ventPos == null) {
+            Alien.LOGGER.info(
+                "Hive: surface party made NO vent at {} for {} - no sturdy, open surface column anywhere in the chunk.",
+                chunk,
+                location.id()
+            );
             return;
         }
 
@@ -245,6 +270,37 @@ public final class SurfacePartyLifecycleTask {
         }
 
         Alien.LOGGER.info("Hive: surface party dropped a vent + resin at {} for location {}", ventPos, location.id());
+    }
+
+    /** A sturdy, open surface column somewhere in the chunk - rings outward from the centre. */
+    private static @org.jetbrains.annotations.Nullable BlockPos findSurfaceVentSpot(
+        ServerLevel serverLevel,
+        ChunkPos chunk
+    ) {
+        var centre = chunk.getMiddleBlockPosition(0);
+        for (int radius = 0; radius <= 7; radius++) {
+            for (int dx = -radius; dx <= radius; dx++) {
+                for (int dz = -radius; dz <= radius; dz++) {
+                    if (radius > 0 && Math.abs(dx) != radius && Math.abs(dz) != radius) {
+                        continue;
+                    }
+                    int x = centre.getX() + dx;
+                    int z = centre.getZ() + dz;
+                    int y = serverLevel.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, x, z);
+                    var candidate = new BlockPos(x, y, z);
+                    var ground = candidate.below();
+                    if (!serverLevel.getBlockState(ground).isFaceSturdy(serverLevel, ground, Direction.UP)) {
+                        continue;
+                    }
+                    var state = serverLevel.getBlockState(candidate);
+                    if (!state.isAir() && !state.canBeReplaced()) {
+                        continue;
+                    }
+                    return candidate;
+                }
+            }
+        }
+        return null;
     }
 
     private static final int RESIN_PATCH_RADIUS = 5; // blocks around the party's chunk centre
