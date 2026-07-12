@@ -210,12 +210,12 @@ public class MoltingManager implements NBTSerializable {
 
     private boolean canStartMolting() {
         return !isVulnerableAndOnFire()
-                && !isAggroed()
-                && !wasRecentlyHurt()
-                && !isHiveLocationTrackingPlayers()
-                && !isMoving()
-                && !hasActiveBLibPath()
-                && !hasNearbyAttackTarget();
+            && !isAggroed()
+            && !wasRecentlyHurt()
+            && !isHiveLocationTrackingPlayers()
+            && !isMoving()
+            && !hasActiveBLibPath()
+            && !hasNearbyAttackTarget();
     }
 
     private boolean isVulnerableAndOnFire() {
@@ -255,9 +255,9 @@ public class MoltingManager implements NBTSerializable {
         }
 
         return xenomorph.getEntitySenseCache()
-                .getByClass(LivingEntity.class)
-                .stream()
-                .anyMatch(potentialTarget -> AlienPredicates.canAcquireTarget(xenomorph, potentialTarget));
+            .getByClass(LivingEntity.class)
+            .stream()
+            .anyMatch(potentialTarget -> AlienPredicates.canAcquireTarget(xenomorph, potentialTarget));
     }
 
     private float computeMoltAlpha(MoltPhase phase) {
@@ -295,7 +295,7 @@ public class MoltingManager implements NBTSerializable {
 
         if (Math.abs(modifierValue) > 0.001) {
             scaleInstance.addTransientModifier(
-                    new AttributeModifier(MOLTING_PROFILE_MODIFIER, modifierValue, AttributeModifier.Operation.ADD_MULTIPLIED_TOTAL)
+                new AttributeModifier(MOLTING_PROFILE_MODIFIER, modifierValue, AttributeModifier.Operation.ADD_MULTIPLIED_TOTAL)
             );
         }
     }

@@ -16,15 +16,15 @@ import java.util.List;
 /**
  * Who a host-hunt party may capture, and in what order.
  * <p>
- * Capture is strictly limited to entities in the host lists - a host party ignores everything else. (It still
- * defends itself: a non-host that attacks a drone is fought and killed through the normal targeting rules, it is
- * simply never CAPTURED.)
+ * Capture is strictly limited to entities in the host lists - a host party ignores everything else. (It still defends
+ * itself: a non-host that attacks a drone is fought and killed through the normal targeting rules, it is simply never
+ * CAPTURED.)
  * <p>
- * Priority follows what the hive gets out of the host: humanoid hosts (which grow into drones - the default,
- * generic path) first, then spitter hosts, then runner hosts.
+ * Priority follows what the hive gets out of the host: humanoid hosts (which grow into drones - the default, generic
+ * path) first, then spitter hosts, then runner hosts.
  * <p>
- * Players are a special case: they may only be grabbed once worn down to {@link #PLAYER_GRAB_HEALTH_FRACTION} of
- * their max health, and never while they still have grab-immunity from a previous escape.
+ * Players are a special case: they may only be grabbed once worn down to {@link #PLAYER_GRAB_HEALTH_FRACTION} of their
+ * max health, and never while they still have grab-immunity from a previous escape.
  * <p>
  * [Flag for teammate review: targeting/lifecycle interaction.]
  */
@@ -80,12 +80,12 @@ public final class HostCaptureRules {
     /** The best capture target from {@code candidates}, or null. Priority first, then distance. */
     public static @Nullable LivingEntity pickTarget(Alien captor, List<? extends LivingEntity> candidates) {
         return candidates.stream()
-                .filter(candidate -> isCapturable(captor, candidate))
-                .min(
-                        Comparator.<LivingEntity>comparingInt(HostCaptureRules::capturePriority)
-                                .thenComparingDouble(captor::distanceToSqr)
-                )
-                .orElse(null);
+            .filter(candidate -> isCapturable(captor, candidate))
+            .min(
+                Comparator.<LivingEntity>comparingInt(HostCaptureRules::capturePriority)
+                    .thenComparingDouble(captor::distanceToSqr)
+            )
+            .orElse(null);
     }
 
     private static boolean isSpitterHost(EntityType<?> type) {

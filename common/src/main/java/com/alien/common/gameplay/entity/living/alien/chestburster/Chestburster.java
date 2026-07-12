@@ -22,14 +22,14 @@ public class Chestburster extends Alien {
 
     public static AttributeSupplier.Builder createChestbursterAttributes() {
         return Alien.createAlienAttributes()
-                .add(Attributes.ARMOR, 0f)
-                .add(Attributes.ARMOR_TOUGHNESS, 0f)
-                .add(Attributes.ATTACK_DAMAGE, PlayerStatConstants.BASE_HEALTH * 0.1F)
-                .add(Attributes.FOLLOW_RANGE, 16F)
-                .add(Attributes.KNOCKBACK_RESISTANCE, 0F)
-                .add(Attributes.MAX_HEALTH, PlayerStatConstants.BASE_HEALTH * 0.25F)
-                .add(Attributes.MOVEMENT_SPEED, PlayerStatConstants.BASE_WALK_SPEED * 1.05F)
-                .add(Attributes.SCALE, 0.4F);
+            .add(Attributes.ARMOR, 0f)
+            .add(Attributes.ARMOR_TOUGHNESS, 0f)
+            .add(Attributes.ATTACK_DAMAGE, PlayerStatConstants.BASE_HEALTH * 0.1F)
+            .add(Attributes.FOLLOW_RANGE, 16F)
+            .add(Attributes.KNOCKBACK_RESISTANCE, 0F)
+            .add(Attributes.MAX_HEALTH, PlayerStatConstants.BASE_HEALTH * 0.25F)
+            .add(Attributes.MOVEMENT_SPEED, PlayerStatConstants.BASE_WALK_SPEED * 1.05F)
+            .add(Attributes.SCALE, 0.4F);
     }
 
     private final ChestbursterAnimationDispatcher animationDispatcher;
@@ -40,7 +40,7 @@ public class Chestburster extends Alien {
         super(entityType, level);
         this.animationDispatcher = new ChestbursterAnimationDispatcher(this);
         this.growthManager = new GrowthManager(this)
-                .setGrowOverTime(true);
+            .setGrowOverTime(true);
     }
 
     @Override
@@ -51,17 +51,17 @@ public class Chestburster extends Alien {
     @Override
     protected void registerGoals() {
         this.goalSelector.addGoal(
-                3,
-                new AvoidEntityGoal<>(
-                        this,
-                        LivingEntity.class,
-                        8,
-                        1,
-                        1.2,
-                        entity -> entity instanceof Alien alien
-                                ? AlienPredicates.areAliensEnemies(this, alien)
-                                : !BLibEntityPredicates.isInvulnerable(entity)
-                )
+            3,
+            new AvoidEntityGoal<>(
+                this,
+                LivingEntity.class,
+                8,
+                1,
+                1.2,
+                entity -> entity instanceof Alien alien
+                    ? AlienPredicates.areAliensEnemies(this, alien)
+                    : !BLibEntityPredicates.isInvulnerable(entity)
+            )
         );
         goalSelector.addGoal(7, new WaterAvoidingRandomStrollGoal(this, 0.5));
     }

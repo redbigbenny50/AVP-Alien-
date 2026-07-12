@@ -11,12 +11,11 @@ import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.Mob;
-import net.minecraft.world.phys.AABB;
 import org.jetbrains.annotations.Nullable;
 
 /**
- * The capture half of the host-hunt arc: a host-party drone grabs a viable host, walks it to the nearest SURFACE
- * VENT, and the pair is ducted straight into the host chamber.
+ * The capture half of the host-hunt arc: a host-party drone grabs a viable host, walks it to the nearest SURFACE VENT,
+ * and the pair is ducted straight into the host chamber.
  * <p>
  * Hosts are never carried home overland - the vent is the hand-off point into the hive, exactly as the party design
  * specifies. Once the carrier is within {@link #VENT_HANDOFF_DISTANCE} of a surface vent, both it and its cargo are
@@ -62,7 +61,8 @@ public final class HostCaptureTask {
             freeMob.removeFreedom();
         }
         captor.setPersistenceRequired();
-        captor.level().playSound(
+        captor.level()
+            .playSound(
                 null,
                 captor.getX(),
                 captor.getY(),
@@ -71,18 +71,18 @@ public final class HostCaptureTask {
                 SoundSource.HOSTILE,
                 1.0F,
                 0.6F
-        );
+            );
     }
 
     /**
-     * Called from a host-party drone's tick. Handles both halves of the job: grab a viable host when one is in
-     * reach, and hand a carried host off at the nearest surface vent.
+     * Called from a host-party drone's tick. Handles both halves of the job: grab a viable host when one is in reach,
+     * and hand a carried host off at the nearest surface vent.
      */
     public static void tick(
-            com.alien.common.gameplay.entity.living.alien.Alien captor,
-            ServerLevel level,
-            HiveLocation location,
-            int surfaceBandBlocks
+        com.alien.common.gameplay.entity.living.alien.Alien captor,
+        ServerLevel level,
+        HiveLocation location,
+        int surfaceBandBlocks
     ) {
         if (captor.tickCount % CHECK_INTERVAL_TICKS != 0 || HostGrabImmunity.isStunned(captor)) {
             return;
@@ -112,11 +112,11 @@ public final class HostCaptureTask {
     }
 
     private static void tryVentHandoff(
-            com.alien.common.gameplay.entity.living.alien.Alien captor,
-            LivingEntity carried,
-            ServerLevel level,
-            HiveLocation location,
-            int surfaceBandBlocks
+        com.alien.common.gameplay.entity.living.alien.Alien captor,
+        LivingEntity carried,
+        ServerLevel level,
+        HiveLocation location,
+        int surfaceBandBlocks
     ) {
         var vents = PartyVentUtil.findSurfaceVents(level, location, surfaceBandBlocks);
         if (vents.isEmpty()) {
@@ -139,10 +139,10 @@ public final class HostCaptureTask {
 
     /** The hand-off itself: the host is ducted into the hive and webbed into a free host-chamber spot. */
     private static void deliverToHostChamber(
-            com.alien.common.gameplay.entity.living.alien.Alien captor,
-            LivingEntity carried,
-            ServerLevel level,
-            HiveLocation location
+        com.alien.common.gameplay.entity.living.alien.Alien captor,
+        LivingEntity carried,
+        ServerLevel level,
+        HiveLocation location
     ) {
         var spot = HostChamberSlots.firstFreeSpot(level, location);
         if (spot == null) {
@@ -151,20 +151,20 @@ public final class HostCaptureTask {
         carried.stopRiding();
         HostParking.embed(level, carried, spot.pos(), spot.facing());
         level.playSound(
-                null,
-                spot.pos().getX() + 0.5,
-                spot.pos().getY() + 0.5,
-                spot.pos().getZ() + 0.5,
-                SoundEvents.BEEHIVE_ENTER,
-                SoundSource.HOSTILE,
-                1.0F,
-                0.7F
+            null,
+            spot.pos().getX() + 0.5,
+            spot.pos().getY() + 0.5,
+            spot.pos().getZ() + 0.5,
+            SoundEvents.BEEHIVE_ENTER,
+            SoundSource.HOSTILE,
+            1.0F,
+            0.7F
         );
         Alien.LOGGER.info(
-                "Hive at {}: host {} delivered to a host chamber spot at {}.",
-                location.centerPos(),
-                carried.getName().getString(),
-                spot.pos()
+            "Hive at {}: host {} delivered to a host chamber spot at {}.",
+            location.centerPos(),
+            carried.getName().getString(),
+            spot.pos()
         );
     }
 }

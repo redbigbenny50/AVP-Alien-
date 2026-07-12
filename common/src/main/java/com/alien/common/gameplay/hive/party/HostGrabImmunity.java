@@ -10,15 +10,15 @@ import java.util.Map;
 import java.util.WeakHashMap;
 
 /**
- * Post-escape state for the host capture arc: a freed host cannot be immediately re-grabbed, and the drone that lost
- * it is stunned.
+ * Post-escape state for the host capture arc: a freed host cannot be immediately re-grabbed, and the drone that lost it
+ * is stunned.
  * <p>
  * When a carried host gets free - a player fills the struggle bar, or someone kills/attacks the carrier - two things
  * happen for {@link #ESCAPE_DURATION_TICKS} (60s):
  * <ul>
- *   <li>the host is <b>grab-immune</b>: no drone will try to carry it off again. Other xenomorphs still ATTACK it
- *       normally - escaping a capture is not a truce, it just means the hive stops trying to take you alive.</li>
- *   <li>the carrier is <b>stunned</b>: it stands idle and helpless. Hitting it wakes it early.</li>
+ * <li>the host is <b>grab-immune</b>: no drone will try to carry it off again. Other xenomorphs still ATTACK it
+ * normally - escaping a capture is not a truce, it just means the hive stops trying to take you alive.</li>
+ * <li>the carrier is <b>stunned</b>: it stands idle and helpless. Hitting it wakes it early.</li>
  * </ul>
  * Both are transient (in-memory): after a restart the world has moved on and neither should persist.
  */
@@ -72,7 +72,7 @@ public final class HostGrabImmunity {
         }
         boolean recovered = carrier.level().getGameTime() >= until;
         boolean wokenByPain = carrier.getLastHurtByMob() != null
-                && carrier.tickCount - carrier.getLastHurtByMobTimestamp() < 5;
+            && carrier.tickCount - carrier.getLastHurtByMobTimestamp() < 5;
         if (recovered || wokenByPain) {
             wake(carrier);
         }
@@ -86,8 +86,8 @@ public final class HostGrabImmunity {
     }
 
     /**
-     * Release a carried host: it dismounts, regains its freedom and its grab-immunity, and the carrier is stunned.
-     * Used both when a player wins the struggle and when someone rescues a captive by hurting the carrier.
+     * Release a carried host: it dismounts, regains its freedom and its grab-immunity, and the carrier is stunned. Used
+     * both when a player wins the struggle and when someone rescues a captive by hurting the carrier.
      */
     public static void breakCapture(Alien carrier, LivingEntity host) {
         host.stopRiding();

@@ -227,6 +227,22 @@ public final class HiveDebugCommands {
                     )
             )
             .then(
+                Commands.literal("force_party")
+                    .requires(CommandSourceStack::isPlayer)
+                    .then(
+                        Commands.literal("host_hunt")
+                            .executes(ctx -> forceParty(ctx, "host_hunt"))
+                    )
+                    .then(
+                        Commands.literal("biomass_hunting")
+                            .executes(ctx -> forceParty(ctx, "biomass_hunting"))
+                    )
+                    .then(
+                        Commands.literal("surface_spawn")
+                            .executes(ctx -> forceParty(ctx, "surface_spawn"))
+                    )
+            )
+            .then(
                 Commands.literal("force_raid")
                     .requires(CommandSourceStack::isPlayer)
                     .then(
@@ -290,6 +306,103 @@ public final class HiveDebugCommands {
      * current chunk. An inhibited location runs no autonomy (claims/biomass/spawning/contests) — used to verify the
      * gate before the real queen-driven claim lifecycle (Slice B2) wires it.
      */
+    /**
+     * Force-dispatch a party from the hive whose claim the player is standing in, reporting exactly which gate blocked
+     * it when nothing spawns (the dispatchers are otherwise silent about refusals).
+     */
+    private static int forceParty(
+        com.mojang.brigadier.context.CommandContext<CommandSourceStack> ctx,
+        String partyType
+    ) {
+        var source = ctx.getSource();
+        var player = source.getPlayer();
+        if (player == null) {
+            source.sendFailure(Component.literal("Must be run by a player."));
+            return 0;
+        }
+        if (!(player.level() instanceof net.minecraft.server.level.ServerLevel level)) {
+            source.sendFailure(Component.literal("Server level only."));
+            return 0;
+        }
+        var chunk = new ChunkPos(player.blockPosition());
+        var dimension = player.level().dimension();
+        HiveLocation target = null;
+        for (var location : HiveLocationRegistry.INSTANCE.all()) {
+            if (
+                location.isAlive()
+                    && location.dimension().equals(dimension)
+                    && location.claimedChunks().contains(chunk)
+            ) {
+                target = location;
+                break;
+            }
+        }
+        if (target == null) {
+            source.sendFailure(Component.literal("Stand inside a hive claim to dispatch one of its parties."));
+            return 0;
+        }
+
+        var config = HiveLocationRegistry.INSTANCE.config();
+        var server = source.getServer();
+
+        // Report the common gates up-front - a silent no-op is the usual confusion when testing parties.
+        var vents = com.alien.common.gameplay.hive.party.PartyVentUtil.findSurfaceVents(
+            level,
+            target,
+            config.surfacePartySurfaceBandBlocks()
+        );
+        if (!"surface_spawn".equals(partyType) && vents.isEmpty()) {
+            source.sendFailure(
+                Component.literal(
+                    "This hive has no near-surface vent, so it cannot dispatch that party. Surface-spawn parties "
+                        + "seed those vents - run force_party surface_spawn first."
+                )
+            );
+            return 0;
+        }
+        if (
+            "host_hunt".equals(partyType)
+                && com.alien.common.gameplay.hive.structure.HostChamberSlots.firstFreeSpot(level, target) == null
+        ) {
+            source.sendFailure(
+                Component.literal(
+                    "No free host-chamber spot: the hive will not hunt hosts it has nowhere to put."
+                )
+            );
+            return 0;
+        }
+
+        var before = target.parties().size();
+        switch (partyType) {
+            case "host_hunt" ->
+                com.alien.common.gameplay.hive.party.HostHuntPartyDispatch.tryRun(server, target, config);
+            case "biomass_hunting" ->
+                com.alien.common.gameplay.hive.party.BiomassHuntingPartyDispatch.tryRun(server, target, config);
+            case "surface_spawn" ->
+                com.alien.common.gameplay.hive.party.SurfacePartyDispatch.tryRun(server, target, config);
+            default -> {
+                source.sendFailure(Component.literal("Unknown party type: " + partyType));
+                return 0;
+            }
+        }
+
+        if (target.parties().size() > before) {
+            var dispatched = target; // effectively-final copy for the lambda
+            source.sendSuccess(
+                () -> Component.literal("Dispatched a " + partyType + " party for " + dispatched.id() + "."),
+                true
+            );
+            return 1;
+        }
+        source.sendFailure(
+            Component.literal(
+                "Dispatch refused. Most likely: a party of that type is already active, or the reserves are empty "
+                    + "(check /avp_alien debug inspect_location)."
+            )
+        );
+        return 0;
+    }
+
     private static int webHost(com.mojang.brigadier.context.CommandContext<CommandSourceStack> ctx) {
         var source = ctx.getSource();
         var player = source.getPlayer();

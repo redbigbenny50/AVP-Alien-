@@ -14,17 +14,17 @@ import java.util.WeakHashMap;
 /**
  * Molt feeding + spent-remains cleanup.
  * <p>
- * An implantation leaves litter behind forever: the opened ovomorph and the spent facehugger both persist in place,
- * so a host chamber silently fills with corpses. Rather than just deleting them, the young alien EATS them: a
- * chestburster or adolescent that is next to a spent egg or a spent facehugger consumes it and instantly completes
- * one molt phase. Both have three phases, so eating the egg AND the hugger left by its own birth cuts its molting
- * from three phases to one.
+ * An implantation leaves litter behind forever: the opened ovomorph and the spent facehugger both persist in place, so
+ * a host chamber silently fills with corpses. Rather than just deleting them, the young alien EATS them: a chestburster
+ * or adolescent that is next to a spent egg or a spent facehugger consumes it and instantly completes one molt phase.
+ * Both have three phases, so eating the egg AND the hugger left by its own birth cuts its molting from three phases to
+ * one.
  * <p>
- * A spent remain that nothing eats despawns after {@link #REMAINS_LIFETIME_TICKS} (one Minecraft day), so a chamber
- * can never pile up even with no young aliens around.
+ * A spent remain that nothing eats despawns after {@link #REMAINS_LIFETIME_TICKS} (one Minecraft day), so a chamber can
+ * never pile up even with no young aliens around.
  * <p>
- * "Spent" means finished, never live: an ovomorph that has already HATCHED (its hugger is out), and a facehugger
- * that has already implanted its embryo ({@code isFertile == false}). Live eggs and fertile huggers are never eaten.
+ * "Spent" means finished, never live: an ovomorph that has already HATCHED (its hugger is out), and a facehugger that
+ * has already implanted its embryo ({@code isFertile == false}). Live eggs and fertile huggers are never eaten.
  * <p>
  * [Flag for teammate review: growth/lifecycle system.]
  */
@@ -66,9 +66,9 @@ public final class MoltFeeding {
     }
 
     /**
-     * Called from a spent egg's / spent hugger's tick: once it has lain around for a full Minecraft day, remove
-     * it, so uneaten remains can never accumulate. Age is tracked in memory only - after a reload the clock
-     * simply restarts, which is fine for a cleanup backstop.
+     * Called from a spent egg's / spent hugger's tick: once it has lain around for a full Minecraft day, remove it, so
+     * uneaten remains can never accumulate. Age is tracked in memory only - after a reload the clock simply restarts,
+     * which is fine for a cleanup backstop.
      */
     public static void tickRemainsLifetime(Entity remain) {
         if (remain.level().isClientSide || remain.tickCount % FEED_CHECK_INTERVAL_TICKS != 0) {
@@ -89,16 +89,16 @@ public final class MoltFeeding {
     /** True if this ovomorph is a spent shell: already hatched, its facehugger long gone. */
     public static boolean isSpentEgg(Entity entity) {
         return entity instanceof Ovomorph ovomorph
-                && ovomorph.isAlive()
-                && ovomorph.getHatchManager().isHatched();
+            && ovomorph.isAlive()
+            && ovomorph.getHatchManager().isHatched();
     }
 
     /** True if this facehugger has already implanted its embryo and has nothing left to give. */
     public static boolean isSpentHugger(Entity entity) {
         return entity instanceof Facehugger facehugger
-                && facehugger.isAlive()
-                && !facehugger.isFertile.get()
-                && !facehugger.isPassenger();
+            && facehugger.isAlive()
+            && !facehugger.isFertile.get()
+            && !facehugger.isPassenger();
     }
 
     private static Entity findSpentRemain(Alien alien) {
@@ -122,26 +122,26 @@ public final class MoltFeeding {
             adolescent.getAnimationDispatcher().biteAttack();
         }
         level.playSound(
-                null,
-                alien.getX(),
-                alien.getY(),
-                alien.getZ(),
-                SoundEvents.GENERIC_EAT,
-                SoundSource.HOSTILE,
-                1.0F,
-                0.7F
+            null,
+            alien.getX(),
+            alien.getY(),
+            alien.getZ(),
+            SoundEvents.GENERIC_EAT,
+            SoundSource.HOSTILE,
+            1.0F,
+            0.7F
         );
         if (level instanceof ServerLevel serverLevel) {
             serverLevel.sendParticles(
-                    ParticleTypes.ITEM_SLIME,
-                    meal.getX(),
-                    meal.getY() + 0.4,
-                    meal.getZ(),
-                    12,
-                    0.2,
-                    0.2,
-                    0.2,
-                    0.01
+                ParticleTypes.ITEM_SLIME,
+                meal.getX(),
+                meal.getY() + 0.4,
+                meal.getZ(),
+                12,
+                0.2,
+                0.2,
+                0.2,
+                0.01
             );
         }
         meal.discard();

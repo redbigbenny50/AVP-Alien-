@@ -25,14 +25,14 @@ public class Adolescent extends Alien {
 
     public static AttributeSupplier.Builder createAdolescentAttributes() {
         return Alien.createAlienAttributes()
-                .add(Attributes.ARMOR, 0f)
-                .add(Attributes.ARMOR_TOUGHNESS, 0f)
-                .add(Attributes.ATTACK_DAMAGE, PlayerStatConstants.BASE_HEALTH * 0.1F)
-                .add(Attributes.FOLLOW_RANGE, 16F)
-                .add(Attributes.KNOCKBACK_RESISTANCE, 0F)
-                .add(Attributes.MAX_HEALTH, PlayerStatConstants.BASE_HEALTH * 0.5F)
-                .add(Attributes.MOVEMENT_SPEED, PlayerStatConstants.BASE_WALK_SPEED * 1.025F)
-                .add(Attributes.SCALE, 0.7F);
+            .add(Attributes.ARMOR, 0f)
+            .add(Attributes.ARMOR_TOUGHNESS, 0f)
+            .add(Attributes.ATTACK_DAMAGE, PlayerStatConstants.BASE_HEALTH * 0.1F)
+            .add(Attributes.FOLLOW_RANGE, 16F)
+            .add(Attributes.KNOCKBACK_RESISTANCE, 0F)
+            .add(Attributes.MAX_HEALTH, PlayerStatConstants.BASE_HEALTH * 0.5F)
+            .add(Attributes.MOVEMENT_SPEED, PlayerStatConstants.BASE_WALK_SPEED * 1.025F)
+            .add(Attributes.SCALE, 0.7F);
     }
 
     private static final String NBT_HAS_DORSAL_TUBES = "hasDorsalTubes";
@@ -50,7 +50,7 @@ public class Adolescent extends Alien {
 
         this.animationDispatcher = new AdolescentAnimationDispatcher(this);
         this.growthManager = new GrowthManager(this)
-                .setGrowOverTime(true);
+            .setGrowOverTime(true);
     }
 
     @Override
@@ -61,17 +61,17 @@ public class Adolescent extends Alien {
     @Override
     protected void registerGoals() {
         this.goalSelector.addGoal(
-                3,
-                new AvoidEntityGoal<>(
-                        this,
-                        LivingEntity.class,
-                        8,
-                        1,
-                        1.2,
-                        entity -> entity instanceof Alien alien
-                                ? AlienPredicates.areAliensEnemies(this, alien)
-                                : !BLibEntityPredicates.isInvulnerable(entity)
-                )
+            3,
+            new AvoidEntityGoal<>(
+                this,
+                LivingEntity.class,
+                8,
+                1,
+                1.2,
+                entity -> entity instanceof Alien alien
+                    ? AlienPredicates.areAliensEnemies(this, alien)
+                    : !BLibEntityPredicates.isInvulnerable(entity)
+            )
         );
         goalSelector.addGoal(7, new WaterAvoidingRandomStrollGoal(this, 0.5));
     }

@@ -11,12 +11,12 @@ import java.util.ArrayList;
 
 /**
  * Per-tick (piggybacking {@code HiveLocationLoadedTickTask}'s 20-tick cadence) resolution for
- * {@link HiveParty.HostHunt} parties. No day/night cycle like {@link SurfacePartyLifecycleTask} — this party runs
- * for a fixed {@code config.hostHuntPartyDurationTicks()} active duration (tracked from
- * {@link HiveParty#dispatchedTick()}), then resolves: surviving members are instantly teleported to the nearest known
- * hive vent (the "vents act as fast travel points back to hive" design point) before refunding to reserves and being
- * discarded. Party-specific targeting eligibility (the biomass-hunting THREAT_2 bypass in
- * {@code AlienPredicates#isActiveBiomassHuntingPartyMember}) is cleared alongside membership.
+ * {@link HiveParty.HostHunt} parties. No day/night cycle like {@link SurfacePartyLifecycleTask} — this party runs for a
+ * fixed {@code config.hostHuntPartyDurationTicks()} active duration (tracked from {@link HiveParty#dispatchedTick()}),
+ * then resolves: surviving members are instantly teleported to the nearest known hive vent (the "vents act as fast
+ * travel points back to hive" design point) before refunding to reserves and being discarded. Party-specific targeting
+ * eligibility (the biomass-hunting THREAT_2 bypass in {@code AlienPredicates#isActiveBiomassHuntingPartyMember}) is
+ * cleared alongside membership.
  */
 public final class HostHuntPartyLifecycleTask {
 
@@ -51,10 +51,10 @@ public final class HostHuntPartyLifecycleTask {
     }
 
     private static void resolve(
-            ServerLevel serverLevel,
-            HiveLocation location,
-            HiveParty.HostHunt party,
-            HiveConfig config
+        ServerLevel serverLevel,
+        HiveLocation location,
+        HiveParty.HostHunt party,
+        HiveConfig config
     ) {
         var homeVent = nearestVent(serverLevel, location, config);
 
