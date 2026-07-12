@@ -17,14 +17,14 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Dispatch for {@link HiveParty.BiomassHunting}. Unlike {@link SurfacePartyDispatch}, this party needs an existing
+ * Dispatch for {@link HiveParty.HostHunt}. Unlike {@link SurfacePartyDispatch}, this party needs an existing
  * near-surface vent to spawn from at all (see {@code AVP_Party_System_Design.md} § 3) — if the hive has none yet
  * (general surface spawn hasn't seeded any), dispatch simply fails and retries next cycle. Runs from the same 20-tick
  * cadence as the other party dispatchers.
  */
-public final class BiomassHuntingPartyDispatch {
+public final class HostHuntPartyDispatch {
 
-    private BiomassHuntingPartyDispatch() {}
+    private HostHuntPartyDispatch() {}
 
     public static void tryRun(MinecraftServer server, HiveLocation location, HiveConfig config) {
         var serverLevel = server.getLevel(location.dimension());
@@ -33,10 +33,15 @@ public final class BiomassHuntingPartyDispatch {
         }
 
         for (var party : location.parties()) {
-            if (party instanceof HiveParty.BiomassHunting) {
+            if (party instanceof HiveParty.HostHunt) {
                 // One at a time per hive.
                 return;
             }
+        }
+
+        // No point hunting hosts we have nowhere to put: require a free host-chamber spot.
+        if (com.alien.common.gameplay.hive.structure.HostChamberSlots.firstFreeSpot(serverLevel, location) == null) {
+            return;
         }
 
         var surfaceVents = PartyVentUtil.findSurfaceVents(serverLevel, location, config.surfacePartySurfaceBandBlocks());
@@ -46,32 +51,32 @@ public final class BiomassHuntingPartyDispatch {
         var spawnPos = surfaceVents.get(serverLevel.random.nextInt(surfaceVents.size()));
 
         // Size scales with claims but is CAPPED (bonus spitters ride on top of this budget).
-        var biomassCap = com.alien.common.gameplay.hive.structure.HiveRouter.isEmpressInfluenced(location)
-            ? config.biomassHuntingPartyMaxSizeEmpress()
-            : config.biomassHuntingPartyMaxSize();
+        var hostCap = com.alien.common.gameplay.hive.structure.HiveRouter.isEmpressInfluenced(location)
+                ? config.hostHuntPartyMaxSizeEmpress()
+                : config.hostHuntPartyMaxSize();
         var desiredSize = Math.min(
-            biomassCap,
-            Math.max(
-                1,
-                Math.round(
-                    config.biomassHuntingPartyBaseSize()
-                        + config.biomassHuntingPartySizePerClaimedChunk() * location.claimedChunks().size()
+                hostCap,
+                Math.max(
+                        1,
+                        Math.round(
+                                config.hostHuntPartyBaseSize()
+                                        + config.hostHuntPartySizePerClaimedChunk() * location.claimedChunks().size()
+                        )
                 )
-            )
         );
 
-        var composition = drainComposition(location, (int) desiredSize, config.biomassHuntingPartyBonusSpitterCount());
+        var composition = drainComposition(location, (int) desiredSize, 0);
         if (composition.getCount() <= 0) {
             return;
         }
 
         var currentTick = serverLevel.getGameTime();
-        var party = new HiveParty.BiomassHunting(
-            HivePartyId.fresh(),
-            location.id(),
-            location.dimension(),
-            composition,
-            currentTick
+        var party = new HiveParty.HostHunt(
+                HivePartyId.fresh(),
+                location.id(),
+                location.dimension(),
+                composition,
+                currentTick
         );
 
         var spawnedCount = materialize(serverLevel, location, party, spawnPos);
@@ -82,46 +87,34 @@ public final class BiomassHuntingPartyDispatch {
 
         location.parties().add(party);
         Alien.LOGGER.info(
-            "Hive: dispatched biomass hunting party for location {} — {} members from vent at {}",
-            location.id(),
-            spawnedCount,
-            spawnPos
+                "Hive: dispatched host hunt party for location {} — {} members from vent at {}",
+                location.id(),
+                spawnedCount,
+                spawnPos
         );
     }
 
-    /**
-     * Guaranteed Prowlers + Warriors up to {@code desiredCount}, plus up to {@code bonusSpitterCount} Spitters on top.
-     */
+    /** Host parties are DRONES: they carry hosts, they do not fight for sport. */
     private static EntityReserves drainComposition(HiveLocation location, int desiredCount, int bonusSpitterCount) {
         var reserves = location.localReserves();
         var composition = new EntityReserves();
 
-        var coreTypes = new ArrayList<EntityType<?>>();
+        var droneTypes = new ArrayList<EntityType<?>>();
         for (var type : reserves.getAvailableEntityTypes()) {
-            if (type.is(AlienEntityTypeTags.PROWLERS) || type.is(AlienEntityTypeTags.WARRIORS)) {
-                coreTypes.add(type);
+            if (type.is(AlienEntityTypeTags.DRONES)) {
+                droneTypes.add(type);
             }
         }
-        drainUpTo(reserves, composition, coreTypes, desiredCount);
-
-        if (bonusSpitterCount > 0) {
-            var spitterTypes = new ArrayList<EntityType<?>>();
-            for (var type : reserves.getAvailableEntityTypes()) {
-                if (type.is(AlienEntityTypeTags.SPITTERS)) {
-                    spitterTypes.add(type);
-                }
-            }
-            drainUpTo(reserves, composition, spitterTypes, bonusSpitterCount);
-        }
+        drainUpTo(reserves, composition, droneTypes, desiredCount);
 
         return composition;
     }
 
     private static void drainUpTo(
-        com.alien.common.gameplay.hive.location.HiveLocationReserves reserves,
-        EntityReserves composition,
-        List<EntityType<?>> candidateTypes,
-        int count
+            com.alien.common.gameplay.hive.location.HiveLocationReserves reserves,
+            EntityReserves composition,
+            List<EntityType<?>> candidateTypes,
+            int count
     ) {
         if (candidateTypes.isEmpty()) {
             return;
@@ -156,7 +149,7 @@ public final class BiomassHuntingPartyDispatch {
         }
     }
 
-    private static int materialize(ServerLevel level, HiveLocation location, HiveParty.BiomassHunting party, BlockPos spawnPos) {
+    private static int materialize(ServerLevel level, HiveLocation location, HiveParty.HostHunt party, BlockPos spawnPos) {
         var spawnedCount = 0;
         for (var type : new ArrayList<>(party.composition().getAvailableEntityTypes())) {
             var count = party.composition().getCount(type);

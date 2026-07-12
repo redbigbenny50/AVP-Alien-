@@ -2,8 +2,11 @@ package com.alien.common.gameplay.entity.living.alien.xenomorph.ai.egg.action;
 
 import com.alien.common.gameplay.entity.living.alien.ovomorph.Ovomorph;
 import com.alien.common.gameplay.entity.living.alien.xenomorph.Xenomorph;
+import com.alien.common.gameplay.entity.living.alien.xenomorph.ai.egg.QueenEggZone;
+import com.alien.common.gameplay.entity.living.alien.xenomorph.queen.Queen;
 import com.alien.common.gameplay.hive.location.HiveLocationRegistry;
 import com.alien.common.gameplay.hive.structure.HiveChamberSlots;
+import com.alien.common.gameplay.hive.structure.HostEggDelivery;
 import com.alien.common.gameplay.hive.vent.HiveVents;
 import com.alien.common.registry.init.AlienSoundEvents;
 import com.alien.common.registry.tag.AlienEntityTypeTags;
@@ -93,16 +96,26 @@ public class DropOffEggAction {
             }
             // STORAGE FIRST: haul the egg to a free bed in an egg chamber while any exists - eggs only accumulate
             // around the queen (the original spiral search below) once the nursery chambers are full or unreachable.
-            var freeSpot = findChamberBedSpot(xenomorph, failedSpots);
-            var isChamberBed = freeSpot.isPresent();
-            if (freeSpot.isEmpty()) {
-                freeSpot = findFreeEggSpot(
-                    xenomorph,
-                    xenomorph.level(),
-                    xenomorph.blockPosition(),
-                    pos -> xenomorph.level().getBlockState(pos).entityCanStandOn(xenomorph.level(), pos, xenomorph),
-                    failedSpots
+            // HOST DELIVERY FIRST: an embedded host awaiting an egg outranks nursery storage - the egg opens in
+            // front of it and the facehugger attaches. Falls through to nursery/spiral when no host needs one.
+            java.util.Optional<net.minecraft.core.BlockPos> hostDrop = java.util.Optional.empty();
+            if (xenomorph.level() instanceof net.minecraft.server.level.ServerLevel hostDropLevel) {
+                var hostDropLocation = HiveLocationRegistry.INSTANCE.getByChunk(
+                    hostDropLevel.dimension(),
+                    xenomorph.chunkPosition()
                 );
+                if (hostDropLocation != null) {
+                    hostDrop = HostEggDelivery.findAwaitingHostEggDrop(hostDropLevel, hostDropLocation);
+                }
+            }
+            var isHostDrop = hostDrop.isPresent();
+            var freeSpot = isHostDrop ? hostDrop : findChamberBedSpot(xenomorph, failedSpots);
+            var isChamberBed = !isHostDrop && freeSpot.isPresent();
+            if (freeSpot.isEmpty()) {
+                // OVERFLOW: nurseries full/unreachable -> the queen's clutch zone (a bounded patch in FRONT of
+                // her). The old fallback spiralled outward from the HAULER's position, which pushed overflow eggs
+                // into hallways and doorways. The zone is anchored to the queen and eggs can never leave it.
+                freeSpot = findQueenZoneSpot(xenomorph, failedSpots);
             }
             setFailedSpots(blackboard, failedSpots);
 
@@ -114,7 +127,7 @@ public class DropOffEggAction {
             targetPos = freeSpot.get().getCenter();
             blackboard.set(KEY_TARGET_POS, targetPos);
             blackboard.set(KEY_TARGET_SET_TICK, xenomorph.tickCount);
-            if (isChamberBed) {
+            if (isChamberBed || isHostDrop) {
                 planVentLeg(xenomorph, freeSpot.get(), blackboard);
             }
         }
@@ -128,11 +141,7 @@ public class DropOffEggAction {
         // there. Any pathing trouble on this leg just abandons the duct and walks the whole way.
         var ventEntry = blackboard.getOrDefault(KEY_VENT_ENTRY, (BlockPos) null);
         if (ventEntry != null) {
-            // Approach a STANDABLE spot beside/below the vent, not the vent block itself: vents sit in walls,
-            // often 2-3 up, so the drone can never get within reach of the vent center. emergencePosNear finds
-            // the floor spot the exit side already uses, so elevated vents become usable.
-            var ventApproach = HiveVents.emergencePosNear(xenomorph.level(), ventEntry);
-            var ventTarget = ventApproach != null ? Vec3.atBottomCenterOf(ventApproach) : Vec3.atCenterOf(ventEntry);
+            var ventTarget = Vec3.atCenterOf(ventEntry);
             var ventResult = NeoMoveToPosAction.perform(context, ventTarget, 0.5);
             if (xenomorph.distanceToSqr(ventTarget) <= VENT_REACH_SQUARED) {
                 var ventExit = blackboard.getOrDefault(KEY_VENT_EXIT, (BlockPos) null);
@@ -302,6 +311,28 @@ public class DropOffEggAction {
      * failed-spot memory so retries skip them; empty result means the nursery is full/absent and the caller falls back
      * to the around-the-queen spiral.
      */
+    /** A free cell in the queen's clutch zone (bounded patch in front of her), nearest to her first. */
+    private static Optional<BlockPos> findQueenZoneSpot(Xenomorph xenomorph, Set<BlockPos> failedSpots) {
+        if (!(xenomorph.level() instanceof ServerLevel serverLevel)) {
+            return Optional.empty();
+        }
+        var location = HiveLocationRegistry.INSTANCE.getByChunk(serverLevel.dimension(), xenomorph.chunkPosition());
+        if (location == null || location.founderId() == null) {
+            return Optional.empty();
+        }
+        var queen = serverLevel.getEntity(location.founderId()) instanceof Queen q ? q : null;
+        if (queen == null) {
+            return Optional.empty();
+        }
+        for (var pos : QueenEggZone.candidates(serverLevel, queen)) {
+            if (failedSpots.contains(pos)) {
+                continue;
+            }
+            return Optional.of(pos);
+        }
+        return Optional.empty();
+    }
+
     private static Optional<BlockPos> findChamberBedSpot(Xenomorph xenomorph, Set<BlockPos> failedSpots) {
         if (!(xenomorph.level() instanceof ServerLevel serverLevel)) {
             return Optional.empty();

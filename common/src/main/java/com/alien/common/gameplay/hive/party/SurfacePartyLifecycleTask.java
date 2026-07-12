@@ -174,6 +174,11 @@ public final class SurfacePartyLifecycleTask {
             }
             lastKnownChunk = new ChunkPos(entity.blockPosition());
             location.localReserves().addReturningMember(entry.getValue(), 1);
+            // EGG DUTY: a carrier is refunded but NEVER discarded - discarding it mid-haul vanished the
+            // worker and dropped its egg. It stays alive to finish the delivery.
+            if (EggDutyGuard.isOnEggDuty(entity)) {
+                continue;
+            }
             entity.discard();
         }
 

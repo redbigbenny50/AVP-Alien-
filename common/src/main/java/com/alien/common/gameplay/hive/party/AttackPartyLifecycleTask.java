@@ -101,6 +101,11 @@ public final class AttackPartyLifecycleTask {
             if (entity instanceof com.alien.common.gameplay.entity.living.alien.Alien alien) {
                 alien.clearPartyMembership();
             }
+            // EGG DUTY: a carrier is refunded but NEVER discarded - discarding it mid-haul vanished the
+            // worker and dropped its egg. It stays alive to finish the delivery.
+            if (EggDutyGuard.isOnEggDuty(entity)) {
+                continue;
+            }
             entity.discard();
         }
 

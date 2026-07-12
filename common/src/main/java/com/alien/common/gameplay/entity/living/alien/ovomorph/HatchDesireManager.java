@@ -3,6 +3,7 @@ package com.alien.common.gameplay.entity.living.alien.ovomorph;
 import com.alien.common.registry.init.AlienDataSyncKeys;
 import com.alien.common.util.AlienPredicates;
 import com.blib.api.common.data_sync.v1.DataAccessor;
+import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.level.gameevent.vibrations.VibrationInfo;
 
 import java.util.Objects;
@@ -12,6 +13,15 @@ public class HatchDesireManager {
     private static final int MAXIMUM_DESIRE_TO_HATCH = 100;
 
     private static final int HOST_VIBRATION_DESIRE_MULTIPLIER = 4;
+
+    // A host PARKED in a host chamber is frozen (setNoAi + removeFreedom), so it emits NO vibrations - the
+    // vibration-driven desire below can never fire for it, and an egg delivered in front of it just decays to zero
+    // and never opens. A free host sitting still right next to the egg is the entire point of the host chamber, so
+    // desire also builds on PROXIMITY.
+    private static final double ADJACENT_HOST_RADIUS = 2.5;
+
+    /** Desire per 20-tick cycle from an adjacent free host: maximum after ~5s beside one. */
+    private static final int ADJACENT_HOST_DESIRE = 20;
 
     private final Ovomorph ovomorph;
 
@@ -28,7 +38,11 @@ public class HatchDesireManager {
         handleVibration();
 
         if (ovomorph.tickCount % 20 == 0) {
-            addDesire(-1);
+            if (hasAdjacentFreeHost()) {
+                addDesire(ADJACENT_HOST_DESIRE);
+            } else {
+                addDesire(-1);
+            }
         }
 
         if (ovomorph.getHatchManager().isHatched()) {
@@ -65,6 +79,17 @@ public class HatchDesireManager {
 
             this.lastVibrationInfo = vibrationInfo;
         }
+    }
+
+    /** A free host within reach of this egg - e.g. one webbed into a host-chamber wall right in front of it. */
+    private boolean hasAdjacentFreeHost() {
+        var box = ovomorph.getBoundingBox().inflate(ADJACENT_HOST_RADIUS);
+        for (var candidate : ovomorph.level().getEntitiesOfClass(LivingEntity.class, box)) {
+            if (AlienPredicates.isFreeHost(ovomorph, candidate)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     public boolean wantsToHatch() {

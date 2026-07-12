@@ -100,24 +100,24 @@ public sealed interface HiveParty {
         private long lastEconomyCheckTick;
 
         public SurfaceSpawn(
-            HivePartyId id,
-            HiveLocationId sourceLocationId,
-            ResourceKey<Level> dimension,
-            EntityReserves composition,
-            long dispatchedTick
+                HivePartyId id,
+                HiveLocationId sourceLocationId,
+                ResourceKey<Level> dimension,
+                EntityReserves composition,
+                long dispatchedTick
         ) {
             this(id, sourceLocationId, dimension, composition, new HashMap<>(), dispatchedTick, EconomyBias.HARVEST, -1L);
         }
 
         public SurfaceSpawn(
-            HivePartyId id,
-            HiveLocationId sourceLocationId,
-            ResourceKey<Level> dimension,
-            EntityReserves composition,
-            Map<UUID, EntityType<?>> materializedMembers,
-            long dispatchedTick,
-            EconomyBias economyBias,
-            long lastEconomyCheckTick
+                HivePartyId id,
+                HiveLocationId sourceLocationId,
+                ResourceKey<Level> dimension,
+                EntityReserves composition,
+                Map<UUID, EntityType<?>> materializedMembers,
+                long dispatchedTick,
+                EconomyBias economyBias,
+                long lastEconomyCheckTick
         ) {
             this.id = id;
             this.sourceLocationId = sourceLocationId;
@@ -227,22 +227,126 @@ public sealed interface HiveParty {
         private final long dispatchedTick;
 
         public BiomassHunting(
-            HivePartyId id,
-            HiveLocationId sourceLocationId,
-            ResourceKey<Level> dimension,
-            EntityReserves composition,
-            long dispatchedTick
+                HivePartyId id,
+                HiveLocationId sourceLocationId,
+                ResourceKey<Level> dimension,
+                EntityReserves composition,
+                long dispatchedTick
         ) {
             this(id, sourceLocationId, dimension, composition, new HashMap<>(), dispatchedTick);
         }
 
         public BiomassHunting(
-            HivePartyId id,
-            HiveLocationId sourceLocationId,
-            ResourceKey<Level> dimension,
-            EntityReserves composition,
-            Map<UUID, EntityType<?>> materializedMembers,
-            long dispatchedTick
+                HivePartyId id,
+                HiveLocationId sourceLocationId,
+                ResourceKey<Level> dimension,
+                EntityReserves composition,
+                Map<UUID, EntityType<?>> materializedMembers,
+                long dispatchedTick
+        ) {
+            this.id = id;
+            this.sourceLocationId = sourceLocationId;
+            this.dimension = dimension;
+            this.composition = composition;
+            this.materializedMembers = new HashMap<>(materializedMembers);
+            this.dispatchedTick = dispatchedTick;
+        }
+
+        @Override
+        public HivePartyId id() {
+            return id;
+        }
+
+        @Override
+        public HiveLocationId sourceLocationId() {
+            return sourceLocationId;
+        }
+
+        @Override
+        public ResourceKey<Level> dimension() {
+            return dimension;
+        }
+
+        @Override
+        public EntityReserves composition() {
+            return composition;
+        }
+
+        @Override
+        public Map<UUID, EntityType<?>> materializedMembers() {
+            return materializedMembers;
+        }
+
+        @Override
+        public void trackMaterializedMember(UUID memberId, EntityType<?> entityType) {
+            materializedMembers.put(memberId, entityType);
+        }
+
+        @Override
+        public @Nullable EntityType<?> untrackMaterializedMember(UUID memberId) {
+            return materializedMembers.remove(memberId);
+        }
+
+        @Override
+        public int materializedCountMatching(Predicate<EntityType<?>> predicate) {
+            var count = 0;
+            for (var type : materializedMembers.values()) {
+                if (predicate.test(type)) {
+                    count++;
+                }
+            }
+            return count;
+        }
+
+        @Override
+        public long dispatchedTick() {
+            return dispatchedTick;
+        }
+    }
+
+    /**
+     * Host hunt (§ 2): drones sent out to bring back a live host for the egg-morphing pipeline.
+     * <p>
+     * Vent-dependent like the rest of the trio - it spawns AT a near-surface vent and cannot dispatch before
+     * one exists. Members are DRONES: they capture rather than kill, and only creatures on the host lists are
+     * ever taken (anything else is simply ignored unless it attacks first). A captured host rides its captor to
+     * the nearest surface vent, which is the hand-off point INTO the hive - hosts are never walked home
+     * overland - and is embedded in a host-chamber spot to await an egg.
+     * <p>
+     * Resolves the same way as {@link BiomassHunting}: a fixed active duration, then instant vent-teleport home
+     * and refund - see {@code HostHuntPartyLifecycleTask}.
+     */
+    final class HostHunt implements HiveParty {
+
+        private final HivePartyId id;
+
+        private final HiveLocationId sourceLocationId;
+
+        private final ResourceKey<Level> dimension;
+
+        private final EntityReserves composition;
+
+        private final Map<UUID, EntityType<?>> materializedMembers;
+
+        private final long dispatchedTick;
+
+        public HostHunt(
+                HivePartyId id,
+                HiveLocationId sourceLocationId,
+                ResourceKey<Level> dimension,
+                EntityReserves composition,
+                long dispatchedTick
+        ) {
+            this(id, sourceLocationId, dimension, composition, new HashMap<>(), dispatchedTick);
+        }
+
+        public HostHunt(
+                HivePartyId id,
+                HiveLocationId sourceLocationId,
+                ResourceKey<Level> dimension,
+                EntityReserves composition,
+                Map<UUID, EntityType<?>> materializedMembers,
+                long dispatchedTick
         ) {
             this.id = id;
             this.sourceLocationId = sourceLocationId;
@@ -307,7 +411,7 @@ public sealed interface HiveParty {
     /**
      * Retribution party — primarily Warriors/Prowlers, also Crushers/Praetorians, dispatched against a specific player
      * who breached this hive location's claim and lingered while fighting (see {@code AttackCampaign} for the
-     * territorial-intrusion two-wave model). Vent-dependent like {@link BiomassHunting}. The campaign state (waves
+     * territorial-intrusion two-wave model). Vent-dependent like {@link HostHunt}. The campaign state (waves
      * sent, cleared flag) lives on {@code HiveLocation#attackCampaigns}, not on the party itself, since it must persist
      * across and between wave dispatches.
      * <p>
@@ -315,7 +419,7 @@ public sealed interface HiveParty {
      * active raid, but that cross-system hook (hive-level party topping up a lineage-level raid convoy) is deliberately
      * deferred; not implemented here.
      * <p>
-     * Resolves the same way as {@link BiomassHunting}: a fixed active duration, then instant vent-teleport home and
+     * Resolves the same way as {@link HostHunt}: a fixed active duration, then instant vent-teleport home and
      * refund — see {@code AttackPartyLifecycleTask}. Also resolves early if {@link #targetPlayerId} is confirmed dead.
      */
     final class AttackParty implements HiveParty {
@@ -335,24 +439,24 @@ public sealed interface HiveParty {
         private final UUID targetPlayerId;
 
         public AttackParty(
-            HivePartyId id,
-            HiveLocationId sourceLocationId,
-            ResourceKey<Level> dimension,
-            EntityReserves composition,
-            long dispatchedTick,
-            UUID targetPlayerId
+                HivePartyId id,
+                HiveLocationId sourceLocationId,
+                ResourceKey<Level> dimension,
+                EntityReserves composition,
+                long dispatchedTick,
+                UUID targetPlayerId
         ) {
             this(id, sourceLocationId, dimension, composition, new HashMap<>(), dispatchedTick, targetPlayerId);
         }
 
         public AttackParty(
-            HivePartyId id,
-            HiveLocationId sourceLocationId,
-            ResourceKey<Level> dimension,
-            EntityReserves composition,
-            Map<UUID, EntityType<?>> materializedMembers,
-            long dispatchedTick,
-            UUID targetPlayerId
+                HivePartyId id,
+                HiveLocationId sourceLocationId,
+                ResourceKey<Level> dimension,
+                EntityReserves composition,
+                Map<UUID, EntityType<?>> materializedMembers,
+                long dispatchedTick,
+                UUID targetPlayerId
         ) {
             this.id = id;
             this.sourceLocationId = sourceLocationId;

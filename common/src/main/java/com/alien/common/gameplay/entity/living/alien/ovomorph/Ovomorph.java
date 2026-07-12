@@ -50,13 +50,13 @@ public class Ovomorph extends Alien implements GOAPUser<Ovomorph>, Shearable {
 
     public static AttributeSupplier.Builder createOvomorphAttributes() {
         return Alien.createAlienAttributes()
-            .add(Attributes.ARMOR, 0f)
-            .add(Attributes.ARMOR_TOUGHNESS, 0f)
-            .add(Attributes.ATTACK_DAMAGE, 0f)
-            .add(Attributes.FOLLOW_RANGE, 0f)
-            .add(Attributes.KNOCKBACK_RESISTANCE, 1f)
-            .add(Attributes.MAX_HEALTH, PlayerStatConstants.BASE_HEALTH * 1.5F)
-            .add(Attributes.MOVEMENT_SPEED, 0f);
+                .add(Attributes.ARMOR, 0f)
+                .add(Attributes.ARMOR_TOUGHNESS, 0f)
+                .add(Attributes.ATTACK_DAMAGE, 0f)
+                .add(Attributes.FOLLOW_RANGE, 0f)
+                .add(Attributes.KNOCKBACK_RESISTANCE, 1f)
+                .add(Attributes.MAX_HEALTH, PlayerStatConstants.BASE_HEALTH * 1.5F)
+                .add(Attributes.MOVEMENT_SPEED, 0f);
     }
 
     public final DataAccessor<Byte> hatchStateId;
@@ -112,6 +112,8 @@ public class Ovomorph extends Alien implements GOAPUser<Ovomorph>, Shearable {
         growthManager.tick();
         hatchManager.tick();
         vibrationSystemManager.tick();
+        // Spent shell (already hatched): despawn after a Minecraft day if nothing eats it.
+        com.alien.common.gameplay.entity.living.alien.MoltFeeding.tickRemainsLifetime(this);
 
         if (!level().isClientSide) {
             tryRaidFrenzyHatch();
@@ -145,23 +147,23 @@ public class Ovomorph extends Alien implements GOAPUser<Ovomorph>, Shearable {
 
     public boolean canBeHeld() {
         return isAlive()
-            && !isDeadOrDying()
-            && !isRooted.get()
-            && getHatchState().contains(HatchState.SLEEPING);
+                && !isDeadOrDying()
+                && !isRooted.get()
+                && getHatchState().contains(HatchState.SLEEPING);
     }
 
     public boolean canBePickedUp() {
         return canBeHeld()
-            && onGround()
-            && !isPassenger();
+                && onGround()
+                && !isPassenger();
     }
 
     public void tryHatch() {
         if (
-            !level().isClientSide
-                && !hatchManager.isHatching()
-                && !hatchManager.isHatched()
-                && !isIrradiated()
+                !level().isClientSide
+                        && !hatchManager.isHatching()
+                        && !hatchManager.isHatched()
+                        && !isIrradiated()
         ) {
             hatchManager.hatch();
         }
@@ -202,12 +204,12 @@ public class Ovomorph extends Alien implements GOAPUser<Ovomorph>, Shearable {
 
         if (itemEntity != null) {
             itemEntity.setDeltaMovement(
-                itemEntity.getDeltaMovement()
-                    .add(
-                        (random.nextFloat() - random.nextFloat()) * 0.1F,
-                        random.nextFloat() * 0.05F,
-                        (random.nextFloat() - random.nextFloat()) * 0.1F
-                    )
+                    itemEntity.getDeltaMovement()
+                            .add(
+                                    (random.nextFloat() - random.nextFloat()) * 0.1F,
+                                    random.nextFloat() * 0.05F,
+                                    (random.nextFloat() - random.nextFloat()) * 0.1F
+                            )
             );
         }
     }
@@ -241,9 +243,9 @@ public class Ovomorph extends Alien implements GOAPUser<Ovomorph>, Shearable {
 
         if (
             // Entity is not an alien...
-            !entity.getType().is(AlienEntityTypeTags.ALIENS)
-                // OR entity is an ovomorph.
-                || entity.getType().is(AlienEntityTypeTags.OVOMORPHS)
+                !entity.getType().is(AlienEntityTypeTags.ALIENS)
+                        // OR entity is an ovomorph.
+                        || entity.getType().is(AlienEntityTypeTags.OVOMORPHS)
         ) {
             super.doPush(entity);
         }
@@ -252,7 +254,7 @@ public class Ovomorph extends Alien implements GOAPUser<Ovomorph>, Shearable {
     @Override
     protected boolean canBleedAcid() {
         return !hatchManager.isHatching()
-            && !hatchManager.isHatched();
+                && !hatchManager.isHatched();
     }
 
     @Override
@@ -279,8 +281,8 @@ public class Ovomorph extends Alien implements GOAPUser<Ovomorph>, Shearable {
     @Override
     protected boolean canHeal() {
         return !hatchManager.isHatching()
-            && !hatchManager.isHatched()
-            && super.canHeal();
+                && !hatchManager.isHatched()
+                && super.canHeal();
     }
 
     @Override

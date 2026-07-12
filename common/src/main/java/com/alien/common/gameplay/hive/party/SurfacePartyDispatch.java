@@ -43,9 +43,16 @@ public final class SurfacePartyDispatch {
             }
         }
 
-        var desiredSize = Math.max(
-            1,
-            Math.round(config.surfacePartyBaseSize() + config.surfacePartySizePerClaimedChunk() * location.claimedChunks().size())
+        // Size scales with claims but is CAPPED - unbounded scaling put 20+ runners on a large hive.
+        var surfaceCap = com.alien.common.gameplay.hive.structure.HiveRouter.isEmpressInfluenced(location)
+            ? config.surfacePartyMaxSizeEmpress()
+            : config.surfacePartyMaxSize();
+        var desiredSize = Math.min(
+            surfaceCap,
+            Math.max(
+                1,
+                Math.round(config.surfacePartyBaseSize() + config.surfacePartySizePerClaimedChunk() * location.claimedChunks().size())
+            )
         );
 
         var composition = drainRunners(location, (int) desiredSize);

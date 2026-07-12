@@ -29,4 +29,12 @@ public interface Host {
         setEmbryoGrowthTimeInTicks(0);
         getOrCreateParasiteGeneContainer().clear();
     }
+
+    /**
+     * World game time this host was embedded in a host chamber (drives the egg-delivery settle delay); Long.MIN_VALUE
+     * if never.
+     */
+    long getEmbedGameTime();
+
+    void setEmbedGameTime(long gameTime);
 }

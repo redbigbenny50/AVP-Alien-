@@ -1,6 +1,7 @@
 package com.alien.common.gameplay.hive.structure;
 
 import com.alien.common.model.alien.FreeMob;
+import com.alien.common.model.alien.Host;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.server.level.ServerLevel;
@@ -38,6 +39,10 @@ public final class HostParking {
             if (mob instanceof FreeMob freeMob) {
                 freeMob.removeFreedom();
             }
+        }
+
+        if (host instanceof Host hostState) {
+            hostState.setEmbedGameTime(level.getGameTime());
         }
     }
 }

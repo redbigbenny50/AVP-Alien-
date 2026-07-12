@@ -32,13 +32,13 @@ public class Facehugger extends Parasite implements EntitySenseCacheUser, GOAPUs
 
     public static AttributeSupplier.Builder createFacehuggerAttributes() {
         return Alien.createAlienAttributes()
-            .add(Attributes.ARMOR, 0f)
-            .add(Attributes.ARMOR_TOUGHNESS, 0f)
-            .add(Attributes.ATTACK_DAMAGE, 0f)
-            .add(Attributes.FOLLOW_RANGE, 35F)
-            .add(Attributes.KNOCKBACK_RESISTANCE, 0f)
-            .add(Attributes.MAX_HEALTH, PlayerStatConstants.BASE_HEALTH * 0.15F)
-            .add(Attributes.MOVEMENT_SPEED, PlayerStatConstants.BASE_WALK_SPEED * 1.1F);
+                .add(Attributes.ARMOR, 0f)
+                .add(Attributes.ARMOR_TOUGHNESS, 0f)
+                .add(Attributes.ATTACK_DAMAGE, 0f)
+                .add(Attributes.FOLLOW_RANGE, 35F)
+                .add(Attributes.KNOCKBACK_RESISTANCE, 0f)
+                .add(Attributes.MAX_HEALTH, PlayerStatConstants.BASE_HEALTH * 0.15F)
+                .add(Attributes.MOVEMENT_SPEED, PlayerStatConstants.BASE_WALK_SPEED * 1.1F);
     }
 
     public final DataAccessor<Boolean> isLunging;
@@ -54,8 +54,8 @@ public class Facehugger extends Parasite implements EntitySenseCacheUser, GOAPUs
         this.isLunging = new DataAccessor<>(this, AlienDataSyncKeys.FACEHUGGER_IS_LUNGING.get());
         this.animationDispatcher = new FacehuggerAnimationDispatcher(this);
         this.entitySenseCache = EntitySenseCache.builder(this)
-            .withScanRadius(40)
-            .build();
+                .withScanRadius(40)
+                .build();
         this.data = new FacehuggerData(this);
     }
 
@@ -82,6 +82,9 @@ public class Facehugger extends Parasite implements EntitySenseCacheUser, GOAPUs
     @Override
     public void tick() {
         super.tick();
+
+        // Spent hugger (embryo implanted): despawn after a Minecraft day if nothing eats it.
+        com.alien.common.gameplay.entity.living.alien.MoltFeeding.tickRemainsLifetime(this);
 
         if (!level().isClientSide()) {
             data.tick();

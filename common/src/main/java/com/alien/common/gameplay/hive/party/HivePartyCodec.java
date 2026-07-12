@@ -51,6 +51,8 @@ public final class HivePartyCodec {
 
     private static final String TYPE_ATTACK_PARTY = "attack_party";
 
+    private static final String TYPE_HOST_HUNT = "host_hunt";
+
     private static final String NBT_TARGET_PLAYER_ID = "TargetPlayerId";
 
     private static final String NBT_ECONOMY_BIAS = "EconomyBias";
@@ -98,6 +100,8 @@ public final class HivePartyCodec {
             tag.putLong(NBT_LAST_ECONOMY_CHECK_TICK, surfaceSpawn.lastEconomyCheckTick());
         } else if (party instanceof HiveParty.BiomassHunting) {
             tag.putString(NBT_TYPE, TYPE_BIOMASS_HUNTING);
+        } else if (party instanceof HiveParty.HostHunt) {
+            tag.putString(NBT_TYPE, TYPE_HOST_HUNT);
         } else if (party instanceof HiveParty.AttackParty attackParty) {
             tag.putString(NBT_TYPE, TYPE_ATTACK_PARTY);
             tag.putUUID(NBT_TARGET_PLAYER_ID, attackParty.targetPlayerId());
@@ -119,39 +123,47 @@ public final class HivePartyCodec {
         var compositionTag = tag.getCompound(NBT_COMPOSITION).getCompound("reserves");
         var composition = new EntityReserves();
         EntityReserves.CODEC.decode(BLibCodecs.Schema.NBT, compositionTag)
-            .inspectErr(failure -> Alien.LOGGER.error("Failed to load party composition: {}", failure))
-            .ifOk(loaded -> composition.putAll(loaded.getBackingMap()));
+                .inspectErr(failure -> Alien.LOGGER.error("Failed to load party composition: {}", failure))
+                .ifOk(loaded -> composition.putAll(loaded.getBackingMap()));
         var materializedMembers = decodeMaterializedMembers(tag.getList(NBT_MATERIALIZED_MEMBERS, Tag.TAG_COMPOUND));
 
         return switch (type) {
             case TYPE_SURFACE_SPAWN -> new HiveParty.SurfaceSpawn(
-                id,
-                sourceLocationId,
-                dimension,
-                composition,
-                materializedMembers,
-                dispatchedTick,
-                tag.contains(NBT_ECONOMY_BIAS)
-                    ? HiveParty.EconomyBias.valueOf(tag.getString(NBT_ECONOMY_BIAS))
-                    : HiveParty.EconomyBias.HARVEST,
-                tag.getLong(NBT_LAST_ECONOMY_CHECK_TICK)
+                    id,
+                    sourceLocationId,
+                    dimension,
+                    composition,
+                    materializedMembers,
+                    dispatchedTick,
+                    tag.contains(NBT_ECONOMY_BIAS)
+                            ? HiveParty.EconomyBias.valueOf(tag.getString(NBT_ECONOMY_BIAS))
+                            : HiveParty.EconomyBias.HARVEST,
+                    tag.getLong(NBT_LAST_ECONOMY_CHECK_TICK)
             );
             case TYPE_BIOMASS_HUNTING -> new HiveParty.BiomassHunting(
-                id,
-                sourceLocationId,
-                dimension,
-                composition,
-                materializedMembers,
-                dispatchedTick
+                    id,
+                    sourceLocationId,
+                    dimension,
+                    composition,
+                    materializedMembers,
+                    dispatchedTick
+            );
+            case TYPE_HOST_HUNT -> new HiveParty.HostHunt(
+                    id,
+                    sourceLocationId,
+                    dimension,
+                    composition,
+                    materializedMembers,
+                    dispatchedTick
             );
             case TYPE_ATTACK_PARTY -> new HiveParty.AttackParty(
-                id,
-                sourceLocationId,
-                dimension,
-                composition,
-                materializedMembers,
-                dispatchedTick,
-                tag.getUUID(NBT_TARGET_PLAYER_ID)
+                    id,
+                    sourceLocationId,
+                    dimension,
+                    composition,
+                    materializedMembers,
+                    dispatchedTick,
+                    tag.getUUID(NBT_TARGET_PLAYER_ID)
             );
             default -> {
                 Alien.LOGGER.warn("Unknown party type discriminator '{}' — skipping", type);

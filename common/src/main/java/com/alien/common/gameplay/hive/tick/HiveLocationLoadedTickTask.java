@@ -97,6 +97,8 @@ public final class HiveLocationLoadedTickTask {
             SurfacePartyLifecycleTask.run(server, location, config);
             BiomassHuntingPartyDispatch.tryRun(server, location, config);
             BiomassHuntingPartyLifecycleTask.run(server, location, config);
+            com.alien.common.gameplay.hive.party.HostHuntPartyDispatch.tryRun(server, location, config);
+            com.alien.common.gameplay.hive.party.HostHuntPartyLifecycleTask.run(server, location, config);
             AttackPartyDispatch.tryRun(server, location, config);
             AttackPartyLifecycleTask.run(server, location, config);
         }
@@ -116,6 +118,8 @@ public final class HiveLocationLoadedTickTask {
             com.alien.common.gameplay.hive.spawning.EggRestockTask.run(serverLevel, location);
             // Captured terrain spawners move into harvest-chamber slots as chambers and slots free up.
             com.alien.common.gameplay.hive.structure.HarvestChamberTask.run(serverLevel, location);
+            // A webbed host awaiting an egg releases one stored nursery egg, which a carrier then ferries to it.
+            com.alien.common.gameplay.hive.structure.HostEggFerryTask.run(serverLevel, location);
         }
     }
 

@@ -37,6 +37,12 @@ public abstract class MixinLivingEntity_Host extends Entity implements Host {
     private int embryoGrowthTimeInTicks;
 
     @Unique
+    private static final String NBT_HOST_EMBED_GAME_TIME = "hostEmbedGameTime";
+
+    @Unique
+    private long hostEmbedGameTime = Long.MIN_VALUE;
+
+    @Unique
     private Option<EntityType<?>> embryoTypeOption = Option.none();
 
     @Unique
@@ -70,6 +76,9 @@ public abstract class MixinLivingEntity_Host extends Entity implements Host {
             var tag = compoundTag.getCompound(NBT_PARASITE_GENES);
             getOrCreateParasiteGeneContainer().load(tag);
         }
+        if (compoundTag.contains(NBT_HOST_EMBED_GAME_TIME)) {
+            this.hostEmbedGameTime = compoundTag.getLong(NBT_HOST_EMBED_GAME_TIME);
+        }
     }
 
     @Inject(at = @At("HEAD"), method = "addAdditionalSaveData")
@@ -84,6 +93,9 @@ public abstract class MixinLivingEntity_Host extends Entity implements Host {
         var tag = new CompoundTag();
         getOrCreateParasiteGeneContainer().save(tag);
         compoundTag.put(NBT_PARASITE_GENES, tag);
+        if (this.hostEmbedGameTime != Long.MIN_VALUE) {
+            compoundTag.putLong(NBT_HOST_EMBED_GAME_TIME, this.hostEmbedGameTime);
+        }
     }
 
     @Override
@@ -133,5 +145,15 @@ public abstract class MixinLivingEntity_Host extends Entity implements Host {
     @Override
     public void setEmbryoGrowthTimeInTicks(int embryoGrowthTimeInTicks) {
         this.embryoGrowthTimeInTicks = embryoGrowthTimeInTicks;
+    }
+
+    @Override
+    public long getEmbedGameTime() {
+        return this.hostEmbedGameTime;
+    }
+
+    @Override
+    public void setEmbedGameTime(long gameTime) {
+        this.hostEmbedGameTime = gameTime;
     }
 }

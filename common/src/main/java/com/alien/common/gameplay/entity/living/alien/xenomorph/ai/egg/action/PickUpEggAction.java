@@ -93,6 +93,8 @@ public class PickUpEggAction {
             case MOVING -> {
                 if (arrived) {
                     targetOvomorph.startRiding(xenomorph);
+                    // Egg duty: a loaded carrier must not vanilla-despawn mid-haul (the egg would drop).
+                    xenomorph.setPersistenceRequired();
                     eggCarrier.getEggPickupManager().setTargetOvomorph(null);
                 }
                 yield Action.Signal.CONTINUE;
@@ -100,6 +102,8 @@ public class PickUpEggAction {
             case FINISHED -> {
                 if (arrived) {
                     targetOvomorph.startRiding(xenomorph);
+                    // Egg duty: a loaded carrier must not vanilla-despawn mid-haul (the egg would drop).
+                    xenomorph.setPersistenceRequired();
                     eggCarrier.getEggPickupManager().setTargetOvomorph(null);
                     yield Action.Signal.CONTINUE;
                 }

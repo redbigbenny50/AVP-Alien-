@@ -11,16 +11,16 @@ import java.util.ArrayList;
 
 /**
  * Per-tick (piggybacking {@code HiveLocationLoadedTickTask}'s 20-tick cadence) resolution for
- * {@link HiveParty.BiomassHunting} parties. No day/night cycle like {@link SurfacePartyLifecycleTask} — this party runs
- * for a fixed {@code config.biomassHuntingPartyDurationTicks()} active duration (tracked from
+ * {@link HiveParty.HostHunt} parties. No day/night cycle like {@link SurfacePartyLifecycleTask} — this party runs
+ * for a fixed {@code config.hostHuntPartyDurationTicks()} active duration (tracked from
  * {@link HiveParty#dispatchedTick()}), then resolves: surviving members are instantly teleported to the nearest known
  * hive vent (the "vents act as fast travel points back to hive" design point) before refunding to reserves and being
  * discarded. Party-specific targeting eligibility (the biomass-hunting THREAT_2 bypass in
  * {@code AlienPredicates#isActiveBiomassHuntingPartyMember}) is cleared alongside membership.
  */
-public final class BiomassHuntingPartyLifecycleTask {
+public final class HostHuntPartyLifecycleTask {
 
-    private BiomassHuntingPartyLifecycleTask() {}
+    private HostHuntPartyLifecycleTask() {}
 
     public static void run(MinecraftServer server, HiveLocation location, HiveConfig config) {
         if (location.parties().isEmpty()) {
@@ -37,11 +37,11 @@ public final class BiomassHuntingPartyLifecycleTask {
         var iterator = location.parties().iterator();
         while (iterator.hasNext()) {
             var party = iterator.next();
-            if (!(party instanceof HiveParty.BiomassHunting biomassHunting)) {
+            if (!(party instanceof HiveParty.HostHunt biomassHunting)) {
                 continue;
             }
 
-            if (currentTick - biomassHunting.dispatchedTick() < config.biomassHuntingPartyDurationTicks()) {
+            if (currentTick - biomassHunting.dispatchedTick() < config.hostHuntPartyDurationTicks()) {
                 continue;
             }
 
@@ -51,10 +51,10 @@ public final class BiomassHuntingPartyLifecycleTask {
     }
 
     private static void resolve(
-        ServerLevel serverLevel,
-        HiveLocation location,
-        HiveParty.BiomassHunting party,
-        HiveConfig config
+            ServerLevel serverLevel,
+            HiveLocation location,
+            HiveParty.HostHunt party,
+            HiveConfig config
     ) {
         var homeVent = nearestVent(serverLevel, location, config);
 
@@ -92,7 +92,7 @@ public final class BiomassHuntingPartyLifecycleTask {
             party.composition().add(type, -count);
         }
 
-        Alien.LOGGER.info("Hive: biomass hunting party resolved (duration elapsed) for location {}", location.id());
+        Alien.LOGGER.info("Hive: host hunt party resolved (duration elapsed) for location {}", location.id());
     }
 
     private static BlockPos nearestVent(ServerLevel serverLevel, HiveLocation location, HiveConfig config) {
