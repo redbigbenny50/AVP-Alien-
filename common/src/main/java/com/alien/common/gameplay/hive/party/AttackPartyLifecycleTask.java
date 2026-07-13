@@ -60,10 +60,10 @@ public final class AttackPartyLifecycleTask {
     }
 
     private static void resolve(
-        ServerLevel serverLevel,
-        HiveLocation location,
-        HiveParty.AttackParty party,
-        HiveConfig config
+            ServerLevel serverLevel,
+            HiveLocation location,
+            HiveParty.AttackParty party,
+            HiveConfig config
     ) {
         // Campaign clearing (territorial-intrusion model): the hive stops hunting a player when EITHER a wave kills
         // them (targetGone via death), OR they survive the second wave's full duration. A player who dies to wave 1 is
@@ -76,10 +76,10 @@ public final class AttackPartyLifecycleTask {
             if (targetDead || campaign.wavesSent() >= 2) {
                 campaign.markCleared();
                 Alien.LOGGER.info(
-                    "Hive: retribution campaign against player {} cleared at location {} ({})",
-                    party.targetPlayerId(),
-                    location.id(),
-                    targetDead ? "target defeated" : "survived final wave"
+                        "Hive: retribution campaign against player {} cleared at location {} ({})",
+                        party.targetPlayerId(),
+                        location.id(),
+                        targetDead ? "target defeated" : "survived final wave"
                 );
             }
         }
@@ -89,8 +89,14 @@ public final class AttackPartyLifecycleTask {
         for (var entry : new ArrayList<>(party.materializedMembers().entrySet())) {
             var entity = serverLevel.getEntity(entry.getKey());
             party.untrackMaterializedMember(entry.getKey());
-            if (entity == null || !entity.isAlive()) {
+            if (entity == null) {
+                // Not loaded - NOT dead (real deaths are untracked in PartyMemberDeath). Refund it: writing
+                // off every out-of-range member is what quietly drained the hive on each dispatch.
+                location.localReserves().addReturningMember(entry.getValue(), 1);
                 continue;
+            }
+            if (!entity.isAlive()) {
+                continue; // died this tick, before its death hook untracked it
             }
 
             if (homeVent != null) {
@@ -122,13 +128,11 @@ public final class AttackPartyLifecycleTask {
     }
 
     private static BlockPos nearestVent(ServerLevel serverLevel, HiveLocation location, HiveConfig config) {
-        var surfaceVents = PartyVentUtil.findSurfaceVents(serverLevel, location, config.surfacePartySurfaceBandBlocks());
+        // Home is any door onto the world - surface or frontier. No fallback to interior ducts: survivors cannot
+        // walk home to a vent buried in the rock.
+        var surfaceVents = PartyVentUtil.findPartyVents(serverLevel, location);
         if (!surfaceVents.isEmpty()) {
             return closestTo(surfaceVents, location.centerPos());
-        }
-        var allVents = new ArrayList<>(location.ventManager().allVents());
-        if (!allVents.isEmpty()) {
-            return closestTo(allVents, location.centerPos());
         }
         return null;
     }

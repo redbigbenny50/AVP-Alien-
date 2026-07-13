@@ -2,6 +2,7 @@ package com.alien.common.util;
 
 import com.alien.common.data.AlienVariantTypes;
 import com.alien.common.gameplay.entity.living.alien.Alien;
+import com.alien.common.gameplay.entity.living.alien.parasite.HuggerImmunity;
 import com.alien.common.gameplay.entity.living.alien.royal_cocoon.RoyalCocoon;
 import com.alien.common.gameplay.entity.living.alien.xenomorph.queen.Queen;
 import com.alien.common.gameplay.hive.growth.BiomassIncome;
@@ -261,7 +262,11 @@ public class AlienPredicates {
             isHost(hostTarget) &&
             !hasEmbryo(hostTarget) &&
             !isSelfOrOtherParasiteAttached(parasite, hostTarget)
-            && !hasFacehuggerResistantHelmet((LivingEntity) hostTarget);
+            && !hasFacehuggerResistantHelmet((LivingEntity) hostTarget)
+            // A host that has just torn a hugger off its face gets 30 seconds before the next one may try. This is the
+            // one choke point every route onto a face passes through - GOAP targeting, an ovomorph's hatch desire, and
+            // Parasite's attach-on-touch / attach-on-hit - so gating it here covers all of them at once.
+            && !HuggerImmunity.isImmune(hostTarget);
     }
 
     public static boolean isHost(Entity target) {

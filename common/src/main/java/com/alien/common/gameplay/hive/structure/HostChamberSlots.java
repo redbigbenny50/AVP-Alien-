@@ -182,6 +182,14 @@ public final class HostChamberSlots {
      * Facing from a webbed wall cell toward the open interior: the horizontal direction (biased toward the 2x2 centre)
      * whose neighbour is a two-tall open column. {@code null} if the cell has no open front.
      */
+    /** Air, or the hive's own resin growth - neither blocks a host from being webbed to a wall. */
+    private static boolean isOpenForHost(ServerLevel level, BlockPos pos) {
+        var state = level.getBlockState(pos);
+        return state.isAir()
+            || state.is(com.alien.common.registry.init.block.AlienResinBlocks.RESIN_VEIN.get())
+            || state.is(com.alien.common.registry.init.block.AlienResinBlocks.RESIN_WEB.get());
+    }
+
     private static Direction facing(ServerLevel level, BlockPos spot, int minX, int minZ) {
         int centreX = minX + 16;
         int centreZ = minZ + 16;
@@ -189,7 +197,10 @@ public final class HostChamberSlots {
         Direction towardZ = spot.getZ() < centreZ ? Direction.SOUTH : Direction.NORTH;
         for (Direction dir : new Direction[] { towardX, towardZ, towardX.getOpposite(), towardZ.getOpposite() }) {
             var front = spot.relative(dir);
-            if (level.getBlockState(front).isAir() && level.getBlockState(front.above()).isAir()) {
+            // Resin growth (veins/webs) spreads over the hive constantly. If a vein grew in front of a host spot,
+            // facing() returned null, the spot silently stopped existing, firstFreeSpot went empty - and the hive
+            // would refuse to dispatch a host hunt ("no free host-chamber spot"). Resin is not an obstruction.
+            if (isOpenForHost(level, front) && isOpenForHost(level, front.above())) {
                 return dir;
             }
         }

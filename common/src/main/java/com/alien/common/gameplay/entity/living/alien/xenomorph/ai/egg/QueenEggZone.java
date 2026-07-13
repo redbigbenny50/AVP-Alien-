@@ -118,6 +118,14 @@ public final class QueenEggZone {
         return null;
     }
 
+    /** Air, replaceable, or the hive's own resin growth - none of which blocks an egg. */
+    private static boolean isEmptyForEgg(net.minecraft.world.level.block.state.BlockState state) {
+        return state.isAir()
+            || state.canBeReplaced()
+            || state.is(com.alien.common.registry.init.block.AlienResinBlocks.RESIN_VEIN.get())
+            || state.is(com.alien.common.registry.init.block.AlienResinBlocks.RESIN_WEB.get());
+    }
+
     private static boolean isFreeEggCell(Level level, BlockPos pos) {
         var below = level.getBlockState(pos.below());
         if (!below.isFaceSturdy(level, pos.below(), Direction.UP)) {
@@ -125,7 +133,9 @@ public final class QueenEggZone {
         }
         var state = level.getBlockState(pos);
         var above = level.getBlockState(pos.above());
-        if (!(state.isAir() || state.canBeReplaced()) || !(above.isAir() || above.canBeReplaced())) {
+        // Resin growth (veins/webs) is the hive's own decoration and constantly spreads over its floors - it must
+        // never block the queen from having her eggs placed.
+        if (!isEmptyForEgg(state) || !isEmptyForEgg(above)) {
             return false;
         }
         // NB: do NOT reject a cell just because some entity overlaps it - the hauler itself (and the queen) stand

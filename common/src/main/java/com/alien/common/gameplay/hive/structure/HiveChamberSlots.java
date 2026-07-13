@@ -54,6 +54,13 @@ public final class HiveChamberSlots {
      * blocks of air above it, inside the wall margin. Deterministic per chunk, so the same chamber always yields the
      * same slots.
      */
+    /** Air, or the hive's own resin growth (veins/webs) - neither blocks an egg bed or a jelly vat. */
+    private static boolean isEmptyForSlot(net.minecraft.world.level.block.state.BlockState state) {
+        return state.isAir()
+            || state.is(AlienResinBlocks.RESIN_VEIN.get())
+            || state.is(AlienResinBlocks.RESIN_WEB.get());
+    }
+
     private static List<BlockPos> slots(ServerLevel level, HiveLocation location, ChunkPos chamber, int count, int floorSpacing) {
         int floorY = location.hiveFloorY();
         var tendril = AlienResinBlocks.RESIN_TENDRIL.get();
@@ -69,7 +76,14 @@ public final class HiveChamberSlots {
                 // (no air above), the "deterministic" pick shifted each pass, and regrows multiplied the vats.
                 var above = level.getBlockState(pos.move(0, 1, 0));
                 boolean occupiedByVat = above.is(AlienBlocks.JELLY_VAT.get());
-                if (!occupiedByVat && (!above.isAir() || !level.getBlockState(pos.move(0, 1, 0)).isAir())) {
+                // Resin GROWTH (veins/webs) is the hive's own decoration and spreads over its floors constantly.
+                // It must NOT disqualify a slot: a vein growing on a tendril used to delete that egg bed from the
+                // chamber entirely, so haulers found "no free bed", stood holding their eggs forever, and only
+                // moved again when someone physically broke the vein. Treat resin growth as empty space.
+                if (
+                    !occupiedByVat
+                        && (!isEmptyForSlot(above) || !isEmptyForSlot(level.getBlockState(pos.move(0, 1, 0))))
+                ) {
                     continue;
                 }
                 candidates.add(new BlockPos(x, floorY + 1, z));

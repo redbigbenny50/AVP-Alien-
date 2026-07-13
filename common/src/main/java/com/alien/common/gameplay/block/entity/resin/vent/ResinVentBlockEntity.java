@@ -4,10 +4,14 @@ import com.alien.common.data.AlienVariantTypes;
 import com.alien.common.gameplay.hive.id.HiveLocationId;
 import com.alien.common.gameplay.hive.location.HiveLocation;
 import com.alien.common.gameplay.hive.location.HiveLocationRegistry;
+import com.alien.common.gameplay.hive.vent.HiveVents;
+import com.alien.common.gameplay.hive.vent.VentKind;
 import com.alien.common.gameplay.level.gameevent.listener.CryForHelpListener;
 import com.alien.common.registry.init.AlienBlockEntityTypes;
 import com.blib.api.common.time.v1.Cooldown;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.HolderLookup;
+import net.minecraft.nbt.CompoundTag;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.entity.BlockEntity;
@@ -27,11 +31,19 @@ import java.time.Duration;
  */
 public class ResinVentBlockEntity extends BlockEntity implements GameEventListener.Provider<CryForHelpListener> {
 
+    private static final String KIND_TAG = "avp_vent_kind";
+
     private final Cooldown alienSpawnCooldown;
 
     private final CryForHelpListener cryForHelpListener;
 
     private @Nullable HiveLocationId boundLocationId;
+
+    /**
+     * What this vent is FOR. Null until classified: template-stamped structure vents never carry one from placement,
+     * and neither does any vent from a world that predates vent kinds. Both are resolved on first tick and persisted.
+     */
+    private @Nullable VentKind kind;
 
     public ResinVentBlockEntity(BlockPos blockPos, BlockState blockState) {
         super(AlienBlockEntityTypes.RESIN_VENT.get(), blockPos, blockState);
@@ -48,6 +60,30 @@ public class ResinVentBlockEntity extends BlockEntity implements GameEventListen
 
     public @Nullable HiveLocationId getBoundLocationId() {
         return boundLocationId;
+    }
+
+    public @Nullable VentKind getKind() {
+        return kind;
+    }
+
+    /** Stamp a vent with its role at placement time (surface parties and frontier builders both do this). */
+    public void setKind(VentKind kind) {
+        this.kind = kind;
+        setChanged();
+    }
+
+    @Override
+    protected void saveAdditional(@NotNull CompoundTag compoundTag, @NotNull HolderLookup.Provider provider) {
+        super.saveAdditional(compoundTag, provider);
+        if (kind != null) {
+            compoundTag.putString(KIND_TAG, kind.name());
+        }
+    }
+
+    @Override
+    protected void loadAdditional(@NotNull CompoundTag compoundTag, @NotNull HolderLookup.Provider provider) {
+        super.loadAdditional(compoundTag, provider);
+        kind = compoundTag.contains(KIND_TAG) ? VentKind.byName(compoundTag.getString(KIND_TAG)) : null;
     }
 
     public @Nullable HiveLocation getBoundLocation() {
@@ -79,9 +115,9 @@ public class ResinVentBlockEntity extends BlockEntity implements GameEventListen
         // contested away from an aberrant lineage).
         var lineageFaction = com.alien.Alien.MOD.factions().get(owningLocation.lineageFactionId());
         if (
-            lineageFaction == null
-                || !(lineageFaction.data() instanceof com.alien.common.gameplay.hive.faction.LineageFactionData lineage)
-                || lineage.variant() != ventVariant
+                lineageFaction == null
+                        || !(lineageFaction.data() instanceof com.alien.common.gameplay.hive.faction.LineageFactionData lineage)
+                        || lineage.variant() != ventVariant
         ) {
             // Variant mismatch — disown.
             if (vent.boundLocationId != null) {
@@ -92,7 +128,17 @@ public class ResinVentBlockEntity extends BlockEntity implements GameEventListen
 
         // Bound to this location. Register the vent in its vent manager.
         vent.boundLocationId = owningLocation.id();
-        owningLocation.ventManager().addVent(ventPos);
+
+        if (vent.kind == null) {
+            // Template-stamped, or from a world older than vent kinds. Work it out once and write it down, so nothing
+            // downstream ever has to guess from geometry again.
+            var config = HiveLocationRegistry.INSTANCE.config();
+            vent.setKind(
+                    HiveVents.classifyUntagged(level, owningLocation, ventPos, config.surfacePartySurfaceBandBlocks())
+            );
+        }
+
+        owningLocation.ventManager().addVent(ventPos, vent.kind);
     }
 
     @Override

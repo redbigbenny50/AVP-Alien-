@@ -13,6 +13,7 @@ import net.minecraft.world.effect.MobEffectInstance;
 import net.minecraft.world.effect.MobEffects;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.Mob;
+import net.minecraft.world.entity.player.Player;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.Objects;
@@ -70,6 +71,15 @@ public class ParasiteAttachmentManager {
         host.addEffect(new MobEffectInstance(MobEffects.BLINDNESS, effectTimeInTicks, 3, true, false, true));
         host.addEffect(new MobEffectInstance(MobEffects.MOVEMENT_SLOWDOWN, effectTimeInTicks, 3, true, false, true));
         host.addEffect(new MobEffectInstance(MobEffects.DIG_SLOWDOWN, effectTimeInTicks, 3, true, false, true));
+
+        if (host instanceof Player) {
+            // A hugged player is pinned from the first tick, not from the ten-second mark: they cannot run, only fight
+            // (see HuggerStruggle). The absurd amplifier zeroes movement speed outright; the jump is killed client-side
+            // by MixinKeyboardInput_HuggerLock, since slowness alone would still let them hop in place while mashing.
+            host.addEffect(
+                new MobEffectInstance(MobEffects.MOVEMENT_SLOWDOWN, effectTimeInTicks, 100, true, false, true)
+            );
+        }
 
         var falloffTimeInTicks = (host instanceof ServerPlayer ? 1.5 : 2.5) * 20 * 60;
 

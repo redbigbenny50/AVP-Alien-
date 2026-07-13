@@ -105,10 +105,23 @@ public class Drone extends Xenomorph implements EggCarrier, GOAPUser<Drone>, Ven
         eggPickupManager.tick();
     }
 
+    /**
+     * A drone carries eggs AND captured hosts.
+     * <p>
+     * HOSTS is not optional. {@code Alien.tick()} evicts every passenger that fails this check, and
+     * {@code HostCaptureTask.capture} mounts the host with {@code startRiding(captor, true)} - force bypasses
+     * canAddPassenger at mount time, but NOT the eviction sweep one tick later. Leaving HOSTS out means the drone grabs
+     * its captive and throws it off again every single tick: the host is dismounted to the top of the drone's bounding
+     * box, falls, is re-grabbed, and never survives long enough as a passenger to receive LivingEntity#rideTick - which
+     * is what resets fallDistance. The captive accumulates fall damage until it lands and dies. The planner also sees
+     * IS_CARRYING_HOST flicker false every tick and never commits to the delivery, and a captured PLAYER is thrown
+     * clear before the struggle bar can survive a tick.
+     */
     @Override
     protected boolean canEntityRideAlien(@NotNull Entity passenger) {
         return super.canEntityRideAlien(passenger)
-            || passenger.getType().is(AlienEntityTypeTags.OVOMORPHS);
+            || passenger.getType().is(AlienEntityTypeTags.OVOMORPHS)
+            || passenger.getType().is(AlienEntityTypeTags.HOSTS);
     }
 
     @Override

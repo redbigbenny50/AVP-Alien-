@@ -7,12 +7,14 @@ import com.alien.common.network.handler.DestroyTrackerHandler;
 import com.alien.common.network.handler.HiveConfigUpdateHandler;
 import com.alien.common.network.handler.HiveInspectionRequestHandler;
 import com.alien.common.network.handler.HiveRenderToggleHandler;
+import com.alien.common.network.handler.HostStruggleMashHandler;
 import com.alien.common.network.handler.RenameTrackerHandler;
 import com.alien.common.network.handler.ShieldAbilityActivationHandler;
 import com.alien.common.network.handler.TrackedQueensRequestHandler;
 import com.alien.common.network.payload.C2SAckLostTrackersPayload;
 import com.alien.common.network.payload.C2SActivateShieldAbilityPayload;
 import com.alien.common.network.payload.C2SDestroyTrackerPayload;
+import com.alien.common.network.payload.C2SHostStruggleMashPayload;
 import com.alien.common.network.payload.C2SRenameTrackerPayload;
 import com.alien.common.network.payload.C2SRequestHiveInspectionPayload;
 import com.alien.common.network.payload.C2SRequestTrackedQueensPayload;
@@ -45,6 +47,9 @@ public final class AlienNetworking {
         );
         registry.registerPacketDirection(
             new PacketDirection.C2S<>(C2SActivateShieldAbilityPayload.TYPE, C2SActivateShieldAbilityPayload.CODEC)
+        );
+        registry.registerPacketDirection(
+            new PacketDirection.C2S<>(C2SHostStruggleMashPayload.TYPE, C2SHostStruggleMashPayload.CODEC)
         );
         registry.registerPacketDirection(
             new PacketDirection.S2C<>(S2CHiveInspectionPayload.TYPE, S2CHiveInspectionPayload.CODEC)
@@ -93,6 +98,13 @@ public final class AlienNetworking {
                 C2SActivateShieldAbilityPayload.TYPE,
                 C2SActivateShieldAbilityPayload.CODEC,
                 ShieldAbilityActivationHandler::handle
+            )
+        );
+        registry.registerPacketHandler(
+            new NetworkHandler.FromClient<>(
+                C2SHostStruggleMashPayload.TYPE,
+                C2SHostStruggleMashPayload.CODEC,
+                HostStruggleMashHandler::handle
             )
         );
         registry.registerPacketHandler(

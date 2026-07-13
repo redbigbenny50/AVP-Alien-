@@ -13,6 +13,7 @@
     "MixinMob_IncapacitateHost",
     "MixinNaturalSpawner_HiveSlabSpawnDeny",
     "MixinPersistentEntitySectionManager_ConvoyUnload",
+    "MixinPlayer_HostCapture",
     "MixinProjectileUtil_AllowHittingVehicle",
     "MixinVillagerHostilesSensor_RunAwayFromAVPMonsters",
     "MixinGameRulesAccessor",
@@ -20,8 +21,10 @@
   ],
   "client": [
     "client.MixinLocalPlayer_NoBlockingMovementPenalty",
+    "client.MixinMinecraft_HostStruggle",
     "client.MixinMinecraft_ShieldAbility",
-    "client.MixinEntityRenderer_CaptureChainLeash"
+    "client.MixinEntityRenderer_CaptureChainLeash",
+    "client.MixinKeyboardInput_HuggerLock"
   ],
   "server": [],
   "injectors": {

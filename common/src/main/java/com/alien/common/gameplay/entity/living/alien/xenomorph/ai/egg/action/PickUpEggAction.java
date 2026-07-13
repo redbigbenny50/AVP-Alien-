@@ -3,6 +3,7 @@ package com.alien.common.gameplay.entity.living.alien.xenomorph.ai.egg.action;
 import com.alien.common.gameplay.entity.living.alien.EggCarrier;
 import com.alien.common.gameplay.entity.living.alien.xenomorph.Xenomorph;
 import com.alien.common.gameplay.hive.location.HiveLocationRegistry;
+import com.alien.common.gameplay.hive.vent.VentKind;
 import com.alien.common.gameplay.hive.vent.HiveVents;
 import com.blib.api.common.goap.v1.action.impl.NeoMoveToPosAction;
 import com.just.ai.goap.StateKey;
@@ -130,8 +131,9 @@ public class PickUpEggAction {
         }
         var vents = location.ventManager();
         // Interior vents only - surface vents are the hive's defensive/party mouths, never used for egg fetching.
-        var band = HiveLocationRegistry.INSTANCE.config().surfacePartySurfaceBandBlocks();
-        Predicate<BlockPos> interiorOnly = v -> !HiveVents.isNearSurface(serverLevel, v, band);
+        // In-hive shortcut: STRUCTURE ducts only. This used to be "any vent that is not near the surface", which also
+        // swept up frontier vents out in the caves.
+        Predicate<BlockPos> interiorOnly = v -> location.ventManager().isKind(v, VentKind.STRUCTURE);
         var entry = HiveVents.nearestVent(vents, xenomorph.blockPosition(), VENT_SEARCH_RADIUS_CHUNKS, interiorOnly);
         var exit = HiveVents.nearestVent(vents, egg, VENT_SEARCH_RADIUS_CHUNKS, interiorOnly);
         if (entry == null || exit == null || entry.equals(exit)) {

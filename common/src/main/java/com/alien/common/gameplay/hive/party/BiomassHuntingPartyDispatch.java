@@ -39,7 +39,9 @@ public final class BiomassHuntingPartyDispatch {
             }
         }
 
-        var surfaceVents = PartyVentUtil.findSurfaceVents(serverLevel, location, config.surfacePartySurfaceBandBlocks());
+        // Biomass hunters go wherever the hive opens onto the world: the surface doors, or a frontier vent at a cave
+        // mouth.
+        var surfaceVents = PartyVentUtil.findPartyVents(serverLevel, location);
         if (surfaceVents.isEmpty()) {
             return;
         }
@@ -47,17 +49,17 @@ public final class BiomassHuntingPartyDispatch {
 
         // Size scales with claims but is CAPPED (bonus spitters ride on top of this budget).
         var biomassCap = com.alien.common.gameplay.hive.structure.HiveRouter.isEmpressInfluenced(location)
-            ? config.biomassHuntingPartyMaxSizeEmpress()
-            : config.biomassHuntingPartyMaxSize();
+                ? config.biomassHuntingPartyMaxSizeEmpress()
+                : config.biomassHuntingPartyMaxSize();
         var desiredSize = Math.min(
-            biomassCap,
-            Math.max(
-                1,
-                Math.round(
-                    config.biomassHuntingPartyBaseSize()
-                        + config.biomassHuntingPartySizePerClaimedChunk() * location.claimedChunks().size()
+                biomassCap,
+                Math.max(
+                        1,
+                        Math.round(
+                                config.biomassHuntingPartyBaseSize()
+                                        + config.biomassHuntingPartySizePerClaimedChunk() * location.claimedChunks().size()
+                        )
                 )
-            )
         );
 
         var composition = drainComposition(location, (int) desiredSize, config.biomassHuntingPartyBonusSpitterCount());
@@ -67,11 +69,11 @@ public final class BiomassHuntingPartyDispatch {
 
         var currentTick = serverLevel.getGameTime();
         var party = new HiveParty.BiomassHunting(
-            HivePartyId.fresh(),
-            location.id(),
-            location.dimension(),
-            composition,
-            currentTick
+                HivePartyId.fresh(),
+                location.id(),
+                location.dimension(),
+                composition,
+                currentTick
         );
 
         var spawnedCount = materialize(serverLevel, location, party, spawnPos);
@@ -82,10 +84,10 @@ public final class BiomassHuntingPartyDispatch {
 
         location.parties().add(party);
         Alien.LOGGER.info(
-            "Hive: dispatched biomass hunting party for location {} — {} members from vent at {}",
-            location.id(),
-            spawnedCount,
-            spawnPos
+                "Hive: dispatched biomass hunting party for location {} — {} members from vent at {}",
+                location.id(),
+                spawnedCount,
+                spawnPos
         );
     }
 
@@ -118,10 +120,10 @@ public final class BiomassHuntingPartyDispatch {
     }
 
     private static void drainUpTo(
-        com.alien.common.gameplay.hive.location.HiveLocationReserves reserves,
-        EntityReserves composition,
-        List<EntityType<?>> candidateTypes,
-        int count
+            com.alien.common.gameplay.hive.location.HiveLocationReserves reserves,
+            EntityReserves composition,
+            List<EntityType<?>> candidateTypes,
+            int count
     ) {
         if (candidateTypes.isEmpty()) {
             return;

@@ -29,6 +29,13 @@ public final class HostGrabImmunity {
     /** Grab-immunity and carrier stun both last one minute. */
     public static final int ESCAPE_DURATION_TICKS = 60 * 20;
 
+    /**
+     * A player who LOSES the struggle and is webbed into a host chamber is not finished: webbing slows but does not
+     * hold, so they can still crawl out before an egg reaches them. That escape is only real if the drones cannot
+     * simply pick them straight back up off the wall, so an embedded player gets a longer window than a normal escape.
+     */
+    public static final int EMBED_ESCAPE_DURATION_TICKS = 120 * 20;
+
     /** Game time at which each host's grab-immunity expires. */
     private static final Map<Entity, Long> IMMUNE_UNTIL = new WeakHashMap<>();
 
@@ -37,7 +44,12 @@ public final class HostGrabImmunity {
 
     /** Grant a freed host immunity from being grabbed again for a minute. */
     public static void grantImmunity(Entity host) {
-        IMMUNE_UNTIL.put(host, host.level().getGameTime() + ESCAPE_DURATION_TICKS);
+        grantImmunity(host, ESCAPE_DURATION_TICKS);
+    }
+
+    /** Grant grab-immunity for a specific duration (see {@link #EMBED_ESCAPE_DURATION_TICKS}). */
+    public static void grantImmunity(Entity host, int durationTicks) {
+        IMMUNE_UNTIL.put(host, host.level().getGameTime() + durationTicks);
     }
 
     public static boolean isImmune(Entity host) {

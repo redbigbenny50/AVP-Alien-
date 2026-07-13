@@ -1,5 +1,6 @@
 package com.alien.common.gameplay.hive.structure;
 
+import com.alien.common.gameplay.hive.party.HostGrabImmunity;
 import com.alien.common.model.alien.FreeMob;
 import com.alien.common.model.alien.Host;
 import net.minecraft.core.BlockPos;
@@ -7,6 +8,7 @@ import net.minecraft.core.Direction;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.Mob;
+import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.phys.Vec3;
 
 /**
@@ -39,6 +41,12 @@ public final class HostParking {
             if (mob instanceof FreeMob freeMob) {
                 freeMob.removeFreedom();
             }
+        }
+
+        if (host instanceof Player) {
+            // Losing the struggle is not the end of the line: the webbing slows a player but never holds them, so give
+            // them a window in which the hive will not simply pluck them off the wall again while they crawl out.
+            HostGrabImmunity.grantImmunity(host, HostGrabImmunity.EMBED_ESCAPE_DURATION_TICKS);
         }
 
         if (host instanceof Host hostState) {

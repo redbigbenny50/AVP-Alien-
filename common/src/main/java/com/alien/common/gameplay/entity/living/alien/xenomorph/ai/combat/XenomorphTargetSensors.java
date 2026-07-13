@@ -59,6 +59,8 @@ public final class XenomorphTargetSensors {
             applyFoundingLeash(xenomorph, targets);
             applyHiveWorkerLeash(xenomorph, targets);
             applyTargetGiveUp(xenomorph, targets);
+            applyEggDutyDisarm(xenomorph, targets);
+            applyHostHuntSwitch(xenomorph, targets);
 
             return targets;
         }
@@ -132,6 +134,79 @@ public final class XenomorphTargetSensors {
         private int lastProgressTick;
 
         private double bestDistanceSquared = Double.MAX_VALUE;
+    }
+
+    /**
+     * A xenomorph CARRYING AN EGG does not pick fights.
+     * <p>
+     * This is not just flavour: the DROP_OFF_EGG action is gated on {@code HAS_ATTACK_TARGET == false}. A hauler that
+     * acquired any target - through a wall, a passing mob, anything - could therefore never run the drop-off action at
+     * all, and simply stood in place holding its egg forever, with no error and no log (perform() was never even
+     * reached). Dropping the target lets the delivery proceed.
+     * <p>
+     * It keeps defending itself in the sense that anything that hurts it will still be handled once the egg is
+     * delivered - the egg run just takes priority over the fight.
+     */
+    /**
+     * A host-hunt drone is HUNTING, not brawling.
+     * <p>
+     * Two things happen here, and both are needed because CAPTURE_HOST is gated on {@code HAS_ATTACK_TARGET ==
+     * false}:
+     * <ol>
+     * <li><b>A capturable target is never attacked.</b> Players may only be grabbed once worn down to 30% health, so a
+     * drone has to fight them first - but the moment they turn capturable the attack target is dropped, so the drone
+     * stops trying to KILL them and starts trying to TAKE them.</li>
+     * <li><b>Non-hosts are ignored while a host is in reach.</b> The surface is full of mobs; a hunting drone that
+     * locked onto a zombie kept HAS_ATTACK_TARGET true forever and could never capture ANYTHING. It ignores them and
+     * goes for its quarry - unless something actually hurt it, in which case it defends itself.</li>
+     * </ol>
+     */
+    private static void applyHostHuntSwitch(Xenomorph xenomorph, List<LivingEntity> targets) {
+        if (!com.alien.common.gameplay.entity.living.alien.xenomorph.ai.host.HostHuntDuty.isOnHostHunt(xenomorph)) {
+            return;
+        }
+
+        // (1) never attack something we mean to carry off
+        targets.removeIf(
+            candidate -> com.alien.common.gameplay.hive.party.HostCaptureRules.isCapturable(xenomorph, candidate)
+        );
+
+        // (2) with a host in reach, ignore everything that is not actively hurting us
+        var quarry = com.alien.common.gameplay.entity.living.alien.xenomorph.ai.host.HostSensors
+            .findCaptureTarget(xenomorph);
+        if (quarry != null) {
+            var aggressor = xenomorph.getLastHurtByMob();
+            targets.removeIf(candidate -> candidate != aggressor);
+        }
+
+        var current = xenomorph.getTarget();
+        if (current != null && !targets.contains(current)) {
+            xenomorph.setTarget(null);
+        }
+    }
+
+    private static void applyEggDutyDisarm(Xenomorph xenomorph, List<LivingEntity> targets) {
+        if (!com.alien.common.gameplay.hive.party.EggDutyGuard.isOnEggDuty(xenomorph)) {
+            return;
+        }
+        int hadTargets = targets.size();
+        var hadTarget = xenomorph.getTarget();
+        targets.clear();
+        if (xenomorph.getTarget() != null) {
+            xenomorph.setTarget(null);
+        }
+        // [DIAGNOSTIC] Sensors run every tick regardless of what the planner picks, so this ALWAYS fires for a
+        // frozen hauler. It proves the two DELIVER_EGG preconditions: carrying an egg, and no attack target.
+        if (xenomorph.tickCount % 100 == 0) {
+            com.alien.Alien.LOGGER.info(
+                "[eggdebug] carrier sensor: {} at {} eggDuty=true targetsCleared={} hadTarget={} nowTarget={}",
+                xenomorph.getType().getDescriptionId(),
+                xenomorph.blockPosition(),
+                hadTargets,
+                hadTarget == null ? "none" : hadTarget.getType().getDescriptionId(),
+                xenomorph.getTarget() == null ? "none" : "STILL SET"
+            );
+        }
     }
 
     private static void applyTargetGiveUp(Xenomorph xenomorph, List<LivingEntity> targets) {

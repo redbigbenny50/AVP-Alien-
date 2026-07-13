@@ -325,9 +325,8 @@ public abstract class Alien extends Monster implements DataUser {
         hiveManager.tick();
         moltingManager.tick();
         if (!level().isClientSide) {
-            // Host-hunt duties: grab a viable host, walk it to a surface vent, hand it into the host chamber.
+            // Capture/delivery itself is a GOAP action (HostActions) - only the stun timer ticks here.
             com.alien.common.gameplay.hive.party.HostGrabImmunity.tickStun(this);
-            tickHostCapture();
         }
 
         if (!level().isClientSide) {
@@ -493,10 +492,17 @@ public abstract class Alien extends Monster implements DataUser {
 
     @Override
     public boolean hurt(@NotNull DamageSource damageSource, float damage) {
-        // Rescue: hurting a xenomorph that is carrying a captured host makes it drop the host and stunned.
+        // Rescue: hurting a xenomorph that is carrying a captured host makes it drop the host and be stunned.
+        //
+        // The captive itself is excluded: a carried player can look down and hit the drone under them (see
+        // MixinProjectileUtil_AllowHittingVehicle, which deliberately allows hitting an alien vehicle), and letting
+        // that free them would bypass the struggle bar entirely. Rescue is something SOMEONE ELSE does for you; your
+        // own way out is HostStruggle.
         if (!level().isClientSide) {
             var captive = com.alien.common.gameplay.hive.party.HostCaptureTask.carriedHost(this);
-            if (captive != null) {
+            var attacker = damageSource.getEntity();
+            var directAttacker = damageSource.getDirectEntity();
+            if (captive != null && attacker != captive && directAttacker != captive) {
                 com.alien.common.gameplay.hive.party.HostGrabImmunity.breakCapture(this, captive);
             }
         }
@@ -548,31 +554,6 @@ public abstract class Alien extends Monster implements DataUser {
         }
 
         return isHurt;
-    }
-
-    /** Host-hunt party members grab hosts and deliver them; everyone else ignores this entirely. */
-    private void tickHostCapture() {
-        if (!(level() instanceof net.minecraft.server.level.ServerLevel serverLevel)) {
-            return;
-        }
-        boolean carrying = com.alien.common.gameplay.hive.party.HostCaptureTask.isCarryingHost(this);
-        if (!carrying && partyMembership() == null) {
-            return; // only a dispatched host-hunt drone goes looking; a carrier always finishes its delivery
-        }
-        var location = com.alien.common.gameplay.hive.location.HiveLocationRegistry.INSTANCE.findNearestInDim(
-            serverLevel.dimension(),
-            blockPosition()
-        );
-        if (location == null) {
-            return;
-        }
-        var config = com.alien.common.gameplay.hive.location.HiveLocationRegistry.INSTANCE.config();
-        com.alien.common.gameplay.hive.party.HostCaptureTask.tick(
-            this,
-            serverLevel,
-            location,
-            config.surfacePartySurfaceBandBlocks()
-        );
     }
 
     /**
@@ -843,6 +824,11 @@ public abstract class Alien extends Monster implements DataUser {
 
     @Override
     public void die(@NotNull DamageSource damageSource) {
+        // Untrack this member from its party NOW, while we know it truly died. Resolution cannot otherwise tell a
+        // dead member from one that is merely in an unloaded chunk, and was writing off both.
+        if (!level().isClientSide) {
+            com.alien.common.gameplay.hive.party.PartyMemberDeath.onDeath(this);
+        }
         // Hive raid attribution: if a player gets the kill credit, record it against every lineage this alien
         // belongs to. Defers to vanilla's getKillCredit so indirect kills (TNT, fall damage from broken block,
         // etc) count when vanilla counts them.

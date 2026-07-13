@@ -5,7 +5,6 @@ import com.alien.common.gameplay.hive.location.HiveLocation;
 import com.alien.common.gameplay.hive.structure.HostChamberSlots;
 import com.alien.common.gameplay.hive.structure.HostParking;
 import com.alien.common.model.alien.FreeMob;
-import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
@@ -18,8 +17,12 @@ import org.jetbrains.annotations.Nullable;
  * and the pair is ducted straight into the host chamber.
  * <p>
  * Hosts are never carried home overland - the vent is the hand-off point into the hive, exactly as the party design
- * specifies. Once the carrier is within {@link #VENT_HANDOFF_DISTANCE} of a surface vent, both it and its cargo are
- * teleported: the host is embedded in a free host-chamber spot, and the drone returns to its duties.
+ * specifies. Once the carrier reaches a surface vent, both it and its cargo are teleported: the host is embedded in a
+ * free host-chamber spot, and the drone returns to its duties.
+ * <p>
+ * This class holds only the PRIMITIVES - grab, carry, hand off. The AI that walks a drone to a host and then to a vent
+ * lives in {@code CaptureHostAction} / {@code DeliverHostAction}, because movement must be a GOAP action holding the
+ * MOVE mask; driven from an entity tick, the planner's idle goals simply walk the drone away again.
  * <p>
  * Mobs do not resist - being grabbed immobilizes them. Players DO resist (the struggle bar), which is handled by the
  * struggle system, not here; this task only enforces the delivery.
@@ -29,15 +32,6 @@ import org.jetbrains.annotations.Nullable;
 public final class HostCaptureTask {
 
     private HostCaptureTask() {}
-
-    /** Reach for actually grabbing a host. */
-    private static final double GRAB_RANGE = 2.0;
-
-    /** How close the carrier must get to a surface vent before the hand-off fires. */
-    private static final double VENT_HANDOFF_DISTANCE = 1.0;
-
-    /** Checked on this cadence rather than every tick. */
-    private static final int CHECK_INTERVAL_TICKS = 10;
 
     /** True if this alien is currently carrying a captured host. */
     public static boolean isCarryingHost(com.alien.common.gameplay.entity.living.alien.Alien alien) {
@@ -75,70 +69,16 @@ public final class HostCaptureTask {
     }
 
     /**
-     * Called from a host-party drone's tick. Handles both halves of the job: grab a viable host when one is in reach,
-     * and hand a carried host off at the nearest surface vent.
+     * NOTE: the old tick-driven capture loop lived here (tick / tryGrabNearbyHost / tryVentHandoff). It is gone.
+     * <p>
+     * A drone cannot be MOVED from an entity tick - movement has to be a GOAP action holding the MOVE mask, or the
+     * planner's idle goals just walk the drone somewhere else. That is what {@code CaptureHostAction} and
+     * {@code DeliverHostAction} are for; they call {@link #capture} and {@link #deliverToHostChamber} below. This class
+     * is now only the primitives - grab, carry, hand off - with the AI layer on top of it.
      */
-    public static void tick(
-        com.alien.common.gameplay.entity.living.alien.Alien captor,
-        ServerLevel level,
-        HiveLocation location,
-        int surfaceBandBlocks
-    ) {
-        if (captor.tickCount % CHECK_INTERVAL_TICKS != 0 || HostGrabImmunity.isStunned(captor)) {
-            return;
-        }
-
-        var carried = carriedHost(captor);
-        if (carried == null) {
-            tryGrabNearbyHost(captor, level);
-            return;
-        }
-
-        if (!carried.isAlive()) {
-            carried.stopRiding();
-            return;
-        }
-
-        tryVentHandoff(captor, carried, level, location, surfaceBandBlocks);
-    }
-
-    private static void tryGrabNearbyHost(com.alien.common.gameplay.entity.living.alien.Alien captor, ServerLevel level) {
-        var box = captor.getBoundingBox().inflate(GRAB_RANGE);
-        var candidates = level.getEntitiesOfClass(LivingEntity.class, box);
-        var target = HostCaptureRules.pickTarget(captor, candidates);
-        if (target != null) {
-            capture(captor, target);
-        }
-    }
-
-    private static void tryVentHandoff(
-        com.alien.common.gameplay.entity.living.alien.Alien captor,
-        LivingEntity carried,
-        ServerLevel level,
-        HiveLocation location,
-        int surfaceBandBlocks
-    ) {
-        var vents = PartyVentUtil.findSurfaceVents(level, location, surfaceBandBlocks);
-        if (vents.isEmpty()) {
-            return;
-        }
-        BlockPos nearest = null;
-        double nearestDistance = Double.MAX_VALUE;
-        for (var vent : vents) {
-            double distance = captor.distanceToSqr(vent.getX() + 0.5, vent.getY(), vent.getZ() + 0.5);
-            if (distance < nearestDistance) {
-                nearestDistance = distance;
-                nearest = vent;
-            }
-        }
-        if (nearest == null || nearestDistance > VENT_HANDOFF_DISTANCE * VENT_HANDOFF_DISTANCE + 1.0) {
-            return; // still walking it to the vent
-        }
-        deliverToHostChamber(captor, carried, level, location);
-    }
 
     /** The hand-off itself: the host is ducted into the hive and webbed into a free host-chamber spot. */
-    private static void deliverToHostChamber(
+    public static void deliverToHostChamber(
         com.alien.common.gameplay.entity.living.alien.Alien captor,
         LivingEntity carried,
         ServerLevel level,

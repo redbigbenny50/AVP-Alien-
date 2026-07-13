@@ -51,19 +51,24 @@ public final class HostHuntPartyLifecycleTask {
     }
 
     private static void resolve(
-        ServerLevel serverLevel,
-        HiveLocation location,
-        HiveParty.HostHunt party,
-        HiveConfig config
+            ServerLevel serverLevel,
+            HiveLocation location,
+            HiveParty.HostHunt party,
+            HiveConfig config
     ) {
         var homeVent = nearestVent(serverLevel, location, config);
 
         for (var entry : new ArrayList<>(party.materializedMembers().entrySet())) {
             var entity = serverLevel.getEntity(entry.getKey());
             party.untrackMaterializedMember(entry.getKey());
-            if (entity == null || !entity.isAlive()) {
-                // Lost in the field — nothing to refund.
+            if (entity == null) {
+                // NOT loaded - and not dead: real deaths are untracked at the moment of death (PartyMemberDeath).
+                // Writing off every out-of-range member is what quietly drained the hive on each dispatch.
+                location.localReserves().addReturningMember(entry.getValue(), 1);
                 continue;
+            }
+            if (!entity.isAlive()) {
+                continue; // died this tick, before its death hook untracked it
             }
 
             if (homeVent != null) {
@@ -95,16 +100,14 @@ public final class HostHuntPartyLifecycleTask {
         Alien.LOGGER.info("Hive: host hunt party resolved (duration elapsed) for location {}", location.id());
     }
 
+    /**
+     * Host hunts come home through the front door. SURFACE vents only, and no fallback to "any vent" - falling back to
+     * an interior duct would send survivors home to a vent buried in the rock that they cannot reach.
+     */
     private static BlockPos nearestVent(ServerLevel serverLevel, HiveLocation location, HiveConfig config) {
-        // Prefer a near-surface vent (matches the design's "vents" as the fast-travel network); fall back to any
-        // known vent if the hive somehow has none near the surface anymore.
-        var surfaceVents = PartyVentUtil.findSurfaceVents(serverLevel, location, config.surfacePartySurfaceBandBlocks());
+        var surfaceVents = PartyVentUtil.findSurfaceVents(serverLevel, location);
         if (!surfaceVents.isEmpty()) {
             return closestTo(surfaceVents, location.centerPos());
-        }
-        var allVents = new ArrayList<>(location.ventManager().allVents());
-        if (!allVents.isEmpty()) {
-            return closestTo(allVents, location.centerPos());
         }
         return null;
     }

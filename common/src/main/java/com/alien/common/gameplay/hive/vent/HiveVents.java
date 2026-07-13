@@ -65,6 +65,33 @@ public final class HiveVents {
     }
 
     /**
+     * Work out what an untagged vent is for, ONCE. Two kinds of vent reach us with no recorded kind:
+     * <ul>
+     * <li><b>Template-stamped vents.</b> The hive structures write plain blocks with no NBT, so a structure vent can
+     * never carry a flag from placement - it has to be recognised by where it sits.</li>
+     * <li><b>Vents from before kinds existed.</b> The one-time migration: an old world's vents get classified on
+     * first load by the rule that used to be applied on the fly, and the answer is then persisted.</li>
+     * </ul>
+     * Inside a built structure chunk and within the slab, it is part of the hive proper. Otherwise, if it is up at
+     * the surface it is a front door; anything else is an outpost in the rock.
+     */
+    public static VentKind classifyUntagged(
+            Level level,
+            com.alien.common.gameplay.hive.location.HiveLocation location,
+            BlockPos vent,
+            int surfaceBandBlocks
+    ) {
+        var chunk = new net.minecraft.world.level.ChunkPos(vent);
+        if (location.structurePieceByChunk().containsKey(chunk) && location.withinSlab(vent.getY())) {
+            return VentKind.STRUCTURE;
+        }
+        if (isNearSurface(level, vent, surfaceBandBlocks)) {
+            return VentKind.SURFACE;
+        }
+        return VentKind.FRONTIER;
+    }
+
+    /**
      * The spot an alien pops out at: 1-2 blocks IN FRONT of the vent. Vents carry no facing state, so "front" is the
      * template convention - the horizontal direction from the vent toward its chunk's centre (chamber vents sit on
      * walls facing the room). Webbing counts as open space: the templates web most vent mouths, and xenomorphs walk
@@ -97,9 +124,9 @@ public final class HiveVents {
         }
         for (var pos : candidates) {
             if (
-                passable(level, pos)
-                    && passable(level, pos.above())
-                    && level.getBlockState(pos.below()).isFaceSturdy(level, pos.below(), Direction.UP)
+                    passable(level, pos)
+                            && passable(level, pos.above())
+                            && level.getBlockState(pos.below()).isFaceSturdy(level, pos.below(), Direction.UP)
             ) {
                 return pos;
             }
@@ -110,7 +137,11 @@ public final class HiveVents {
     /** Open space for a xenomorph: air, or resin web (aliens pass through webbing unaffected). */
     private static boolean passable(Level level, BlockPos pos) {
         var state = level.getBlockState(pos);
-        return state.isAir() || state.is(AlienResinBlocks.RESIN_WEB.get());
+        // Resin VEINS grow over vents just like webs do. A vein must not seal a vent shut - xenomorphs pass
+        // straight through their own resin.
+        return state.isAir()
+                || state.is(AlienResinBlocks.RESIN_WEB.get())
+                || state.is(AlienResinBlocks.RESIN_VEIN.get());
     }
 
     /**
@@ -125,8 +156,8 @@ public final class HiveVents {
             return null;
         }
         return Math.abs(dx) >= Math.abs(dz)
-            ? (dx > 0 ? Direction.EAST : Direction.WEST)
-            : (dz > 0 ? Direction.SOUTH : Direction.NORTH);
+                ? (dx > 0 ? Direction.EAST : Direction.WEST)
+                : (dz > 0 ? Direction.SOUTH : Direction.NORTH);
     }
 
     /**

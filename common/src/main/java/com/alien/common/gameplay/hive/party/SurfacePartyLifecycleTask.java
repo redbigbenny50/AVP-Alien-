@@ -66,11 +66,11 @@ public final class SurfacePartyLifecycleTask {
     }
 
     private static void tickActive(
-        ServerLevel serverLevel,
-        HiveLocation location,
-        HiveParty.SurfaceSpawn party,
-        HiveConfig config,
-        long currentTick
+            ServerLevel serverLevel,
+            HiveLocation location,
+            HiveParty.SurfaceSpawn party,
+            HiveConfig config,
+            long currentTick
     ) {
         if (currentTick - party.lastEconomyCheckTick() < ECONOMY_RECHECK_INTERVAL_TICKS) {
             return;
@@ -78,8 +78,8 @@ public final class SurfacePartyLifecycleTask {
         party.setLastEconomyCheckTick(currentTick);
 
         var bias = com.alien.common.util.AlienPredicates.isLocationLowOnBiomass(location)
-            ? HiveParty.EconomyBias.HARVEST
-            : HiveParty.EconomyBias.EXPAND;
+                ? HiveParty.EconomyBias.HARVEST
+                : HiveParty.EconomyBias.EXPAND;
         party.setEconomyBias(bias);
 
         if (bias != HiveParty.EconomyBias.EXPAND) {
@@ -105,11 +105,11 @@ public final class SurfacePartyLifecycleTask {
     }
 
     private static void tryOpportunisticClaim(
-        ServerLevel serverLevel,
-        HiveLocation location,
-        HiveConfig config,
-        ChunkPos candidate,
-        long currentTick
+            ServerLevel serverLevel,
+            HiveLocation location,
+            HiveConfig config,
+            ChunkPos candidate,
+            long currentTick
     ) {
         if (location.claimedChunks().contains(candidate)) {
             return;
@@ -134,10 +134,10 @@ public final class SurfacePartyLifecycleTask {
         if (HiveLocationClaims.claim(serverLevel, location, candidate, currentTick)) {
             location.setBiomass(location.biomass() - cost);
             Alien.LOGGER.info(
-                "Hive: surface party opportunistic claim at {} for location {} (cost {})",
-                candidate,
-                location.id(),
-                cost
+                    "Hive: surface party opportunistic claim at {} for location {} (cost {})",
+                    candidate,
+                    location.id(),
+                    cost
             );
         }
     }
@@ -158,19 +158,24 @@ public final class SurfacePartyLifecycleTask {
     }
 
     private static void resolveAtDawn(
-        ServerLevel serverLevel,
-        HiveLocation location,
-        HiveParty.SurfaceSpawn party,
-        HiveConfig config
+            ServerLevel serverLevel,
+            HiveLocation location,
+            HiveParty.SurfaceSpawn party,
+            HiveConfig config
     ) {
         ChunkPos lastKnownChunk = null;
 
         for (var entry : new ArrayList<>(party.materializedMembers().entrySet())) {
             var entity = serverLevel.getEntity(entry.getKey());
             party.untrackMaterializedMember(entry.getKey());
-            if (entity == null || !entity.isAlive()) {
-                // Lost in the field — nothing to refund.
+            if (entity == null) {
+                // NOT loaded - and not dead: real deaths are untracked at the moment of death (PartyMemberDeath).
+                // Writing off every out-of-range member is what quietly drained the hive on each dispatch.
+                location.localReserves().addReturningMember(entry.getValue(), 1);
                 continue;
+            }
+            if (!entity.isAlive()) {
+                continue; // died this tick, before its death hook untracked it
             }
             lastKnownChunk = new ChunkPos(entity.blockPosition());
             location.localReserves().addReturningMember(entry.getValue(), 1);
@@ -201,28 +206,26 @@ public final class SurfacePartyLifecycleTask {
     }
 
     private static void maybeDropVentAndResin(
-        ServerLevel serverLevel,
-        HiveLocation location,
-        HiveConfig config,
-        ChunkPos chunk
+            ServerLevel serverLevel,
+            HiveLocation location,
+            HiveConfig config,
+            ChunkPos chunk
     ) {
-        var centerBlock = chunk.getMiddleBlockPosition(0);
-        var surfaceY = serverLevel.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, centerBlock.getX(), centerBlock.getZ());
-        var band = config.surfacePartySurfaceBandBlocks();
-
-        var nearSurfaceCount = 0;
+        // Count the SURFACE vents actually recorded in this chunk. This used to re-derive "near the surface" from the
+        // heightmap, which also counted interior and frontier vents that happened to sit high in their own column.
+        var surfaceVentCount = 0;
         for (var pos : location.ventManager().getVentsWithinChunk(chunk)) {
-            if (Math.abs(pos.getY() - surfaceY) <= band) {
-                nearSurfaceCount++;
+            if (location.ventManager().isKind(pos, com.alien.common.gameplay.hive.vent.VentKind.SURFACE)) {
+                surfaceVentCount++;
             }
         }
-        if (nearSurfaceCount >= config.surfacePartyMaxVentsPerClaim()) {
+        if (surfaceVentCount >= config.surfacePartyMaxVentsPerClaim()) {
             Alien.LOGGER.info(
-                "Hive: surface party made NO vent at {} for {} - already {} near-surface vents there (cap {}).",
-                chunk,
-                location.id(),
-                nearSurfaceCount,
-                config.surfacePartyMaxVentsPerClaim()
+                    "Hive: surface party made NO vent at {} for {} - already {} surface vents there (cap {}).",
+                    chunk,
+                    location.id(),
+                    surfaceVentCount,
+                    config.surfacePartyMaxVentsPerClaim()
             );
             return;
         }
@@ -230,19 +233,19 @@ public final class SurfacePartyLifecycleTask {
         var variant = location.lineageVariantOrNull();
         if (variant == null) {
             Alien.LOGGER.info(
-                "Hive: surface party made NO vent at {} for {} - the location has no lineage variant.",
-                chunk,
-                location.id()
+                    "Hive: surface party made NO vent at {} for {} - the location has no lineage variant.",
+                    chunk,
+                    location.id()
             );
             return;
         }
         // Roll LAST: burning the 10% chance and THEN bailing on a bad spot wasted the drop entirely.
         if (serverLevel.random.nextDouble() >= config.surfacePartyVentDropChance()) {
             Alien.LOGGER.info(
-                "Hive: surface party made NO vent at {} for {} - lost the {}% drop roll.",
-                chunk,
-                location.id(),
-                (int) (config.surfacePartyVentDropChance() * 100)
+                    "Hive: surface party made NO vent at {} for {} - lost the {}% drop roll.",
+                    chunk,
+                    location.id(),
+                    (int) (config.surfacePartyVentDropChance() * 100)
             );
             return;
         }
@@ -254,28 +257,29 @@ public final class SurfacePartyLifecycleTask {
         var ventPos = findSurfaceVentSpot(serverLevel, chunk);
         if (ventPos == null) {
             Alien.LOGGER.info(
-                "Hive: surface party made NO vent at {} for {} - no sturdy, open surface column anywhere in the chunk.",
-                chunk,
-                location.id()
+                    "Hive: surface party made NO vent at {} for {} - no sturdy, open surface column anywhere in the chunk.",
+                    chunk,
+                    location.id()
             );
             return;
         }
 
-        serverLevel.setBlock(ventPos, variantType.resinVent().get().defaultBlockState(), 3);
-        for (var direction : Direction.Plane.HORIZONTAL) {
-            var resinPos = ventPos.relative(direction);
-            if (serverLevel.getBlockState(resinPos).isAir()) {
-                serverLevel.setBlock(resinPos, variantType.resin().get().defaultBlockState(), 3);
-            }
-        }
+        // Same geometry as every other vent now: it sits on the surface of the ground, webbed on every side touching
+        // air, with resin creeping over the rock around it. The old ring-of-resin collar is gone.
+        com.alien.common.gameplay.hive.vent.VentPlacement.place(
+                serverLevel,
+                ventPos,
+                variantType,
+                com.alien.common.gameplay.hive.vent.VentKind.SURFACE
+        );
 
-        Alien.LOGGER.info("Hive: surface party dropped a vent + resin at {} for location {}", ventPos, location.id());
+        Alien.LOGGER.info("Hive: surface party dropped a SURFACE vent at {} for location {}", ventPos, location.id());
     }
 
     /** A sturdy, open surface column somewhere in the chunk - rings outward from the centre. */
     private static @org.jetbrains.annotations.Nullable BlockPos findSurfaceVentSpot(
-        ServerLevel serverLevel,
-        ChunkPos chunk
+            ServerLevel serverLevel,
+            ChunkPos chunk
     ) {
         var centre = chunk.getMiddleBlockPosition(0);
         for (int radius = 0; radius <= 7; radius++) {
@@ -293,7 +297,15 @@ public final class SurfacePartyLifecycleTask {
                         continue;
                     }
                     var state = serverLevel.getBlockState(candidate);
-                    if (!state.isAir() && !state.canBeReplaced()) {
+                    // Surface parties RESIN the ground they claim, so the next party finds that ground covered in
+                    // the hive's own resin. Treating resin as an obstruction meant a resined hillside could never
+                    // host a vent again - the party spread resin every time and dropped a vent never.
+                    if (
+                            !state.isAir()
+                                    && !state.canBeReplaced()
+                                    && !state.is(com.alien.common.registry.init.block.AlienResinBlocks.RESIN_VEIN.get())
+                                    && !state.is(com.alien.common.registry.init.block.AlienResinBlocks.RESIN_WEB.get())
+                    ) {
                         continue;
                     }
                     return candidate;
@@ -327,8 +339,8 @@ public final class SurfacePartyLifecycleTask {
         var nodePos = new BlockPos(centerBlock.getX(), centerY, centerBlock.getZ());
         var nodeGround = nodePos.below();
         if (
-            serverLevel.getBlockState(nodePos).isAir()
-                && serverLevel.getBlockState(nodeGround).isFaceSturdy(serverLevel, nodeGround, Direction.UP)
+                serverLevel.getBlockState(nodePos).isAir()
+                        && serverLevel.getBlockState(nodeGround).isFaceSturdy(serverLevel, nodeGround, Direction.UP)
         ) {
             serverLevel.setBlock(nodePos, variantType.resinNode().get().defaultBlockState(), 3);
         }
@@ -341,8 +353,8 @@ public final class SurfacePartyLifecycleTask {
             var pos = new BlockPos(x, y, z);
             var ground = pos.below();
             if (
-                !serverLevel.getBlockState(pos).isAir()
-                    || !serverLevel.getBlockState(ground).isFaceSturdy(serverLevel, ground, Direction.UP)
+                    !serverLevel.getBlockState(pos).isAir()
+                            || !serverLevel.getBlockState(ground).isFaceSturdy(serverLevel, ground, Direction.UP)
             ) {
                 continue;
             }
@@ -351,10 +363,10 @@ public final class SurfacePartyLifecycleTask {
         }
         if (placed > 0) {
             Alien.LOGGER.info(
-                "Hive: surface party spread {} resin across the surface at {} for location {}",
-                placed,
-                chunk,
-                location.id()
+                    "Hive: surface party spread {} resin across the surface at {} for location {}",
+                    placed,
+                    chunk,
+                    location.id()
             );
         }
     }

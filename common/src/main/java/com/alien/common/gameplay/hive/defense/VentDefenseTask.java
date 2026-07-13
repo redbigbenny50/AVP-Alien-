@@ -7,6 +7,7 @@ import com.alien.common.gameplay.hive.location.HiveLocationRegistry;
 import com.alien.common.gameplay.hive.spawning.HiveLoadedSpawner;
 import com.alien.common.gameplay.hive.spawning.ReserveSpawnUtil;
 import com.alien.common.gameplay.hive.tick.HiveTerritoryAggroTask;
+import com.alien.common.gameplay.hive.vent.VentKind;
 import com.alien.common.gameplay.hive.vent.HiveVents;
 import com.alien.common.registry.init.AlienSoundEvents;
 import com.alien.common.registry.tag.AlienEntityTypeTags;
@@ -49,18 +50,18 @@ public final class VentDefenseTask {
 
     /** Combat castes first when drawing defenders from the reserves. */
     private static final List<net.minecraft.tags.TagKey<EntityType<?>>> DRAW_ORDER = List.of(
-        AlienEntityTypeTags.WARRIORS,
-        AlienEntityTypeTags.PROWLERS,
-        AlienEntityTypeTags.RUNNERS,
-        AlienEntityTypeTags.DRONES
+            AlienEntityTypeTags.WARRIORS,
+            AlienEntityTypeTags.PROWLERS,
+            AlienEntityTypeTags.RUNNERS,
+            AlienEntityTypeTags.DRONES
     );
 
     private static final Map<HiveLocation, Long> LAST_WAVE =
-        java.util.Collections.synchronizedMap(new java.util.WeakHashMap<>());
+            java.util.Collections.synchronizedMap(new java.util.WeakHashMap<>());
 
     /** Defenders emerged per intruder (by UUID) for the current incident; cleared when the intruder is gone. */
     private static final Map<HiveLocation, Map<UUID, Integer>> EMERGED =
-        java.util.Collections.synchronizedMap(new java.util.WeakHashMap<>());
+            java.util.Collections.synchronizedMap(new java.util.WeakHashMap<>());
 
     private VentDefenseTask() {}
 
@@ -98,7 +99,14 @@ public final class VentDefenseTask {
                 continue;
             }
 
-            var vents = HiveVents.ventsNear(location.ventManager(), intruder.blockPosition(), VENT_RANGE_CHUNKS, null);
+            // STRUCTURE or SURFACE only. A defender emerging from a FRONTIER vent pops out in a cave, far from the
+            // intruder it was summoned for, and strands itself out there.
+            var vents = HiveVents.ventsNear(
+                    location.ventManager(),
+                    intruder.blockPosition(),
+                    VENT_RANGE_CHUNKS,
+                    v -> location.ventManager().isKind(v, VentKind.STRUCTURE, VentKind.SURFACE)
+            );
             if (vents.isEmpty()) {
                 continue; // no duct mouth near this intruder - the loaded defenders will have to walk
             }
@@ -130,9 +138,9 @@ public final class VentDefenseTask {
         if (spawnedThisWave > 0) {
             LAST_WAVE.put(location, now);
             Alien.LOGGER.info(
-                "Hive at {}: {} defender(s) emerged from the vents against intruders.",
-                location.centerPos(),
-                spawnedThisWave
+                    "Hive at {}: {} defender(s) emerged from the vents against intruders.",
+                    location.centerPos(),
+                    spawnedThisWave
             );
         }
     }
@@ -144,13 +152,13 @@ public final class VentDefenseTask {
     private static int defenderTarget(ServerLevel level, HiveLocation location, LivingEntity intruder) {
         int band = HiveLocationRegistry.INSTANCE.config().surfacePartySurfaceBandBlocks();
         int surfaceY = level.getHeight(
-            Heightmap.Types.MOTION_BLOCKING_NO_LEAVES,
-            intruder.getBlockX(),
-            intruder.getBlockZ()
+                Heightmap.Types.MOTION_BLOCKING_NO_LEAVES,
+                intruder.getBlockX(),
+                intruder.getBlockZ()
         );
         boolean onSurface = intruder.getY() >= surfaceY - band;
         boolean escalated = intruder instanceof Player player
-            && location.attackCampaigns().containsKey(player.getUUID());
+                && location.attackCampaigns().containsKey(player.getUUID());
         if (onSurface && !escalated) {
             return (DEFENDER_TARGET * 2 + 2) / 3; // 2/3 strength, rounded up
         }

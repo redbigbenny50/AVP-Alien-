@@ -150,6 +150,17 @@ public class XenomorphGOAP {
         return graphBuilder;
     }
 
+    /** Host hunt: walk to a host, grab it, carry it to a vent, hand it into the host chamber. */
+    public static <T extends Xenomorph> Graph.Builder<T> addHostCapturePackage(Graph.Builder<T> graphBuilder) {
+        graphBuilder.addGoal(com.alien.common.gameplay.entity.living.alien.xenomorph.ai.host.HostActions.CAPTURE_HOST_GOAL);
+        graphBuilder.addGoal(com.alien.common.gameplay.entity.living.alien.xenomorph.ai.host.HostActions.DELIVER_HOST_GOAL);
+        graphBuilder.addAction(com.alien.common.gameplay.entity.living.alien.xenomorph.ai.host.HostActions.CAPTURE_HOST);
+        graphBuilder.addAction(com.alien.common.gameplay.entity.living.alien.xenomorph.ai.host.HostActions.DELIVER_HOST);
+        graphBuilder.addSensor(com.alien.common.gameplay.entity.living.alien.xenomorph.ai.host.HostSensors.HAS_TARGET_HOST);
+        graphBuilder.addSensor(com.alien.common.gameplay.entity.living.alien.xenomorph.ai.host.HostSensors.IS_CARRYING_HOST);
+        return graphBuilder;
+    }
+
     public static <T extends Xenomorph> Graph.Builder<T> addEggPackage(Graph.Builder<T> graphBuilder) {
         graphBuilder.addGoal(EggGoals.FETCH_EGG);
         graphBuilder.addGoal(EggGoals.DELIVER_EGG);
