@@ -4,6 +4,7 @@ import com.alien.AlienResources;
 import com.alien.client.animation.entity.cocoon.CocoonAnimationStateTracker;
 import com.alien.common.gameplay.entity.living.alien.xenomorph.AttackType;
 import com.alien.common.gameplay.entity.living.alien.xenomorph.CocoonSourceForm;
+import com.alien.common.gameplay.entity.living.alien.xenomorph.queen.QueenBindManager;
 import com.alien.common.gameplay.entity.living.alien.xenomorph.queen.Queen;
 import com.alien.common.gameplay.entity.living.alien.xenomorph.queen.QueenAnimationRefs;
 import com.alien.common.util.AzAlienAnimationUtil;
@@ -33,8 +34,10 @@ public class QueenAnimator extends AzEntityAnimator<Queen> {
     /** Edge-detects the digging state so digdown/digup one-shots fire once on start/stop. */
     private boolean previousDigging = false;
 
+    private boolean previousIncapacitated = false;
+
     private final CocoonAnimationStateTracker<Queen> cocoonAnimationStateTracker =
-        new CocoonAnimationStateTracker<>(QueenAnimator::selectLoopAnimation, QueenAnimator::selectEmergeAnimation);
+            new CocoonAnimationStateTracker<>(QueenAnimator::selectLoopAnimation, QueenAnimator::selectEmergeAnimation);
 
     public QueenAnimator() {
         super(AzAnimatorConfig.defaultConfig());
@@ -43,9 +46,9 @@ public class QueenAnimator extends AzEntityAnimator<Queen> {
     @Override
     public void registerTracks(AzAnimationTrackContainer<Queen> animationTrackContainer) {
         animationTrackContainer.add(
-            AzAnimationTrack.builder(this, AzAlienAnimationUtil.BODY)
-                .setTransitionLength(5)
-                .build()
+                AzAnimationTrack.builder(this, AzAlienAnimationUtil.BODY)
+                        .setTransitionLength(5)
+                        .build()
         );
     }
 
@@ -109,15 +112,15 @@ public class QueenAnimator extends AzEntityAnimator<Queen> {
     /** Source-specific in-cocoon loop: from a crusher she plays molting.crusher, otherwise molting.prae. */
     private static String selectLoopAnimation(Queen queen) {
         return queen.cocoonSourceForm.get() == CocoonSourceForm.CRUSHER
-            ? QueenAnimationRefs.MOLTING_CRUSHER_ANIMATION_NAME
-            : QueenAnimationRefs.MOLTING_PRAE_ANIMATION_NAME;
+                ? QueenAnimationRefs.MOLTING_CRUSHER_ANIMATION_NAME
+                : QueenAnimationRefs.MOLTING_PRAE_ANIMATION_NAME;
     }
 
     /** Source-specific emerge burst: from a crusher she plays emerge.crusher, otherwise emerge.prae. */
     private static String selectEmergeAnimation(Queen queen) {
         return queen.cocoonSourceForm.get() == CocoonSourceForm.CRUSHER
-            ? QueenAnimationRefs.EMERGE_CRUSHER_ANIMATION_NAME
-            : QueenAnimationRefs.EMERGE_PRAE_ANIMATION_NAME;
+                ? QueenAnimationRefs.EMERGE_CRUSHER_ANIMATION_NAME
+                : QueenAnimationRefs.EMERGE_PRAE_ANIMATION_NAME;
     }
 
     private void runPassiveAnimations(Queen queen) {
@@ -126,6 +129,36 @@ public class QueenAnimator extends AzEntityAnimator<Queen> {
         // Front-end Stage 3: while hibernating she holds the curled sleep pose, overriding idle/walk/run. Driven off
         // the
         // synced flag because the lifecycle phase is server-only state — animation dispatch must happen client-side.
+        // Incapacitated (involuntary defeat collapse) outranks everything, including hibernation: she did not
+        // choose this. Three-part machine driven off the synced flag - a one-shot DROP on the rising edge, the
+        // loop while she is down, and a one-shot RISE on the falling edge as she gets back up. Both one-shots
+        // hold on their last frame, so each hands off cleanly to whatever comes next.
+        boolean incapacitatedNow = queen.isIncapacitated();
+        if (incapacitatedNow && !previousIncapacitated) {
+            dispatcher.incapacitatedDrop();
+            previousIncapacitated = true;
+            return;
+        }
+        if (!incapacitatedNow && previousIncapacitated) {
+            dispatcher.incapacitatedRise();
+            previousIncapacitated = false;
+            return;
+        }
+        if (incapacitatedNow) {
+            dispatcher.incapacitated();
+            return;
+        }
+
+        // Straining against the chains. ONLY during the window where she is fully bound (4+ chains) but not yet
+        // subdued: an inhibited queen is pacified, and one riding her chained eggsack is a settled captive
+        // breeder. Neither strains. This is the fight she puts up in between.
+        if (queen.bindChainCount.get() >= QueenBindManager.FULLY_BOUND_CHAINS
+                && !queen.isInhibited()
+                && !queen.isRidingOvipositor()) {
+            dispatcher.boundStruggle();
+            return;
+        }
+
         if (queen.isHibernating.get()) {
             dispatcher.hibernate();
             return;
@@ -212,24 +245,24 @@ public class QueenAnimator extends AzEntityAnimator<Queen> {
     private String selectAttackAnimation(Queen queen, AttackType attackType, int attackId) {
         if (attackType == Queen.SWIPE_DOWN) {
             return chooseArmAnimation(
-                queen,
-                attackId,
-                QueenAnimationRefs.LEFT_SWIPE_DOWN_ANIMATION_NAME,
-                QueenAnimationRefs.RIGHT_SWIPE_DOWN_ANIMATION_NAME
+                    queen,
+                    attackId,
+                    QueenAnimationRefs.LEFT_SWIPE_DOWN_ANIMATION_NAME,
+                    QueenAnimationRefs.RIGHT_SWIPE_DOWN_ANIMATION_NAME
             );
         } else if (attackType == Queen.BACKHAND) {
             return chooseArmAnimation(
-                queen,
-                attackId,
-                QueenAnimationRefs.LEFT_BACKHAND_ANIMATION_NAME,
-                QueenAnimationRefs.RIGHT_BACKHAND_ANIMATION_NAME
+                    queen,
+                    attackId,
+                    QueenAnimationRefs.LEFT_BACKHAND_ANIMATION_NAME,
+                    QueenAnimationRefs.RIGHT_BACKHAND_ANIMATION_NAME
             );
         } else if (attackType == Queen.TAIL_STRIKE) {
             return chooseTailAnimation(
-                queen,
-                attackId,
-                QueenAnimationRefs.LEFT_TAIL_STRIKE_ANIMATION_NAME,
-                QueenAnimationRefs.RIGHT_TAIL_STRIKE_ANIMATION_NAME
+                    queen,
+                    attackId,
+                    QueenAnimationRefs.LEFT_TAIL_STRIKE_ANIMATION_NAME,
+                    QueenAnimationRefs.RIGHT_TAIL_STRIKE_ANIMATION_NAME
             );
         }
 
