@@ -55,8 +55,12 @@ public final class VentPlacement {
         }
 
         // Creep resin over the rock around the mouth, the same way the hive resins ground it claims.
-        for (var offset : BlockPos.betweenClosed(ventPos.offset(-RESIN_RADIUS, -RESIN_RADIUS, -RESIN_RADIUS),
-                ventPos.offset(RESIN_RADIUS, RESIN_RADIUS, RESIN_RADIUS))) {
+        for (
+            var offset : BlockPos.betweenClosed(
+                ventPos.offset(-RESIN_RADIUS, -RESIN_RADIUS, -RESIN_RADIUS),
+                ventPos.offset(RESIN_RADIUS, RESIN_RADIUS, RESIN_RADIUS)
+            )
+        ) {
             var pos = offset.immutable();
             if (pos.equals(ventPos)) {
                 continue;
@@ -74,8 +78,8 @@ public final class VentPlacement {
     }
 
     /**
-     * True if this OPEN cell rests against at least one solid face - the block whose surface the vent will sit on.
-     * Any face counts: a vent may sit on the floor, cling to a wall, or hang from a ceiling.
+     * True if this OPEN cell rests against at least one solid face - the block whose surface the vent will sit on. Any
+     * face counts: a vent may sit on the floor, cling to a wall, or hang from a ceiling.
      */
     public static boolean restsOnSolidFace(Level level, BlockPos pos) {
         for (var direction : Direction.values()) {

@@ -3,11 +3,11 @@ package com.alien.common.gameplay.entity.living.alien.xenomorph.queen;
 import com.alien.common.data.AlienVariantTypes;
 import com.alien.common.registry.tag.AlienEntityTypeTags;
 import net.minecraft.ChatFormatting;
+import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerBossEvent;
-import net.minecraft.world.BossEvent;
-import net.minecraft.nbt.CompoundTag;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.BossEvent;
 import net.minecraft.world.damagesource.DamageSource;
 import net.minecraft.world.entity.LivingEntity;
 
@@ -18,11 +18,11 @@ import net.minecraft.world.entity.LivingEntity;
  * (one point) and refills to {@link #BAR_MAX} over {@link #SELF_RECOVERY_TICKS}, so she is at her most killable the
  * instant she goes down and hardens the longer she is left alone. The four exits:
  * <ul>
- *   <li><b>Kill</b> - drain the bar to 0. Damage taken while down eats the BAR, not her health.</li>
- *   <li><b>Heal (rescue)</b> - a nearby xenomorph restores {@link #XENO_HEAL_FRACTION} of her health and she wakes.</li>
- *   <li><b>Self-recovery</b> - left alone, the bar fills and she wakes fully healed.</li>
- *   <li><b>Capture</b> - the player tags/chains her. She still wakes on heal/timeout; the inhibitor only changes WHO
- *       she is when she wakes, not whether she does.</li>
+ * <li><b>Kill</b> - drain the bar to 0. Damage taken while down eats the BAR, not her health.</li>
+ * <li><b>Heal (rescue)</b> - a nearby xenomorph restores {@link #XENO_HEAL_FRACTION} of her health and she wakes.</li>
+ * <li><b>Self-recovery</b> - left alone, the bar fills and she wakes fully healed.</li>
+ * <li><b>Capture</b> - the player tags/chains her. She still wakes on heal/timeout; the inhibitor only changes WHO she
+ * is when she wakes, not whether she does.</li>
  * </ul>
  * On top of that sits the DOWN CAP: go down more than {@link #MAX_DOWNS} times inside {@link #DOWN_WINDOW_TICKS} and
  * the next defeat is a real death. The cap takes precedence over the heal and timeout exits - you cannot rescue your
@@ -42,8 +42,8 @@ public final class QueenIncapacitationManager {
     /**
      * Left completely alone, this is how long the bar takes to fill (and she wakes fully healed).
      * <p>
-     * Ten minutes: the downed window is not just a finisher timer, it is the window in which you MOVE her.
-     * Chaining, hauling and securing a queen has to be realistically possible inside it.
+     * Ten minutes: the downed window is not just a finisher timer, it is the window in which you MOVE her. Chaining,
+     * hauling and securing a queen has to be realistically possible inside it.
      */
     public static final int SELF_RECOVERY_TICKS = 10 * 60 * 20;
 
@@ -201,18 +201,18 @@ public final class QueenIncapacitationManager {
     }
 
     /**
-     * The incapacitation bar itself. It reads as a RESISTANCE meter, not a health bar: it starts nearly empty
-     * (she is one point from death the instant she drops) and fills as she recovers. A player watching it
-     * fill knows exactly how long they have left to finish her, chain her, or run.
+     * The incapacitation bar itself. It reads as a RESISTANCE meter, not a health bar: it starts nearly empty (she is
+     * one point from death the instant she drops) and fills as she recovers. A player watching it fill knows exactly
+     * how long they have left to finish her, chain her, or run.
      */
     private void showBar() {
         if (bossEvent != null) {
             return;
         }
         bossEvent = new ServerBossEvent(
-                title(),
-                AlienVariantTypes.getFor(queen.getVariant()).bossBarColor(),
-                BossEvent.BossBarOverlay.PROGRESS
+            title(),
+            AlienVariantTypes.getFor(queen.getVariant()).bossBarColor(),
+            BossEvent.BossBarOverlay.PROGRESS
         );
         bossEvent.setProgress(barFraction());
     }
@@ -251,7 +251,7 @@ public final class QueenIncapacitationManager {
     private Component title() {
         var downsLeft = Math.max(0, MAX_DOWNS - downCount);
         return Component.translatable("boss.avp_alien.queen_incapacitated")
-                .append(Component.literal(" (" + downsLeft + ")").withStyle(ChatFormatting.DARK_RED));
+            .append(Component.literal(" (" + downsLeft + ")").withStyle(ChatFormatting.DARK_RED));
     }
 
     /** She left the world while down (killed, unloaded, removed): never leak the bar. */

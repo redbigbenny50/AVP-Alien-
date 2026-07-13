@@ -49,14 +49,14 @@ public final class CaptureHostAction {
 
         if (xenomorph.tickCount % 60 == 0) {
             com.alien.Alien.LOGGER.info(
-                    "[hostdbg] CAPTURE: me={} quarry={} at {} distSq={} move={} navDone={} onGround={}",
-                    xenomorph.blockPosition(),
-                    target.getType().getDescriptionId(),
-                    target.blockPosition(),
-                    String.format("%.1f", xenomorph.distanceToSqr(target)),
-                    result,
-                    xenomorph.getNavigation().isDone(),
-                    xenomorph.onGround()
+                "[hostdbg] CAPTURE: me={} quarry={} at {} distSq={} move={} navDone={} onGround={}",
+                xenomorph.blockPosition(),
+                target.getType().getDescriptionId(),
+                target.blockPosition(),
+                String.format("%.1f", xenomorph.distanceToSqr(target)),
+                result,
+                xenomorph.getNavigation().isDone(),
+                xenomorph.onGround()
             );
         }
 

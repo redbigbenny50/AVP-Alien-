@@ -21,9 +21,9 @@ public class GrowthConstants {
      * a llama.
      * <p>
      * Runners and spitters are deliberately derived as {@code / 2} of this rather than hardcoded, so the fast castes
-     * stay proportionally fast whenever this is retuned. Halving this therefore also takes them from 3000 to 1500:
-     * a drone totals 6000 ticks, a runner or spitter 4500. Grabbing a cow instead of a villager is still the quicker
-     * way to a body.
+     * stay proportionally fast whenever this is retuned. Halving this therefore also takes them from 3000 to 1500: a
+     * drone totals 6000 ticks, a runner or spitter 4500. Grabbing a cow instead of a villager is still the quicker way
+     * to a body.
      */
     public static final int ADOLESCENT_GROWTH_TIME_IN_TICKS = (int) TimeUnit.MINUTES.toSeconds(5) / 2 * 20;
 

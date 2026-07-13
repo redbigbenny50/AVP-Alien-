@@ -11,40 +11,40 @@ public class QueenAnimationDispatcher {
     private static final float DIG_ANIMATION_SPEED = 0.7F;
 
     private static final AzCommand<Queen> IDLE = AzCommand.<Queen>idempotent()
-            .play(AzAlienAnimationUtil.BODY, QueenAnimationRefs.IDLE_ANIMATION_NAME, AzPlayBehaviors.LOOP)
-            .build();
+        .play(AzAlienAnimationUtil.BODY, QueenAnimationRefs.IDLE_ANIMATION_NAME, AzPlayBehaviors.LOOP)
+        .build();
 
     private static final AzCommand<Queen> HIBERNATE = AzCommand.<Queen>idempotent()
-            .play(AzAlienAnimationUtil.BODY, QueenAnimationRefs.HIBERNATE_ANIMATION_NAME, AzPlayBehaviors.LOOP)
-            .build();
+        .play(AzAlienAnimationUtil.BODY, QueenAnimationRefs.HIBERNATE_ANIMATION_NAME, AzPlayBehaviors.LOOP)
+        .build();
 
     private static final AzCommand<Queen> INCAPACITATED = AzCommand.<Queen>idempotent()
-            .play(AzAlienAnimationUtil.BODY, QueenAnimationRefs.INCAPACITATED_ANIMATION_NAME, AzPlayBehaviors.LOOP)
-            .build();
+        .play(AzAlienAnimationUtil.BODY, QueenAnimationRefs.INCAPACITATED_ANIMATION_NAME, AzPlayBehaviors.LOOP)
+        .build();
 
     private static final AzCommand<Queen> CRAWL = AzCommand.<Queen>idempotent()
-            .play(AzAlienAnimationUtil.BODY, QueenAnimationRefs.CRAWL_ANIMATION_NAME, AzPlayBehaviors.LOOP)
-            .build();
+        .play(AzAlienAnimationUtil.BODY, QueenAnimationRefs.CRAWL_ANIMATION_NAME, AzPlayBehaviors.LOOP)
+        .build();
 
     private static final AzCommand<Queen> CRAWL_IDLE = AzCommand.<Queen>idempotent()
-            .play(AzAlienAnimationUtil.BODY, QueenAnimationRefs.CRAWL_IDLE_ANIMATION_NAME, AzPlayBehaviors.LOOP)
-            .build();
+        .play(AzAlienAnimationUtil.BODY, QueenAnimationRefs.CRAWL_IDLE_ANIMATION_NAME, AzPlayBehaviors.LOOP)
+        .build();
 
     private static final AzCommand<Queen> RUN = AzCommand.<Queen>idempotent()
-            .play(AzAlienAnimationUtil.BODY, QueenAnimationRefs.RUN_ANIMATION_NAME, AzPlayBehaviors.LOOP)
-            .build();
+        .play(AzAlienAnimationUtil.BODY, QueenAnimationRefs.RUN_ANIMATION_NAME, AzPlayBehaviors.LOOP)
+        .build();
 
     private static final AzCommand<Queen> SIT_ON_OVIPOSITOR = AzCommand.<Queen>idempotent()
-            .play(AzAlienAnimationUtil.BODY, QueenAnimationRefs.RIDE_EGG_SACK_ANIMATION_NAME, AzPlayBehaviors.LOOP)
-            .build();
+        .play(AzAlienAnimationUtil.BODY, QueenAnimationRefs.RIDE_EGG_SACK_ANIMATION_NAME, AzPlayBehaviors.LOOP)
+        .build();
 
     private static final AzCommand<Queen> SWIM = AzCommand.<Queen>idempotent()
-            .play(AzAlienAnimationUtil.BODY, QueenAnimationRefs.SWIM_ANIMATION_NAME, AzPlayBehaviors.LOOP)
-            .build();
+        .play(AzAlienAnimationUtil.BODY, QueenAnimationRefs.SWIM_ANIMATION_NAME, AzPlayBehaviors.LOOP)
+        .build();
 
     private static final AzCommand<Queen> WALK = AzCommand.<Queen>idempotent()
-            .play(AzAlienAnimationUtil.BODY, QueenAnimationRefs.WALK_ANIMATION_NAME, AzPlayBehaviors.LOOP)
-            .build();
+        .play(AzAlienAnimationUtil.BODY, QueenAnimationRefs.WALK_ANIMATION_NAME, AzPlayBehaviors.LOOP)
+        .build();
 
     private final Queen queen;
 
@@ -72,11 +72,11 @@ public class QueenAnimationDispatcher {
 
     public void crawl(float speed) {
         AzAlienAnimationUtil.singleWithSpeed(
-                AzAlienAnimationUtil.BODY,
-                QueenAnimationRefs.CRAWL_ANIMATION_NAME,
-                AzPlayBehaviors.LOOP,
-                AzDispatchMode.PLAY_IF_NOT_PLAYING,
-                speed
+            AzAlienAnimationUtil.BODY,
+            QueenAnimationRefs.CRAWL_ANIMATION_NAME,
+            AzPlayBehaviors.LOOP,
+            AzDispatchMode.PLAY_IF_NOT_PLAYING,
+            speed
         ).dispatchForEntity(queen);
     }
 
@@ -106,28 +106,28 @@ public class QueenAnimationDispatcher {
     /** One-shot: she plants and starts burrowing straight down. Holds on the last frame into the digging loop. */
     public void digDown() {
         AzCommand.<Queen>replay()
-                .play(AzAlienAnimationUtil.BODY, QueenAnimationRefs.DIG_DOWN_ANIMATION_NAME, AzPlayBehaviors.HOLD_ON_LAST_FRAME)
-                .build()
-                .dispatchForEntity(queen);
+            .play(AzAlienAnimationUtil.BODY, QueenAnimationRefs.DIG_DOWN_ANIMATION_NAME, AzPlayBehaviors.HOLD_ON_LAST_FRAME)
+            .build()
+            .dispatchForEntity(queen);
     }
 
     /** Looping vertical dig, played at 70% speed per design. Idempotent so it isn't restarted every tick. */
     public void digging() {
         AzAlienAnimationUtil.singleWithSpeed(
-                AzAlienAnimationUtil.BODY,
-                QueenAnimationRefs.DIGGING_ANIMATION_NAME,
-                AzPlayBehaviors.LOOP,
-                AzDispatchMode.PLAY_IF_NOT_PLAYING,
-                DIG_ANIMATION_SPEED
+            AzAlienAnimationUtil.BODY,
+            QueenAnimationRefs.DIGGING_ANIMATION_NAME,
+            AzPlayBehaviors.LOOP,
+            AzDispatchMode.PLAY_IF_NOT_PLAYING,
+            DIG_ANIMATION_SPEED
         ).dispatchForEntity(queen);
     }
 
     /** One-shot: she pulls up out of the dig and returns toward idle. */
     public void digUp() {
         AzCommand.<Queen>replay()
-                .play(AzAlienAnimationUtil.BODY, QueenAnimationRefs.DIG_UP_ANIMATION_NAME, AzPlayBehaviors.PLAY_ONCE)
-                .build()
-                .dispatchForEntity(queen);
+            .play(AzAlienAnimationUtil.BODY, QueenAnimationRefs.DIG_UP_ANIMATION_NAME, AzPlayBehaviors.PLAY_ONCE)
+            .build()
+            .dispatchForEntity(queen);
     }
 
     // ---- Standing/horizontal dig (also room carving): start (once) -> stand_digging (loop @70%) -> stop (once) ----
@@ -135,28 +135,28 @@ public class QueenAnimationDispatcher {
     /** One-shot: she raises her hands to begin a horizontal dig. */
     public void digStandStart() {
         AzCommand.<Queen>replay()
-                .play(AzAlienAnimationUtil.BODY, QueenAnimationRefs.DIG_STAND_START_ANIMATION_NAME, AzPlayBehaviors.PLAY_ONCE)
-                .build()
-                .dispatchForEntity(queen);
+            .play(AzAlienAnimationUtil.BODY, QueenAnimationRefs.DIG_STAND_START_ANIMATION_NAME, AzPlayBehaviors.PLAY_ONCE)
+            .build()
+            .dispatchForEntity(queen);
     }
 
     /** Looping horizontal dig (digging outward / carving a room), played at 70% speed per design. */
     public void standDigging() {
         AzAlienAnimationUtil.singleWithSpeed(
-                AzAlienAnimationUtil.BODY,
-                QueenAnimationRefs.STAND_DIGGING_ANIMATION_NAME,
-                AzPlayBehaviors.LOOP,
-                AzDispatchMode.PLAY_IF_NOT_PLAYING,
-                DIG_ANIMATION_SPEED
+            AzAlienAnimationUtil.BODY,
+            QueenAnimationRefs.STAND_DIGGING_ANIMATION_NAME,
+            AzPlayBehaviors.LOOP,
+            AzDispatchMode.PLAY_IF_NOT_PLAYING,
+            DIG_ANIMATION_SPEED
         ).dispatchForEntity(queen);
     }
 
     /** One-shot: she lowers her arms back to idle after a horizontal dig. */
     public void digStandStop() {
         AzCommand.<Queen>replay()
-                .play(AzAlienAnimationUtil.BODY, QueenAnimationRefs.DIG_STAND_STOP_ANIMATION_NAME, AzPlayBehaviors.PLAY_ONCE)
-                .build()
-                .dispatchForEntity(queen);
+            .play(AzAlienAnimationUtil.BODY, QueenAnimationRefs.DIG_STAND_STOP_ANIMATION_NAME, AzPlayBehaviors.PLAY_ONCE)
+            .build()
+            .dispatchForEntity(queen);
     }
 
     // ---- Incapacitated sequence: drop (once) -> incapacitated (loop) -> rise (once) ----
@@ -164,25 +164,25 @@ public class QueenAnimationDispatcher {
     /** One-shot: 0-hp collapse into the incapacitated pose. */
     public void incapacitatedDrop() {
         AzCommand.<Queen>replay()
-                .play(AzAlienAnimationUtil.BODY, QueenAnimationRefs.INCAPACITATED_DROP_ANIMATION_NAME, AzPlayBehaviors.PLAY_ONCE)
-                .build()
-                .dispatchForEntity(queen);
+            .play(AzAlienAnimationUtil.BODY, QueenAnimationRefs.INCAPACITATED_DROP_ANIMATION_NAME, AzPlayBehaviors.PLAY_ONCE)
+            .build()
+            .dispatchForEntity(queen);
     }
 
     /** One-shot: she awakens from incapacitation back toward idle. */
     public void incapacitatedRise() {
         AzCommand.<Queen>replay()
-                .play(AzAlienAnimationUtil.BODY, QueenAnimationRefs.INCAPACITATED_RISE_ANIMATION_NAME, AzPlayBehaviors.PLAY_ONCE)
-                .build()
-                .dispatchForEntity(queen);
+            .play(AzAlienAnimationUtil.BODY, QueenAnimationRefs.INCAPACITATED_RISE_ANIMATION_NAME, AzPlayBehaviors.PLAY_ONCE)
+            .build()
+            .dispatchForEntity(queen);
     }
 
     /** Looping struggle while fully chained (4 chains) but not yet inhibited (no eggsack). */
     public void boundStruggle() {
         AzCommand.<Queen>idempotent()
-                .play(AzAlienAnimationUtil.BODY, QueenAnimationRefs.BOUND_STRUGGLE_ANIMATION_NAME, AzPlayBehaviors.LOOP)
-                .build()
-                .dispatchForEntity(queen);
+            .play(AzAlienAnimationUtil.BODY, QueenAnimationRefs.BOUND_STRUGGLE_ANIMATION_NAME, AzPlayBehaviors.LOOP)
+            .build()
+            .dispatchForEntity(queen);
     }
 
     public void backhandAttack() {
@@ -223,16 +223,16 @@ public class QueenAnimationDispatcher {
 
     private void playAttack(String animationName) {
         AzCommand.<Queen>replay()
-                .play(AzAlienAnimationUtil.BODY, animationName, AzPlayBehaviors.PLAY_ONCE)
-                .build()
-                .dispatchForEntity(queen);
+            .play(AzAlienAnimationUtil.BODY, animationName, AzPlayBehaviors.PLAY_ONCE)
+            .build()
+            .dispatchForEntity(queen);
     }
 
     private void playAttack(String animationName, float speed) {
         AzCommand.<Queen>replay()
-                .play(AzAlienAnimationUtil.BODY, animationName, AzPlayBehaviors.PLAY_ONCE)
-                .setSpeed(AzAlienAnimationUtil.BODY, speed)
-                .build()
-                .dispatchForEntity(queen);
+            .play(AzAlienAnimationUtil.BODY, animationName, AzPlayBehaviors.PLAY_ONCE)
+            .setSpeed(AzAlienAnimationUtil.BODY, speed)
+            .build()
+            .dispatchForEntity(queen);
     }
 }

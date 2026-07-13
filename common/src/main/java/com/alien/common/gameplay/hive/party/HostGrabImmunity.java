@@ -67,8 +67,8 @@ public final class HostGrabImmunity {
     /** Stun the drone that just lost its catch: it stands idle until the timer runs out or something hits it. */
     public static void stun(Alien carrier) {
         STUNNED.put(
-                carrier,
-                new Stun(carrier.level().getGameTime() + ESCAPE_DURATION_TICKS, carrier.tickCount)
+            carrier,
+            new Stun(carrier.level().getGameTime() + ESCAPE_DURATION_TICKS, carrier.tickCount)
         );
         if (carrier instanceof FreeMob freeMob) {
             freeMob.removeFreedom();
@@ -95,8 +95,8 @@ public final class HostGrabImmunity {
         }
         boolean recovered = carrier.level().getGameTime() >= stun.recoversAt();
         boolean wokenByPain = carrier.getLastHurtByMob() != null
-                && carrier.getLastHurtByMobTimestamp() > stun.startedAtTick()
-                && carrier.tickCount - carrier.getLastHurtByMobTimestamp() < 5;
+            && carrier.getLastHurtByMobTimestamp() > stun.startedAtTick()
+            && carrier.tickCount - carrier.getLastHurtByMobTimestamp() < 5;
         if (recovered || wokenByPain) {
             wake(carrier);
         }
@@ -109,7 +109,10 @@ public final class HostGrabImmunity {
         }
     }
 
-    private record Stun(long recoversAt, int startedAtTick) {}
+    private record Stun(
+        long recoversAt,
+        int startedAtTick
+    ) {}
 
     /**
      * Release a carried host: it dismounts, regains its freedom and its grab-immunity, and the carrier is stunned. Used

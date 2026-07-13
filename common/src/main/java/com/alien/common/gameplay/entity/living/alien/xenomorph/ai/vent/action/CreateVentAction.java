@@ -19,12 +19,12 @@ import org.jetbrains.annotations.Nullable;
 /**
  * Place a FRONTIER vent: the hive's outpost onto the caves and openings beyond its structure.
  * <p>
- * <b>Xenomorphs no longer dig.</b> The old action rayed into a wall, carved a three-block tunnel of resin web with resin
- * walls, and buried the vent block inside the rock at depth three. Nothing could path to such a vent, which is why every
- * consumer had to go hunting for a standable cell near it, and why carriers stalled forever outside hills.
+ * <b>Xenomorphs no longer dig.</b> The old action rayed into a wall, carved a three-block tunnel of resin web with
+ * resin walls, and buried the vent block inside the rock at depth three. Nothing could path to such a vent, which is
+ * why every consumer had to go hunting for a standable cell near it, and why carriers stalled forever outside hills.
  * <p>
- * Now the vent is simply placed in an <b>open cell resting against a solid face</b> - floor, wall or ceiling - webbed on
- * every side that touches air, with resin creeping over the rock around it. The wall stays solid. See
+ * Now the vent is simply placed in an <b>open cell resting against a solid face</b> - floor, wall or ceiling - webbed
+ * on every side that touches air, with resin creeping over the rock around it. The wall stays solid. See
  * {@link VentPlacement}.
  * <p>
  * The hive's own internal ducts are STRUCTURE vents and come with the templates; nothing is dug for them. SURFACE vents
@@ -97,10 +97,10 @@ public class CreateVentAction {
 
     private static void placeVent(Xenomorph xenomorph, BlockPos ventSpot) {
         VentPlacement.place(
-                xenomorph.level(),
-                ventSpot,
-                AlienVariantTypes.getFor(xenomorph),
-                VentKind.FRONTIER
+            xenomorph.level(),
+            ventSpot,
+            AlienVariantTypes.getFor(xenomorph),
+            VentKind.FRONTIER
         );
     }
 
@@ -115,10 +115,12 @@ public class CreateVentAction {
         BlockPos best = null;
         double bestDistance = Double.MAX_VALUE;
 
-        for (var candidate : BlockPos.betweenClosed(
+        for (
+            var candidate : BlockPos.betweenClosed(
                 origin.offset(-SEARCH_RADIUS, -SEARCH_RADIUS, -SEARCH_RADIUS),
                 origin.offset(SEARCH_RADIUS, SEARCH_RADIUS, SEARCH_RADIUS)
-        )) {
+            )
+        ) {
             var pos = candidate.immutable();
 
             if (!VentPlacement.isOpen(level, pos)) {
@@ -171,8 +173,8 @@ public class CreateVentAction {
 
     private static boolean hasVentNearby(Xenomorph xenomorph, BlockPos pos) {
         var owningLocation = HiveLocationRegistry.INSTANCE.getByChunk(
-                xenomorph.level().dimension(),
-                new ChunkPos(pos)
+            xenomorph.level().dimension(),
+            new ChunkPos(pos)
         );
         return owningLocation != null && !owningLocation.ventManager().getVentsWithinSection(pos).isEmpty();
     }

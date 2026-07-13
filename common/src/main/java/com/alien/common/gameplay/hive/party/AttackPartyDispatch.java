@@ -48,10 +48,10 @@ public final class AttackPartyDispatch {
         var spawnPos = surfaceVents.get(serverLevel.random.nextInt(surfaceVents.size()));
 
         var desiredSize = Math.max(
-                1,
-                Math.round(
-                        config.attackPartyBaseSize() + config.attackPartySizePerClaimedChunk() * location.claimedChunks().size()
-                )
+            1,
+            Math.round(
+                config.attackPartyBaseSize() + config.attackPartySizePerClaimedChunk() * location.claimedChunks().size()
+            )
         );
 
         var composition = drainComposition(location, (int) desiredSize);
@@ -60,12 +60,12 @@ public final class AttackPartyDispatch {
         }
 
         var party = new HiveParty.AttackParty(
-                HivePartyId.fresh(),
-                location.id(),
-                location.dimension(),
-                composition,
-                currentTick,
-                target
+            HivePartyId.fresh(),
+            location.id(),
+            location.dimension(),
+            composition,
+            currentTick,
+            target
         );
 
         var spawnedCount = materialize(serverLevel, party, spawnPos);
@@ -89,11 +89,11 @@ public final class AttackPartyDispatch {
 
         location.parties().add(party);
         Alien.LOGGER.info(
-                "Hive: dispatched attack party (wave {}) for location {} — {} members targeting player {}",
-                campaign.wavesSent(),
-                location.id(),
-                spawnedCount,
-                target
+            "Hive: dispatched attack party (wave {}) for location {} — {} members targeting player {}",
+            campaign.wavesSent(),
+            location.id(),
+            spawnedCount,
+            target
         );
     }
 
@@ -112,8 +112,8 @@ public final class AttackPartyDispatch {
             }
 
             var waveDue = campaign.wavesSent() == 0
-                    ? currentTick - campaign.intrusionTick() >= config.attackPartyWave1DelayTicks()
-                    : currentTick - campaign.lastWaveTick() >= config.attackPartyCooldownTicks();
+                ? currentTick - campaign.intrusionTick() >= config.attackPartyWave1DelayTicks()
+                : currentTick - campaign.lastWaveTick() >= config.attackPartyCooldownTicks();
             if (!waveDue) {
                 continue;
             }
@@ -141,10 +141,10 @@ public final class AttackPartyDispatch {
         var candidateTypes = new ArrayList<EntityType<?>>();
         for (var type : reserves.getAvailableEntityTypes()) {
             if (
-                    type.is(AlienEntityTypeTags.WARRIORS)
-                            || type.is(AlienEntityTypeTags.PROWLERS)
-                            || type.is(AlienEntityTypeTags.CRUSHERS)
-                            || type.is(AlienEntityTypeTags.PRAETORIANS)
+                type.is(AlienEntityTypeTags.WARRIORS)
+                    || type.is(AlienEntityTypeTags.PROWLERS)
+                    || type.is(AlienEntityTypeTags.CRUSHERS)
+                    || type.is(AlienEntityTypeTags.PRAETORIANS)
             ) {
                 candidateTypes.add(type);
             }

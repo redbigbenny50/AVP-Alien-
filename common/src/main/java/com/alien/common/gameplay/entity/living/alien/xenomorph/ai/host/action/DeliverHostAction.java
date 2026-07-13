@@ -46,10 +46,10 @@ public final class DeliverHostAction {
     /**
      * Vents this carrier could not reach, so it stops hammering the same one.
      * <p>
-     * "Near-surface" is measured against the heightmap of the vent's OWN column, so a vent under a hill or in a dip
-     * can qualify while sitting well below the ground the carrier is standing on - and a carrier outside the hive
-     * cannot walk down to it. Picking strictly the closest such vent and never reconsidering means a permanent stall
-     * with a live host on its back. Instead: fail once, write it off, try the next nearest.
+     * "Near-surface" is measured against the heightmap of the vent's OWN column, so a vent under a hill or in a dip can
+     * qualify while sitting well below the ground the carrier is standing on - and a carrier outside the hive cannot
+     * walk down to it. Picking strictly the closest such vent and never reconsidering means a permanent stall with a
+     * live host on its back. Instead: fail once, write it off, try the next nearest.
      */
     private static final Map<Entity, Set<BlockPos>> UNREACHABLE_VENTS = new WeakHashMap<>();
 
@@ -69,8 +69,8 @@ public final class DeliverHostAction {
         }
 
         var location = HiveLocationRegistry.INSTANCE.findNearestInDim(
-                serverLevel.dimension(),
-                xenomorph.blockPosition()
+            serverLevel.dimension(),
+            xenomorph.blockPosition()
         );
         if (location == null) {
             stall(xenomorph, "no hive location resolved - cannot deliver the host");
@@ -128,17 +128,19 @@ public final class DeliverHostAction {
         }
     }
 
-    /** SURFACE vents only: a captive comes in through the front door, never a cave-mouth outpost or an interior duct. */
     /**
-     * Close enough to USE the vent: within {@link #VENT_USE_RANGE} blocks on EVERY axis - beside it, above it,
-     * below it, diagonally, all count. Vents are embedded in walls and floors, so a straight-line distance to
-     * the vent could fail even while the carrier stood right next to it.
+     * SURFACE vents only: a captive comes in through the front door, never a cave-mouth outpost or an interior duct.
+     */
+    /**
+     * Close enough to USE the vent: within {@link #VENT_USE_RANGE} blocks on EVERY axis - beside it, above it, below
+     * it, diagonally, all count. Vents are embedded in walls and floors, so a straight-line distance to the vent could
+     * fail even while the carrier stood right next to it.
      */
     private static boolean isAtVent(Xenomorph xenomorph, BlockPos vent) {
         var pos = xenomorph.blockPosition();
         return Math.abs(pos.getX() - vent.getX()) <= VENT_USE_RANGE
-                && Math.abs(pos.getY() - vent.getY()) <= VENT_USE_RANGE
-                && Math.abs(pos.getZ() - vent.getZ()) <= VENT_USE_RANGE;
+            && Math.abs(pos.getY() - vent.getY()) <= VENT_USE_RANGE
+            && Math.abs(pos.getZ() - vent.getZ()) <= VENT_USE_RANGE;
     }
 
     private static BlockPos nearestSurfaceVent(ServerLevel level, HiveLocation location, Xenomorph xenomorph) {

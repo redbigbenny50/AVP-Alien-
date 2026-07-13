@@ -60,10 +60,10 @@ public final class AttackPartyLifecycleTask {
     }
 
     private static void resolve(
-            ServerLevel serverLevel,
-            HiveLocation location,
-            HiveParty.AttackParty party,
-            HiveConfig config
+        ServerLevel serverLevel,
+        HiveLocation location,
+        HiveParty.AttackParty party,
+        HiveConfig config
     ) {
         // Campaign clearing (territorial-intrusion model): the hive stops hunting a player when EITHER a wave kills
         // them (targetGone via death), OR they survive the second wave's full duration. A player who dies to wave 1 is
@@ -76,10 +76,10 @@ public final class AttackPartyLifecycleTask {
             if (targetDead || campaign.wavesSent() >= 2) {
                 campaign.markCleared();
                 Alien.LOGGER.info(
-                        "Hive: retribution campaign against player {} cleared at location {} ({})",
-                        party.targetPlayerId(),
-                        location.id(),
-                        targetDead ? "target defeated" : "survived final wave"
+                    "Hive: retribution campaign against player {} cleared at location {} ({})",
+                    party.targetPlayerId(),
+                    location.id(),
+                    targetDead ? "target defeated" : "survived final wave"
                 );
             }
         }

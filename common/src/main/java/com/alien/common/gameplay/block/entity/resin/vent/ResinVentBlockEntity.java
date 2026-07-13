@@ -115,9 +115,9 @@ public class ResinVentBlockEntity extends BlockEntity implements GameEventListen
         // contested away from an aberrant lineage).
         var lineageFaction = com.alien.Alien.MOD.factions().get(owningLocation.lineageFactionId());
         if (
-                lineageFaction == null
-                        || !(lineageFaction.data() instanceof com.alien.common.gameplay.hive.faction.LineageFactionData lineage)
-                        || lineage.variant() != ventVariant
+            lineageFaction == null
+                || !(lineageFaction.data() instanceof com.alien.common.gameplay.hive.faction.LineageFactionData lineage)
+                || lineage.variant() != ventVariant
         ) {
             // Variant mismatch — disown.
             if (vent.boundLocationId != null) {
@@ -134,7 +134,7 @@ public class ResinVentBlockEntity extends BlockEntity implements GameEventListen
             // downstream ever has to guess from geometry again.
             var config = HiveLocationRegistry.INSTANCE.config();
             vent.setKind(
-                    HiveVents.classifyUntagged(level, owningLocation, ventPos, config.surfacePartySurfaceBandBlocks())
+                HiveVents.classifyUntagged(level, owningLocation, ventPos, config.surfacePartySurfaceBandBlocks())
             );
         }
 

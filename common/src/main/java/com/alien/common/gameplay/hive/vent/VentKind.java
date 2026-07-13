@@ -3,10 +3,10 @@ package com.alien.common.gameplay.hive.vent;
 import org.jetbrains.annotations.Nullable;
 
 /**
- * What a vent is FOR. Every vent used to be an anonymous {@code BlockPos}, and "is this a surface vent?" was answered by
- * comparing its Y against the heightmap of its own column - which is how a carrier ended up trying to walk from y=3 to a
- * vent at y=-4 that was "near the surface" of the hill it was buried under. A vent's role is now recorded when it is
- * placed, not guessed afterwards.
+ * What a vent is FOR. Every vent used to be an anonymous {@code BlockPos}, and "is this a surface vent?" was answered
+ * by comparing its Y against the heightmap of its own column - which is how a carrier ended up trying to walk from y=3
+ * to a vent at y=-4 that was "near the surface" of the hill it was buried under. A vent's role is now recorded when it
+ * is placed, not guessed afterwards.
  */
 public enum VentKind {
 
@@ -21,8 +21,8 @@ public enum VentKind {
      * Placed by a xenomorph out beyond the structure slab, at cave mouths and openings next to the hive. The hive's
      * outposts onto the cave network - biomass hunters and attack parties launch from these.
      * <p>
-     * Defenders deliberately do NOT emerge from frontier vents: they would pop out in a cave, far from the intruder they
-     * were summoned to deal with, and strand themselves.
+     * Defenders deliberately do NOT emerge from frontier vents: they would pop out in a cave, far from the intruder
+     * they were summoned to deal with, and strand themselves.
      */
     FRONTIER,
 

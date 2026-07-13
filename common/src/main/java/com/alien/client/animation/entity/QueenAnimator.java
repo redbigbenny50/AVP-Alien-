@@ -4,9 +4,9 @@ import com.alien.AlienResources;
 import com.alien.client.animation.entity.cocoon.CocoonAnimationStateTracker;
 import com.alien.common.gameplay.entity.living.alien.xenomorph.AttackType;
 import com.alien.common.gameplay.entity.living.alien.xenomorph.CocoonSourceForm;
-import com.alien.common.gameplay.entity.living.alien.xenomorph.queen.QueenBindManager;
 import com.alien.common.gameplay.entity.living.alien.xenomorph.queen.Queen;
 import com.alien.common.gameplay.entity.living.alien.xenomorph.queen.QueenAnimationRefs;
+import com.alien.common.gameplay.entity.living.alien.xenomorph.queen.QueenBindManager;
 import com.alien.common.util.AzAlienAnimationUtil;
 import com.alien.common.util.AzAlienHeadAnimationUtil;
 import com.blib.api.client.animation.v1.animator.AzAnimatorConfig;
@@ -37,7 +37,7 @@ public class QueenAnimator extends AzEntityAnimator<Queen> {
     private boolean previousIncapacitated = false;
 
     private final CocoonAnimationStateTracker<Queen> cocoonAnimationStateTracker =
-            new CocoonAnimationStateTracker<>(QueenAnimator::selectLoopAnimation, QueenAnimator::selectEmergeAnimation);
+        new CocoonAnimationStateTracker<>(QueenAnimator::selectLoopAnimation, QueenAnimator::selectEmergeAnimation);
 
     public QueenAnimator() {
         super(AzAnimatorConfig.defaultConfig());
@@ -46,9 +46,9 @@ public class QueenAnimator extends AzEntityAnimator<Queen> {
     @Override
     public void registerTracks(AzAnimationTrackContainer<Queen> animationTrackContainer) {
         animationTrackContainer.add(
-                AzAnimationTrack.builder(this, AzAlienAnimationUtil.BODY)
-                        .setTransitionLength(5)
-                        .build()
+            AzAnimationTrack.builder(this, AzAlienAnimationUtil.BODY)
+                .setTransitionLength(5)
+                .build()
         );
     }
 
@@ -112,15 +112,15 @@ public class QueenAnimator extends AzEntityAnimator<Queen> {
     /** Source-specific in-cocoon loop: from a crusher she plays molting.crusher, otherwise molting.prae. */
     private static String selectLoopAnimation(Queen queen) {
         return queen.cocoonSourceForm.get() == CocoonSourceForm.CRUSHER
-                ? QueenAnimationRefs.MOLTING_CRUSHER_ANIMATION_NAME
-                : QueenAnimationRefs.MOLTING_PRAE_ANIMATION_NAME;
+            ? QueenAnimationRefs.MOLTING_CRUSHER_ANIMATION_NAME
+            : QueenAnimationRefs.MOLTING_PRAE_ANIMATION_NAME;
     }
 
     /** Source-specific emerge burst: from a crusher she plays emerge.crusher, otherwise emerge.prae. */
     private static String selectEmergeAnimation(Queen queen) {
         return queen.cocoonSourceForm.get() == CocoonSourceForm.CRUSHER
-                ? QueenAnimationRefs.EMERGE_CRUSHER_ANIMATION_NAME
-                : QueenAnimationRefs.EMERGE_PRAE_ANIMATION_NAME;
+            ? QueenAnimationRefs.EMERGE_CRUSHER_ANIMATION_NAME
+            : QueenAnimationRefs.EMERGE_PRAE_ANIMATION_NAME;
     }
 
     private void runPassiveAnimations(Queen queen) {
@@ -152,9 +152,11 @@ public class QueenAnimator extends AzEntityAnimator<Queen> {
         // Straining against the chains. ONLY during the window where she is fully bound (4+ chains) but not yet
         // subdued: an inhibited queen is pacified, and one riding her chained eggsack is a settled captive
         // breeder. Neither strains. This is the fight she puts up in between.
-        if (queen.bindChainCount.get() >= QueenBindManager.FULLY_BOUND_CHAINS
+        if (
+            queen.bindChainCount.get() >= QueenBindManager.FULLY_BOUND_CHAINS
                 && !queen.isInhibited()
-                && !queen.isRidingOvipositor()) {
+                && !queen.isRidingOvipositor()
+        ) {
             dispatcher.boundStruggle();
             return;
         }
@@ -245,24 +247,24 @@ public class QueenAnimator extends AzEntityAnimator<Queen> {
     private String selectAttackAnimation(Queen queen, AttackType attackType, int attackId) {
         if (attackType == Queen.SWIPE_DOWN) {
             return chooseArmAnimation(
-                    queen,
-                    attackId,
-                    QueenAnimationRefs.LEFT_SWIPE_DOWN_ANIMATION_NAME,
-                    QueenAnimationRefs.RIGHT_SWIPE_DOWN_ANIMATION_NAME
+                queen,
+                attackId,
+                QueenAnimationRefs.LEFT_SWIPE_DOWN_ANIMATION_NAME,
+                QueenAnimationRefs.RIGHT_SWIPE_DOWN_ANIMATION_NAME
             );
         } else if (attackType == Queen.BACKHAND) {
             return chooseArmAnimation(
-                    queen,
-                    attackId,
-                    QueenAnimationRefs.LEFT_BACKHAND_ANIMATION_NAME,
-                    QueenAnimationRefs.RIGHT_BACKHAND_ANIMATION_NAME
+                queen,
+                attackId,
+                QueenAnimationRefs.LEFT_BACKHAND_ANIMATION_NAME,
+                QueenAnimationRefs.RIGHT_BACKHAND_ANIMATION_NAME
             );
         } else if (attackType == Queen.TAIL_STRIKE) {
             return chooseTailAnimation(
-                    queen,
-                    attackId,
-                    QueenAnimationRefs.LEFT_TAIL_STRIKE_ANIMATION_NAME,
-                    QueenAnimationRefs.RIGHT_TAIL_STRIKE_ANIMATION_NAME
+                queen,
+                attackId,
+                QueenAnimationRefs.LEFT_TAIL_STRIKE_ANIMATION_NAME,
+                QueenAnimationRefs.RIGHT_TAIL_STRIKE_ANIMATION_NAME
             );
         }
 

@@ -72,8 +72,8 @@ public class QueenBindManager {
 
     /** Register a chain from {@code anchorPos}. The first chain locks the bind chunk to the queen's current chunk. */
     /**
-     * Chance that securing THIS chain jolts a downed queen awake. Escalating - the final securing chain is by far
-     * the riskiest, so the closer you are to owning her, the more likely you are to lose her.
+     * Chance that securing THIS chain jolts a downed queen awake. Escalating - the final securing chain is by far the
+     * riskiest, so the closer you are to owning her, the more likely you are to lose her.
      */
     private static double wakeChanceForChain(int chainNumber) {
         return switch (chainNumber) {

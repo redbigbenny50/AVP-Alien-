@@ -51,10 +51,10 @@ public final class BiomassHuntingPartyLifecycleTask {
     }
 
     private static void resolve(
-            ServerLevel serverLevel,
-            HiveLocation location,
-            HiveParty.BiomassHunting party,
-            HiveConfig config
+        ServerLevel serverLevel,
+        HiveLocation location,
+        HiveParty.BiomassHunting party,
+        HiveConfig config
     ) {
         var homeVent = nearestVent(serverLevel, location, config);
 

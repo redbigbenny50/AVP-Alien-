@@ -6,10 +6,10 @@ import com.alien.common.registry.init.block.AlienResinBlocks;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.server.level.ServerLevel;
-
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.levelgen.Heightmap;
 import org.jetbrains.annotations.Nullable;
+
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
@@ -24,7 +24,8 @@ import java.util.List;
  * <p>
  * A vent's role is now recorded when it is placed ({@link VentKind}), so this just asks.
  * <ul>
- * <li><b>Host hunts</b> use SURFACE vents only, both to launch from and to carry a captive home to. The front door.</li>
+ * <li><b>Host hunts</b> use SURFACE vents only, both to launch from and to carry a captive home to. The front
+ * door.</li>
  * <li><b>Biomass hunts and attack parties</b> use SURFACE or FRONTIER - anywhere that opens onto the world.</li>
  * <li><b>Nothing</b> launches from a STRUCTURE vent: those are the hive's internal ducts and lead nowhere outside.</li>
  * </ul>
@@ -36,14 +37,14 @@ public final class PartyVentUtil {
     /**
      * Where a party emerging from {@code vent} should actually appear.
      * <p>
-     * A vent is a BEACON for its chunk, not a doorway. Members used to be placed at the vent block itself, but
-     * vents are embedded in terrain - often several blocks underground - so parties MATERIALISED INSIDE SOLID
-     * GROUND, could not path anywhere, and stood at the vent for their whole duration with valid quarry in
-     * plain sight. Surface anywhere standable in the vent's chunk instead, preferring spots near the vent, so
-     * it no longer matters whether the vent itself is buried.
+     * A vent is a BEACON for its chunk, not a doorway. Members used to be placed at the vent block itself, but vents
+     * are embedded in terrain - often several blocks underground - so parties MATERIALISED INSIDE SOLID GROUND, could
+     * not path anywhere, and stood at the vent for their whole duration with valid quarry in plain sight. Surface
+     * anywhere standable in the vent's chunk instead, preferring spots near the vent, so it no longer matters whether
+     * the vent itself is buried.
      * <p>
-     * Returns null when the chunk has nowhere dry to stand (an ocean vent). Callers must NOT fall back to the
-     * vent block - that is the burial bug again.
+     * Returns null when the chunk has nowhere dry to stand (an ocean vent). Callers must NOT fall back to the vent
+     * block - that is the burial bug again.
      */
     public static @Nullable BlockPos surfaceEmergeSpot(ServerLevel level, BlockPos vent) {
         var chunk = new ChunkPos(vent);
@@ -82,8 +83,8 @@ public final class PartyVentUtil {
     }
 
     /**
-     * Air, or the hive's own resin growth. NOT water: {@code canBeReplaced()} is true for fluids, so accepting
-     * it would let a party surface straight into an ocean column.
+     * Air, or the hive's own resin growth. NOT water: {@code canBeReplaced()} is true for fluids, so accepting it would
+     * let a party surface straight into an ocean column.
      */
     private static boolean isFree(ServerLevel level, BlockPos pos) {
         var state = level.getBlockState(pos);
@@ -91,9 +92,9 @@ public final class PartyVentUtil {
             return false;
         }
         return state.isAir()
-                || state.canBeReplaced()
-                || state.is(AlienResinBlocks.RESIN_VEIN.get())
-                || state.is(AlienResinBlocks.RESIN_WEB.get());
+            || state.canBeReplaced()
+            || state.is(AlienResinBlocks.RESIN_VEIN.get())
+            || state.is(AlienResinBlocks.RESIN_WEB.get());
     }
 
     /** The hive's front doors: vents dropped in the open by surface parties. Host hunts use only these. */

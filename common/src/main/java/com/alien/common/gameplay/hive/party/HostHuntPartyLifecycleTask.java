@@ -51,10 +51,10 @@ public final class HostHuntPartyLifecycleTask {
     }
 
     private static void resolve(
-            ServerLevel serverLevel,
-            HiveLocation location,
-            HiveParty.HostHunt party,
-            HiveConfig config
+        ServerLevel serverLevel,
+        HiveLocation location,
+        HiveParty.HostHunt party,
+        HiveConfig config
     ) {
         var homeVent = nearestVent(serverLevel, location, config);
 
