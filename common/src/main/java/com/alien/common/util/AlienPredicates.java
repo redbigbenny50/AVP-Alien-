@@ -10,6 +10,7 @@ import com.alien.common.gameplay.hive.id.HiveLocationId;
 import com.alien.common.gameplay.hive.id.HiveLocationIds;
 import com.alien.common.gameplay.hive.location.HiveLocation;
 import com.alien.common.gameplay.hive.location.HiveLocationRegistry;
+import com.alien.common.gameplay.hive.party.HostCaptureTask;
 import com.alien.common.gameplay.hive.war.AlienTerritoryWarSystem;
 import com.alien.common.model.alien.Host;
 import com.alien.common.model.alien.variant.AlienVariant;
@@ -35,7 +36,7 @@ public class AlienPredicates {
 
     public static boolean canTarget(@NotNull Alien alien, @NotNull LivingEntity potentialTarget) {
         return canContinueTargeting(alien, potentialTarget)
-            && isTargetThreatAllowed(alien, potentialTarget);
+                && isTargetThreatAllowed(alien, potentialTarget);
     }
 
     public static boolean canAcquireTarget(@NotNull Alien alien, @NotNull LivingEntity potentialTarget) {
@@ -47,14 +48,37 @@ public class AlienPredicates {
         if (alien instanceof Queen boundQueen && boundQueen.getBindManager().isFullyBound()) {
             return false;
         }
+        // A host on a drone's back is CARGO, not prey. The hive spent a whole party fetching it and is carrying it
+        // home to a chamber to be implanted - killing it on the way is pure self-sabotage. A tester watched a spitter
+        // shoot the wolf a drone was hauling, purely because a wolf reads as a low-tier threat.
+        //
+        // This gates CONTINUATION as well as acquisition (canAcquireTarget runs through here), so a xenomorph that was
+        // already hunting the wolf DROPS it the moment a drone picks it up. It also sits ABOVE the retaliation
+        // override in isTargetThreatAllowed, which is ANDed with this - so even a captive that lashes out on the way
+        // home does not get itself shot by the escort. The carrier itself stays a valid target: hitting IT is how a
+        // rescue works.
+        if (isCapturedHost(potentialTarget)) {
+            return false;
+        }
         // Target must still be valid...
         return isValidTarget(alien.getVariant(), potentialTarget)
-            // AND is not an alien OR if it is an alien, is an enemy alien.
-            // We add this check here because the target alien might change strain or hive membership mid-targeting.
-            && (!(potentialTarget instanceof Alien targetedAlien) || areAliensEnemies(alien, targetedAlien))
-            // AND, for a royal-change cocoon (a plain Mob with its strain encoded in its entity type), only a rival
-            // strain may attack it -- a xenomorph never strikes its own strain's forming royal.
-            && (!(potentialTarget instanceof RoyalCocoon cocoon) || alien.getVariant() != cocoon.getVariant());
+                // AND is not an alien OR if it is an alien, is an enemy alien.
+                // We add this check here because the target alien might change strain or hive membership mid-targeting.
+                && (!(potentialTarget instanceof Alien targetedAlien) || areAliensEnemies(alien, targetedAlien))
+                // AND, for a royal-change cocoon (a plain Mob with its strain encoded in its entity type), only a rival
+                // strain may attack it -- a xenomorph never strikes its own strain's forming royal.
+                && (!(potentialTarget instanceof RoyalCocoon cocoon) || alien.getVariant() != cocoon.getVariant());
+    }
+
+    /**
+     * True if this entity is currently being carried off by a xenomorph as a captured host.
+     * <p>
+     * Deliberately routed through {@code HostCaptureTask.carriedHost}, which only ever returns a NON-alien passenger,
+     * so this covers captives without also shielding an ovomorph riding an egg-hauler from a rival hive's attention.
+     */
+    private static boolean isCapturedHost(@NotNull LivingEntity potentialTarget) {
+        return potentialTarget.getVehicle() instanceof Alien captor
+                && HostCaptureTask.carriedHost(captor) == potentialTarget;
     }
 
     private static boolean isTargetThreatAllowed(@NotNull Alien alien, @NotNull LivingEntity potentialTarget) {
@@ -63,8 +87,8 @@ public class AlienPredicates {
         // in canContinueTargeting still apply on top of this, so friendly fire from the alien's own side never
         // escalates into a civil war; only the tier gating below is bypassed.
         if (
-            potentialTarget == alien.getLastHurtByMob()
-                && alien.tickCount - alien.getLastHurtByMobTimestamp() < RETALIATION_GRUDGE_TICKS
+                potentialTarget == alien.getLastHurtByMob()
+                        && alien.tickCount - alien.getLastHurtByMobTimestamp() < RETALIATION_GRUDGE_TICKS
         ) {
             return true;
         }
@@ -77,14 +101,14 @@ public class AlienPredicates {
         // halls clean (and turns intruding vermin into biomass) regardless of the prey tiers below. Covers
         // mobs that bypass natural-spawn suppression (event/horde mods, pre-construction cave survivors).
         if (
-            potentialTarget instanceof net.minecraft.world.entity.monster.Monster
-                && !com.alien.Alien.MOD_ID.equals(
-                    net.minecraft.world.entity.EntityType.getKey(potentialTarget.getType()).getNamespace()
+                potentialTarget instanceof net.minecraft.world.entity.monster.Monster
+                        && !com.alien.Alien.MOD_ID.equals(
+                        net.minecraft.world.entity.EntityType.getKey(potentialTarget.getType()).getNamespace()
                 )
         ) {
             var verminLocation = HiveLocationRegistry.INSTANCE.getByChunk(
-                potentialTarget.level().dimension(),
-                potentialTarget.chunkPosition()
+                    potentialTarget.level().dimension(),
+                    potentialTarget.chunkPosition()
             );
             if (verminLocation != null && verminLocation.withinSlab(potentialTarget.blockPosition().getY())) {
                 return true;
@@ -170,10 +194,10 @@ public class AlienPredicates {
     public static boolean isAlienTarget(@NotNull Alien alien, @NotNull LivingEntity potentialTarget) {
         // If a target is tagged as an alien...
         return potentialTarget.getType().is(AlienEntityTypeTags.ALIENS)
-            // AND target is a typed alien...
-            && potentialTarget instanceof Alien potentialAlienTarget
-            // AND aliens are enemies (either opposing hives or opposing strains).
-            && areAliensEnemies(alien, potentialAlienTarget);
+                // AND target is a typed alien...
+                && potentialTarget instanceof Alien potentialAlienTarget
+                // AND aliens are enemies (either opposing hives or opposing strains).
+                && areAliensEnemies(alien, potentialAlienTarget);
     }
 
     // This function is here for semantics reasons.
@@ -181,47 +205,47 @@ public class AlienPredicates {
         // Different strains always fight. Same-strain hives also fight when their lineages are not unified under the
         // same empress authority.
         return areAliensDifferentStrains(first, second)
-            || AlienTerritoryWarSystem.areAlienLineagesEnemies(first, second);
+                || AlienTerritoryWarSystem.areAlienLineagesEnemies(first, second);
     }
 
     private static boolean areAliensDifferentStrains(Alien first, Alien second) {
         return !Objects.equals(first.isAberrant(), second.isAberrant())
-            || !Objects.equals(first.isIrradiated(), second.isIrradiated())
-            || !Objects.equals(first.isNetherAfflicted(), second.isNetherAfflicted());
+                || !Objects.equals(first.isIrradiated(), second.isIrradiated())
+                || !Objects.equals(first.isNetherAfflicted(), second.isNetherAfflicted());
     }
 
     public static boolean isValidTarget(AlienVariant selfVariant, @NotNull LivingEntity potentialTarget) {
         // Pacifist list (bats, creepers, anything modpacks add) is data-driven via the tag.
         return !potentialTarget.getType().is(AlienEntityTypeTags.IGNORED_BY_XENOMORPHS)
-            // AND the target must be alive in order for it to be killed (duh).
-            && potentialTarget.isAlive()
-            // AND can't attack what can't be attacked (duh).
-            && potentialTarget.attackable()
-            // AND can't attack immortal players.
-            && (!(potentialTarget instanceof Player) || !BLibEntityPredicates.isInvulnerable(potentialTarget))
-            // AND *shouldn't* attack entities with an embryo inside them.
-            && (!AlienPredicates.hasEmbryo(potentialTarget) || doesTargetHaveEnemyVariantEmbryo(selfVariant, potentialTarget))
-            // AND *shouldn't* attack entities with a parasite attached.
-            && !AlienPredicates.isParasiteAttached(potentialTarget);
+                // AND the target must be alive in order for it to be killed (duh).
+                && potentialTarget.isAlive()
+                // AND can't attack what can't be attacked (duh).
+                && potentialTarget.attackable()
+                // AND can't attack immortal players.
+                && (!(potentialTarget instanceof Player) || !BLibEntityPredicates.isInvulnerable(potentialTarget))
+                // AND *shouldn't* attack entities with an embryo inside them.
+                && (!AlienPredicates.hasEmbryo(potentialTarget) || doesTargetHaveEnemyVariantEmbryo(selfVariant, potentialTarget))
+                // AND *shouldn't* attack entities with a parasite attached.
+                && !AlienPredicates.isParasiteAttached(potentialTarget);
     }
 
     private static boolean doesTargetHaveEnemyVariantEmbryo(AlienVariant selfVariant, @NotNull LivingEntity potentialTarget) {
         return potentialTarget instanceof Host host && host.getEmbryoType()
-            .isSomeAnd(
-                embryoType -> AlienVariantTypes.getFor(embryoType)
-                    .isSomeAnd(alienVariantType -> !Objects.equals(selfVariant, alienVariantType.variant()))
-            );
+                .isSomeAnd(
+                        embryoType -> AlienVariantTypes.getFor(embryoType)
+                                .isSomeAnd(alienVariantType -> !Objects.equals(selfVariant, alienVariantType.variant()))
+                );
     }
 
     public static boolean isTargetingHiveMember(@NotNull Alien alien, @NotNull LivingEntity potentialTarget) {
         // Mobs hold targeting behavior...
         return potentialTarget instanceof Mob mob
-            // AND the target must not be null.
-            && mob.getTarget() != null
-            // AND the mob's target is an alien.
-            && mob.getTarget() instanceof Alien targetedAlien
-            // AND the mob's targeted alien is the same hive as this alien.
-            && areAliensSameHive(alien, targetedAlien);
+                // AND the target must not be null.
+                && mob.getTarget() != null
+                // AND the mob's target is an alien.
+                && mob.getTarget() instanceof Alien targetedAlien
+                // AND the mob's targeted alien is the same hive as this alien.
+                && areAliensSameHive(alien, targetedAlien);
     }
 
     public static boolean areAliensSameHive(@NotNull Alien alien, @NotNull Alien otherAlien) {
@@ -230,8 +254,8 @@ public class AlienPredicates {
 
         // Two aliens with null/missing hives are not considered part of the same hive.
         return hiveSignatureOption.isSome()
-            && otherHiveSignatureOption.isSome()
-            && Objects.equals(hiveSignatureOption, otherHiveSignatureOption);
+                && otherHiveSignatureOption.isSome()
+                && Objects.equals(hiveSignatureOption, otherHiveSignatureOption);
     }
 
     public static boolean isStandingOnResin(@NotNull LivingEntity potentialTarget) {
@@ -250,7 +274,7 @@ public class AlienPredicates {
         }
 
         return potentialTarget.getType().is(AlienEntityTypeTags.HATED_BY_XENOMORPHS)
-            || isTargetingHiveMember(alien, potentialTarget);
+                || isTargetingHiveMember(alien, potentialTarget);
     }
 
     public static boolean hasEmbryo(Entity target) {
@@ -259,21 +283,21 @@ public class AlienPredicates {
 
     public static boolean isFreeHost(Entity parasite, Entity hostTarget) {
         return BLibEntityPredicates.isAlive(hostTarget) &&
-            isHost(hostTarget) &&
-            !hasEmbryo(hostTarget) &&
-            !isSelfOrOtherParasiteAttached(parasite, hostTarget)
-            && !hasFacehuggerResistantHelmet((LivingEntity) hostTarget)
-            // A host that has just torn a hugger off its face gets 30 seconds before the next one may try. This is the
-            // one choke point every route onto a face passes through - GOAP targeting, an ovomorph's hatch desire, and
-            // Parasite's attach-on-touch / attach-on-hit - so gating it here covers all of them at once.
-            && !HuggerImmunity.isImmune(hostTarget);
+                isHost(hostTarget) &&
+                !hasEmbryo(hostTarget) &&
+                !isSelfOrOtherParasiteAttached(parasite, hostTarget)
+                && !hasFacehuggerResistantHelmet((LivingEntity) hostTarget)
+                // A host that has just torn a hugger off its face gets 30 seconds before the next one may try. This is the
+                // one choke point every route onto a face passes through - GOAP targeting, an ovomorph's hatch desire, and
+                // Parasite's attach-on-touch / attach-on-hit - so gating it here covers all of them at once.
+                && !HuggerImmunity.isImmune(hostTarget);
     }
 
     public static boolean isHost(Entity target) {
         return target.getType().is(AlienEntityTypeTags.HOSTS) &&
-            BLibEntityPredicates.isAlive(target) &&
-            !BLibEntityPredicates.isBaby(target) &&
-            !BLibEntityPredicates.isInvulnerable(target);
+                BLibEntityPredicates.isAlive(target) &&
+                !BLibEntityPredicates.isBaby(target) &&
+                !BLibEntityPredicates.isInvulnerable(target);
     }
 
     public static boolean isParasiteAttached(Entity target) {
@@ -282,12 +306,12 @@ public class AlienPredicates {
 
     public static boolean isSelfOrOtherParasiteAttached(Entity parasite, Entity target) {
         return target.hasPassenger(
-            passenger -> passenger.equals(parasite) || passenger.getType().is(AlienEntityTypeTags.PARASITES)
+                passenger -> passenger.equals(parasite) || passenger.getType().is(AlienEntityTypeTags.PARASITES)
         );
     }
 
     public static boolean hasFacehuggerResistantHelmet(LivingEntity livingEntity) {
         return livingEntity.getItemBySlot(EquipmentSlot.HEAD)
-            .is(AlienItemTags.FACEHUGGER_RESISTANT_HELMETS);
+                .is(AlienItemTags.FACEHUGGER_RESISTANT_HELMETS);
     }
 }
