@@ -2,13 +2,14 @@ package com.alien.common.gameplay.entity.living.alien.xenomorph.ai.egg.action;
 
 import com.alien.common.gameplay.entity.living.alien.ovomorph.Ovomorph;
 import com.alien.common.gameplay.entity.living.alien.xenomorph.Xenomorph;
+import com.alien.common.gameplay.entity.living.alien.xenomorph.ai.egg.EggSpotClaims;
 import com.alien.common.gameplay.entity.living.alien.xenomorph.ai.egg.QueenEggZone;
 import com.alien.common.gameplay.entity.living.alien.xenomorph.queen.Queen;
 import com.alien.common.gameplay.hive.location.HiveLocationRegistry;
 import com.alien.common.gameplay.hive.structure.HiveChamberSlots;
 import com.alien.common.gameplay.hive.structure.HostEggDelivery;
-import com.alien.common.gameplay.hive.vent.HiveVents;
 import com.alien.common.gameplay.hive.vent.VentKind;
+import com.alien.common.gameplay.hive.vent.HiveVents;
 import com.alien.common.registry.init.AlienSoundEvents;
 import com.alien.common.registry.tag.AlienEntityTypeTags;
 import com.blib.api.common.goap.v1.action.impl.NeoMoveToPosAction;
@@ -58,6 +59,12 @@ public class DropOffEggAction {
 
     /** Entry vents this hauler could not reach on this run - never offered to it again for this haul. */
     private static final StateKey<Set<BlockPos>> KEY_FAILED_VENTS = StateKey.sensed("egg_dropoff_failed_vents");
+
+    /**
+     * Set once a hauler has FAILED to walk to a spot. From then on the duct is on the table no matter how near the
+     * next target looks: proximity is what made it choose to walk in the first place, and walking is what failed.
+     */
+    private static final StateKey<Boolean> KEY_WALK_FAILED = StateKey.sensed("egg_dropoff_walk_failed");
 
     private static final double VENT_WORTHWHILE_DIST_SQUARED = 32.0 * 32.0; // shorter hauls just walk
 
@@ -115,21 +122,30 @@ public class DropOffEggAction {
             java.util.Optional<net.minecraft.core.BlockPos> hostDrop = java.util.Optional.empty();
             if (xenomorph.level() instanceof net.minecraft.server.level.ServerLevel hostDropLevel) {
                 var hostDropLocation = HiveLocationRegistry.INSTANCE.getByChunk(
-                    hostDropLevel.dimension(),
-                    xenomorph.chunkPosition()
+                        hostDropLevel.dimension(),
+                        xenomorph.chunkPosition()
                 );
                 if (hostDropLocation != null) {
                     hostDrop = HostEggDelivery.findAwaitingHostEggDrop(hostDropLevel, hostDropLocation);
                 }
             }
+            // A spot another hauler is ALREADY on its way to is NOT free. An egg in transit is not sitting in the
+            // cell yet, so without this every hauler saw the same empty cell and they all set off for it: three
+            // drones queued on ONE webbed host, all placed an egg, and all three hatched.
+            hostDrop = hostDrop.filter(spot -> !isClaimedByOther(xenomorph, spot));
+
             var isHostDrop = hostDrop.isPresent();
-            var freeSpot = isHostDrop ? hostDrop : findChamberBedSpot(xenomorph, failedSpots);
+            var freeSpot = isHostDrop
+                    ? hostDrop
+                    : findChamberBedSpot(xenomorph, failedSpots)
+                    .filter(spot -> !isClaimedByOther(xenomorph, spot));
             var isChamberBed = !isHostDrop && freeSpot.isPresent();
             if (freeSpot.isEmpty()) {
                 // OVERFLOW: nurseries full/unreachable -> the queen's clutch zone (a bounded patch in FRONT of
                 // her). The old fallback spiralled outward from the HAULER's position, which pushed overflow eggs
                 // into hallways and doorways. The zone is anchored to the queen and eggs can never leave it.
-                freeSpot = findQueenZoneSpot(xenomorph, failedSpots);
+                freeSpot = findQueenZoneSpot(xenomorph, failedSpots)
+                        .filter(spot -> !isClaimedByOther(xenomorph, spot));
             }
             setFailedSpots(blackboard, failedSpots);
 
@@ -141,6 +157,8 @@ public class DropOffEggAction {
                 return Action.Signal.CONTINUE;
             }
 
+            // Ours now - other haulers will look elsewhere. The claim expires by itself if we never arrive.
+            claimSpot(xenomorph, freeSpot.get());
             targetPos = freeSpot.get().getCenter();
             blackboard.set(KEY_TARGET_POS, targetPos);
             blackboard.set(KEY_TARGET_SET_TICK, xenomorph.tickCount);
@@ -163,8 +181,8 @@ public class DropOffEggAction {
             // returned MOVING forever and the drone stood frozen holding its egg with a perfectly valid target.
             var ventApproach = HiveVents.emergencePosNear(xenomorph.level(), ventEntry);
             var ventTarget = ventApproach != null
-                ? Vec3.atBottomCenterOf(ventApproach)
-                : Vec3.atCenterOf(ventEntry);
+                    ? Vec3.atBottomCenterOf(ventApproach)
+                    : Vec3.atCenterOf(ventEntry);
             var ventResult = NeoMoveToPosAction.perform(context, ventTarget, 0.5);
             if (xenomorph.distanceToSqr(ventTarget) <= VENT_REACH_SQUARED) {
                 var ventExit = blackboard.getOrDefault(KEY_VENT_EXIT, (BlockPos) null);
@@ -217,6 +235,12 @@ public class DropOffEggAction {
                 // Wedged against another hauler, or orbiting a node it can't quite reach: after a generous window
                 // give up on this spot and pick a different bed instead of freezing here holding the egg forever.
                 if (isTargetStale(blackboard, xenomorph.tickCount)) {
+                    // Could not WALK there in time. Unlock the duct for the rest of this haul: a nursery or host
+                    // chamber only a short way off can still be unreachable on foot (a dead-end room, a wall, a
+                    // drop), and simply re-picking another NEARBY spot walks straight back into the same trap.
+                    // Carriers were filing into a dead-end room beside the queen and standing there forever,
+                    // never reconsidering the vents, because proximity ruled ducting out before they set off.
+                    blackboard.set(KEY_WALK_FAILED, true);
                     yield abandonTarget(context, blackboard, targetPos, xenomorph.tickCount);
                 }
                 yield Action.Signal.CONTINUE;
@@ -241,26 +265,29 @@ public class DropOffEggAction {
 
     /** Root the carried egg(s) at the target, unless another drone claimed the spot mid-approach (then re-search). */
     private static Action.Signal arriveAtTarget(
-        Action.Context<? extends Xenomorph> context,
-        Xenomorph xenomorph,
-        Blackboard blackboard,
-        Vec3 targetPos
+            Action.Context<? extends Xenomorph> context,
+            Xenomorph xenomorph,
+            Blackboard blackboard,
+            Vec3 targetPos
     ) {
         if (isSpotTaken(xenomorph, targetPos)) {
             return abandonTarget(context, blackboard, targetPos, xenomorph.tickCount);
         }
         placeEggs(xenomorph, targetPos);
+        EggSpotClaims.release(BlockPos.containing(targetPos)); // delivered - release the reservation
+        blackboard.set(KEY_WALK_FAILED, false); // delivered - stop forcing the duct
         return Action.Signal.CONTINUE;
     }
 
     /** Give up on the current target: blacklist it, clear the search so a fresh spot is picked, stop navigating. */
     private static Action.Signal abandonTarget(
-        Action.Context<? extends Xenomorph> context,
-        Blackboard blackboard,
-        Vec3 targetPos,
-        int currentTick
+            Action.Context<? extends Xenomorph> context,
+            Blackboard blackboard,
+            Vec3 targetPos,
+            int currentTick
     ) {
         rememberFailedSpot(blackboard, BlockPos.containing(targetPos));
+        EggSpotClaims.release(BlockPos.containing(targetPos)); // giving up - let another hauler have it
         scheduleSearchRetry(blackboard, currentTick);
         NeoMoveToPosAction.onFinish(context);
         return Action.Signal.CONTINUE;
@@ -278,21 +305,34 @@ public class DropOffEggAction {
     }
 
     /** True when another ovomorph already occupies (or a race just claimed) the spot - the caller re-searches. */
+    private static boolean isClaimedByOther(Xenomorph xenomorph, BlockPos spot) {
+        if (!(xenomorph.level() instanceof ServerLevel serverLevel)) {
+            return false;
+        }
+        return EggSpotClaims.isClaimedByOther(serverLevel, spot, xenomorph.getUUID());
+    }
+
+    private static void claimSpot(Xenomorph xenomorph, BlockPos spot) {
+        if (xenomorph.level() instanceof ServerLevel serverLevel) {
+            EggSpotClaims.claim(serverLevel, spot, xenomorph.getUUID());
+        }
+    }
+
     private static boolean isSpotTaken(Xenomorph xenomorph, Vec3 center) {
         var box = new AABB(center.x - 0.6, center.y - 0.5, center.z - 0.6, center.x + 0.6, center.y + 1.5, center.z + 0.6);
         return !xenomorph.level()
-            .getEntitiesOfClass(
-                Ovomorph.class,
-                box,
-                e -> e.isAlive() && e.getVehicle() != xenomorph
-            )
-            .isEmpty();
+                .getEntitiesOfClass(
+                        Ovomorph.class,
+                        box,
+                        e -> e.isAlive() && e.getVehicle() != xenomorph
+                )
+                .isEmpty();
     }
 
     private static void placeEggs(Xenomorph xenomorph, Vec3 center) {
         getPassengerOvomorphs(xenomorph).forEach(ovomorph -> {
             xenomorph.level()
-                .playSound(null, ovomorph, AlienSoundEvents.ENTITY_OVOMORPH_ROOT.get(), SoundSource.HOSTILE, 1.0F, 1.0F);
+                    .playSound(null, ovomorph, AlienSoundEvents.ENTITY_OVOMORPH_ROOT.get(), SoundSource.HOSTILE, 1.0F, 1.0F);
             ovomorph.isRooted.set(true);
             ovomorph.stopRiding();
             ovomorph.setPos(center.x, center.y, center.z);
@@ -314,10 +354,10 @@ public class DropOffEggAction {
 
     private static List<Ovomorph> getPassengerOvomorphs(Xenomorph xenomorph) {
         return xenomorph.getPassengers()
-            .stream()
-            .filter(passenger -> passenger instanceof Ovomorph)
-            .map(passenger -> (Ovomorph) passenger)
-            .toList();
+                .stream()
+                .filter(passenger -> passenger instanceof Ovomorph)
+                .map(passenger -> (Ovomorph) passenger)
+                .toList();
     }
 
     /**
@@ -338,7 +378,9 @@ public class DropOffEggAction {
         if (!(xenomorph.level() instanceof ServerLevel serverLevel)) {
             return;
         }
-        if (xenomorph.blockPosition().distSqr(bed) < VENT_WORTHWHILE_DIST_SQUARED) {
+        // Proximity normally rules the duct out - but NOT once a walk has already failed. See KEY_WALK_FAILED.
+        var walkFailed = blackboard.getOrDefault(KEY_WALK_FAILED, false);
+        if (!walkFailed && xenomorph.blockPosition().distSqr(bed) < VENT_WORTHWHILE_DIST_SQUARED) {
             return;
         }
         var location = resolveLocation(serverLevel, xenomorph);
@@ -350,10 +392,10 @@ public class DropOffEggAction {
         // Egg haulers travel the hive's OWN ducts - STRUCTURE vents. Never a party door, and never a vent this hauler
         // has already failed to reach on this run.
         java.util.function.Predicate<BlockPos> usableEntry =
-            v -> location.ventManager().isKind(v, VentKind.STRUCTURE) && !failedVents.contains(v);
+                v -> location.ventManager().isKind(v, VentKind.STRUCTURE) && !failedVents.contains(v);
         // In-hive shortcut: STRUCTURE ducts only (was "any vent not near the surface", which caught frontier vents).
         java.util.function.Predicate<BlockPos> interiorOnly =
-            v -> location.ventManager().isKind(v, VentKind.STRUCTURE);
+                v -> location.ventManager().isKind(v, VentKind.STRUCTURE);
         var entry = HiveVents.nearestVent(vents, xenomorph.blockPosition(), VENT_SEARCH_RADIUS_CHUNKS, usableEntry);
         var exit = HiveVents.nearestVent(vents, bed, VENT_SEARCH_RADIUS_CHUNKS, interiorOnly);
         if (entry == null || exit == null || entry.equals(exit)) {
@@ -424,9 +466,9 @@ public class DropOffEggAction {
         var location = resolveLocation(serverLevel, xenomorph);
         if (location == null) {
             com.alien.Alien.LOGGER.info(
-                "Egg haul STUCK: {} at {} is holding an egg but belongs to NO hive location.",
-                xenomorph.getType().getDescriptionId(),
-                xenomorph.blockPosition()
+                    "Egg haul STUCK: {} at {} is holding an egg but belongs to NO hive location.",
+                    xenomorph.getType().getDescriptionId(),
+                    xenomorph.blockPosition()
             );
             return;
         }
@@ -462,35 +504,35 @@ public class DropOffEggAction {
         int queenZoneFree = queen == null ? -1 : QueenEggZone.candidates(serverLevel, queen).size();
 
         com.alien.Alien.LOGGER.info(
-            "Egg haul STUCK at {}: hive {} has {} egg chamber(s) ({} unloaded), {} free bed(s), {} occupied; "
-                + "queen clutch zone has {} free cell(s) (queen {}); {} spot(s) on this hauler's failed list. "
-                + "No destination accepted the egg.",
-            xenomorph.blockPosition(),
-            location.id(),
-            eggChambers,
-            unloadedChambers,
-            freeBeds,
-            occupiedBeds,
-            queenZoneFree,
-            queen == null ? "MISSING" : "alive",
-            failedSpots.size()
+                "Egg haul STUCK at {}: hive {} has {} egg chamber(s) ({} unloaded), {} free bed(s), {} occupied; "
+                        + "queen clutch zone has {} free cell(s) (queen {}); {} spot(s) on this hauler's failed list. "
+                        + "No destination accepted the egg.",
+                xenomorph.blockPosition(),
+                location.id(),
+                eggChambers,
+                unloadedChambers,
+                freeBeds,
+                occupiedBeds,
+                queenZoneFree,
+                queen == null ? "MISSING" : "alive",
+                failedSpots.size()
         );
     }
 
     private static com.alien.common.gameplay.hive.location.HiveLocation resolveLocation(
-        ServerLevel serverLevel,
-        Xenomorph xenomorph
+            ServerLevel serverLevel,
+            Xenomorph xenomorph
     ) {
         var byChunk = HiveLocationRegistry.INSTANCE.getByChunk(
-            serverLevel.dimension(),
-            xenomorph.chunkPosition()
+                serverLevel.dimension(),
+                xenomorph.chunkPosition()
         );
         if (byChunk != null) {
             return byChunk;
         }
         return HiveLocationRegistry.INSTANCE.findNearestInDim(
-            serverLevel.dimension(),
-            xenomorph.blockPosition()
+                serverLevel.dimension(),
+                xenomorph.blockPosition()
         );
     }
 
@@ -537,18 +579,18 @@ public class DropOffEggAction {
         var center = bed.getCenter();
         var box = new AABB(center.x - 1.0, bed.getY() - 1.0, center.z - 1.0, center.x + 1.0, bed.getY() + 2.0, center.z + 1.0);
         return !level.getEntitiesOfClass(
-            Ovomorph.class,
-            box,
-            entity -> entity.getType().is(AlienEntityTypeTags.OVOMORPHS) && entity.isRooted.get()
+                Ovomorph.class,
+                box,
+                entity -> entity.getType().is(AlienEntityTypeTags.OVOMORPHS) && entity.isRooted.get()
         ).isEmpty();
     }
 
     private static Optional<BlockPos> findFreeEggSpot(
-        Xenomorph xenomorph,
-        Level level,
-        BlockPos center,
-        Predicate<BlockPos> isWalkable,
-        Set<BlockPos> failedSpots
+            Xenomorph xenomorph,
+            Level level,
+            BlockPos center,
+            Predicate<BlockPos> isWalkable,
+            Set<BlockPos> failedSpots
     ) {
         var gridAlignedCenter = alignToEggGrid(center);
 
@@ -576,10 +618,10 @@ public class DropOffEggAction {
                 var aboveState = level.getBlockState(adjustedPos.above());
 
                 if (
-                    (state.isAir() || state.canBeReplaced())
-                        && (aboveState.isAir() || aboveState.canBeReplaced())
-                        && level.getEntities(null, new AABB(adjustedPos)).isEmpty()
-                        && hasOvomorphSpacing(level, adjustedPos)
+                        (state.isAir() || state.canBeReplaced())
+                                && (aboveState.isAir() || aboveState.canBeReplaced())
+                                && level.getEntities(null, new AABB(adjustedPos)).isEmpty()
+                                && hasOvomorphSpacing(level, adjustedPos)
                 ) {
                     viable.add(adjustedPos.immutable());
                 }
@@ -612,18 +654,18 @@ public class DropOffEggAction {
         var center = pos.getCenter();
         var halfSize = MIN_HORIZONTAL_OVOMORPH_SPACING_BLOCKS;
         var searchBox = new AABB(
-            center.x - halfSize,
-            pos.getY() - level.dimensionType().height(),
-            center.z - halfSize,
-            center.x + halfSize,
-            pos.getY() + 5,
-            center.z + halfSize
+                center.x - halfSize,
+                pos.getY() - level.dimensionType().height(),
+                center.z - halfSize,
+                center.x + halfSize,
+                pos.getY() + 5,
+                center.z + halfSize
         );
 
         return level.getEntitiesOfClass(
-            Ovomorph.class,
-            searchBox,
-            entity -> entity.getType().is(AlienEntityTypeTags.OVOMORPHS) && entity.isRooted.get()
+                Ovomorph.class,
+                searchBox,
+                entity -> entity.getType().is(AlienEntityTypeTags.OVOMORPHS) && entity.isRooted.get()
         ).isEmpty();
     }
 
@@ -639,10 +681,10 @@ public class DropOffEggAction {
 
     private static void setFailedSpots(Blackboard blackboard, Set<BlockPos> failedSpots) {
         blackboard.set(
-            KEY_FAILED_SPOTS,
-            failedSpots.stream()
-                .limit(MAX_REMEMBERED_FAILED_SPOTS)
-                .toList()
+                KEY_FAILED_SPOTS,
+                failedSpots.stream()
+                        .limit(MAX_REMEMBERED_FAILED_SPOTS)
+                        .toList()
         );
     }
 
