@@ -1,5 +1,5 @@
 {
   "from": "avp_alien:adolescent",
-  "growthTimeInTicks": 6000,
+  "growthTimeInTicks": 3000,
   "to": "avp_alien:drone"
 }

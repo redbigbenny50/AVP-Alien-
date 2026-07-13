@@ -1,6 +1,6 @@
 {
   "from": "avp_alien:nether_adolescent",
-  "growthTimeInTicks": 3000,
+  "growthTimeInTicks": 1500,
   "hostTypePredicate": [
     "minecraft:llama",
     "minecraft:trader_llama"

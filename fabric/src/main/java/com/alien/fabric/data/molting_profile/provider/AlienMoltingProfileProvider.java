@@ -25,280 +25,280 @@ public class AlienMoltingProfileProvider {
 
     private static void provideChestbursterProfiles(BiConsumer<String, MoltingProfile> biConsumer) {
         biConsumer.accept(
-            "chestburster",
-            new MoltingProfile(
-                AlienEntityTypes.CHESTBURSTER.get(),
-                MoltingProfileConstants.CHESTBURSTER_START_SCALE,
-                MoltingProfileConstants.CHESTBURSTER_END_SCALE,
-                MoltingProfileConstants.CHESTBURSTER_PHASES
-            )
+                "chestburster",
+                new MoltingProfile(
+                        AlienEntityTypes.CHESTBURSTER.get(),
+                        MoltingProfileConstants.CHESTBURSTER_START_SCALE,
+                        MoltingProfileConstants.CHESTBURSTER_END_SCALE,
+                        MoltingProfileConstants.CHESTBURSTER_PHASES
+                )
         );
         biConsumer.accept(
-            "royal_chestburster",
-            new MoltingProfile(
-                AlienEntityTypes.ROYAL_CHESTBURSTER.get(),
-                MoltingProfileConstants.CHESTBURSTER_START_SCALE,
-                MoltingProfileConstants.CHESTBURSTER_END_SCALE,
-                MoltingProfileConstants.CHESTBURSTER_PHASES
-            )
+                "royal_chestburster",
+                new MoltingProfile(
+                        AlienEntityTypes.ROYAL_CHESTBURSTER.get(),
+                        MoltingProfileConstants.CHESTBURSTER_START_SCALE,
+                        MoltingProfileConstants.CHESTBURSTER_END_SCALE,
+                        MoltingProfileConstants.ROYAL_CHESTBURSTER_PHASES
+                )
         );
         biConsumer.accept(
-            "predalien_chestburster",
-            new MoltingProfile(
-                AlienEntityTypes.PREDALIEN_CHESTBURSTER.get(),
-                MoltingProfileConstants.CHESTBURSTER_START_SCALE,
-                MoltingProfileConstants.CHESTBURSTER_END_SCALE,
-                MoltingProfileConstants.CHESTBURSTER_PHASES
-            )
+                "predalien_chestburster",
+                new MoltingProfile(
+                        AlienEntityTypes.PREDALIEN_CHESTBURSTER.get(),
+                        MoltingProfileConstants.CHESTBURSTER_START_SCALE,
+                        MoltingProfileConstants.CHESTBURSTER_END_SCALE,
+                        MoltingProfileConstants.PREDALIEN_CHESTBURSTER_PHASES
+                )
         );
     }
 
     private static void provideAdolescentProfiles(BiConsumer<String, MoltingProfile> biConsumer) {
         biConsumer.accept(
-            "adolescent",
-            new MoltingProfile(
-                AlienEntityTypes.ADOLESCENT.get(),
-                MoltingProfileConstants.ADOLESCENT_START_SCALE,
-                MoltingProfileConstants.ADOLESCENT_END_SCALE,
-                MoltingProfileConstants.ADOLESCENT_PHASES
-            )
+                "adolescent",
+                new MoltingProfile(
+                        AlienEntityTypes.ADOLESCENT.get(),
+                        MoltingProfileConstants.ADOLESCENT_START_SCALE,
+                        MoltingProfileConstants.ADOLESCENT_END_SCALE,
+                        MoltingProfileConstants.ADOLESCENT_PHASES
+                )
         );
         biConsumer.accept(
-            "royal_adolescent",
-            new MoltingProfile(
-                AlienEntityTypes.ROYAL_ADOLESCENT.get(),
-                MoltingProfileConstants.ADOLESCENT_START_SCALE,
-                MoltingProfileConstants.ADOLESCENT_END_SCALE,
-                MoltingProfileConstants.ADOLESCENT_PHASES
-            )
+                "royal_adolescent",
+                new MoltingProfile(
+                        AlienEntityTypes.ROYAL_ADOLESCENT.get(),
+                        MoltingProfileConstants.ADOLESCENT_START_SCALE,
+                        MoltingProfileConstants.ADOLESCENT_END_SCALE,
+                        MoltingProfileConstants.ROYAL_ADOLESCENT_PHASES
+                )
         );
         biConsumer.accept(
-            "predalien_adolescent",
-            new MoltingProfile(
-                AlienEntityTypes.PREDALIEN_ADOLESCENT.get(),
-                MoltingProfileConstants.ADOLESCENT_START_SCALE,
-                MoltingProfileConstants.ADOLESCENT_END_SCALE,
-                MoltingProfileConstants.ADOLESCENT_PHASES
-            )
+                "predalien_adolescent",
+                new MoltingProfile(
+                        AlienEntityTypes.PREDALIEN_ADOLESCENT.get(),
+                        MoltingProfileConstants.ADOLESCENT_START_SCALE,
+                        MoltingProfileConstants.ADOLESCENT_END_SCALE,
+                        MoltingProfileConstants.PREDALIEN_ADOLESCENT_PHASES
+                )
         );
     }
 
     private static void provideBursterProfiles(BiConsumer<String, MoltingProfile> biConsumer) {
         biConsumer.accept(
-            "burster",
-            new MoltingProfile(
-                AlienEntityTypes.BURSTER.get(),
-                MoltingProfileConstants.DRONE_START_SCALE,
-                MoltingProfileConstants.DRONE_END_SCALE,
-                MoltingProfileConstants.DRONE_PHASES
-            )
+                "burster",
+                new MoltingProfile(
+                        AlienEntityTypes.BURSTER.get(),
+                        MoltingProfileConstants.DRONE_START_SCALE,
+                        MoltingProfileConstants.DRONE_END_SCALE,
+                        MoltingProfileConstants.DRONE_PHASES
+                )
         );
         biConsumer.accept(
-            "irradiated_burster",
-            new MoltingProfile(
-                AlienEntityTypes.IRRADIATED_BURSTER.get(),
-                MoltingProfileConstants.DRONE_START_SCALE,
-                MoltingProfileConstants.DRONE_END_SCALE,
-                MoltingProfileConstants.DRONE_PHASES
-            )
+                "irradiated_burster",
+                new MoltingProfile(
+                        AlienEntityTypes.IRRADIATED_BURSTER.get(),
+                        MoltingProfileConstants.DRONE_START_SCALE,
+                        MoltingProfileConstants.DRONE_END_SCALE,
+                        MoltingProfileConstants.DRONE_PHASES
+                )
         );
     }
 
     private static void provideDroneProfiles(BiConsumer<String, MoltingProfile> biConsumer) {
         biConsumer.accept(
-            "drone",
-            new MoltingProfile(
-                AlienEntityTypes.DRONE.get(),
-                MoltingProfileConstants.DRONE_START_SCALE,
-                MoltingProfileConstants.DRONE_END_SCALE,
-                MoltingProfileConstants.DRONE_PHASES
-            )
+                "drone",
+                new MoltingProfile(
+                        AlienEntityTypes.DRONE.get(),
+                        MoltingProfileConstants.DRONE_START_SCALE,
+                        MoltingProfileConstants.DRONE_END_SCALE,
+                        MoltingProfileConstants.DRONE_PHASES
+                )
         );
         biConsumer.accept(
-            "irradiated_drone",
-            new MoltingProfile(
-                AlienEntityTypes.IRRADIATED_DRONE.get(),
-                MoltingProfileConstants.DRONE_START_SCALE,
-                MoltingProfileConstants.DRONE_END_SCALE,
-                MoltingProfileConstants.DRONE_PHASES
-            )
+                "irradiated_drone",
+                new MoltingProfile(
+                        AlienEntityTypes.IRRADIATED_DRONE.get(),
+                        MoltingProfileConstants.DRONE_START_SCALE,
+                        MoltingProfileConstants.DRONE_END_SCALE,
+                        MoltingProfileConstants.DRONE_PHASES
+                )
         );
     }
 
     private static void provideRunnerProfiles(BiConsumer<String, MoltingProfile> biConsumer) {
         biConsumer.accept(
-            "runner",
-            new MoltingProfile(
-                AlienEntityTypes.RUNNER.get(),
-                MoltingProfileConstants.DRONE_START_SCALE,
-                MoltingProfileConstants.DRONE_END_SCALE,
-                MoltingProfileConstants.DRONE_PHASES
-            )
+                "runner",
+                new MoltingProfile(
+                        AlienEntityTypes.RUNNER.get(),
+                        MoltingProfileConstants.DRONE_START_SCALE,
+                        MoltingProfileConstants.DRONE_END_SCALE,
+                        MoltingProfileConstants.DRONE_PHASES
+                )
         );
         biConsumer.accept(
-            "irradiated_runner",
-            new MoltingProfile(
-                AlienEntityTypes.IRRADIATED_RUNNER.get(),
-                MoltingProfileConstants.DRONE_START_SCALE,
-                MoltingProfileConstants.DRONE_END_SCALE,
-                MoltingProfileConstants.DRONE_PHASES
-            )
+                "irradiated_runner",
+                new MoltingProfile(
+                        AlienEntityTypes.IRRADIATED_RUNNER.get(),
+                        MoltingProfileConstants.DRONE_START_SCALE,
+                        MoltingProfileConstants.DRONE_END_SCALE,
+                        MoltingProfileConstants.DRONE_PHASES
+                )
         );
     }
 
     private static void provideCarrierProfiles(BiConsumer<String, MoltingProfile> biConsumer) {
         biConsumer.accept(
-            "carrier",
-            new MoltingProfile(
-                AlienEntityTypes.CARRIER.get(),
-                MoltingProfileConstants.PRAETORIAN_START_SCALE,
-                MoltingProfileConstants.PRAETORIAN_END_SCALE,
-                MoltingProfileConstants.PRAETORIAN_PHASES
-            )
+                "carrier",
+                new MoltingProfile(
+                        AlienEntityTypes.CARRIER.get(),
+                        MoltingProfileConstants.PRAETORIAN_START_SCALE,
+                        MoltingProfileConstants.PRAETORIAN_END_SCALE,
+                        MoltingProfileConstants.PRAETORIAN_PHASES
+                )
         );
         biConsumer.accept(
-            "irradiated_carrier",
-            new MoltingProfile(
-                AlienEntityTypes.IRRADIATED_CARRIER.get(),
-                MoltingProfileConstants.PRAETORIAN_START_SCALE,
-                MoltingProfileConstants.PRAETORIAN_END_SCALE,
-                MoltingProfileConstants.PRAETORIAN_PHASES
-            )
+                "irradiated_carrier",
+                new MoltingProfile(
+                        AlienEntityTypes.IRRADIATED_CARRIER.get(),
+                        MoltingProfileConstants.PRAETORIAN_START_SCALE,
+                        MoltingProfileConstants.PRAETORIAN_END_SCALE,
+                        MoltingProfileConstants.PRAETORIAN_PHASES
+                )
         );
     }
 
     private static void provideChrysalisProfiles(BiConsumer<String, MoltingProfile> biConsumer) {
         biConsumer.accept(
-            "chrysalis",
-            new MoltingProfile(
-                AlienEntityTypes.CHRYSALIS.get(),
-                MoltingProfileConstants.PRAETORIAN_START_SCALE,
-                MoltingProfileConstants.PRAETORIAN_END_SCALE,
-                MoltingProfileConstants.PRAETORIAN_PHASES
-            )
+                "chrysalis",
+                new MoltingProfile(
+                        AlienEntityTypes.CHRYSALIS.get(),
+                        MoltingProfileConstants.PRAETORIAN_START_SCALE,
+                        MoltingProfileConstants.PRAETORIAN_END_SCALE,
+                        MoltingProfileConstants.PRAETORIAN_PHASES
+                )
         );
         biConsumer.accept(
-            "irradiated_chrysalis",
-            new MoltingProfile(
-                AlienEntityTypes.IRRADIATED_CHRYSALIS.get(),
-                MoltingProfileConstants.PRAETORIAN_START_SCALE,
-                MoltingProfileConstants.PRAETORIAN_END_SCALE,
-                MoltingProfileConstants.PRAETORIAN_PHASES
-            )
+                "irradiated_chrysalis",
+                new MoltingProfile(
+                        AlienEntityTypes.IRRADIATED_CHRYSALIS.get(),
+                        MoltingProfileConstants.PRAETORIAN_START_SCALE,
+                        MoltingProfileConstants.PRAETORIAN_END_SCALE,
+                        MoltingProfileConstants.PRAETORIAN_PHASES
+                )
         );
     }
 
     private static void providePredalienProfiles(BiConsumer<String, MoltingProfile> biConsumer) {
         biConsumer.accept(
-            "predalien",
-            new MoltingProfile(
-                AlienEntityTypes.PREDALIEN.get(),
-                MoltingProfileConstants.PRAETORIAN_START_SCALE,
-                MoltingProfileConstants.PRAETORIAN_END_SCALE,
-                MoltingProfileConstants.PRAETORIAN_PHASES
-            )
+                "predalien",
+                new MoltingProfile(
+                        AlienEntityTypes.PREDALIEN.get(),
+                        MoltingProfileConstants.PRAETORIAN_START_SCALE,
+                        MoltingProfileConstants.PRAETORIAN_END_SCALE,
+                        MoltingProfileConstants.PRAETORIAN_PHASES
+                )
         );
     }
 
     private static void providePraetorianProfiles(BiConsumer<String, MoltingProfile> biConsumer) {
         biConsumer.accept(
-            "praetorian",
-            new MoltingProfile(
-                AlienEntityTypes.PRAETORIAN.get(),
-                MoltingProfileConstants.PRAETORIAN_START_SCALE,
-                MoltingProfileConstants.PRAETORIAN_END_SCALE,
-                MoltingProfileConstants.PRAETORIAN_PHASES
-            )
+                "praetorian",
+                new MoltingProfile(
+                        AlienEntityTypes.PRAETORIAN.get(),
+                        MoltingProfileConstants.PRAETORIAN_START_SCALE,
+                        MoltingProfileConstants.PRAETORIAN_END_SCALE,
+                        MoltingProfileConstants.PRAETORIAN_PHASES
+                )
         );
         biConsumer.accept(
-            "irradiated_praetorian",
-            new MoltingProfile(
-                AlienEntityTypes.IRRADIATED_PRAETORIAN.get(),
-                MoltingProfileConstants.PRAETORIAN_START_SCALE,
-                MoltingProfileConstants.PRAETORIAN_END_SCALE,
-                MoltingProfileConstants.PRAETORIAN_PHASES
-            )
+                "irradiated_praetorian",
+                new MoltingProfile(
+                        AlienEntityTypes.IRRADIATED_PRAETORIAN.get(),
+                        MoltingProfileConstants.PRAETORIAN_START_SCALE,
+                        MoltingProfileConstants.PRAETORIAN_END_SCALE,
+                        MoltingProfileConstants.PRAETORIAN_PHASES
+                )
         );
     }
 
     private static void provideRavagerProfiles(BiConsumer<String, MoltingProfile> biConsumer) {
         biConsumer.accept(
-            "ravager",
-            new MoltingProfile(
-                AlienEntityTypes.RAVAGER.get(),
-                MoltingProfileConstants.PRAETORIAN_START_SCALE,
-                MoltingProfileConstants.PRAETORIAN_END_SCALE,
-                MoltingProfileConstants.PRAETORIAN_PHASES
-            )
+                "ravager",
+                new MoltingProfile(
+                        AlienEntityTypes.RAVAGER.get(),
+                        MoltingProfileConstants.PRAETORIAN_START_SCALE,
+                        MoltingProfileConstants.PRAETORIAN_END_SCALE,
+                        MoltingProfileConstants.PRAETORIAN_PHASES
+                )
         );
         biConsumer.accept(
-            "irradiated_ravager",
-            new MoltingProfile(
-                AlienEntityTypes.IRRADIATED_RAVAGER.get(),
-                MoltingProfileConstants.PRAETORIAN_START_SCALE,
-                MoltingProfileConstants.PRAETORIAN_END_SCALE,
-                MoltingProfileConstants.PRAETORIAN_PHASES
-            )
+                "irradiated_ravager",
+                new MoltingProfile(
+                        AlienEntityTypes.IRRADIATED_RAVAGER.get(),
+                        MoltingProfileConstants.PRAETORIAN_START_SCALE,
+                        MoltingProfileConstants.PRAETORIAN_END_SCALE,
+                        MoltingProfileConstants.PRAETORIAN_PHASES
+                )
         );
     }
 
     private static void provideRazorClawProfiles(BiConsumer<String, MoltingProfile> biConsumer) {
         biConsumer.accept(
-            "razor_claw",
-            new MoltingProfile(
-                AlienEntityTypes.RAZOR_CLAW.get(),
-                MoltingProfileConstants.PRAETORIAN_START_SCALE,
-                MoltingProfileConstants.PRAETORIAN_END_SCALE,
-                MoltingProfileConstants.PRAETORIAN_PHASES
-            )
+                "razor_claw",
+                new MoltingProfile(
+                        AlienEntityTypes.RAZOR_CLAW.get(),
+                        MoltingProfileConstants.PRAETORIAN_START_SCALE,
+                        MoltingProfileConstants.PRAETORIAN_END_SCALE,
+                        MoltingProfileConstants.PRAETORIAN_PHASES
+                )
         );
         biConsumer.accept(
-            "irradiated_razor_claw",
-            new MoltingProfile(
-                AlienEntityTypes.IRRADIATED_RAZOR_CLAW.get(),
-                MoltingProfileConstants.PRAETORIAN_START_SCALE,
-                MoltingProfileConstants.PRAETORIAN_END_SCALE,
-                MoltingProfileConstants.PRAETORIAN_PHASES
-            )
+                "irradiated_razor_claw",
+                new MoltingProfile(
+                        AlienEntityTypes.IRRADIATED_RAZOR_CLAW.get(),
+                        MoltingProfileConstants.PRAETORIAN_START_SCALE,
+                        MoltingProfileConstants.PRAETORIAN_END_SCALE,
+                        MoltingProfileConstants.PRAETORIAN_PHASES
+                )
         );
     }
 
     private static void provideQueenProfiles(BiConsumer<String, MoltingProfile> biConsumer) {
         biConsumer.accept(
-            "queen",
-            new MoltingProfile(
-                AlienEntityTypes.QUEEN.get(),
-                MoltingProfileConstants.QUEEN_START_SCALE,
-                MoltingProfileConstants.QUEEN_END_SCALE,
-                MoltingProfileConstants.QUEEN_PHASES
-            )
+                "queen",
+                new MoltingProfile(
+                        AlienEntityTypes.QUEEN.get(),
+                        MoltingProfileConstants.QUEEN_START_SCALE,
+                        MoltingProfileConstants.QUEEN_END_SCALE,
+                        MoltingProfileConstants.QUEEN_PHASES
+                )
         );
         biConsumer.accept(
-            "empress",
-            new MoltingProfile(
-                AlienEntityTypes.EMPRESS.get(),
-                MoltingProfileConstants.QUEEN_START_SCALE,
-                MoltingProfileConstants.QUEEN_END_SCALE,
-                MoltingProfileConstants.QUEEN_PHASES
-            )
+                "empress",
+                new MoltingProfile(
+                        AlienEntityTypes.EMPRESS.get(),
+                        MoltingProfileConstants.QUEEN_START_SCALE,
+                        MoltingProfileConstants.QUEEN_END_SCALE,
+                        MoltingProfileConstants.QUEEN_PHASES
+                )
         );
         biConsumer.accept(
-            "irradiated_queen",
-            new MoltingProfile(
-                AlienEntityTypes.IRRADIATED_QUEEN.get(),
-                MoltingProfileConstants.QUEEN_START_SCALE,
-                MoltingProfileConstants.QUEEN_END_SCALE,
-                MoltingProfileConstants.QUEEN_PHASES
-            )
+                "irradiated_queen",
+                new MoltingProfile(
+                        AlienEntityTypes.IRRADIATED_QUEEN.get(),
+                        MoltingProfileConstants.QUEEN_START_SCALE,
+                        MoltingProfileConstants.QUEEN_END_SCALE,
+                        MoltingProfileConstants.QUEEN_PHASES
+                )
         );
         biConsumer.accept(
-            "irradiated_empress",
-            new MoltingProfile(
-                AlienEntityTypes.IRRADIATED_EMPRESS.get(),
-                MoltingProfileConstants.QUEEN_START_SCALE,
-                MoltingProfileConstants.QUEEN_END_SCALE,
-                MoltingProfileConstants.QUEEN_PHASES
-            )
+                "irradiated_empress",
+                new MoltingProfile(
+                        AlienEntityTypes.IRRADIATED_EMPRESS.get(),
+                        MoltingProfileConstants.QUEEN_START_SCALE,
+                        MoltingProfileConstants.QUEEN_END_SCALE,
+                        MoltingProfileConstants.QUEEN_PHASES
+                )
         );
     }
 }
