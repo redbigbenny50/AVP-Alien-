@@ -11,13 +11,13 @@ import java.util.UUID;
  * Which egg destinations are already SPOKEN FOR.
  * <p>
  * A destination is only "free" if no egg is sitting in it - but an egg still being carried across the hive is not
- * sitting anywhere yet. So every hauler looking for somewhere to put an egg saw the same empty cell and all of them
- * set off for it. Three drones queued up on ONE webbed host, all placed an egg, and all three hatched: one host,
- * three facehuggers.
+ * sitting anywhere yet. So every hauler looking for somewhere to put an egg saw the same empty cell and all of them set
+ * off for it. Three drones queued up on ONE webbed host, all placed an egg, and all three hatched: one host, three
+ * facehuggers.
  * <p>
- * A claim is a soft reservation: the first hauler to pick a spot owns it, and other haulers look elsewhere. It
- * EXPIRES ({@link #CLAIM_LIFETIME_TICKS}) so a carrier that dies, despawns, or gets stuck en route cannot lock a
- * nursery bed or a host out of the hive forever - the spot simply frees itself and someone else takes the job.
+ * A claim is a soft reservation: the first hauler to pick a spot owns it, and other haulers look elsewhere. It EXPIRES
+ * ({@link #CLAIM_LIFETIME_TICKS}) so a carrier that dies, despawns, or gets stuck en route cannot lock a nursery bed or
+ * a host out of the hive forever - the spot simply frees itself and someone else takes the job.
  * <p>
  * Deliberately transient (server-side, not persisted): on reload nothing is in flight, so nothing is claimed.
  */
@@ -28,7 +28,10 @@ public final class EggSpotClaims {
     /** A claim only outlives its carrier by this much. Refreshed every tick the carrier is still on its way. */
     private static final int CLAIM_LIFETIME_TICKS = 300;
 
-    private record Claim(UUID carrier, long expiresAtGameTime) {}
+    private record Claim(
+        UUID carrier,
+        long expiresAtGameTime
+    ) {}
 
     private static final Map<BlockPos, Claim> CLAIMS = new HashMap<>();
 
