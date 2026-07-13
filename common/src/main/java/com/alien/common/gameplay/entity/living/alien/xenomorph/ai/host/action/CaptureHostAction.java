@@ -46,11 +46,24 @@ public final class CaptureHostAction {
 
         xenomorph.getLookControl().setLookAt(target, 30.0F, 30.0F);
         var result = NeoMoveToPosAction.perform(context, target.position(), 0.5);
-        return switch (result) {
-            case MOVING -> Action.Signal.CONTINUE;
-            case FINISHED -> Action.Signal.CONTINUE; // arrived near it; the grab check fires next tick
-            default -> Action.Signal.ABORT; // cannot path to it - let the planner pick another
-        };
+
+        if (xenomorph.tickCount % 60 == 0) {
+            com.alien.Alien.LOGGER.info(
+                    "[hostdbg] CAPTURE: me={} quarry={} at {} distSq={} move={} navDone={} onGround={}",
+                    xenomorph.blockPosition(),
+                    target.getType().getDescriptionId(),
+                    target.blockPosition(),
+                    String.format("%.1f", xenomorph.distanceToSqr(target)),
+                    result,
+                    xenomorph.getNavigation().isDone(),
+                    xenomorph.onGround()
+            );
+        }
+
+        // NEVER abort on a failed path. Aborting made the planner drop the action, re-plan, and abort again -
+        // forever - so a drone with a perfectly valid quarry stood still and never took a single step. Keep the
+        // action alive and let the navigator keep trying.
+        return Action.Signal.CONTINUE;
     }
 
     public static void onFinish(Action.Context<? extends Xenomorph> context) {

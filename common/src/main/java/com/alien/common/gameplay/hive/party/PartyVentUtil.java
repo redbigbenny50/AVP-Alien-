@@ -2,10 +2,16 @@ package com.alien.common.gameplay.hive.party;
 
 import com.alien.common.gameplay.hive.location.HiveLocation;
 import com.alien.common.gameplay.hive.vent.VentKind;
+import com.alien.common.registry.init.block.AlienResinBlocks;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
 import net.minecraft.server.level.ServerLevel;
 
+import net.minecraft.world.level.ChunkPos;
+import net.minecraft.world.level.levelgen.Heightmap;
+import org.jetbrains.annotations.Nullable;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 
 /**
@@ -26,6 +32,69 @@ import java.util.List;
 public final class PartyVentUtil {
 
     private PartyVentUtil() {}
+
+    /**
+     * Where a party emerging from {@code vent} should actually appear.
+     * <p>
+     * A vent is a BEACON for its chunk, not a doorway. Members used to be placed at the vent block itself, but
+     * vents are embedded in terrain - often several blocks underground - so parties MATERIALISED INSIDE SOLID
+     * GROUND, could not path anywhere, and stood at the vent for their whole duration with valid quarry in
+     * plain sight. Surface anywhere standable in the vent's chunk instead, preferring spots near the vent, so
+     * it no longer matters whether the vent itself is buried.
+     * <p>
+     * Returns null when the chunk has nowhere dry to stand (an ocean vent). Callers must NOT fall back to the
+     * vent block - that is the burial bug again.
+     */
+    public static @Nullable BlockPos surfaceEmergeSpot(ServerLevel level, BlockPos vent) {
+        var chunk = new ChunkPos(vent);
+        var minX = chunk.getMinBlockX();
+        var minZ = chunk.getMinBlockZ();
+
+        var candidates = new ArrayList<BlockPos>();
+        for (int x = minX; x < minX + 16; x++) {
+            for (int z = minZ; z < minZ + 16; z++) {
+                var y = level.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, x, z);
+                var pos = new BlockPos(x, y, z);
+                if (isStandable(level, pos)) {
+                    candidates.add(pos);
+                }
+            }
+        }
+        if (candidates.isEmpty()) {
+            return null;
+        }
+
+        candidates.sort(Comparator.comparingDouble(pos -> pos.distSqr(vent)));
+        return candidates.get(level.random.nextInt(Math.min(candidates.size(), 8)));
+    }
+
+    /** Open headroom on solid, DRY ground - somewhere an alien can actually stand. */
+    private static boolean isStandable(ServerLevel level, BlockPos pos) {
+        var ground = pos.below();
+        var groundState = level.getBlockState(ground);
+        if (!groundState.getFluidState().isEmpty()) {
+            return false; // never stand a party on water
+        }
+        if (!groundState.isFaceSturdy(level, ground, Direction.UP)) {
+            return false;
+        }
+        return isFree(level, pos) && isFree(level, pos.above());
+    }
+
+    /**
+     * Air, or the hive's own resin growth. NOT water: {@code canBeReplaced()} is true for fluids, so accepting
+     * it would let a party surface straight into an ocean column.
+     */
+    private static boolean isFree(ServerLevel level, BlockPos pos) {
+        var state = level.getBlockState(pos);
+        if (!state.getFluidState().isEmpty()) {
+            return false;
+        }
+        return state.isAir()
+                || state.canBeReplaced()
+                || state.is(AlienResinBlocks.RESIN_VEIN.get())
+                || state.is(AlienResinBlocks.RESIN_WEB.get());
+    }
 
     /** The hive's front doors: vents dropped in the open by surface parties. Host hunts use only these. */
     public static List<BlockPos> findSurfaceVents(ServerLevel level, HiveLocation location) {

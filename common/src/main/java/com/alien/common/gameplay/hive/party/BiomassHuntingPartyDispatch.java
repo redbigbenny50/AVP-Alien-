@@ -167,9 +167,19 @@ public final class BiomassHuntingPartyDispatch {
                 if (entity == null) {
                     continue;
                 }
-                var jitterX = spawnPos.getX() + 0.5 + (level.random.nextDouble() - 0.5) * 2.0;
-                var jitterZ = spawnPos.getZ() + 0.5 + (level.random.nextDouble() - 0.5) * 2.0;
-                entity.moveTo(jitterX, spawnPos.getY(), jitterZ, level.random.nextFloat() * 360.0F, 0.0F);
+                // The vent is a BEACON for its chunk, not a doorway. Surface anywhere standable in that chunk so it
+                // no longer matters that the vent itself is buried: members used to materialise INSIDE SOLID
+                // GROUND at the vent's own Y and could never path a single step.
+                var emergePos = PartyVentUtil.surfaceEmergeSpot(level, spawnPos);
+                if (emergePos == null) {
+                    // Nowhere dry to surface (an ocean vent). Do NOT fall back to the vent block - that buries
+                    // them again. Skip: the member stays in the composition and is refunded at resolution.
+                    entity.discard();
+                    continue;
+                }
+                var jitterX = emergePos.getX() + 0.5 + (level.random.nextDouble() - 0.5) * 2.0;
+                var jitterZ = emergePos.getZ() + 0.5 + (level.random.nextDouble() - 0.5) * 2.0;
+                entity.moveTo(jitterX, emergePos.getY(), jitterZ, level.random.nextFloat() * 360.0F, 0.0F);
                 if (entity instanceof Mob mob) {
                     mob.finalizeSpawn(level, level.getCurrentDifficultyAt(spawnPos), MobSpawnType.MOB_SUMMONED, null);
                     mob.setPersistenceRequired();

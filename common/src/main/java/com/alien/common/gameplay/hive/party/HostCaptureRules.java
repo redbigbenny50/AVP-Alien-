@@ -65,12 +65,15 @@ public final class HostCaptureRules {
         if (AlienPredicates.hasEmbryo(living)) {
             return false; // already implanted - nothing to gain
         }
+        if (HostGrabImmunity.isImmune(living)) {
+            // EVERY host gets the post-rescue window, not just players. This check used to live inside the player
+            // branch below, so a rescued cow was re-grabbed on the very next tick - the rescue looked like it did
+            // nothing at all, and the capture sound machine-gunned as capture() fired over and over.
+            return false;
+        }
         if (living instanceof Player player) {
             if (player.isCreative() || player.isSpectator()) {
                 return false;
-            }
-            if (HostGrabImmunity.isImmune(player)) {
-                return false; // just escaped a grab
             }
             return player.getHealth() <= player.getMaxHealth() * PLAYER_GRAB_HEALTH_FRACTION;
         }
@@ -80,12 +83,12 @@ public final class HostCaptureRules {
     /** The best capture target from {@code candidates}, or null. Priority first, then distance. */
     public static @Nullable LivingEntity pickTarget(Alien captor, List<? extends LivingEntity> candidates) {
         return candidates.stream()
-            .filter(candidate -> isCapturable(captor, candidate))
-            .min(
-                Comparator.<LivingEntity>comparingInt(HostCaptureRules::capturePriority)
-                    .thenComparingDouble(captor::distanceToSqr)
-            )
-            .orElse(null);
+                .filter(candidate -> isCapturable(captor, candidate))
+                .min(
+                        Comparator.<LivingEntity>comparingInt(HostCaptureRules::capturePriority)
+                                .thenComparingDouble(captor::distanceToSqr)
+                )
+                .orElse(null);
     }
 
     private static boolean isSpitterHost(EntityType<?> type) {

@@ -37,7 +37,8 @@ public final class DeliverHostAction {
     private DeliverHostAction() {}
 
     /** How close the carrier must get to the vent approach before the hand-off fires. */
-    private static final double VENT_REACH_SQUARED = 2.5 * 2.5;
+    /** A carrier may use a vent from ANY side within this many blocks on each axis (a box, not a sphere). */
+    private static final int VENT_USE_RANGE = 2;
 
     /** Stall reasons are logged on this cadence, not every tick. */
     private static final int LOG_INTERVAL_TICKS = 100;
@@ -95,7 +96,7 @@ public final class DeliverHostAction {
         var approach = HiveVents.emergencePosNear(serverLevel, vent);
         var ventTarget = approach != null ? Vec3.atBottomCenterOf(approach) : Vec3.atBottomCenterOf(vent);
 
-        if (xenomorph.distanceToSqr(ventTarget) <= VENT_REACH_SQUARED) {
+        if (isAtVent(xenomorph, vent)) {
             NeoMoveToPosAction.onFinish(context);
             UNREACHABLE_VENTS.remove(xenomorph);
             HostCaptureTask.deliverToHostChamber(xenomorph, carried, serverLevel, location);
@@ -128,6 +129,18 @@ public final class DeliverHostAction {
     }
 
     /** SURFACE vents only: a captive comes in through the front door, never a cave-mouth outpost or an interior duct. */
+    /**
+     * Close enough to USE the vent: within {@link #VENT_USE_RANGE} blocks on EVERY axis - beside it, above it,
+     * below it, diagonally, all count. Vents are embedded in walls and floors, so a straight-line distance to
+     * the vent could fail even while the carrier stood right next to it.
+     */
+    private static boolean isAtVent(Xenomorph xenomorph, BlockPos vent) {
+        var pos = xenomorph.blockPosition();
+        return Math.abs(pos.getX() - vent.getX()) <= VENT_USE_RANGE
+                && Math.abs(pos.getY() - vent.getY()) <= VENT_USE_RANGE
+                && Math.abs(pos.getZ() - vent.getZ()) <= VENT_USE_RANGE;
+    }
+
     private static BlockPos nearestSurfaceVent(ServerLevel level, HiveLocation location, Xenomorph xenomorph) {
         var writtenOff = UNREACHABLE_VENTS.get(xenomorph);
 

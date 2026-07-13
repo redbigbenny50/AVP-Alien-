@@ -39,8 +39,8 @@ public final class HostGrabImmunity {
     /** Game time at which each host's grab-immunity expires. */
     private static final Map<Entity, Long> IMMUNE_UNTIL = new WeakHashMap<>();
 
-    /** Game time at which each stunned carrier recovers. */
-    private static final Map<Alien, Long> STUNNED_UNTIL = new WeakHashMap<>();
+    /** Each stunned carrier: when it recovers, and the tick the stun began. */
+    private static final Map<Alien, Stun> STUNNED = new WeakHashMap<>();
 
     /** Grant a freed host immunity from being grabbed again for a minute. */
     public static void grantImmunity(Entity host) {
@@ -66,25 +66,37 @@ public final class HostGrabImmunity {
 
     /** Stun the drone that just lost its catch: it stands idle until the timer runs out or something hits it. */
     public static void stun(Alien carrier) {
-        STUNNED_UNTIL.put(carrier, carrier.level().getGameTime() + ESCAPE_DURATION_TICKS);
+        STUNNED.put(
+                carrier,
+                new Stun(carrier.level().getGameTime() + ESCAPE_DURATION_TICKS, carrier.tickCount)
+        );
         if (carrier instanceof FreeMob freeMob) {
             freeMob.removeFreedom();
         }
     }
 
     public static boolean isStunned(Alien carrier) {
-        return STUNNED_UNTIL.containsKey(carrier);
+        return STUNNED.containsKey(carrier);
     }
 
-    /** Called from the carrier's tick: ends the stun when the timer expires. Hitting it wakes it early. */
+    /**
+     * Called from the carrier's tick: ends the stun when the timer expires, or early if something hits it.
+     * <p>
+     * The wake-on-pain check must IGNORE the blow that caused the stun. A rescue IS a hit on the carrier:
+     * {@code Alien.hurt} calls {@link #breakCapture} (which stuns) and only then runs {@code super.hurt}, which stamps
+     * the hurt timestamp. So the stunning blow lands on the same tick the stun starts, and a naive "hurt in the last
+     * five ticks" test cancels the stun instantly - the drone never stands still for a moment and simply grabs its
+     * victim straight back. Only a hit landed STRICTLY AFTER the stun began wakes it.
+     */
     public static void tickStun(Alien carrier) {
-        var until = STUNNED_UNTIL.get(carrier);
-        if (until == null) {
+        var stun = STUNNED.get(carrier);
+        if (stun == null) {
             return;
         }
-        boolean recovered = carrier.level().getGameTime() >= until;
+        boolean recovered = carrier.level().getGameTime() >= stun.recoversAt();
         boolean wokenByPain = carrier.getLastHurtByMob() != null
-            && carrier.tickCount - carrier.getLastHurtByMobTimestamp() < 5;
+                && carrier.getLastHurtByMobTimestamp() > stun.startedAtTick()
+                && carrier.tickCount - carrier.getLastHurtByMobTimestamp() < 5;
         if (recovered || wokenByPain) {
             wake(carrier);
         }
@@ -92,10 +104,12 @@ public final class HostGrabImmunity {
 
     /** End a stun immediately (recovered, or hit). */
     public static void wake(Alien carrier) {
-        if (STUNNED_UNTIL.remove(carrier) != null && carrier instanceof FreeMob freeMob) {
+        if (STUNNED.remove(carrier) != null && carrier instanceof FreeMob freeMob) {
             freeMob.restoreFreedom();
         }
     }
+
+    private record Stun(long recoversAt, int startedAtTick) {}
 
     /**
      * Release a carried host: it dismounts, regains its freedom and its grab-immunity, and the carrier is stunned. Used
