@@ -1,6 +1,9 @@
 package com.alien.common.gameplay.hive.party;
 
+import com.alien.common.gameplay.hive.location.HiveLocation;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.server.level.ServerPlayer;
 
 /**
  * Per-player retribution campaign state for {@link HiveParty.AttackParty}, driven by the territorial-intrusion model: a
@@ -68,6 +71,22 @@ public final class AttackCampaign {
         this.dwellTicks = 0L;
     }
 
+    /**
+     * Stamp a hostile act against a hive. Dwell only accrues for a player who is BOTH inside the claim and recently
+     * hostile ({@code HiveTerritoryAggroTask.HOSTILE_RECENCY_TICKS}) - that is what tells "fighting the hive" apart
+     * from "walking through it". Until now the only thing that counted as hostile was hitting a member, so a player
+     * could stroll into a host chamber, cut the hive's larder loose, and stroll out again without the hive ever
+     * noticing. Freeing a captive is theft, and the hive treats it as a blow.
+     */
+    public static void recordHostileAct(ServerLevel level, HiveLocation location, ServerPlayer player) {
+        if (!location.isAlive()) {
+            return;
+        }
+        location.attackCampaigns()
+                .computeIfAbsent(player.getUUID(), ignored -> new AttackCampaign())
+                .setLastHostileTick(level.getGameTime());
+    }
+
     public long lastHostileTick() {
         return lastHostileTick;
     }
@@ -122,12 +141,12 @@ public final class AttackCampaign {
 
     public static AttackCampaign load(CompoundTag tag) {
         return new AttackCampaign(
-            tag.getLong("DwellTicks"),
-            tag.contains("LastHostileTick") ? tag.getLong("LastHostileTick") : Long.MIN_VALUE,
-            tag.contains("IntrusionTick") ? tag.getLong("IntrusionTick") : -1L,
-            tag.getInt("WavesSent"),
-            tag.contains("LastWaveTick") ? tag.getLong("LastWaveTick") : Long.MIN_VALUE,
-            tag.getBoolean("Cleared")
+                tag.getLong("DwellTicks"),
+                tag.contains("LastHostileTick") ? tag.getLong("LastHostileTick") : Long.MIN_VALUE,
+                tag.contains("IntrusionTick") ? tag.getLong("IntrusionTick") : -1L,
+                tag.getInt("WavesSent"),
+                tag.contains("LastWaveTick") ? tag.getLong("LastWaveTick") : Long.MIN_VALUE,
+                tag.getBoolean("Cleared")
         );
     }
 }

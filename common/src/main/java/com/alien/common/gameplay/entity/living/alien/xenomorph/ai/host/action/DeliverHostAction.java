@@ -1,6 +1,8 @@
 package com.alien.common.gameplay.entity.living.alien.xenomorph.ai.host.action;
 
 import com.alien.common.gameplay.entity.living.alien.xenomorph.Xenomorph;
+import com.alien.common.gameplay.entity.living.alien.xenomorph.ai.host.InteriorSweepDuty;
+import com.alien.common.gameplay.hive.structure.HostChamberSlots;
 import com.alien.common.gameplay.hive.location.HiveLocation;
 import com.alien.common.gameplay.hive.location.HiveLocationRegistry;
 import com.alien.common.gameplay.hive.party.HostCaptureTask;
@@ -40,6 +42,9 @@ public final class DeliverHostAction {
     /** A carrier may use a vent from ANY side within this many blocks on each axis (a box, not a sphere). */
     private static final int VENT_USE_RANGE = 2;
 
+    /** Close enough to the chamber spot to web the host into it. */
+    private static final double CHAMBER_REACH_SQUARED = 2.5 * 2.5;
+
     /** Stall reasons are logged on this cadence, not every tick. */
     private static final int LOG_INTERVAL_TICKS = 100;
 
@@ -69,12 +74,18 @@ public final class DeliverHostAction {
         }
 
         var location = HiveLocationRegistry.INSTANCE.findNearestInDim(
-            serverLevel.dimension(),
-            xenomorph.blockPosition()
+                serverLevel.dimension(),
+                xenomorph.blockPosition()
         );
         if (location == null) {
             stall(xenomorph, "no hive location resolved - cannot deliver the host");
             return Action.Signal.CONTINUE;
+        }
+
+        // ALREADY INSIDE THE HIVE? Then walk it straight to the chamber. A drone that picked a cow up in a corridor
+        // must not carry it OUT of the hive to a surface vent just to duct it back in again.
+        if (InteriorSweepDuty.isInsideHive(location, xenomorph)) {
+            return deliverFromInside(context, xenomorph, carried, serverLevel, location);
         }
 
         var vent = nearestSurfaceVent(serverLevel, location, xenomorph);
@@ -118,6 +129,46 @@ public final class DeliverHostAction {
         };
     }
 
+    /**
+     * Delivery for a carrier that is already inside the hive: walk to the free chamber spot and web the host up there.
+     * No vent involved - there is nothing to duct through, we are already home.
+     * <p>
+     * The drone paths to the cell IN FRONT of the spot (the same cell the host's egg is later set in), because the spot
+     * itself is a web block in a wall and is not somewhere anything can stand.
+     */
+    private static Action.Signal deliverFromInside(
+            Action.Context<? extends Xenomorph> context,
+            Xenomorph xenomorph,
+            net.minecraft.world.entity.LivingEntity carried,
+            ServerLevel serverLevel,
+            HiveLocation location
+    ) {
+        var spot = HostChamberSlots.firstFreeSpot(serverLevel, location);
+        if (spot == null) {
+            // The larder filled up while we were carrying this one. Hold it; a spot may free up.
+            stall(xenomorph, "no free host-chamber spot - holding the host");
+            return Action.Signal.CONTINUE;
+        }
+
+        var approach = HostChamberSlots.eggDropFor(spot);
+        var target = Vec3.atBottomCenterOf(approach);
+
+        if (xenomorph.distanceToSqr(target) <= CHAMBER_REACH_SQUARED) {
+            NeoMoveToPosAction.onFinish(context);
+            HostCaptureTask.deliverToHostChamber(xenomorph, carried, serverLevel, location);
+            return Action.Signal.CONTINUE;
+        }
+
+        var result = NeoMoveToPosAction.perform(context, target, 0.5);
+        return switch (result) {
+            case MOVING, FINISHED -> Action.Signal.CONTINUE;
+            default -> {
+                stall(xenomorph, "cannot path to the host chamber at " + approach + " - holding the host");
+                yield Action.Signal.CONTINUE;
+            }
+        };
+    }
+
     public static void onFinish(Action.Context<? extends Xenomorph> context) {
         NeoMoveToPosAction.onFinish(context);
     }
@@ -139,8 +190,8 @@ public final class DeliverHostAction {
     private static boolean isAtVent(Xenomorph xenomorph, BlockPos vent) {
         var pos = xenomorph.blockPosition();
         return Math.abs(pos.getX() - vent.getX()) <= VENT_USE_RANGE
-            && Math.abs(pos.getY() - vent.getY()) <= VENT_USE_RANGE
-            && Math.abs(pos.getZ() - vent.getZ()) <= VENT_USE_RANGE;
+                && Math.abs(pos.getY() - vent.getY()) <= VENT_USE_RANGE
+                && Math.abs(pos.getZ() - vent.getZ()) <= VENT_USE_RANGE;
     }
 
     private static BlockPos nearestSurfaceVent(ServerLevel level, HiveLocation location, Xenomorph xenomorph) {

@@ -46,19 +46,26 @@ public final class HostParking {
      */
     public static boolean isParked(LivingEntity host) {
         return host instanceof Mob mob
-            && mob.isNoAi()
-            && host instanceof Host hostState
-            && hostState.getEmbedGameTime() != Long.MIN_VALUE;
+                && mob.isNoAi()
+                && host instanceof Host hostState
+                && hostState.getEmbedGameTime() != Long.MIN_VALUE;
     }
 
     /** Break the webbing around {@code webPos} and any captive it was holding walks free. */
     public static void releaseAt(ServerLevel level, BlockPos webPos) {
-        var box = new AABB(webPos).inflate(RELEASE_RADIUS);
-        for (var candidate : level.getEntitiesOfClass(LivingEntity.class, box)) {
-            if (isParked(candidate)) {
-                release(candidate);
-            }
+        for (var candidate : captivesAt(level, webPos)) {
+            release(candidate);
         }
+    }
+
+    /** True if this web is currently holding a captive. Asked BEFORE the block breaks, to know it was a rescue. */
+    public static boolean holdsCaptive(ServerLevel level, BlockPos webPos) {
+        return !captivesAt(level, webPos).isEmpty();
+    }
+
+    private static java.util.List<LivingEntity> captivesAt(ServerLevel level, BlockPos webPos) {
+        var box = new AABB(webPos).inflate(RELEASE_RADIUS);
+        return level.getEntitiesOfClass(LivingEntity.class, box, HostParking::isParked);
     }
 
     /** Undo an embed: AI back on, no longer counted as the hive's cargo, and briefly immune to being re-taken. */
