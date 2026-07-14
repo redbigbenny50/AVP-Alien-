@@ -36,6 +36,15 @@ public final class HostEggDelivery {
     private static final double EGG_DROP_SCAN_RADIUS = 0.5;
 
     /**
+     * How far from a host's egg-drop cell a loose or carried egg counts as "one is already on the way".
+     * <p>
+     * MUST match the ferry's inbound radius. An egg the ferry un-roots starts life across the hive and takes seconds
+     * to arrive; if this gate only looked AT the drop cell (as it once did) it would report the host still waiting and
+     * trigger another release every cadence, draining the whole nursery.
+     */
+    private static final double INBOUND_EGG_RADIUS = 48.0;
+
+    /**
      * The egg-drop cell in front of an embedded host ready for an egg, or empty if none: a free host (alive,
      * un-implanted, no parasite attached) embedded at least {@link #SETTLE_TICKS} ago, whose {@code eggDropFor} cell
      * holds no ovomorph yet.
@@ -49,8 +58,8 @@ public final class HostEggDelivery {
                     continue;
                 }
                 var eggDrop = HostChamberSlots.eggDropFor(spot);
-                if (hasOvomorphAt(level, eggDrop)) {
-                    continue; // already has, or is being brought, its egg
+                if (hasOvomorphAt(level, eggDrop) || hasInboundEgg(level, eggDrop)) {
+                    continue; // already has its egg, or one is loose and on the way
                 }
                 long embedTime = ((Host) host).getEmbedGameTime();
                 if (embedTime != Long.MIN_VALUE && now - embedTime >= SETTLE_TICKS) {
@@ -68,10 +77,10 @@ public final class HostEggDelivery {
                 continue;
             }
             if (
-                AlienPredicates.isHost(entity)
-                    && entity.isAlive()
-                    && !AlienPredicates.hasEmbryo(entity)
-                    && !hasParasitePassenger(entity)
+                    AlienPredicates.isHost(entity)
+                            && entity.isAlive()
+                            && !AlienPredicates.hasEmbryo(entity)
+                            && !hasParasitePassenger(entity)
             ) {
                 return entity;
             }
@@ -90,5 +99,15 @@ public final class HostEggDelivery {
 
     private static boolean hasOvomorphAt(ServerLevel level, BlockPos pos) {
         return !level.getEntitiesOfClass(Ovomorph.class, new AABB(pos).inflate(EGG_DROP_SCAN_RADIUS)).isEmpty();
+    }
+
+    /** Is an egg already loose (or being carried) and bound for this drop cell? Then the host is not "awaiting" one. */
+    private static boolean hasInboundEgg(ServerLevel level, BlockPos eggDrop) {
+        var box = new AABB(eggDrop).inflate(INBOUND_EGG_RADIUS);
+        return !level.getEntitiesOfClass(
+                Ovomorph.class,
+                box,
+                egg -> egg.isAlive() && (!egg.isRooted.get() || egg.isPassenger())
+        ).isEmpty();
     }
 }

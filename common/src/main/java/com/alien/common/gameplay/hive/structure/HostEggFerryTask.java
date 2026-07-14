@@ -30,9 +30,6 @@ public final class HostEggFerryTask {
 
     private HostEggFerryTask() {}
 
-    /** How far around the host's egg-drop cell an already-loose egg counts as "one is on the way". */
-    private static final double INBOUND_EGG_RADIUS = 48.0;
-
     /** How far around the queen to look for one of her rooted clutch eggs. */
     private static final double QUEEN_CLUTCH_RADIUS = 16.0;
 
@@ -44,17 +41,10 @@ public final class HostEggFerryTask {
         }
         var dropCell = awaiting.get();
 
-        // One in flight at a time: a loose egg (or one already being carried) near the host means help is coming.
-        var inboundBox = new AABB(dropCell).inflate(INBOUND_EGG_RADIUS);
-        boolean inbound = !level.getEntitiesOfClass(
-            Ovomorph.class,
-            inboundBox,
-            egg -> egg.isAlive() && (!egg.isRooted.get() || egg.isPassenger())
-        ).isEmpty();
-        if (inbound) {
-            return;
-        }
-
+        // findAwaitingHostEggDrop already excludes any host that has an egg inbound (same radius, same loose/carried
+        // test), so if we are here the host genuinely has nothing coming and we release exactly one egg. The old
+        // duplicate inbound check here used a DIFFERENT gate from the "awaiting" query, and the two disagreeing was
+        // what drained the nursery.
         var released = releaseStoredEgg(level, location);
         if (released == null) {
             // No nursery egg (an early hive may not have built an egg chamber yet) - take one from the queen's
@@ -66,9 +56,9 @@ public final class HostEggFerryTask {
         }
 
         Alien.LOGGER.info(
-            "Hive at {}: released a stored egg to ferry to a waiting host at {}.",
-            location.centerPos(),
-            dropCell
+                "Hive at {}: released a stored egg to ferry to a waiting host at {}.",
+                location.centerPos(),
+                dropCell
         );
     }
 

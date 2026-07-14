@@ -29,16 +29,21 @@ public final class HostSensors {
     public static final double HOST_SEARCH_RADIUS = 32.0;
 
     public static final Sensor.Mono<Xenomorph, Boolean> HAS_TARGET_HOST = Sensors.map(
-        StateKey.sensed("has_target_host"),
-        xenomorph -> findCaptureTarget(xenomorph) != null
+            StateKey.sensed("has_target_host"),
+            xenomorph -> findCaptureTarget(xenomorph) != null
     );
 
     public static final Sensor.Mono<Xenomorph, Boolean> IS_CARRYING_HOST = Sensors.map(
-        StateKey.sensed("is_carrying_host"),
-        xenomorph -> xenomorph.getPassengers()
-            .stream()
-            .anyMatch(passenger -> passenger.getType().is(AlienEntityTypeTags.HOSTS))
+            StateKey.sensed("is_carrying_host"),
+            HostSensors::isCarryingHost
     );
+
+    /** True if this xenomorph already has a captured host riding it. */
+    public static boolean isCarryingHost(Xenomorph xenomorph) {
+        return xenomorph.getPassengers()
+                .stream()
+                .anyMatch(passenger -> passenger.getType().is(AlienEntityTypeTags.HOSTS));
+    }
 
     /**
      * The best host for this xenomorph to capture, or null.
@@ -51,6 +56,15 @@ public final class HostSensors {
      * identically, so without that filter the whole party walks past two viable hosts to pile onto one.
      */
     public static LivingEntity findCaptureTarget(Xenomorph xenomorph) {
+        // Already got one? Then there is nothing to hunt - go and DELIVER it. Without this the drone still sees the
+        // host on its own back as a valid quarry: HAS_TARGET_HOST and IS_CARRYING_HOST are both true at once, the
+        // planner flickers between CAPTURE and DELIVER, and the drone "chases" the captive it is already holding -
+        // which is the wandering, and the speeding-up-and-slowing-down (chaseSpeedFor recomputing against a target
+        // that moves with it).
+        if (isCarryingHost(xenomorph)) {
+            return null;
+        }
+
         var onHostHunt = HostHuntDuty.isOnHostHunt(xenomorph);
         var sweeping = !onHostHunt && InteriorSweepDuty.isSweeper(xenomorph);
 
@@ -66,12 +80,12 @@ public final class HostSensors {
 
         var box = xenomorph.getBoundingBox().inflate(HOST_SEARCH_RADIUS);
         var candidates = xenomorph.level()
-            .getEntitiesOfClass(LivingEntity.class, box)
-            .stream()
-            .filter(candidate -> !sweeping || InteriorSweepDuty.isInsideHive(hive, candidate))
-            .filter(candidate -> !HostClaims.isClaimedByOther(candidate, xenomorph))
-            .filter(candidate -> !HostClaims.isUnreachableFor(candidate, xenomorph))
-            .toList();
+                .getEntitiesOfClass(LivingEntity.class, box)
+                .stream()
+                .filter(candidate -> !sweeping || InteriorSweepDuty.isInsideHive(hive, candidate))
+                .filter(candidate -> !HostClaims.isClaimedByOther(candidate, xenomorph))
+                .filter(candidate -> !HostClaims.isUnreachableFor(candidate, xenomorph))
+                .toList();
         return HostCaptureRules.pickTarget(xenomorph, candidates);
     }
 }
