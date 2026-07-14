@@ -37,6 +37,10 @@ public class EnglishLanguageProvider extends FabricLanguageProvider {
         EnUsCreativeModeTabProvider.CONSUMER.accept(builder);
 
         // Death messages
+        // Boss bar shown while a queen is DOWN. This lived only in the generated en_us.json and would have been
+        // wiped by the next datagen run, leaving the raw key on screen.
+        builder.add("boss.avp_alien.queen_incapacitated", "Queen \u2014 Incapacitated");
+
         builder.add("death.attack.acid", "%1$s vaporized in acid");
         builder.add("death.attack.chestbursting", "%1$s gave birth");
         builder.add("death.attack.ravager_claw", "%1$s was torn apart");
