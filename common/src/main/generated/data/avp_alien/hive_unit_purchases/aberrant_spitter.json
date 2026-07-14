@@ -1,0 +1,18 @@
+{
+  "biomass": 15,
+  "conditions": [
+    {
+      "type": "max_entity_count_in_location",
+      "entity": "avp_alien:aberrant_spitter",
+      "value": 60
+    }
+  ],
+  "input_entities": [
+    {
+      "count": 1,
+      "entity": "avp_alien:aberrant_ovomorph"
+    }
+  ],
+  "output_entity": "avp_alien:aberrant_spitter",
+  "population_biomass_cost_scale": 0.05
+}
