@@ -1,7 +1,9 @@
 package com.alien.common.gameplay.block.resin.web;
 
+import com.alien.common.gameplay.hive.structure.HostParking;
 import com.alien.common.registry.tag.AlienEntityTypeTags;
 import net.minecraft.core.BlockPos;
+import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.level.BlockGetter;
 import net.minecraft.world.level.Level;
@@ -26,12 +28,34 @@ public class ResinWebBlock extends Block {
 
     @Override
     protected @NotNull VoxelShape getShape(
-        @NotNull BlockState blockState,
-        @NotNull BlockGetter blockGetter,
-        @NotNull BlockPos blockPos,
-        @NotNull CollisionContext collisionContext
+            @NotNull BlockState blockState,
+            @NotNull BlockGetter blockGetter,
+            @NotNull BlockPos blockPos,
+            @NotNull CollisionContext collisionContext
     ) {
         return SHAPE;
+    }
+
+    /**
+     * Cutting the webbing frees the captive inside it.
+     * <p>
+     * A host embedded in a chamber is {@code setNoAi(true)} and nothing anywhere used to turn that back on, so a webbed
+     * mob was frozen permanently and could not be rescued at all. Break the web and its AI comes back.
+     */
+    @Override
+    protected void onRemove(
+            @NotNull BlockState blockState,
+            @NotNull Level level,
+            @NotNull BlockPos blockPos,
+            @NotNull BlockState newState,
+            boolean movedByPiston
+    ) {
+        // Only when the web is actually GOING - not on a state swap of the same block.
+        if (!blockState.is(newState.getBlock()) && level instanceof ServerLevel serverLevel) {
+            HostParking.releaseAt(serverLevel, blockPos);
+        }
+
+        super.onRemove(blockState, level, blockPos, newState, movedByPiston);
     }
 
     @Override
@@ -41,8 +65,8 @@ public class ResinWebBlock extends Block {
             var eyeBlockPos = BlockPos.containing(eyePos);
             var eyeBlockState = level.getBlockState(eyeBlockPos);
             var modifier = eyeBlockState.getBlock() instanceof ResinWebBlock
-                ? STUCK_MOVEMENT_MODIFIER
-                : MOVEMENT_MODIFIER;
+                    ? STUCK_MOVEMENT_MODIFIER
+                    : MOVEMENT_MODIFIER;
 
             entity.makeStuckInBlock(blockState, modifier);
         }

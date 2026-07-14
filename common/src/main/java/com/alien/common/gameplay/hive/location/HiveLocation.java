@@ -78,6 +78,12 @@ public final class HiveLocation {
 
     private static final String NBT_LAST_ABSTRACT_SPREAD_TICK = "LastAbstractSpreadTick";
 
+    private static final String NBT_LAST_SURFACE_PARTY_TICK = "LastSurfacePartyTick";
+
+    private static final String NBT_LAST_BIOMASS_PARTY_TICK = "LastBiomassPartyTick";
+
+    private static final String NBT_LAST_HOST_HUNT_PARTY_TICK = "LastHostHuntPartyTick";
+
     private static final String NBT_LAST_ABSTRACT_SPREAD_ATTEMPT = "LastAbstractSpreadAttempt";
 
     private static final String NBT_PEAK_XENOMORPH_COUNT = "PeakXenomorphCount";
@@ -170,6 +176,13 @@ public final class HiveLocation {
     private long lastPassiveClaimTick;
 
     private long lastAbstractSpreadTick;
+
+    /** Game time each throttled party type last went out. See PARTY_COOLDOWN_TICKS. */
+    private long lastSurfacePartyTick;
+
+    private long lastBiomassPartyTick;
+
+    private long lastHostHuntPartyTick;
 
     private AbstractSpreadAttemptDebug lastAbstractSpreadAttempt;
 
@@ -340,11 +353,11 @@ public final class HiveLocation {
     private @Nullable HiveLocationRemovalReason removalReason;
 
     public HiveLocation(
-        HiveLocationId id,
-        ResourceLocation lineageFactionId,
-        ResourceKey<Level> dimension,
-        BlockPos centerPos,
-        @Nullable UUID founderId
+            HiveLocationId id,
+            ResourceLocation lineageFactionId,
+            ResourceKey<Level> dimension,
+            BlockPos centerPos,
+            @Nullable UUID founderId
     ) {
         this(id);
         this.lineageFactionId = lineageFactionId;
@@ -363,6 +376,9 @@ public final class HiveLocation {
         this.lastGrowthTick = 0L;
         this.lastPassiveClaimTick = 0L;
         this.lastAbstractSpreadTick = 0L;
+        this.lastSurfacePartyTick = 0L;
+        this.lastBiomassPartyTick = 0L;
+        this.lastHostHuntPartyTick = 0L;
         this.lastAbstractSpreadAttempt = AbstractSpreadAttemptDebug.none();
         this.peakXenomorphCount = 1;
         this.peakDecayElapsedTicks = 0L;
@@ -464,7 +480,7 @@ public final class HiveLocation {
      */
     public boolean withinSlab(int y) {
         return y >= hiveFloorY() - SLAB_TOLERANCE
-            && y < hiveCeilingY() + SLAB_TOLERANCE;
+                && y < hiveCeilingY() + SLAB_TOLERANCE;
     }
 
     public @Nullable UUID founderId() {
@@ -507,16 +523,54 @@ public final class HiveLocation {
         this.lastAbstractSpreadTick = Math.max(0L, lastAbstractSpreadTick);
     }
 
+    /**
+     * How long a hive must WAIT before sending another party of the same kind: three Minecraft days.
+     * <p>
+     * Parties were going out back-to-back, which drained the reserves as fast as the hive could breed them - the
+     * population never had a chance to settle, let alone be promoted into warriors and prowlers. A raid should be
+     * an event, not a conveyor belt.
+     */
+    public static final long PARTY_COOLDOWN_TICKS = 3L * 24000L;
+
+    public long lastSurfacePartyTick() {
+        return lastSurfacePartyTick;
+    }
+
+    public void setLastSurfacePartyTick(long tick) {
+        this.lastSurfacePartyTick = Math.max(0L, tick);
+    }
+
+    public long lastBiomassPartyTick() {
+        return lastBiomassPartyTick;
+    }
+
+    public void setLastBiomassPartyTick(long tick) {
+        this.lastBiomassPartyTick = Math.max(0L, tick);
+    }
+
+    public long lastHostHuntPartyTick() {
+        return lastHostHuntPartyTick;
+    }
+
+    public void setLastHostHuntPartyTick(long tick) {
+        this.lastHostHuntPartyTick = Math.max(0L, tick);
+    }
+
+    /** True if {@code lastTick} is still inside the party cooldown. A zero/absent stamp never blocks. */
+    public static boolean onPartyCooldown(long lastTick, long currentGameTime) {
+        return lastTick > 0L && currentGameTime - lastTick < PARTY_COOLDOWN_TICKS;
+    }
+
     public AbstractSpreadAttemptDebug lastAbstractSpreadAttempt() {
         return lastAbstractSpreadAttempt;
     }
 
     public void recordAbstractSpreadAttempt(
-        long tick,
-        String result,
-        @Nullable ChunkPos candidateChunk,
-        @Nullable HiveLocationId createdLocationId,
-        String detail
+            long tick,
+            String result,
+            @Nullable ChunkPos candidateChunk,
+            @Nullable HiveLocationId createdLocationId,
+            String detail
     ) {
         this.lastAbstractSpreadAttempt = new AbstractSpreadAttemptDebug(tick, result, candidateChunk, createdLocationId, detail);
     }
@@ -894,6 +948,15 @@ public final class HiveLocation {
         if (lastAbstractSpreadTick > 0L) {
             tag.putLong(NBT_LAST_ABSTRACT_SPREAD_TICK, lastAbstractSpreadTick);
         }
+        if (lastSurfacePartyTick > 0L) {
+            tag.putLong(NBT_LAST_SURFACE_PARTY_TICK, lastSurfacePartyTick);
+        }
+        if (lastBiomassPartyTick > 0L) {
+            tag.putLong(NBT_LAST_BIOMASS_PARTY_TICK, lastBiomassPartyTick);
+        }
+        if (lastHostHuntPartyTick > 0L) {
+            tag.putLong(NBT_LAST_HOST_HUNT_PARTY_TICK, lastHostHuntPartyTick);
+        }
         if (lastAbstractSpreadAttempt.tick() >= 0L) {
             tag.put(NBT_LAST_ABSTRACT_SPREAD_ATTEMPT, lastAbstractSpreadAttempt.save());
         }
@@ -943,9 +1006,9 @@ public final class HiveLocation {
             var pendingHarvestTag = new ListTag();
             for (var type : pendingHarvestSpawners) {
                 pendingHarvestTag.add(
-                    net.minecraft.nbt.StringTag.valueOf(
-                        net.minecraft.core.registries.BuiltInRegistries.ENTITY_TYPE.getKey(type).toString()
-                    )
+                        net.minecraft.nbt.StringTag.valueOf(
+                                net.minecraft.core.registries.BuiltInRegistries.ENTITY_TYPE.getKey(type).toString()
+                        )
                 );
             }
             tag.put(NBT_PENDING_HARVEST_SPAWNERS, pendingHarvestTag);
@@ -1094,39 +1157,42 @@ public final class HiveLocation {
         location.ageInTicks = tag.getLong(NBT_AGE_IN_TICKS);
         location.lastGrowthTick = tag.getLong(NBT_LAST_GROWTH_TICK);
         location.lastPassiveClaimTick = tag.contains(NBT_LAST_PASSIVE_CLAIM_TICK)
-            ? Math.max(0L, tag.getLong(NBT_LAST_PASSIVE_CLAIM_TICK))
-            : Math.max(0L, location.lastGrowthTick);
+                ? Math.max(0L, tag.getLong(NBT_LAST_PASSIVE_CLAIM_TICK))
+                : Math.max(0L, location.lastGrowthTick);
         location.lastAbstractSpreadTick = Math.max(0L, tag.getLong(NBT_LAST_ABSTRACT_SPREAD_TICK));
+        location.lastSurfacePartyTick = Math.max(0L, tag.getLong(NBT_LAST_SURFACE_PARTY_TICK));
+        location.lastBiomassPartyTick = Math.max(0L, tag.getLong(NBT_LAST_BIOMASS_PARTY_TICK));
+        location.lastHostHuntPartyTick = Math.max(0L, tag.getLong(NBT_LAST_HOST_HUNT_PARTY_TICK));
         location.lastAbstractSpreadAttempt = tag.contains(NBT_LAST_ABSTRACT_SPREAD_ATTEMPT)
-            ? AbstractSpreadAttemptDebug.load(tag.getCompound(NBT_LAST_ABSTRACT_SPREAD_ATTEMPT))
-            : AbstractSpreadAttemptDebug.none();
+                ? AbstractSpreadAttemptDebug.load(tag.getCompound(NBT_LAST_ABSTRACT_SPREAD_ATTEMPT))
+                : AbstractSpreadAttemptDebug.none();
         location.peakXenomorphCount = Math.max(1, tag.getInt(NBT_PEAK_XENOMORPH_COUNT));
         location.peakDecayElapsedTicks = Math.max(0L, tag.getLong(NBT_PEAK_DECAY_ELAPSED));
         location.evacuatingRemainingTicks = Math.max(0L, tag.getLong(NBT_EVACUATING_REMAINING));
         location.noContactTicksAccrued = tag.contains(NBT_NO_CONTACT_TICKS_ACCRUED)
-            ? Math.max(0L, tag.getLong(NBT_NO_CONTACT_TICKS_ACCRUED))
-            : 0L;
+                ? Math.max(0L, tag.getLong(NBT_NO_CONTACT_TICKS_ACCRUED))
+                : 0L;
         // Hives saved before this state existed load gracefully as a fresh location: fund available, nothing
         // accrued, no sample taken yet — exactly the private-constructor defaults, so no migration is needed.
         location.firewallFundAvailable = !tag.contains(NBT_FIREWALL_FUND_AVAILABLE) || tag.getBoolean(NBT_FIREWALL_FUND_AVAILABLE);
         location.firewallStableAccruedTicks = tag.contains(NBT_FIREWALL_STABLE_ACCRUED_TICKS)
-            ? Math.max(0L, tag.getLong(NBT_FIREWALL_STABLE_ACCRUED_TICKS))
-            : 0L;
+                ? Math.max(0L, tag.getLong(NBT_FIREWALL_STABLE_ACCRUED_TICKS))
+                : 0L;
         location.firewallBiomassSampleTick = tag.contains(NBT_FIREWALL_BIOMASS_SAMPLE_TICK)
-            ? tag.getLong(NBT_FIREWALL_BIOMASS_SAMPLE_TICK)
-            : Long.MIN_VALUE;
+                ? tag.getLong(NBT_FIREWALL_BIOMASS_SAMPLE_TICK)
+                : Long.MIN_VALUE;
         location.firewallBiomassSampleValue = tag.contains(NBT_FIREWALL_BIOMASS_SAMPLE_VALUE)
-            ? tag.getInt(NBT_FIREWALL_BIOMASS_SAMPLE_VALUE)
-            : 0;
+                ? tag.getInt(NBT_FIREWALL_BIOMASS_SAMPLE_VALUE)
+                : 0;
         location.combatRespiteRemainingTicks = Math.max(0L, tag.getLong(NBT_COMBAT_RESPITE_REMAINING_TICKS));
         location.combatKillsSinceLastRespite = Math.max(0, tag.getInt(NBT_COMBAT_KILLS_SINCE_LAST_RESPITE));
         location.locationNumber = tag.contains(NBT_LOCATION_NUMBER) ? tag.getLong(NBT_LOCATION_NUMBER) : -1L;
         location.queenlessMaturationLastAdvanceTick = tag.contains(NBT_QUEENLESS_MATURATION_LAST_ADVANCE)
-            ? tag.getLong(NBT_QUEENLESS_MATURATION_LAST_ADVANCE)
-            : Long.MIN_VALUE;
+                ? tag.getLong(NBT_QUEENLESS_MATURATION_LAST_ADVANCE)
+                : Long.MIN_VALUE;
         location.queenlessLeaderSnapshot = tag.hasUUID(NBT_QUEENLESS_LEADER_SNAPSHOT)
-            ? tag.getUUID(NBT_QUEENLESS_LEADER_SNAPSHOT)
-            : null;
+                ? tag.getUUID(NBT_QUEENLESS_LEADER_SNAPSHOT)
+                : null;
         location.biomass = Math.max(0, tag.getInt(NBT_BIOMASS));
         location.reproductiveEstablished = tag.getBoolean(NBT_REPRODUCTIVE_ESTABLISHED);
         location.inhibited = tag.getBoolean(NBT_INHIBITED);
@@ -1138,7 +1204,7 @@ public final class HiveLocation {
                 var typeId = net.minecraft.resources.ResourceLocation.tryParse(pendingHarvestTag.getString(i));
                 if (typeId != null) {
                     net.minecraft.core.registries.BuiltInRegistries.ENTITY_TYPE.getOptional(typeId)
-                        .ifPresent(location.pendingHarvestSpawners::add);
+                            .ifPresent(location.pendingHarvestSpawners::add);
                 }
             }
         }
@@ -1178,8 +1244,8 @@ public final class HiveLocation {
             for (var i = 0; i < rolesTag.size(); i++) {
                 var entryTag = rolesTag.getCompound(i);
                 location.structureRoleByChunk.put(
-                    new ChunkPos(entryTag.getInt("X"), entryTag.getInt("Z")),
-                    HiveStructureRole.byName(entryTag.getString("Role"))
+                        new ChunkPos(entryTag.getInt("X"), entryTag.getInt("Z")),
+                        HiveStructureRole.byName(entryTag.getString("Role"))
                 );
             }
         }
@@ -1189,8 +1255,8 @@ public final class HiveLocation {
             for (var i = 0; i < piecesTag.size(); i++) {
                 var entryTag = piecesTag.getCompound(i);
                 location.structurePieceByChunk.put(
-                    new ChunkPos(entryTag.getInt("X"), entryTag.getInt("Z")),
-                    entryTag.getString("Piece")
+                        new ChunkPos(entryTag.getInt("X"), entryTag.getInt("Z")),
+                        entryTag.getString("Piece")
                 );
             }
         }
@@ -1209,14 +1275,14 @@ public final class HiveLocation {
         location.parties.clear();
         if (tag.contains(NBT_PARTIES)) {
             location.parties.addAll(
-                com.alien.common.gameplay.hive.party.HivePartyCodec.loadAll(tag.getList(NBT_PARTIES, Tag.TAG_COMPOUND))
+                    com.alien.common.gameplay.hive.party.HivePartyCodec.loadAll(tag.getList(NBT_PARTIES, Tag.TAG_COMPOUND))
             );
         }
 
         location.grudgePlayerId = tag.hasUUID(NBT_GRUDGE_PLAYER_ID) ? tag.getUUID(NBT_GRUDGE_PLAYER_ID) : null;
         location.rescueCampaign = tag.contains(NBT_RESCUE_CAMPAIGN)
-            ? com.alien.common.gameplay.hive.party.RescueCampaign.load(tag.getCompound(NBT_RESCUE_CAMPAIGN))
-            : null;
+                ? com.alien.common.gameplay.hive.party.RescueCampaign.load(tag.getCompound(NBT_RESCUE_CAMPAIGN))
+                : null;
 
         location.attackCampaigns.clear();
         if (tag.contains(NBT_ATTACK_CAMPAIGNS)) {
@@ -1224,8 +1290,8 @@ public final class HiveLocation {
             for (var i = 0; i < campaignsTag.size(); i++) {
                 var entryTag = campaignsTag.getCompound(i);
                 location.attackCampaigns.put(
-                    entryTag.getUUID("PlayerId"),
-                    com.alien.common.gameplay.hive.party.AttackCampaign.load(entryTag)
+                        entryTag.getUUID("PlayerId"),
+                        com.alien.common.gameplay.hive.party.AttackCampaign.load(entryTag)
                 );
             }
         }
@@ -1263,11 +1329,11 @@ public final class HiveLocation {
     }
 
     public record AbstractSpreadAttemptDebug(
-        long tick,
-        String result,
-        @Nullable ChunkPos candidateChunk,
-        @Nullable HiveLocationId createdLocationId,
-        String detail
+            long tick,
+            String result,
+            @Nullable ChunkPos candidateChunk,
+            @Nullable HiveLocationId createdLocationId,
+            String detail
     ) {
 
         private static final String NBT_TICK = "Tick";
@@ -1293,11 +1359,11 @@ public final class HiveLocation {
 
         public static AbstractSpreadAttemptDebug none() {
             return new AbstractSpreadAttemptDebug(
-                -1L,
-                "never",
-                null,
-                null,
-                "No abstract spread attempt has been recorded."
+                    -1L,
+                    "never",
+                    null,
+                    null,
+                    "No abstract spread attempt has been recorded."
             );
         }
 
@@ -1318,18 +1384,18 @@ public final class HiveLocation {
 
         public static AbstractSpreadAttemptDebug load(CompoundTag tag) {
             var candidateChunk = tag.contains(NBT_CANDIDATE_CHUNK_X) && tag.contains(NBT_CANDIDATE_CHUNK_Z)
-                ? new ChunkPos(tag.getInt(NBT_CANDIDATE_CHUNK_X), tag.getInt(NBT_CANDIDATE_CHUNK_Z))
-                : null;
+                    ? new ChunkPos(tag.getInt(NBT_CANDIDATE_CHUNK_X), tag.getInt(NBT_CANDIDATE_CHUNK_Z))
+                    : null;
             var createdLocationId = tag.contains(NBT_CREATED_LOCATION_ID)
-                ? new HiveLocationId(ResourceLocation.parse(tag.getString(NBT_CREATED_LOCATION_ID)))
-                : null;
+                    ? new HiveLocationId(ResourceLocation.parse(tag.getString(NBT_CREATED_LOCATION_ID)))
+                    : null;
 
             return new AbstractSpreadAttemptDebug(
-                tag.contains(NBT_TICK) ? tag.getLong(NBT_TICK) : -1L,
-                tag.contains(NBT_RESULT) ? tag.getString(NBT_RESULT) : "unknown",
-                candidateChunk,
-                createdLocationId,
-                tag.contains(NBT_DETAIL) ? tag.getString(NBT_DETAIL) : ""
+                    tag.contains(NBT_TICK) ? tag.getLong(NBT_TICK) : -1L,
+                    tag.contains(NBT_RESULT) ? tag.getString(NBT_RESULT) : "unknown",
+                    candidateChunk,
+                    createdLocationId,
+                    tag.contains(NBT_DETAIL) ? tag.getString(NBT_DETAIL) : ""
             );
         }
     }

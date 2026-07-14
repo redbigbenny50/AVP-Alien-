@@ -27,6 +27,17 @@ public final class HostHuntPartyDispatch {
     private HostHuntPartyDispatch() {}
 
     public static void tryRun(MinecraftServer server, HiveLocation location, HiveConfig config) {
+        // Three-day cooldown: a party of this kind is an EVENT, not a conveyor belt. Back-to-back dispatches
+        // drained the reserves as fast as the hive could breed them, so the population never settled and
+        // never got promoted into warriors or prowlers.
+        var world = server.getLevel(location.dimension());
+        if (world == null) {
+            return;
+        }
+        if (HiveLocation.onPartyCooldown(location.lastHostHuntPartyTick(), world.getGameTime())) {
+            return;
+        }
+
         var serverLevel = server.getLevel(location.dimension());
         if (serverLevel == null) {
             return;
@@ -54,17 +65,17 @@ public final class HostHuntPartyDispatch {
 
         // Size scales with claims but is CAPPED (bonus spitters ride on top of this budget).
         var hostCap = com.alien.common.gameplay.hive.structure.HiveRouter.isEmpressInfluenced(location)
-            ? config.hostHuntPartyMaxSizeEmpress()
-            : config.hostHuntPartyMaxSize();
+                ? config.hostHuntPartyMaxSizeEmpress()
+                : config.hostHuntPartyMaxSize();
         var desiredSize = Math.min(
-            hostCap,
-            Math.max(
-                1,
-                Math.round(
-                    config.hostHuntPartyBaseSize()
-                        + config.hostHuntPartySizePerClaimedChunk() * location.claimedChunks().size()
+                hostCap,
+                Math.max(
+                        1,
+                        Math.round(
+                                config.hostHuntPartyBaseSize()
+                                        + config.hostHuntPartySizePerClaimedChunk() * location.claimedChunks().size()
+                        )
                 )
-            )
         );
 
         var composition = drainComposition(location, (int) desiredSize, 0);
@@ -74,11 +85,11 @@ public final class HostHuntPartyDispatch {
 
         var currentTick = serverLevel.getGameTime();
         var party = new HiveParty.HostHunt(
-            HivePartyId.fresh(),
-            location.id(),
-            location.dimension(),
-            composition,
-            currentTick
+                HivePartyId.fresh(),
+                location.id(),
+                location.dimension(),
+                composition,
+                currentTick
         );
 
         var spawnedCount = materialize(serverLevel, location, party, spawnPos);
@@ -88,11 +99,13 @@ public final class HostHuntPartyDispatch {
         }
 
         location.parties().add(party);
+        location.setLastHostHuntPartyTick(world.getGameTime());
+
         Alien.LOGGER.info(
-            "Hive: dispatched host hunt party for location {} — {} members from vent at {}",
-            location.id(),
-            spawnedCount,
-            spawnPos
+                "Hive: dispatched host hunt party for location {} — {} members from vent at {}",
+                location.id(),
+                spawnedCount,
+                spawnPos
         );
     }
 
@@ -113,10 +126,10 @@ public final class HostHuntPartyDispatch {
     }
 
     private static void drainUpTo(
-        com.alien.common.gameplay.hive.location.HiveLocationReserves reserves,
-        EntityReserves composition,
-        List<EntityType<?>> candidateTypes,
-        int count
+            com.alien.common.gameplay.hive.location.HiveLocationReserves reserves,
+            EntityReserves composition,
+            List<EntityType<?>> candidateTypes,
+            int count
     ) {
         if (candidateTypes.isEmpty()) {
             return;

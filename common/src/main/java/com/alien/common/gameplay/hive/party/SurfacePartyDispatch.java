@@ -31,6 +31,17 @@ public final class SurfacePartyDispatch {
     private SurfacePartyDispatch() {}
 
     public static void tryRun(MinecraftServer server, HiveLocation location, HiveConfig config) {
+        // Three-day cooldown: a party of this kind is an EVENT, not a conveyor belt. Back-to-back dispatches
+        // drained the reserves as fast as the hive could breed them, so the population never settled and
+        // never got promoted into warriors or prowlers.
+        var world = server.getLevel(location.dimension());
+        if (world == null) {
+            return;
+        }
+        if (HiveLocation.onPartyCooldown(location.lastSurfacePartyTick(), world.getGameTime())) {
+            return;
+        }
+
         var serverLevel = server.getLevel(location.dimension());
         if (serverLevel == null || serverLevel.isDay()) {
             return;
@@ -45,14 +56,14 @@ public final class SurfacePartyDispatch {
 
         // Size scales with claims but is CAPPED - unbounded scaling put 20+ runners on a large hive.
         var surfaceCap = com.alien.common.gameplay.hive.structure.HiveRouter.isEmpressInfluenced(location)
-            ? config.surfacePartyMaxSizeEmpress()
-            : config.surfacePartyMaxSize();
+                ? config.surfacePartyMaxSizeEmpress()
+                : config.surfacePartyMaxSize();
         var desiredSize = Math.min(
-            surfaceCap,
-            Math.max(
-                1,
-                Math.round(config.surfacePartyBaseSize() + config.surfacePartySizePerClaimedChunk() * location.claimedChunks().size())
-            )
+                surfaceCap,
+                Math.max(
+                        1,
+                        Math.round(config.surfacePartyBaseSize() + config.surfacePartySizePerClaimedChunk() * location.claimedChunks().size())
+                )
         );
 
         var composition = drainRunners(location, (int) desiredSize);
@@ -77,11 +88,13 @@ public final class SurfacePartyDispatch {
         }
 
         location.parties().add(party);
+        location.setLastSurfacePartyTick(world.getGameTime());
+
         Alien.LOGGER.info(
-            "Hive: dispatched surface spawn party for location {} — {} runners at {}",
-            location.id(),
-            spawnedCount,
-            spawnPos
+                "Hive: dispatched surface spawn party for location {} — {} runners at {}",
+                location.id(),
+                spawnedCount,
+                spawnPos
         );
     }
 

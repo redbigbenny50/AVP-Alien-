@@ -1,6 +1,7 @@
 package com.alien.common.gameplay.hive.party;
 
 import com.alien.common.gameplay.entity.living.alien.Alien;
+import com.alien.common.gameplay.hive.structure.HostParking;
 import com.alien.common.registry.tag.AlienEntityTypeTags;
 import com.alien.common.util.AlienPredicates;
 import net.minecraft.resources.ResourceLocation;
@@ -65,6 +66,14 @@ public final class HostCaptureRules {
         if (AlienPredicates.hasEmbryo(living)) {
             return false; // already implanted - nothing to gain
         }
+        if (HostParking.isParked(living)) {
+            // ALREADY WEBBED IN OUR OWN HOST CHAMBER. Without this a host-hunt party spawning at a surface vent looks
+            // down, sees the captives the hive already has 15 blocks below it (HOST_SEARCH_RADIUS is 32), marks them
+            // as quarry, and spends its entire life trying to walk into solid rock. Host hunts never hunted anything.
+            //
+            // A host loose INSIDE the hive but not in a chamber is still fair game - only the webbed ones are off.
+            return false;
+        }
         if (HostGrabImmunity.isImmune(living)) {
             // EVERY host gets the post-rescue window, not just players. This check used to live inside the player
             // branch below, so a rescued cow was re-grabbed on the very next tick - the rescue looked like it did
@@ -83,12 +92,12 @@ public final class HostCaptureRules {
     /** The best capture target from {@code candidates}, or null. Priority first, then distance. */
     public static @Nullable LivingEntity pickTarget(Alien captor, List<? extends LivingEntity> candidates) {
         return candidates.stream()
-            .filter(candidate -> isCapturable(captor, candidate))
-            .min(
-                Comparator.<LivingEntity>comparingInt(HostCaptureRules::capturePriority)
-                    .thenComparingDouble(captor::distanceToSqr)
-            )
-            .orElse(null);
+                .filter(candidate -> isCapturable(captor, candidate))
+                .min(
+                        Comparator.<LivingEntity>comparingInt(HostCaptureRules::capturePriority)
+                                .thenComparingDouble(captor::distanceToSqr)
+                )
+                .orElse(null);
     }
 
     private static boolean isSpitterHost(EntityType<?> type) {

@@ -27,6 +27,12 @@ public final class HostClaims {
 
     private static final Map<LivingEntity, Claim> CLAIMS = new WeakHashMap<>();
 
+    /** How long a drone gives up on quarry it could not path to before it will consider it again. */
+    public static final int WRITE_OFF_TICKS = 600;
+
+    /** Quarry each captor has failed to reach, and when it may look at it again. */
+    private static final Map<Alien, Map<LivingEntity, Long>> UNREACHABLE = new WeakHashMap<>();
+
     /** Stake or refresh this captor's claim on a host. */
     public static void claim(LivingEntity host, Alien captor) {
         CLAIMS.put(host, new Claim(captor.getUUID(), host.level().getGameTime() + CLAIM_TTL_TICKS));
@@ -53,8 +59,39 @@ public final class HostClaims {
         CLAIMS.remove(host);
     }
 
+    /**
+     * This captor could not path to this host. Forget about it for a while and go and find another.
+     * <p>
+     * {@code CaptureHostAction} deliberately never ABORTS on a failed path - aborting made the planner drop the action,
+     * re-plan, and abort again forever. But that means an unreachable quarry pins a drone in place for good. Writing
+     * the target off instead keeps the action alive and simply makes the sensor stop offering that host, so the drone
+     * picks the next one. Per-captor, and it lapses, so nothing is ever permanently un-huntable.
+     */
+    public static void writeOffUnreachable(LivingEntity host, Alien captor) {
+        UNREACHABLE.computeIfAbsent(captor, ignored -> new WeakHashMap<>())
+                .put(host, host.level().getGameTime() + WRITE_OFF_TICKS);
+        release(host);
+    }
+
+    /** True if this captor recently gave up on reaching this host. */
+    public static boolean isUnreachableFor(LivingEntity host, Alien captor) {
+        var writtenOff = UNREACHABLE.get(captor);
+        if (writtenOff == null) {
+            return false;
+        }
+        var until = writtenOff.get(host);
+        if (until == null) {
+            return false;
+        }
+        if (host.level().getGameTime() >= until) {
+            writtenOff.remove(host);
+            return false;
+        }
+        return true;
+    }
+
     private record Claim(
-        UUID captorId,
-        long expiresAt
+            UUID captorId,
+            long expiresAt
     ) {}
 }

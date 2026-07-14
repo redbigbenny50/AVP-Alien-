@@ -48,20 +48,42 @@ public final class VentDefenseTask {
 
     private static final int INCIDENT_EMERGE_CAP = 8; // max defenders emerged per intruder incident
 
-    /** Combat castes first when drawing defenders from the reserves. */
+    /**
+     * Who answers an intrusion, in order.
+     * <p>
+     * The ELITES come out first. Praetorians and crushers are the queen's guard and the hive's defenders - they
+     * take no part in raids, so defending the hive is their entire purpose, and they were absent from this list
+     * entirely. They are also rare (20 each, and each one costs a warrior or prowler), so ELITE_DEFENDER_CAP keeps
+     * an incident from emptying the guard: a couple come out, and the rank and file do the rest.
+     * <p>
+     * Spitters give the defence something the attacker has to close the distance against.
+     * <p>
+     * Workers are last, and only because a hive that has run out of soldiers still bites.
+     */
     private static final List<net.minecraft.tags.TagKey<EntityType<?>>> DRAW_ORDER = List.of(
-        AlienEntityTypeTags.WARRIORS,
-        AlienEntityTypeTags.PROWLERS,
-        AlienEntityTypeTags.RUNNERS,
-        AlienEntityTypeTags.DRONES
+            AlienEntityTypeTags.PRAETORIANS,
+            AlienEntityTypeTags.CRUSHERS,
+            AlienEntityTypeTags.WARRIORS,
+            AlienEntityTypeTags.PROWLERS,
+            AlienEntityTypeTags.SPITTERS,
+            AlienEntityTypeTags.RUNNERS,
+            AlienEntityTypeTags.DRONES
+    );
+
+    /** Only a few of the guard answer any one incident - they are too rare to spend on every intruder. */
+    private static final int ELITE_DEFENDER_CAP = 2;
+
+    private static final List<net.minecraft.tags.TagKey<EntityType<?>>> ELITE_CASTES = List.of(
+            AlienEntityTypeTags.PRAETORIANS,
+            AlienEntityTypeTags.CRUSHERS
     );
 
     private static final Map<HiveLocation, Long> LAST_WAVE =
-        java.util.Collections.synchronizedMap(new java.util.WeakHashMap<>());
+            java.util.Collections.synchronizedMap(new java.util.WeakHashMap<>());
 
     /** Defenders emerged per intruder (by UUID) for the current incident; cleared when the intruder is gone. */
     private static final Map<HiveLocation, Map<UUID, Integer>> EMERGED =
-        java.util.Collections.synchronizedMap(new java.util.WeakHashMap<>());
+            java.util.Collections.synchronizedMap(new java.util.WeakHashMap<>());
 
     private VentDefenseTask() {}
 
@@ -102,18 +124,19 @@ public final class VentDefenseTask {
             // STRUCTURE or SURFACE only. A defender emerging from a FRONTIER vent pops out in a cave, far from the
             // intruder it was summoned for, and strands itself out there.
             var vents = HiveVents.ventsNear(
-                location.ventManager(),
-                intruder.blockPosition(),
-                VENT_RANGE_CHUNKS,
-                v -> location.ventManager().isKind(v, VentKind.STRUCTURE, VentKind.SURFACE)
+                    location.ventManager(),
+                    intruder.blockPosition(),
+                    VENT_RANGE_CHUNKS,
+                    v -> location.ventManager().isKind(v, VentKind.STRUCTURE, VentKind.SURFACE)
             );
             if (vents.isEmpty()) {
                 continue; // no duct mouth near this intruder - the loaded defenders will have to walk
             }
 
             int ventIndex = 0;
+            int elitesSent = 0; // the guard answers, but does not empty itself for one intruder
             for (int i = 0; i < need; i++) {
-                var type = pickReserveType(location);
+                var type = pickReserveType(location, elitesSent);
                 if (type == null) {
                     break; // reserves hold no combat-capable adults
                 }
@@ -129,6 +152,9 @@ public final class VentDefenseTask {
                     continue;
                 }
                 ReserveSpawnUtil.markSpawnedFromReserves(defender);
+                if (isElite(type)) {
+                    elitesSent++;
+                }
                 level.playSound(null, emergence, AlienSoundEvents.BLOCK_RESIN_SPREAD.get(), SoundSource.HOSTILE, 1.0F, 0.8F);
                 emerged.merge(intruder.getUUID(), 1, Integer::sum);
                 spawnedThisWave++;
@@ -138,9 +164,9 @@ public final class VentDefenseTask {
         if (spawnedThisWave > 0) {
             LAST_WAVE.put(location, now);
             Alien.LOGGER.info(
-                "Hive at {}: {} defender(s) emerged from the vents against intruders.",
-                location.centerPos(),
-                spawnedThisWave
+                    "Hive at {}: {} defender(s) emerged from the vents against intruders.",
+                    location.centerPos(),
+                    spawnedThisWave
             );
         }
     }
@@ -152,13 +178,13 @@ public final class VentDefenseTask {
     private static int defenderTarget(ServerLevel level, HiveLocation location, LivingEntity intruder) {
         int band = HiveLocationRegistry.INSTANCE.config().surfacePartySurfaceBandBlocks();
         int surfaceY = level.getHeight(
-            Heightmap.Types.MOTION_BLOCKING_NO_LEAVES,
-            intruder.getBlockX(),
-            intruder.getBlockZ()
+                Heightmap.Types.MOTION_BLOCKING_NO_LEAVES,
+                intruder.getBlockX(),
+                intruder.getBlockZ()
         );
         boolean onSurface = intruder.getY() >= surfaceY - band;
         boolean escalated = intruder instanceof Player player
-            && location.attackCampaigns().containsKey(player.getUUID());
+                && location.attackCampaigns().containsKey(player.getUUID());
         if (onSurface && !escalated) {
             return (DEFENDER_TARGET * 2 + 2) / 3; // 2/3 strength, rounded up
         }
@@ -183,19 +209,36 @@ public final class VentDefenseTask {
         return count;
     }
 
-    /** The best combat-capable reserve type the hive can field, warriors first. */
+    /**
+     * The best combat-capable reserve type the hive can field: the queen's guard first, then the line, then
+     * workers. {@code elitesAlreadySent} caps how much of the guard any single incident can consume.
+     */
     @Nullable
-    private static EntityType<?> pickReserveType(HiveLocation location) {
+    private static EntityType<?> pickReserveType(HiveLocation location, int elitesAlreadySent) {
         var variant = location.lineageVariantOrNull();
         if (variant == null) {
             return null;
         }
         for (var caste : DRAW_ORDER) {
+            // Praetorians and crushers are rare and expensive - a couple answer the alarm, not the whole guard.
+            if (ELITE_CASTES.contains(caste) && elitesAlreadySent >= ELITE_DEFENDER_CAP) {
+                continue;
+            }
             var type = CasteResolver.entityTypeForCaste(variant, caste);
             if (type != null && location.localReserves().getCount(type) > 0) {
                 return type;
             }
         }
         return null;
+    }
+
+    /** Is this entity type one of the queen's guard? */
+    private static boolean isElite(EntityType<?> type) {
+        for (var caste : ELITE_CASTES) {
+            if (type.is(caste)) {
+                return true;
+            }
+        }
+        return false;
     }
 }

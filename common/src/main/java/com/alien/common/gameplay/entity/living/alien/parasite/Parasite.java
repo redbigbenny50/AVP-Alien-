@@ -37,6 +37,12 @@ public abstract class Parasite extends Alien {
         registerGoals();
     }
 
+    /** Point-blank pounce range. Deliberately short: this is a last step, not a substitute for hunting. */
+    private static final double POUNCE_RANGE = 2.0;
+
+    /** The pounce scan is cheap, but there can be a lot of huggers. Every quarter second is plenty. */
+    private static final int POUNCE_INTERVAL_TICKS = 5;
+
     @Override
     public void tick() {
         super.tick();
@@ -48,6 +54,50 @@ public abstract class Parasite extends Alien {
             if (currentTarget != null && !isValidHost(currentTarget)) {
                 setTarget(null);
             }
+
+            if (tickCount % POUNCE_INTERVAL_TICKS == 0) {
+                tryPounce();
+            }
+        }
+    }
+
+    /**
+     * Attach to a host that is RIGHT THERE.
+     * <p>
+     * A facehugger had no way to take a host at point-blank range. Its whole repertoire was:
+     * <ul>
+     * <li>{@code LUNGE_AT_HOST} - which requires the target to be at least
+     * {@code AttachToHostSensors.MIN_LUNGE_RANGE_IN_BLOCKS} (10!) blocks away, so it cannot fire up close;</li>
+     * <li>{@code MOVE_TO_HOST} - which paths INTO the host's own position, and</li>
+     * <li>{@link #doPush} / {@link #doHurtTarget} - collision, which only happens if it actually moves.</li>
+     * </ul>
+     * A host webbed to a chamber wall is NOT a pathable position, so {@code MOVE_TO_HOST} returned NO_PATH and aborted,
+     * the hugger never moved, never collided, and simply sat next to its victim until it despawned. Shoving it by hand
+     * made it collide and attach instantly - which is the whole tell.
+     * <p>
+     * Line of sight is required, so it cannot reach a host through a wall.
+     */
+    private void tryPounce() {
+        if (!isFertile.get() || isPassenger() || isVehicle()) {
+            return;
+        }
+
+        LivingEntity best = null;
+        var bestDistance = Double.MAX_VALUE;
+
+        for (var candidate : level().getEntitiesOfClass(LivingEntity.class, getBoundingBox().inflate(POUNCE_RANGE))) {
+            if (!canAttachToHost(candidate) || !getSensing().hasLineOfSight(candidate)) {
+                continue;
+            }
+            var distance = distanceToSqr(candidate);
+            if (distance < bestDistance) {
+                bestDistance = distance;
+                best = candidate;
+            }
+        }
+
+        if (best != null) {
+            startRiding(best, true);
         }
     }
 
@@ -116,8 +166,8 @@ public abstract class Parasite extends Alien {
 
     protected boolean canAttachToHost(Entity entity) {
         return entity instanceof LivingEntity livingEntity &&
-            isValidHost(livingEntity) &&
-            !BLibEntityPredicates.hasShield(entity) && !(this.isPassenger() || this.isVehicle());
+                isValidHost(livingEntity) &&
+                !BLibEntityPredicates.hasShield(entity) && !(this.isPassenger() || this.isVehicle());
     }
 
     private void tryUpdatePlayerRiding(Entity entity) {
