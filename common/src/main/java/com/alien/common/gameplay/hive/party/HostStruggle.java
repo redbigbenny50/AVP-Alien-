@@ -121,9 +121,9 @@ public final class HostStruggle {
 
     private static State begin(ServerPlayer player, Alien carrier) {
         var bar = new ServerBossEvent(
-                Component.literal("Struggle! [ SPACE / LEFT-CLICK ]").withStyle(ChatFormatting.RED),
-                BossEvent.BossBarColor.RED,
-                BossEvent.BossBarOverlay.PROGRESS
+            Component.literal("Struggle! [ SPACE / LEFT-CLICK ]").withStyle(ChatFormatting.RED),
+            BossEvent.BossBarColor.RED,
+            BossEvent.BossBarOverlay.PROGRESS
         );
         bar.setProgress(0.0F);
         bar.addPlayer(player);
@@ -145,20 +145,20 @@ public final class HostStruggle {
         end(player);
 
         carrier.level()
-                .playSound(
-                        null,
-                        carrier.getX(),
-                        carrier.getY(),
-                        carrier.getZ(),
-                        AlienSoundEvents.ENTITY_XENOMORPH_ESCAPE_HOST.get(),
-                        SoundSource.HOSTILE,
-                        1.0F,
-                        1.0F
-                );
+            .playSound(
+                null,
+                carrier.getX(),
+                carrier.getY(),
+                carrier.getZ(),
+                AlienSoundEvents.ENTITY_XENOMORPH_ESCAPE_HOST.get(),
+                SoundSource.HOSTILE,
+                1.0F,
+                1.0F
+            );
 
         com.alien.Alien.LOGGER.info(
-                "Player {} broke free of a capture and stunned the carrier.",
-                player.getName().getString()
+            "Player {} broke free of a capture and stunned the carrier.",
+            player.getName().getString()
         );
     }
 
@@ -193,11 +193,11 @@ public final class HostStruggle {
         }
 
         attribute.addTransientModifier(
-                new AttributeModifier(
-                        STRUGGLE_SPEED_MODIFIER,
-                        -reduction,
-                        AttributeModifier.Operation.ADD_MULTIPLIED_TOTAL
-                )
+            new AttributeModifier(
+                STRUGGLE_SPEED_MODIFIER,
+                -reduction,
+                AttributeModifier.Operation.ADD_MULTIPLIED_TOTAL
+            )
         );
     }
 

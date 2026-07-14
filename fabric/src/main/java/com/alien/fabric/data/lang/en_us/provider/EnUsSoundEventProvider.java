@@ -71,9 +71,9 @@ public class EnUsSoundEventProvider {
     };
 
     private static void addSound(
-            FabricLanguageProvider.TranslationBuilder translationBuilder,
-            Supplier<SoundEvent> soundEventSupplier,
-            String value
+        FabricLanguageProvider.TranslationBuilder translationBuilder,
+        Supplier<SoundEvent> soundEventSupplier,
+        String value
     ) {
         addSound(translationBuilder, soundEventSupplier.get(), value);
     }

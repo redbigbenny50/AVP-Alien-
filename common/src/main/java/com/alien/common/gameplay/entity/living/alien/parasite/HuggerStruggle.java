@@ -130,14 +130,14 @@ public final class HuggerStruggle {
 
     private static State begin(ServerPlayer player, Parasite parasite) {
         var required = Math.min(
-                MAX_MASHES,
-                BASE_MASHES + MASHES_PER_ESCAPE * HuggerImmunity.escapeCount(player)
+            MAX_MASHES,
+            BASE_MASHES + MASHES_PER_ESCAPE * HuggerImmunity.escapeCount(player)
         );
 
         var bar = new ServerBossEvent(
-                Component.literal("Get it off! [ SPACE / LEFT-CLICK ]").withStyle(ChatFormatting.GREEN),
-                BossEvent.BossBarColor.GREEN,
-                BossEvent.BossBarOverlay.PROGRESS
+            Component.literal("Get it off! [ SPACE / LEFT-CLICK ]").withStyle(ChatFormatting.GREEN),
+            BossEvent.BossBarColor.GREEN,
+            BossEvent.BossBarOverlay.PROGRESS
         );
         bar.setProgress(0.0F);
         bar.addPlayer(player);
@@ -168,21 +168,21 @@ public final class HuggerStruggle {
         food.setSaturation(0.0F);
 
         player.level()
-                .playSound(
-                        null,
-                        player.getX(),
-                        player.getY(),
-                        player.getZ(),
-                        AlienSoundEvents.ENTITY_FACEHUGGER_ESCAPE.get(),
-                        SoundSource.HOSTILE,
-                        1.0F,
-                        1.0F
-                );
+            .playSound(
+                null,
+                player.getX(),
+                player.getY(),
+                player.getZ(),
+                AlienSoundEvents.ENTITY_FACEHUGGER_ESCAPE.get(),
+                SoundSource.HOSTILE,
+                1.0F,
+                1.0F
+            );
 
         com.alien.Alien.LOGGER.info(
-                "Player {} tore a facehugger off (escape #{}).",
-                player.getName().getString(),
-                HuggerImmunity.escapeCount(player)
+            "Player {} tore a facehugger off (escape #{}).",
+            player.getName().getString(),
+            HuggerImmunity.escapeCount(player)
         );
     }
 

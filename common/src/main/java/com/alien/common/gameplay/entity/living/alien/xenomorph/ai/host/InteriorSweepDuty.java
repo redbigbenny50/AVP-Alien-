@@ -15,13 +15,12 @@ import org.jetbrains.annotations.Nullable;
  * A host loose INSIDE the hive is a chore, not an expedition.
  * <p>
  * Livestock wanders in through the vents; a player cuts a captive out of the webbing and it walks off down a corridor.
- * Nothing used to deal with either - {@link HostSensors} only ever let a dispatched {@code HostHunt} party member target
- * a host, so the hive's own workers strolled straight past a cow standing in the nursery.
+ * Nothing used to deal with either - {@link HostSensors} only ever let a dispatched {@code HostHunt} party member
+ * target a host, so the hive's own workers strolled straight past a cow standing in the nursery.
  * <p>
  * This is deliberately NOT a seventh party type. There is no dispatch, no reserve drain, no member cap: any drone that
  * happens to be near a loose host simply picks it up, the way workers already react to a loose egg. Nobody needs to be
  * <i>sent</i> to deal with a sheep that wandered into the hive.
- *
  * <h2>The guardrails, and why each one is there</h2>
  * <ul>
  * <li><b>Built structure only, not the whole claim.</b> The load-bearing one. On a flat world a claim is enormous and
@@ -77,9 +76,9 @@ public final class InteriorSweepDuty {
     /**
      * Is this entity inside the hive's built interior?
      * <p>
-     * Deliberately the BUILT STRUCTURE ({@code structurePieceByChunk} + {@code withinSlab}), not the claim. The claim is
-     * territory; the structure is the building. A sheep in a field the hive happens to own is a host-hunt's problem, not
-     * a chore.
+     * Deliberately the BUILT STRUCTURE ({@code structurePieceByChunk} + {@code withinSlab}), not the claim. The claim
+     * is territory; the structure is the building. A sheep in a field the hive happens to own is a host-hunt's problem,
+     * not a chore.
      * <p>
      * Asked of two different things: of a HOST, to decide whether it is loose in the corridors and should be swept up;
      * and of a CARRIER, to decide whether it can walk its captive straight to the chamber instead of hauling it out to
@@ -88,6 +87,6 @@ public final class InteriorSweepDuty {
     public static boolean isInsideHive(HiveLocation location, LivingEntity entity) {
         var pos = entity.blockPosition();
         return location.structurePieceByChunk().containsKey(new ChunkPos(pos))
-                && location.withinSlab(pos.getY());
+            && location.withinSlab(pos.getY());
     }
 }

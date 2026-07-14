@@ -2,11 +2,11 @@ package com.alien.common.gameplay.entity.living.alien.xenomorph.ai.host.action;
 
 import com.alien.common.gameplay.entity.living.alien.xenomorph.Xenomorph;
 import com.alien.common.gameplay.entity.living.alien.xenomorph.ai.host.InteriorSweepDuty;
-import com.alien.common.gameplay.hive.structure.HostChamberSlots;
 import com.alien.common.gameplay.hive.location.HiveLocation;
 import com.alien.common.gameplay.hive.location.HiveLocationRegistry;
 import com.alien.common.gameplay.hive.party.HostCaptureTask;
 import com.alien.common.gameplay.hive.party.PartyVentUtil;
+import com.alien.common.gameplay.hive.structure.HostChamberSlots;
 import com.alien.common.gameplay.hive.vent.HiveVents;
 import com.blib.api.common.goap.v1.action.impl.NeoMoveToPosAction;
 import com.just.ai.goap.action.Action;
@@ -74,8 +74,8 @@ public final class DeliverHostAction {
         }
 
         var location = HiveLocationRegistry.INSTANCE.findNearestInDim(
-                serverLevel.dimension(),
-                xenomorph.blockPosition()
+            serverLevel.dimension(),
+            xenomorph.blockPosition()
         );
         if (location == null) {
             stall(xenomorph, "no hive location resolved - cannot deliver the host");
@@ -137,11 +137,11 @@ public final class DeliverHostAction {
      * itself is a web block in a wall and is not somewhere anything can stand.
      */
     private static Action.Signal deliverFromInside(
-            Action.Context<? extends Xenomorph> context,
-            Xenomorph xenomorph,
-            net.minecraft.world.entity.LivingEntity carried,
-            ServerLevel serverLevel,
-            HiveLocation location
+        Action.Context<? extends Xenomorph> context,
+        Xenomorph xenomorph,
+        net.minecraft.world.entity.LivingEntity carried,
+        ServerLevel serverLevel,
+        HiveLocation location
     ) {
         var spot = HostChamberSlots.firstFreeSpot(serverLevel, location);
         if (spot == null) {
@@ -190,8 +190,8 @@ public final class DeliverHostAction {
     private static boolean isAtVent(Xenomorph xenomorph, BlockPos vent) {
         var pos = xenomorph.blockPosition();
         return Math.abs(pos.getX() - vent.getX()) <= VENT_USE_RANGE
-                && Math.abs(pos.getY() - vent.getY()) <= VENT_USE_RANGE
-                && Math.abs(pos.getZ() - vent.getZ()) <= VENT_USE_RANGE;
+            && Math.abs(pos.getY() - vent.getY()) <= VENT_USE_RANGE
+            && Math.abs(pos.getZ() - vent.getZ()) <= VENT_USE_RANGE;
     }
 
     private static BlockPos nearestSurfaceVent(ServerLevel level, HiveLocation location, Xenomorph xenomorph) {

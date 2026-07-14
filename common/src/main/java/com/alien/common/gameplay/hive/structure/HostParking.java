@@ -46,9 +46,9 @@ public final class HostParking {
      */
     public static boolean isParked(LivingEntity host) {
         return host instanceof Mob mob
-                && mob.isNoAi()
-                && host instanceof Host hostState
-                && hostState.getEmbedGameTime() != Long.MIN_VALUE;
+            && mob.isNoAi()
+            && host instanceof Host hostState
+            && hostState.getEmbedGameTime() != Long.MIN_VALUE;
     }
 
     /** Break the webbing around {@code webPos} and any captive it was holding walks free. */

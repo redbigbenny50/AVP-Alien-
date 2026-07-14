@@ -83,8 +83,10 @@ public class AlienSoundEvents {
     /** A captive tears free of the drone carrying it off. */
     public static final BLibHolder<SoundEvent> ENTITY_XENOMORPH_ESCAPE_HOST = create("entity.xenomorph.escape_host");
 
-    /** A drone seizes a host. NOTE: this fires once per capture - if you hear it STUTTER, a carrier is grabbing and
-     *  dropping its captive in a loop, which is a bug signature worth chasing. */
+    /**
+     * A drone seizes a host. NOTE: this fires once per capture - if you hear it STUTTER, a carrier is grabbing and
+     * dropping its captive in a loop, which is a bug signature worth chasing.
+     */
     public static final BLibHolder<SoundEvent> ENTITY_XENOMORPH_GRAB_HOST = create("entity.xenomorph.grab_host");
 
     public static final BLibHolder<SoundEvent> ENTITY_XENOMORPH_DEATH = create("entity.xenomorph.death");

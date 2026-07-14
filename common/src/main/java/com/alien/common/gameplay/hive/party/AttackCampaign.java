@@ -83,8 +83,8 @@ public final class AttackCampaign {
             return;
         }
         location.attackCampaigns()
-                .computeIfAbsent(player.getUUID(), ignored -> new AttackCampaign())
-                .setLastHostileTick(level.getGameTime());
+            .computeIfAbsent(player.getUUID(), ignored -> new AttackCampaign())
+            .setLastHostileTick(level.getGameTime());
     }
 
     public long lastHostileTick() {
@@ -141,12 +141,12 @@ public final class AttackCampaign {
 
     public static AttackCampaign load(CompoundTag tag) {
         return new AttackCampaign(
-                tag.getLong("DwellTicks"),
-                tag.contains("LastHostileTick") ? tag.getLong("LastHostileTick") : Long.MIN_VALUE,
-                tag.contains("IntrusionTick") ? tag.getLong("IntrusionTick") : -1L,
-                tag.getInt("WavesSent"),
-                tag.contains("LastWaveTick") ? tag.getLong("LastWaveTick") : Long.MIN_VALUE,
-                tag.getBoolean("Cleared")
+            tag.getLong("DwellTicks"),
+            tag.contains("LastHostileTick") ? tag.getLong("LastHostileTick") : Long.MIN_VALUE,
+            tag.contains("IntrusionTick") ? tag.getLong("IntrusionTick") : -1L,
+            tag.getInt("WavesSent"),
+            tag.contains("LastWaveTick") ? tag.getLong("LastWaveTick") : Long.MIN_VALUE,
+            tag.getBoolean("Cleared")
         );
     }
 }
