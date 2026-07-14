@@ -1,12 +1,12 @@
 package com.alien.common.gameplay.entity.living.alien.parasite;
 
 import com.alien.common.gameplay.hive.party.HostStruggle;
+import com.alien.common.registry.init.AlienSoundEvents;
 import com.alien.common.util.AlienPredicates;
 import net.minecraft.ChatFormatting;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerBossEvent;
 import net.minecraft.server.level.ServerPlayer;
-import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
 import net.minecraft.world.BossEvent;
 import net.minecraft.world.entity.player.Player;
@@ -130,14 +130,14 @@ public final class HuggerStruggle {
 
     private static State begin(ServerPlayer player, Parasite parasite) {
         var required = Math.min(
-            MAX_MASHES,
-            BASE_MASHES + MASHES_PER_ESCAPE * HuggerImmunity.escapeCount(player)
+                MAX_MASHES,
+                BASE_MASHES + MASHES_PER_ESCAPE * HuggerImmunity.escapeCount(player)
         );
 
         var bar = new ServerBossEvent(
-            Component.literal("Get it off! [ SPACE / LEFT-CLICK ]").withStyle(ChatFormatting.GREEN),
-            BossEvent.BossBarColor.GREEN,
-            BossEvent.BossBarOverlay.PROGRESS
+                Component.literal("Get it off! [ SPACE / LEFT-CLICK ]").withStyle(ChatFormatting.GREEN),
+                BossEvent.BossBarColor.GREEN,
+                BossEvent.BossBarOverlay.PROGRESS
         );
         bar.setProgress(0.0F);
         bar.addPlayer(player);
@@ -168,21 +168,21 @@ public final class HuggerStruggle {
         food.setSaturation(0.0F);
 
         player.level()
-            .playSound(
-                null,
-                player.getX(),
-                player.getY(),
-                player.getZ(),
-                SoundEvents.SPIDER_HURT,
-                SoundSource.HOSTILE,
-                1.0F,
-                1.4F
-            );
+                .playSound(
+                        null,
+                        player.getX(),
+                        player.getY(),
+                        player.getZ(),
+                        AlienSoundEvents.ENTITY_FACEHUGGER_ESCAPE.get(),
+                        SoundSource.HOSTILE,
+                        1.0F,
+                        1.0F
+                );
 
         com.alien.Alien.LOGGER.info(
-            "Player {} tore a facehugger off (escape #{}).",
-            player.getName().getString(),
-            HuggerImmunity.escapeCount(player)
+                "Player {} tore a facehugger off (escape #{}).",
+                player.getName().getString(),
+                HuggerImmunity.escapeCount(player)
         );
     }
 

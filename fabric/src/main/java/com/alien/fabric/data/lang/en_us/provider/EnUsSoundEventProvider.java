@@ -21,6 +21,8 @@ public class EnUsSoundEventProvider {
 
         addSound(builder, AlienSoundEvents.ENTITY_CHESTBURSTER_BURST, "Chestburster bursting");
 
+        addSound(builder, AlienSoundEvents.ENTITY_FACEHUGGER_ESCAPE, "Facehugger torn off");
+
         addSound(builder, AlienSoundEvents.ENTITY_OVOMORPH_HATCH, "Ovomorph hatches");
         addSound(builder, AlienSoundEvents.ENTITY_OVOMORPH_LAID, "Queen lays egg");
         addSound(builder, AlienSoundEvents.ENTITY_OVOMORPH_ROOT, "Ovomorph takes root");
@@ -48,6 +50,8 @@ public class EnUsSoundEventProvider {
         addSound(builder, AlienSoundEvents.ENTITY_EMPRESS_STEP_THUMP, "Empress steps");
         addSound(builder, AlienSoundEvents.ENTITY_EMPRESS_STEP_THUMP_ROCK, "Empress steps");
 
+        addSound(builder, AlienSoundEvents.ENTITY_XENOMORPH_GRAB_HOST, "Xenomorph seizes a host");
+        addSound(builder, AlienSoundEvents.ENTITY_XENOMORPH_ESCAPE_HOST, "Host tears free");
         addSound(builder, AlienSoundEvents.ENTITY_XENOMORPH_ATTACK, "Xenomorph attacks");
         addSound(builder, AlienSoundEvents.ENTITY_XENOMORPH_DEATH, "Xenomorph dies");
         addSound(builder, AlienSoundEvents.ENTITY_XENOMORPH_HISS, "Xenomorph hisses");
@@ -67,9 +71,9 @@ public class EnUsSoundEventProvider {
     };
 
     private static void addSound(
-        FabricLanguageProvider.TranslationBuilder translationBuilder,
-        Supplier<SoundEvent> soundEventSupplier,
-        String value
+            FabricLanguageProvider.TranslationBuilder translationBuilder,
+            Supplier<SoundEvent> soundEventSupplier,
+            String value
     ) {
         addSound(translationBuilder, soundEventSupplier.get(), value);
     }

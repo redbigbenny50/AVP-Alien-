@@ -27,6 +27,9 @@ public class AlienSoundEvents {
 
     public static final BLibHolder<SoundEvent> ENTITY_CHESTBURSTER_BURST = create("entity.chestburster.burst");
 
+    /** A facehugger is torn off a face. */
+    public static final BLibHolder<SoundEvent> ENTITY_FACEHUGGER_ESCAPE = create("entity.facehugger.escape");
+
     public static final BLibHolder<SoundEvent> ENTITY_OVOMORPH_HATCH = create("entity.ovomorph.hatch");
 
     public static final BLibHolder<SoundEvent> ENTITY_OVOMORPH_LAID = create("entity.ovomorph.laid");
@@ -76,6 +79,13 @@ public class AlienSoundEvents {
     public static final BLibHolder<SoundEvent> ENTITY_EMPRESS_TAIL_ATTACK = create("entity.empress.tail_attack");
 
     public static final BLibHolder<SoundEvent> ENTITY_XENOMORPH_ATTACK = create("entity.xenomorph.attack");
+
+    /** A captive tears free of the drone carrying it off. */
+    public static final BLibHolder<SoundEvent> ENTITY_XENOMORPH_ESCAPE_HOST = create("entity.xenomorph.escape_host");
+
+    /** A drone seizes a host. NOTE: this fires once per capture - if you hear it STUTTER, a carrier is grabbing and
+     *  dropping its captive in a loop, which is a bug signature worth chasing. */
+    public static final BLibHolder<SoundEvent> ENTITY_XENOMORPH_GRAB_HOST = create("entity.xenomorph.grab_host");
 
     public static final BLibHolder<SoundEvent> ENTITY_XENOMORPH_DEATH = create("entity.xenomorph.death");
 

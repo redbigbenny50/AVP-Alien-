@@ -6,6 +6,7 @@ import com.alien.common.gameplay.hive.structure.HostChamberSlots;
 import com.alien.common.gameplay.hive.structure.HostParking;
 import com.alien.common.model.alien.FreeMob;
 import net.minecraft.server.level.ServerLevel;
+import com.alien.common.registry.init.AlienSoundEvents;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
 import net.minecraft.world.entity.LivingEntity;
@@ -56,16 +57,16 @@ public final class HostCaptureTask {
         }
         captor.setPersistenceRequired();
         captor.level()
-            .playSound(
-                null,
-                captor.getX(),
-                captor.getY(),
-                captor.getZ(),
-                SoundEvents.SPIDER_AMBIENT,
-                SoundSource.HOSTILE,
-                1.0F,
-                0.6F
-            );
+                .playSound(
+                        null,
+                        captor.getX(),
+                        captor.getY(),
+                        captor.getZ(),
+                        AlienSoundEvents.ENTITY_XENOMORPH_GRAB_HOST.get(),
+                        SoundSource.HOSTILE,
+                        1.0F,
+                        1.0F
+                );
     }
 
     /**
@@ -79,10 +80,10 @@ public final class HostCaptureTask {
 
     /** The hand-off itself: the host is ducted into the hive and webbed into a free host-chamber spot. */
     public static void deliverToHostChamber(
-        com.alien.common.gameplay.entity.living.alien.Alien captor,
-        LivingEntity carried,
-        ServerLevel level,
-        HiveLocation location
+            com.alien.common.gameplay.entity.living.alien.Alien captor,
+            LivingEntity carried,
+            ServerLevel level,
+            HiveLocation location
     ) {
         var spot = HostChamberSlots.firstFreeSpot(level, location);
         if (spot == null) {
@@ -91,20 +92,20 @@ public final class HostCaptureTask {
         carried.stopRiding();
         HostParking.embed(level, carried, spot.pos(), spot.facing());
         level.playSound(
-            null,
-            spot.pos().getX() + 0.5,
-            spot.pos().getY() + 0.5,
-            spot.pos().getZ() + 0.5,
-            SoundEvents.BEEHIVE_ENTER,
-            SoundSource.HOSTILE,
-            1.0F,
-            0.7F
+                null,
+                spot.pos().getX() + 0.5,
+                spot.pos().getY() + 0.5,
+                spot.pos().getZ() + 0.5,
+                SoundEvents.BEEHIVE_ENTER,
+                SoundSource.HOSTILE,
+                1.0F,
+                0.7F
         );
         Alien.LOGGER.info(
-            "Hive at {}: host {} delivered to a host chamber spot at {}.",
-            location.centerPos(),
-            carried.getName().getString(),
-            spot.pos()
+                "Hive at {}: host {} delivered to a host chamber spot at {}.",
+                location.centerPos(),
+                carried.getName().getString(),
+                spot.pos()
         );
     }
 }
