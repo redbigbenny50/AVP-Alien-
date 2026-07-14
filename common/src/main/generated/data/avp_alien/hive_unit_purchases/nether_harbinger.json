@@ -6,9 +6,8 @@
       "value": 100
     },
     {
-      "type": "max_entity_count_in_location",
-      "entity": "avp_alien:nether_harbinger",
-      "value": 1
+      "type": "max_per_raid_chamber",
+      "entity": "avp_alien:nether_harbinger"
     }
   ],
   "input_entities": [

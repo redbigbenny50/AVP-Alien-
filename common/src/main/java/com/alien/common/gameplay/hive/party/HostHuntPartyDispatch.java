@@ -65,17 +65,17 @@ public final class HostHuntPartyDispatch {
 
         // Size scales with claims but is CAPPED (bonus spitters ride on top of this budget).
         var hostCap = com.alien.common.gameplay.hive.structure.HiveRouter.isEmpressInfluenced(location)
-                ? config.hostHuntPartyMaxSizeEmpress()
-                : config.hostHuntPartyMaxSize();
+            ? config.hostHuntPartyMaxSizeEmpress()
+            : config.hostHuntPartyMaxSize();
         var desiredSize = Math.min(
-                hostCap,
-                Math.max(
-                        1,
-                        Math.round(
-                                config.hostHuntPartyBaseSize()
-                                        + config.hostHuntPartySizePerClaimedChunk() * location.claimedChunks().size()
-                        )
+            hostCap,
+            Math.max(
+                1,
+                Math.round(
+                    config.hostHuntPartyBaseSize()
+                        + config.hostHuntPartySizePerClaimedChunk() * location.claimedChunks().size()
                 )
+            )
         );
 
         var composition = drainComposition(location, (int) desiredSize, 0);
@@ -85,11 +85,11 @@ public final class HostHuntPartyDispatch {
 
         var currentTick = serverLevel.getGameTime();
         var party = new HiveParty.HostHunt(
-                HivePartyId.fresh(),
-                location.id(),
-                location.dimension(),
-                composition,
-                currentTick
+            HivePartyId.fresh(),
+            location.id(),
+            location.dimension(),
+            composition,
+            currentTick
         );
 
         var spawnedCount = materialize(serverLevel, location, party, spawnPos);
@@ -102,10 +102,10 @@ public final class HostHuntPartyDispatch {
         location.setLastHostHuntPartyTick(world.getGameTime());
 
         Alien.LOGGER.info(
-                "Hive: dispatched host hunt party for location {} — {} members from vent at {}",
-                location.id(),
-                spawnedCount,
-                spawnPos
+            "Hive: dispatched host hunt party for location {} — {} members from vent at {}",
+            location.id(),
+            spawnedCount,
+            spawnPos
         );
     }
 
@@ -126,10 +126,10 @@ public final class HostHuntPartyDispatch {
     }
 
     private static void drainUpTo(
-            com.alien.common.gameplay.hive.location.HiveLocationReserves reserves,
-            EntityReserves composition,
-            List<EntityType<?>> candidateTypes,
-            int count
+        com.alien.common.gameplay.hive.location.HiveLocationReserves reserves,
+        EntityReserves composition,
+        List<EntityType<?>> candidateTypes,
+        int count
     ) {
         if (candidateTypes.isEmpty()) {
             return;

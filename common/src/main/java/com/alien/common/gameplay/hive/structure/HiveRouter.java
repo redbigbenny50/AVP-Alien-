@@ -58,7 +58,7 @@ public final class HiveRouter {
 
     /** Hives that have entered the stitching phase (all rooms/exits routed), for one-time phase logging. */
     private static final java.util.Map<HiveLocation, Boolean> STITCHING = java.util.Collections.synchronizedMap(
-            new java.util.WeakHashMap<>()
+        new java.util.WeakHashMap<>()
     );
 
     /**
@@ -66,14 +66,14 @@ public final class HiveRouter {
      * {@link #setEmpressInfluence}; memory-only, so that system must re-assert influence on world load.
      */
     private static final java.util.Set<HiveLocation> EMPRESS_INFLUENCED =
-            java.util.Collections.synchronizedSet(java.util.Collections.newSetFromMap(new java.util.WeakHashMap<>()));
+        java.util.Collections.synchronizedSet(java.util.Collections.newSetFromMap(new java.util.WeakHashMap<>()));
 
     /** The footprint radius for the hive currently being routed (set at the top of {@link #route}). */
     private static int activeExtent = BASE_EXTENT;
 
     /** Stitch-phase tick counter per hive - past STITCH_BUDGET the hive seals and finishes (runaway backstop). */
     private static final java.util.Map<HiveLocation, Integer> STITCH_TICKS = java.util.Collections.synchronizedMap(
-            new java.util.WeakHashMap<>()
+        new java.util.WeakHashMap<>()
     );
 
     /** Finished hives (nothing left to build/stitch) so their tick is a no-op instead of a full re-scan. */
@@ -100,8 +100,8 @@ public final class HiveRouter {
             STITCHING.remove(location);
             STITCH_TICKS.remove(location);
             Alien.LOGGER.info(
-                    "Hive at {}: empress influence gained - expanding to 23x23 and resuming construction.",
-                    location.centerPos()
+                "Hive at {}: empress influence gained - expanding to 23x23 and resuming construction.",
+                location.centerPos()
             );
         }
     }
@@ -133,8 +133,8 @@ public final class HiveRouter {
         for (var roleEntry : location.structureRoleByChunk().entrySet()) {
             var role = roleEntry.getValue();
             if (
-                    (role == HiveStructureRole.QUEEN_CHAMBER_CENTER || role == HiveStructureRole.QUEEN_CHAMBER_PART)
-                            && !location.structurePieceByChunk().containsKey(roleEntry.getKey())
+                (role == HiveStructureRole.QUEEN_CHAMBER_CENTER || role == HiveStructureRole.QUEEN_CHAMBER_PART)
+                    && !location.structurePieceByChunk().containsKey(roleEntry.getKey())
             ) {
                 location.structurePieceByChunk().put(roleEntry.getKey(), HivePieceCatalog.QUEEN_CHAMBER.toString());
             }
@@ -170,7 +170,7 @@ public final class HiveRouter {
             // Right-sized reserves: a 1x1 room (egg, jelly) needs exactly its chunk - reserving a 3x3 for each of
             // them walled off a third of the footprint and boxed the late routes. 2x2 rooms keep the 3x3 margin.
             boolean big = goal.roomType().contains("chamber_host")
-                    || goal.roomType().contains("chamber_raid") || goal.roomType().contains("hub");
+                || goal.roomType().contains("chamber_raid") || goal.roomType().contains("hub");
             int r = big ? 1 : 0;
             for (int dx = -r; dx <= r; dx++) {
                 for (int dz = -r; dz <= r; dz++) {
@@ -184,8 +184,8 @@ public final class HiveRouter {
         if (!location.pendingHarvestSpawners().isEmpty()) {
             int builtHarvest = countRoomsOfType(location, "chamber_harvest");
             int wantedHarvest = HarvestChamberTask.isCapacityFull(location)
-                    ? builtHarvest + 1
-                    : Math.max(1, builtHarvest);
+                ? builtHarvest + 1
+                : Math.max(1, builtHarvest);
             if (wantedHarvest > builtHarvest) {
                 var harvestTarget = harvestGoalChunk(location, center);
                 if (harvestTarget != null) {
@@ -202,9 +202,9 @@ public final class HiveRouter {
         // Mandatory rooms route FIRST, onto pristine ground: nearest-first ordering sent far raids/hosts into a map
         // already cluttered with reserves and corridors, and they kept boxing out. Priority class, then distance.
         pending.sort(
-                java.util.Comparator
-                        .comparingInt((HiveBlueprint.Goal g) -> goalPriority(g.roomType()))
-                        .thenComparingInt(g -> cheby(g.chunk(), center))
+            java.util.Comparator
+                .comparingInt((HiveBlueprint.Goal g) -> goalPriority(g.roomType()))
+                .thenComparingInt(g -> cheby(g.chunk(), center))
         );
 
         // Also reserve the chunk each unattached special door faces, so corridors can't steal a mandatory room's spot.
@@ -219,7 +219,7 @@ public final class HiveRouter {
         // is skipped for the next instead of ground against (which used to pile corridor into a tumor).
         for (var goal : pending) {
             boolean bigRoom = goal.roomType().contains("chamber_host")
-                    || goal.roomType().contains("chamber_raid") || goal.roomType().contains("hub");
+                || goal.roomType().contains("chamber_raid") || goal.roomType().contains("hub");
             var eff = effectiveTarget(location, goal.chunk(), center, bigRoom ? RELOCATE_RADIUS + 2 : RELOCATE_RADIUS);
             if (eff == null) {
                 continue; // boxed in - skip
@@ -286,10 +286,10 @@ public final class HiveRouter {
         if (stitchTicks > STITCH_BUDGET) {
             int sealedNow = finalizeHive(level, registry, location, center, currentTick);
             Alien.LOGGER.warn(
-                    "Hive {}: stitch budget exhausted - sealed {} remaining doorways and finished. Rooms: {}.",
-                    center,
-                    sealedNow,
-                    roomSummary(location)
+                "Hive {}: stitch budget exhausted - sealed {} remaining doorways and finished. Rooms: {}.",
+                center,
+                sealedNow,
+                roomSummary(location)
             );
             warnMissingRooms(location, blueprint, center);
             DONE.put(location, Boolean.TRUE);
@@ -304,7 +304,7 @@ public final class HiveRouter {
             }
         }
         String bridgeHubType =
-                countRoomsOfType(location, "hub_2x2_4way") < fourWayGoals ? "hub_2x2_4way" : "hub";
+            countRoomsOfType(location, "hub_2x2_4way") < fourWayGoals ? "hub_2x2_4way" : "hub";
 
         var interior = new ArrayList<FrontierSocket>();
         for (FrontierSocket socket : frontier) {
@@ -319,8 +319,8 @@ public final class HiveRouter {
                 // at it and the side-merge pass upgrades that hallway (straight -> tee, tee -> cross) on contact.
                 var hall = nearestHallwayChunk(location, socket);
                 if (
-                        hall != null
-                                && advanceToward(level, registry, location, hall, center, reserved, currentTick, random, socket, true)
+                    hall != null
+                        && advanceToward(level, registry, location, hall, center, reserved, currentTick, random, socket, true)
                 ) {
                     return true;
                 }
@@ -332,8 +332,8 @@ public final class HiveRouter {
             // A long stitch (more than HUB_BRIDGE_GAP chunks of corridor) may bridge with a hub at the midpoint - a
             // proper junction whose spare doors invite further connections - instead of one long featureless run.
             if (
-                    cheby(g1, g2) > HUB_BRIDGE_GAP
-                            && tryDropRoom(level, registry, location, bridgeHubType, mid, center, reserved, currentTick)
+                cheby(g1, g2) > HUB_BRIDGE_GAP
+                    && tryDropRoom(level, registry, location, bridgeHubType, mid, center, reserved, currentTick)
             ) {
                 return true;
             }
@@ -346,10 +346,10 @@ public final class HiveRouter {
         // remember this hive is done so its growth tick becomes a cheap no-op.
         int sealed = finalizeHive(level, registry, location, center, currentTick);
         Alien.LOGGER.info(
-                "Hive {}: stitching complete - {} unconnectable doorways sealed. Hive finished. Rooms: {}.",
-                center,
-                sealed,
-                roomSummary(location)
+            "Hive {}: stitching complete - {} unconnectable doorways sealed. Hive finished. Rooms: {}.",
+            center,
+            sealed,
+            roomSummary(location)
         );
         warnMissingRooms(location, blueprint, center);
         DONE.put(location, Boolean.TRUE);
@@ -375,8 +375,8 @@ public final class HiveRouter {
         int midZ = center.z + dz / 2;
         // Offset perpendicular to the dominant travel axis.
         var via = (Math.abs(dx) >= Math.abs(dz))
-                ? new ChunkPos(midX, midZ + off)
-                : new ChunkPos(midX + off, midZ);
+            ? new ChunkPos(midX, midZ + off)
+            : new ChunkPos(midX + off, midZ);
         if (Math.max(Math.abs(via.x - center.x), Math.abs(via.z - center.z)) > activeExtent || reserved.contains(via)) {
             return null; // swing would leave the footprint or sit in a room's reserved ground - go direct instead
         }
@@ -484,14 +484,14 @@ public final class HiveRouter {
 
     /** Step 1: if a socket already points within GOAL_REACH of the target, place the goal's room there. */
     private static boolean tryDropRoom(
-            ServerLevel level,
-            HivePieceRegistry registry,
-            HiveLocation location,
-            String roomType,
-            ChunkPos goalChunk,
-            ChunkPos center,
-            Set<ChunkPos> forbidden,
-            long currentTick
+        ServerLevel level,
+        HivePieceRegistry registry,
+        HiveLocation location,
+        String roomType,
+        ChunkPos goalChunk,
+        ChunkPos center,
+        Set<ChunkPos> forbidden,
+        long currentTick
     ) {
         // Build checks test STRUCTURE occupancy, never territory claims: the biomass economy claims ground
         // without building, and claimed-but-empty ground is exactly where the hive is allowed to build.
@@ -503,9 +503,9 @@ public final class HiveRouter {
             }
             for (PieceMatch match : HivePieceMatcher.matchesFromRegistry(socket, registry, chunkIsFree)) {
                 if (
-                        matchesType(match, roomType) && withinExtent(match, center)
-                                && !occupiesReserved(match, forbidden)
-                                && place(level, location, match, socket, currentTick)
+                    matchesType(match, roomType) && withinExtent(match, center)
+                        && !occupiesReserved(match, forbidden)
+                        && place(level, location, match, socket, currentTick)
                 ) {
                     return true;
                 }
@@ -516,14 +516,14 @@ public final class HiveRouter {
 
     /** Step 2: one corridor piece toward the target - only if it truly progresses; false = blocked, caller skips. */
     private static boolean advanceToward(
-            ServerLevel level,
-            HivePieceRegistry registry,
-            HiveLocation location,
-            ChunkPos goalChunk,
-            ChunkPos center,
-            Set<ChunkPos> reserved,
-            long currentTick,
-            net.minecraft.util.RandomSource random
+        ServerLevel level,
+        HivePieceRegistry registry,
+        HiveLocation location,
+        ChunkPos goalChunk,
+        ChunkPos center,
+        Set<ChunkPos> reserved,
+        long currentTick,
+        net.minecraft.util.RandomSource random
     ) {
         return advanceToward(level, registry, location, goalChunk, center, reserved, currentTick, random, null, false);
     }
@@ -535,16 +535,16 @@ public final class HiveRouter {
      * phase must terminate instead of feeding itself new doors forever.
      */
     private static boolean advanceToward(
-            ServerLevel level,
-            HivePieceRegistry registry,
-            HiveLocation location,
-            ChunkPos goalChunk,
-            ChunkPos center,
-            Set<ChunkPos> reserved,
-            long currentTick,
-            net.minecraft.util.RandomSource random,
-            FrontierSocket only,
-            boolean plainOnly
+        ServerLevel level,
+        HivePieceRegistry registry,
+        HiveLocation location,
+        ChunkPos goalChunk,
+        ChunkPos center,
+        Set<ChunkPos> reserved,
+        long currentTick,
+        net.minecraft.util.RandomSource random,
+        FrontierSocket only,
+        boolean plainOnly
     ) {
         // Build checks test STRUCTURE occupancy, never territory claims: the biomass economy claims ground
         // without building, and claimed-but-empty ground is exactly where the hive is allowed to build.
@@ -591,7 +591,7 @@ public final class HiveRouter {
                     continue;
                 }
                 int score = dist * 4 + pieceBias(match, random)
-                        + 3 * doomedDoorways(match, socket, location, center);
+                    + 3 * doomedDoorways(match, socket, location, center);
                 if (score < bestScore) {
                     bestScore = score;
                     bestMatch = match;
@@ -613,12 +613,12 @@ public final class HiveRouter {
 
     /** True if the piece's new doorways include one opening onto a free in-bounds chunk closer than currentReach. */
     private static boolean opensCloser(
-            PieceMatch match,
-            FrontierSocket socket,
-            ChunkPos goalChunk,
-            int currentReach,
-            Set<ChunkPos> built,
-            ChunkPos center
+        PieceMatch match,
+        FrontierSocket socket,
+        ChunkPos goalChunk,
+        int currentReach,
+        Set<ChunkPos> built,
+        ChunkPos center
     ) {
         int cellX = socket.chunk().x + socket.facing().getStepX() - match.originChunk().x;
         int cellZ = socket.chunk().z + socket.facing().getStepZ() - match.originChunk().z;
@@ -650,8 +650,8 @@ public final class HiveRouter {
         // chamber off its special door) grows its vats on its tendril-floor slots immediately. The vats are the
         // physical storage; the jelly FILL stays with the economy.
         if (
-                match.piece().id().getPath().contains("chamber_jelly")
-                        || match.piece().id().getPath().contains("chamber_scourge")
+            match.piece().id().getPath().contains("chamber_jelly")
+                || match.piece().id().getPath().contains("chamber_scourge")
         ) {
             var vats = HiveChamberSlots.vatSlots(level, location, match.originChunk());
             for (BlockPos slot : vats) {
@@ -704,9 +704,9 @@ public final class HiveRouter {
         }
         if (!missing.isEmpty()) {
             Alien.LOGGER.warn(
-                    "Hive {}: finished WITHOUT these planned rooms: {}.",
-                    center,
-                    String.join(", ", missing)
+                "Hive {}: finished WITHOUT these planned rooms: {}.",
+                center,
+                String.join(", ", missing)
             );
         }
     }
@@ -779,7 +779,7 @@ public final class HiveRouter {
             }
         }
         boolean twoByTwo = roomType.contains("chamber_host") || roomType.contains("chamber_raid")
-                || roomType.contains("hub") || roomType.contains("chamber_harvest");
+            || roomType.contains("hub") || roomType.contains("chamber_harvest");
         return twoByTwo ? chunks / 4 : chunks;
     }
 
@@ -789,11 +789,11 @@ public final class HiveRouter {
      * The follow-up merge/aligned passes then fuse the two sides. Returns true if the bridge was placed.
      */
     private static boolean fillOneChunkGap(
-            ServerLevel level,
-            HivePieceRegistry registry,
-            HiveLocation location,
-            FrontierSocket socket,
-            ChunkPos center
+        ServerLevel level,
+        HivePieceRegistry registry,
+        HiveLocation location,
+        FrontierSocket socket,
+        ChunkPos center
     ) {
         var gap = growthChunk(socket);
         var built = location.structurePieceByChunk().keySet();
@@ -803,8 +803,8 @@ public final class HiveRouter {
         var facing = socket.facing();
         var beyond = new ChunkPos(gap.x + facing.getStepX(), gap.z + facing.getStepZ());
         if (
-                connectableFrom(level, location, beyond, facing.getOpposite())
-                        && placeBridgingStraight(level, registry, location, socket, beyond)
+            connectableFrom(level, location, beyond, facing.getOpposite())
+                && placeBridgingStraight(level, registry, location, socket, beyond)
         ) {
             return true;
         }
@@ -813,9 +813,9 @@ public final class HiveRouter {
         for (Direction lateral : new Direction[] { facing.getClockWise(), facing.getCounterClockWise() }) {
             var side = new ChunkPos(gap.x + lateral.getStepX(), gap.z + lateral.getStepZ());
             if (
-                    cheby(side, center) <= activeExtent
-                            && connectableFrom(level, location, side, lateral.getOpposite())
-                            && placeBridgingStraight(level, registry, location, socket, side)
+                cheby(side, center) <= activeExtent
+                    && connectableFrom(level, location, side, lateral.getOpposite())
+                    && placeBridgingStraight(level, registry, location, socket, side)
             ) {
                 return true;
             }
@@ -825,11 +825,11 @@ public final class HiveRouter {
 
     /** Places a plain 1x1 straight OR corner off {@code fromSocket} whose far doorway opens onto {@code farChunk}. */
     private static boolean placeBridgingStraight(
-            ServerLevel level,
-            HivePieceRegistry registry,
-            HiveLocation location,
-            FrontierSocket fromSocket,
-            ChunkPos farChunk
+        ServerLevel level,
+        HivePieceRegistry registry,
+        HiveLocation location,
+        FrontierSocket fromSocket,
+        ChunkPos farChunk
     ) {
         var built = location.structurePieceByChunk().keySet();
         Predicate<ChunkPos> chunkIsFree = c -> !built.contains(c);
@@ -837,8 +837,8 @@ public final class HiveRouter {
         for (PieceMatch match : HivePieceMatcher.matchesFromRegistry(fromSocket, registry, chunkIsFree)) {
             String path = match.piece().id().getPath();
             if (
-                    (!path.contains("hallway_straight") && !path.contains("hallway_corner"))
-                            || match.piece().footprintChunksX() != 1 || match.piece().footprintChunksZ() != 1
+                (!path.contains("hallway_straight") && !path.contains("hallway_corner"))
+                    || match.piece().footprintChunksX() != 1 || match.piece().footprintChunksZ() != 1
             ) {
                 continue;
             }
@@ -907,8 +907,8 @@ public final class HiveRouter {
         for (int i = 0; i <= 8; i++) {
             int off = (i % 2 == 0) ? i / 2 : -(i / 2 + 1); // 0, -1, +1, -2, +2 ...
             var candidate = northSouth
-                    ? new ChunkPos(exit.x + off, exit.z)
-                    : new ChunkPos(exit.x, exit.z + off);
+                ? new ChunkPos(exit.x + off, exit.z)
+                : new ChunkPos(exit.x, exit.z + off);
             if (Math.max(Math.abs(candidate.x - center.x), Math.abs(candidate.z - center.z)) != activeExtent) {
                 continue; // slid off the rim (corner) - not a valid exit chunk
             }
@@ -987,7 +987,7 @@ public final class HiveRouter {
     private static boolean isPlainCorridor(PieceMatch match) {
         String path = match.piece().id().getPath();
         return (path.contains("hallway_straight") || path.contains("hallway_corner"))
-                && match.piece().footprintChunksX() == 1 && match.piece().footprintChunksZ() == 1;
+            && match.piece().footprintChunksX() == 1 && match.piece().footprintChunksZ() == 1;
     }
 
     /**
@@ -1028,11 +1028,11 @@ public final class HiveRouter {
      * entrances. Connectivity is unaffected - these doors were unused.
      */
     private static int finalizeHive(
-            ServerLevel level,
-            HivePieceRegistry registry,
-            HiveLocation location,
-            ChunkPos center,
-            long currentTick
+        ServerLevel level,
+        HivePieceRegistry registry,
+        HiveLocation location,
+        ChunkPos center,
+        long currentTick
     ) {
         var frontier = location.frontierSockets();
 
@@ -1051,10 +1051,10 @@ public final class HiveRouter {
             }
         }
         Alien.LOGGER.info(
-                "Hive {}: gap-fill pass checked {} leftover doorways, bridged {}.",
-                center,
-                gapCandidates,
-                filled
+            "Hive {}: gap-fill pass checked {} leftover doorways, bridged {}.",
+            center,
+            gapCandidates,
+            filled
         );
         mergeIntoHallways(level, registry, location, center);
         connectAlignedSockets(location, center);
@@ -1065,10 +1065,10 @@ public final class HiveRouter {
         var redirectSkips = new java.util.LinkedHashMap<String, Integer>();
         int redirected = redirectDeadDoors(level, registry, location, center, redirectSkips);
         Alien.LOGGER.info(
-                "Hive {}: redirect pass re-stamped {} pieces toward touching neighbours (skips: {}).",
-                center,
-                redirected,
-                redirectSkips.isEmpty() ? "none" : redirectSkips.toString()
+            "Hive {}: redirect pass re-stamped {} pieces toward touching neighbours (skips: {}).",
+            center,
+            redirected,
+            redirectSkips.isEmpty() ? "none" : redirectSkips.toString()
         );
         mergeIntoHallways(level, registry, location, center);
         connectAlignedSockets(location, center);
@@ -1086,18 +1086,18 @@ public final class HiveRouter {
                     continue; // room attached; socket consumed by the placer
                 }
                 Alien.LOGGER.warn(
-                        "Hive {}: mandatory special room ({}) could NOT attach at {} - sealing its doorway.",
-                        center,
-                        socket.doorType(),
-                        socket.chunk()
+                    "Hive {}: mandatory special room ({}) could NOT attach at {} - sealing its doorway.",
+                    center,
+                    socket.doorType(),
+                    socket.chunk()
                 );
             }
             // Never wall over a working passage: if the chunk this door faces is open toward us, the two sides
             // already form a doorway (e.g. after a redirect) - drop the socket, keep the passage.
             var facedChunk = growthChunk(socket);
             if (
-                    location.structurePieceByChunk().containsKey(facedChunk)
-                            && openDoorFaces(level, location, facedChunk).contains(socket.facing().getOpposite())
+                location.structurePieceByChunk().containsKey(facedChunk)
+                    && openDoorFaces(level, location, facedChunk).contains(socket.facing().getOpposite())
             ) {
                 frontier.remove(socket);
                 continue;
@@ -1123,8 +1123,8 @@ public final class HiveRouter {
         String id = location.structurePieceByChunk().get(faced);
         if (id == null) {
             return location.claimedChunks().contains(faced)
-                    ? "facing claimed-empty ground"
-                    : "facing open ground (no reachable connection ahead)";
+                ? "facing claimed-empty ground"
+                : "facing open ground (no reachable connection ahead)";
         }
         if (id.contains("hallway_royal")) {
             return "facing a royal hallway";
@@ -1148,11 +1148,11 @@ public final class HiveRouter {
 
     /** Attaches the matching chamber to every currently attachable special door (one placement per call). */
     private static boolean attachSpecialRooms(
-            ServerLevel level,
-            HivePieceRegistry registry,
-            HiveLocation location,
-            ChunkPos center,
-            long currentTick
+        ServerLevel level,
+        HivePieceRegistry registry,
+        HiveLocation location,
+        ChunkPos center,
+        long currentTick
     ) {
         for (FrontierSocket socket : new ArrayList<>(location.frontierSockets())) {
             if (isSpecialDoor(socket.doorType()) && attachAt(level, registry, location, socket, center, currentTick)) {
@@ -1164,12 +1164,12 @@ public final class HiveRouter {
 
     /** Places whatever piece matches this socket's door type (special doors match only their chamber). */
     private static boolean attachAt(
-            ServerLevel level,
-            HivePieceRegistry registry,
-            HiveLocation location,
-            FrontierSocket socket,
-            ChunkPos center,
-            long currentTick
+        ServerLevel level,
+        HivePieceRegistry registry,
+        HiveLocation location,
+        FrontierSocket socket,
+        ChunkPos center,
+        long currentTick
     ) {
         // Build checks test STRUCTURE occupancy, never territory claims: the biomass economy claims ground
         // without building, and claimed-but-empty ground is exactly where the hive is allowed to build.
@@ -1266,11 +1266,11 @@ public final class HiveRouter {
      * upgrade, then a 2x1 we can split. Rooms/hubs without an existing opening are never punched into.
      */
     private static int redirectDeadDoors(
-            ServerLevel level,
-            HivePieceRegistry registry,
-            HiveLocation location,
-            ChunkPos center,
-            java.util.Map<String, Integer> skips
+        ServerLevel level,
+        HivePieceRegistry registry,
+        HiveLocation location,
+        ChunkPos center,
+        java.util.Map<String, Integer> skips
     ) {
         int redirected = 0;
         for (FrontierSocket socket : new ArrayList<>(location.frontierSockets())) {
@@ -1314,8 +1314,8 @@ public final class HiveRouter {
                     // the classic "corridor runs one chunk off the stub's flank". Turn the door AND bridge the gap.
                     var beyond = new ChunkPos(neighbour.x + d.getStepX(), neighbour.z + d.getStepZ());
                     if (
-                            cheby(beyond, center) <= activeExtent
-                                    && connectableFrom(level, location, beyond, d.getOpposite())
+                        cheby(beyond, center) <= activeExtent
+                            && connectableFrom(level, location, beyond, d.getOpposite())
                     ) {
                         mode = 3;
                     } else {
@@ -1368,12 +1368,12 @@ public final class HiveRouter {
                 }
             } else if (bestMode == 2) {
                 splitTwoByOne(
-                        level,
-                        registry,
-                        location,
-                        neighbour,
-                        openDoorFaces(level, location, neighbour),
-                        best.getOpposite()
+                    level,
+                    registry,
+                    location,
+                    neighbour,
+                    openDoorFaces(level, location, neighbour),
+                    best.getOpposite()
                 );
             }
             location.frontierSockets().remove(socket);
@@ -1388,12 +1388,12 @@ public final class HiveRouter {
      * halves is told apart from an end door by sampling outside the 8x8 door span - a seam is fully open there.
      */
     private static boolean splitTwoByOne(
-            ServerLevel level,
-            HivePieceRegistry registry,
-            HiveLocation location,
-            ChunkPos struck,
-            EnumSet<Direction> existing,
-            Direction needed
+        ServerLevel level,
+        HivePieceRegistry registry,
+        HiveLocation location,
+        ChunkPos struck,
+        EnumSet<Direction> existing,
+        Direction needed
     ) {
         // Find the seam face: an open face whose neighbour is also 2x1 and whose wall plane is open OUTSIDE the door
         // span.
@@ -1407,16 +1407,16 @@ public final class HiveRouter {
             }
             int y = location.hiveFloorY() + 2;
             BlockPos probe = (face == Direction.NORTH || face == Direction.SOUTH)
-                    ? new BlockPos(
+                ? new BlockPos(
                     struck.getMinBlockX() + 2,
                     y,
                     face == Direction.NORTH ? struck.getMinBlockZ() : struck.getMaxBlockZ()
-            )
-                    : new BlockPos(
+                )
+                : new BlockPos(
                     face == Direction.WEST ? struck.getMinBlockX() : struck.getMaxBlockX(),
                     y,
                     struck.getMinBlockZ() + 2
-            );
+                );
             if (level.getBlockState(probe).isAir()) {
                 seam = face;
                 partner = neighbour;
@@ -1462,11 +1462,11 @@ public final class HiveRouter {
 
     /** Re-stamps {@code chunk} with the 1x1 hallway whose doors (under some rotation) equal {@code desired}. */
     private static boolean restampHallway(
-            ServerLevel level,
-            HivePieceRegistry registry,
-            HiveLocation location,
-            ChunkPos chunk,
-            EnumSet<Direction> desired
+        ServerLevel level,
+        HivePieceRegistry registry,
+        HiveLocation location,
+        ChunkPos chunk,
+        EnumSet<Direction> desired
     ) {
         String want;
         if (desired.size() == 4) {
@@ -1502,14 +1502,14 @@ public final class HiveRouter {
                     default -> BlockPos.ZERO;
                 };
                 var placeAt = new BlockPos(
-                        chunk.getMinBlockX() + correction.getX(),
-                        location.hiveFloorY(),
-                        chunk.getMinBlockZ() + correction.getZ()
+                    chunk.getMinBlockX() + correction.getX(),
+                    location.hiveFloorY(),
+                    chunk.getMinBlockZ() + correction.getZ()
                 );
                 var settings = new StructurePlaceSettings()
-                        .setRotation(rotation)
-                        .setIgnoreEntities(true)
-                        .addProcessor(JigsawReplacementProcessor.INSTANCE);
+                    .setRotation(rotation)
+                    .setIgnoreEntities(true)
+                    .addProcessor(JigsawReplacementProcessor.INSTANCE);
                 if (!template.placeInWorld(level, placeAt, placeAt, settings, net.minecraft.util.RandomSource.create(), 2)) {
                     return false;
                 }

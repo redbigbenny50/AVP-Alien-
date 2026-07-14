@@ -29,30 +29,30 @@ import java.util.Map;
 public final class HiveBalanceTask {
 
     private static final TagKey<EntityType<?>>[] POPULATION_FILL_CASTES = new TagKey[] {
-            AlienEntityTypeTags.RUNNERS,
-            AlienEntityTypeTags.DRONES
+        AlienEntityTypeTags.RUNNERS,
+        AlienEntityTypeTags.DRONES
     };
 
     private HiveBalanceTask() {}
 
     /** Hard non-queen member ceiling - keeps hive fights reasonable. Raised while under empress influence. */
     /**
-     * Castes with their OWN caps, which therefore do not count against the worker member cap: the standing army,
-     * the queen's guard, spitters, and the whole scourge tier.
+     * Castes with their OWN caps, which therefore do not count against the worker member cap: the standing army, the
+     * queen's guard, spitters, and the whole scourge tier.
      */
     @SuppressWarnings("unchecked")
     private static final TagKey<EntityType<?>>[] MILITARY_CASTES = new TagKey[] {
-            AlienEntityTypeTags.WARRIORS,
-            AlienEntityTypeTags.PROWLERS,
-            AlienEntityTypeTags.PRAETORIANS,
-            AlienEntityTypeTags.CRUSHERS,
-            AlienEntityTypeTags.SPITTERS,
-            AlienEntityTypeTags.BURSTERS,
-            AlienEntityTypeTags.CHRYSALISES,
-            AlienEntityTypeTags.RAZOR_CLAWS,
-            AlienEntityTypeTags.RAVAGERS,
-            AlienEntityTypeTags.CARRIERS,
-            AlienEntityTypeTags.HARBINGERS
+        AlienEntityTypeTags.WARRIORS,
+        AlienEntityTypeTags.PROWLERS,
+        AlienEntityTypeTags.PRAETORIANS,
+        AlienEntityTypeTags.CRUSHERS,
+        AlienEntityTypeTags.SPITTERS,
+        AlienEntityTypeTags.BURSTERS,
+        AlienEntityTypeTags.CHRYSALISES,
+        AlienEntityTypeTags.RAZOR_CLAWS,
+        AlienEntityTypeTags.RAVAGERS,
+        AlienEntityTypeTags.CARRIERS,
+        AlienEntityTypeTags.HARBINGERS
     };
 
     /** The room whose count caps the harbinger. A second one requires empress influence to build. */
@@ -100,18 +100,18 @@ public final class HiveBalanceTask {
         // the queen's founding retinue (1 praetorian + 2 drones). Members from other sources currently count
         // too (origin isn't tagged); if convoy bonuses visibly eat cap space, origin tagging is the fix.
         var memberCap = com.alien.common.gameplay.hive.structure.HiveRouter.isEmpressInfluenced(location)
-                ? EMPRESS_MEMBER_CAP
-                : MEMBER_CAP;
+            ? EMPRESS_MEMBER_CAP
+            : MEMBER_CAP;
         var retinueAllowance = Math.min(1, pop.getOrDefault(AlienEntityTypeTags.PRAETORIANS, 0))
-                + Math.min(2, pop.getOrDefault(AlienEntityTypeTags.DRONES, 0));
+            + Math.min(2, pop.getOrDefault(AlienEntityTypeTags.DRONES, 0));
 
         // The member cap counts WORKERS only. Soldiers, spitters and the scourge tier each have their own cap
         // (max_entity_count_in_location on their purchase) and live OUTSIDE this one - otherwise raising an army
         // would squeeze out the very drones and runners it is promoted from, and the hive would eat itself.
         var workingAdults = totalPop
-                - pop.getOrDefault(AlienEntityTypeTags.QUEENS, 0)
-                - militaryPopulation(pop)
-                - retinueAllowance;
+            - pop.getOrDefault(AlienEntityTypeTags.QUEENS, 0)
+            - militaryPopulation(pop)
+            - retinueAllowance;
         if (workingAdults >= memberCap) {
             return;
         }
@@ -142,12 +142,12 @@ public final class HiveBalanceTask {
     }
 
     private static boolean tryFillPopulation(
-            MinecraftServer server,
-            HiveLocation location,
-            LineageFactionData lineage,
-            Map<TagKey<EntityType<?>>, Integer> pop,
-            int chunks,
-            int totalPop
+        MinecraftServer server,
+        HiveLocation location,
+        LineageFactionData lineage,
+        Map<TagKey<EntityType<?>>, Integer> pop,
+        int chunks,
+        int totalPop
     ) {
         var ordered = populationFillOrder(pop, chunks);
         for (var caste : ordered) {
@@ -155,8 +155,8 @@ public final class HiveBalanceTask {
             // making; if the spitter can't commit, the intended caste still gets its normal attempt.
             var substituted = rollSpitterSubstitution(server, caste);
             if (
-                    substituted != caste
-                            && tryCommitCaste(server, location, lineage, substituted, totalPop, PurchasePopulationMode.NET_GAIN)
+                substituted != caste
+                    && tryCommitCaste(server, location, lineage, substituted, totalPop, PurchasePopulationMode.NET_GAIN)
             ) {
                 return true;
             }
@@ -168,8 +168,8 @@ public final class HiveBalanceTask {
     }
 
     private static ArrayList<TagKey<EntityType<?>>> populationFillOrder(
-            Map<TagKey<EntityType<?>>, Integer> pop,
-            int chunks
+        Map<TagKey<EntityType<?>>, Integer> pop,
+        int chunks
     ) {
         var ordered = new ArrayList<TagKey<EntityType<?>>>();
         var drones = pop.getOrDefault(AlienEntityTypeTags.DRONES, 0);
@@ -213,12 +213,12 @@ public final class HiveBalanceTask {
     }
 
     private static boolean tryBalanceComposition(
-            MinecraftServer server,
-            HiveLocation location,
-            LineageFactionData lineage,
-            Map<TagKey<EntityType<?>>, Integer> pop,
-            int chunks,
-            int totalPop
+        MinecraftServer server,
+        HiveLocation location,
+        LineageFactionData lineage,
+        Map<TagKey<EntityType<?>>, Integer> pop,
+        int chunks,
+        int totalPop
     ) {
         var deficits = computeDeficits(pop, chunks, totalPop);
         if (deficits.isEmpty()) {
@@ -244,8 +244,8 @@ public final class HiveBalanceTask {
     /** Basic egg-born castes (drones, runners) have a 1-in-4 chance of producing a spitter instead. */
     private static TagKey<EntityType<?>> rollSpitterSubstitution(MinecraftServer server, TagKey<EntityType<?>> caste) {
         if (
-                (caste == AlienEntityTypeTags.DRONES || caste == AlienEntityTypeTags.RUNNERS)
-                        && server.overworld().getRandom().nextInt(4) == 0
+            (caste == AlienEntityTypeTags.DRONES || caste == AlienEntityTypeTags.RUNNERS)
+                && server.overworld().getRandom().nextInt(4) == 0
         ) {
             return AlienEntityTypeTags.SPITTERS;
         }
@@ -253,21 +253,21 @@ public final class HiveBalanceTask {
     }
 
     private static boolean tryCommitCaste(
-            MinecraftServer server,
-            HiveLocation location,
-            LineageFactionData lineage,
-            TagKey<EntityType<?>> caste,
-            int totalPop,
-            PurchasePopulationMode populationMode
+        MinecraftServer server,
+        HiveLocation location,
+        LineageFactionData lineage,
+        TagKey<EntityType<?>> caste,
+        int totalPop,
+        PurchasePopulationMode populationMode
     ) {
         var outputType = CasteResolver.entityTypeForCaste(lineage.variant(), caste);
         if (outputType == null) {
             return false;
         }
         if (
-                outputType.is(AlienEntityTypeTags.HARBINGERS)
-                        && (CastePopulation.countCaste(location, AlienEntityTypeTags.HARBINGERS) >= 1
-                        || hasHarbingerAwayInRaid(location, lineage))
+            outputType.is(AlienEntityTypeTags.HARBINGERS)
+                && (CastePopulation.countCaste(location, AlienEntityTypeTags.HARBINGERS) >= 1
+                    || hasHarbingerAwayInRaid(location, lineage))
         ) {
             return false;
         }
@@ -292,9 +292,9 @@ public final class HiveBalanceTask {
 
         var biomassCost = biomassCost(purchase, location);
         if (
-                location.biomass() < biomassCost
-                        || location.royalJelly() < purchase.royalJelly()
-                        || location.scourgeJelly() < purchase.scourgeJelly()
+            location.biomass() < biomassCost
+                || location.royalJelly() < purchase.royalJelly()
+                || location.scourgeJelly() < purchase.scourgeJelly()
         ) {
             return false;
         }
@@ -369,9 +369,9 @@ public final class HiveBalanceTask {
     }
 
     private static Map<TagKey<EntityType<?>>, Integer> computeDeficits(
-            Map<TagKey<EntityType<?>>, Integer> pop,
-            int chunks,
-            int totalPop
+        Map<TagKey<EntityType<?>>, Integer> pop,
+        int chunks,
+        int totalPop
     ) {
         var drone = pop.getOrDefault(AlienEntityTypeTags.DRONES, 0);
         var runner = pop.getOrDefault(AlienEntityTypeTags.RUNNERS, 0);
@@ -404,9 +404,9 @@ public final class HiveBalanceTask {
     }
 
     private static boolean conditionsHold(
-            HiveUnitPurchase purchase,
-            HiveLocation location,
-            int totalPop
+        HiveUnitPurchase purchase,
+        HiveLocation location,
+        int totalPop
     ) {
         for (var condition : purchase.conditions()) {
             switch (condition) {
@@ -432,8 +432,8 @@ public final class HiveBalanceTask {
                     // harbinger; only an empress-influenced hive can build a second and keep raiding after you
                     // kill the first.
                     var chambers = com.alien.common.gameplay.hive.structure.HiveRouter.countRoomsOfType(
-                            location,
-                            RAID_CHAMBER_ROOM_TYPE
+                        location,
+                        RAID_CHAMBER_ROOM_TYPE
                     );
                     var current = CastePopulation.countEntity(location, perChamber.entity());
                     if (current >= Math.max(1, chambers)) {

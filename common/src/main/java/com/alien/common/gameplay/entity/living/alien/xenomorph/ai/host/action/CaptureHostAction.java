@@ -79,21 +79,21 @@ public final class CaptureHostAction {
         // gap - it trails it forever. Chase at combat speed, and lead the target the way the combat AI does:
         // path to where it is GOING, not where it currently is, or every step is aimed at empty ground.
         var result = NeoMoveToPosAction.perform(
-                context,
-                interceptPoint(xenomorph, target),
-                chaseSpeedFor(xenomorph, target)
+            context,
+            interceptPoint(xenomorph, target),
+            chaseSpeedFor(xenomorph, target)
         );
 
         if (xenomorph.tickCount % 60 == 0) {
             com.alien.Alien.LOGGER.info(
-                    "[hostdbg] CAPTURE: me={} quarry={} at {} distSq={} move={} navDone={} onGround={}",
-                    xenomorph.blockPosition(),
-                    target.getType().getDescriptionId(),
-                    target.blockPosition(),
-                    String.format("%.1f", xenomorph.distanceToSqr(target)),
-                    result,
-                    xenomorph.getNavigation().isDone(),
-                    xenomorph.onGround()
+                "[hostdbg] CAPTURE: me={} quarry={} at {} distSq={} move={} navDone={} onGround={}",
+                xenomorph.blockPosition(),
+                target.getType().getDescriptionId(),
+                target.blockPosition(),
+                String.format("%.1f", xenomorph.distanceToSqr(target)),
+                result,
+                xenomorph.getNavigation().isDone(),
+                xenomorph.onGround()
             );
         }
 
@@ -113,9 +113,9 @@ public final class CaptureHostAction {
                     HostClaims.writeOffUnreachable(target, xenomorph);
                     NeoMoveToPosAction.onFinish(context);
                     com.alien.Alien.LOGGER.info(
-                            "[hostdbg] gave up on unreachable quarry {} at {} - looking for another",
-                            target.getType().getDescriptionId(),
-                            target.blockPosition()
+                        "[hostdbg] gave up on unreachable quarry {} at {} - looking for another",
+                        target.getType().getDescriptionId(),
+                        target.blockPosition()
                     );
                 }
             }

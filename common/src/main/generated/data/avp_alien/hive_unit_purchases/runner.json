@@ -1,11 +1,11 @@
 {
-  "biomass": 40,
-  "output_entity": "avp_alien:runner",
-  "population_biomass_cost_scale": 0.05,
+  "biomass": 10,
   "input_entities": [
     {
-      "entity": "avp_alien:ovomorph",
-      "count": 1
+      "count": 1,
+      "entity": "avp_alien:ovomorph"
     }
-  ]
+  ],
+  "output_entity": "avp_alien:runner",
+  "population_biomass_cost_scale": 0.05
 }

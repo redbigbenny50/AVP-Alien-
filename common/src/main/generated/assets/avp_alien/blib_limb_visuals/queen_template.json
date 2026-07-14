@@ -5,14 +5,14 @@
         "gInhibitor"
       ],
       "render_offset": [
-        0,
+        0.0,
         0.375,
-        0
+        0.0
       ],
       "render_rotation": [
-        -60,
-        0,
-        0
+        -60.0,
+        0.0,
+        0.0
       ],
       "root_bone": "gHead"
     },
@@ -21,27 +21,27 @@
         "gLeftArmShackle"
       ],
       "render_offset": [
-        0,
+        0.0,
         0.25,
-        0
+        0.0
       ],
       "render_rotation": [
-        -135,
-        0,
-        0
+        -135.0,
+        0.0,
+        0.0
       ],
       "root_bone": "gLeftShoulder"
     },
     "avp_alien:queen_left_leg": {
       "render_offset": [
-        0,
+        0.0,
         0.5,
-        0
+        0.0
       ],
       "render_rotation": [
-        -90,
-        0,
-        0
+        -90.0,
+        0.0,
+        0.0
       ],
       "root_bone": "gLeftLeg"
     },
@@ -50,111 +50,37 @@
         "gRightArmShackle"
       ],
       "render_offset": [
-        0,
+        0.0,
         0.25,
-        0
+        0.0
       ],
       "render_rotation": [
-        -135,
-        0,
-        0
+        -135.0,
+        0.0,
+        0.0
       ],
       "root_bone": "gRightShoulder"
     },
     "avp_alien:queen_right_leg": {
       "render_offset": [
-        0,
+        0.0,
         0.5,
-        0
+        0.0
       ],
       "render_rotation": [
-        -90,
-        0,
-        0
+        -90.0,
+        0.0,
+        0.0
       ],
       "root_bone": "gRightLeg"
     },
     "avp_alien:queen_tail": {
-      "root_bone": "gTail1",
-      "bone_transforms": {
-        "gTail1": {
-          "rotation": [
-            0,
-            0,
-            0
-          ]
-        },
-        "gTail2": {
-          "rotation": [
-            -22.5,
-            0,
-            0
-          ]
-        },
-        "gTail3": {
-          "rotation": [
-            -22.5,
-            0,
-            0
-          ]
-        },
-        "gTail4": {
-          "rotation": [
-            0,
-            0,
-            0
-          ]
-        },
-        "gTail5": {
-          "rotation": [
-            0,
-            0,
-            0
-          ]
-        },
-        "gTail6": {
-          "rotation": [
-            22.5,
-            0,
-            0
-          ]
-        },
-        "gTail7": {
-          "rotation": [
-            0,
-            0,
-            0
-          ]
-        },
-        "gTail8": {
-          "rotation": [
-            0,
-            0,
-            0
-          ]
-        },
-        "gTail9": {
-          "rotation": [
-            22.5,
-            0,
-            0
-          ]
-        },
-        "gTail10": {
-          "rotation": [
-            22.5,
-            0,
-            0
-          ]
-        },
-        "gTailBlade": {
-          "rotation": [
-            22.5,
-            0,
-            0
-          ]
-        }
-      }
+      "render_offset": [
+        0.0,
+        1.1,
+        0.0
+      ],
+      "root_bone": "gTail1"
     }
   }
 }

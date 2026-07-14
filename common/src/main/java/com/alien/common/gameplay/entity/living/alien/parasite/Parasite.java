@@ -166,8 +166,8 @@ public abstract class Parasite extends Alien {
 
     protected boolean canAttachToHost(Entity entity) {
         return entity instanceof LivingEntity livingEntity &&
-                isValidHost(livingEntity) &&
-                !BLibEntityPredicates.hasShield(entity) && !(this.isPassenger() || this.isVehicle());
+            isValidHost(livingEntity) &&
+            !BLibEntityPredicates.hasShield(entity) && !(this.isPassenger() || this.isVehicle());
     }
 
     private void tryUpdatePlayerRiding(Entity entity) {

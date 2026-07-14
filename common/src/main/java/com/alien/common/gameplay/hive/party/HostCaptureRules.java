@@ -92,12 +92,12 @@ public final class HostCaptureRules {
     /** The best capture target from {@code candidates}, or null. Priority first, then distance. */
     public static @Nullable LivingEntity pickTarget(Alien captor, List<? extends LivingEntity> candidates) {
         return candidates.stream()
-                .filter(candidate -> isCapturable(captor, candidate))
-                .min(
-                        Comparator.<LivingEntity>comparingInt(HostCaptureRules::capturePriority)
-                                .thenComparingDouble(captor::distanceToSqr)
-                )
-                .orElse(null);
+            .filter(candidate -> isCapturable(captor, candidate))
+            .min(
+                Comparator.<LivingEntity>comparingInt(HostCaptureRules::capturePriority)
+                    .thenComparingDouble(captor::distanceToSqr)
+            )
+            .orElse(null);
     }
 
     private static boolean isSpitterHost(EntityType<?> type) {

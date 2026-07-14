@@ -1,15 +1,15 @@
 {
   "type": "minecraft:crafting_shaped",
-  "category": "tools",
+  "category": "equipment",
   "key": {
     "I": {
       "item": "minecraft:iron_ingot"
     },
-    "N": {
-      "item": "minecraft:iron_nugget"
-    },
     "J": {
       "item": "avp_alien:poison_jelly"
+    },
+    "N": {
+      "item": "minecraft:iron_nugget"
     }
   },
   "pattern": [

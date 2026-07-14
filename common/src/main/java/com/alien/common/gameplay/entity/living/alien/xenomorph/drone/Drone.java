@@ -36,32 +36,32 @@ import java.util.function.BiConsumer;
 public class Drone extends Xenomorph implements EggCarrier, GOAPUser<Drone>, VentBuilder {
 
     public static final AttackType CLAW = AttackType.builder("drone_claw")
-            .requiresAnyArm()
-            .defaultDurationInTicks(10)
-            .sound(AlienSoundEvents.ENTITY_XENOMORPH_ATTACK)
-            .build();
+        .requiresAnyArm()
+        .defaultDurationInTicks(10)
+        .sound(AlienSoundEvents.ENTITY_XENOMORPH_ATTACK)
+        .build();
 
     public static final AttackType BITE = AttackType.builder("drone_bite")
-            .requiresHead()
-            .defaultDurationInTicks(8)
-            .sound(AlienSoundEvents.ENTITY_XENOMORPH_ATTACK)
-            .build();
+        .requiresHead()
+        .defaultDurationInTicks(8)
+        .sound(AlienSoundEvents.ENTITY_XENOMORPH_ATTACK)
+        .build();
 
     public static final AttackType TAIL = AttackType.builder("drone_tail")
-            .requiresTail()
-            .defaultDurationInTicks(12)
-            .sound(AlienSoundEvents.ENTITY_XENOMORPH_ATTACK)
-            .build();
+        .requiresTail()
+        .defaultDurationInTicks(12)
+        .sound(AlienSoundEvents.ENTITY_XENOMORPH_ATTACK)
+        .build();
 
     public static AttributeSupplier.Builder createDroneAttributes() {
         return Alien.createAlienAttributes()
-                .add(Attributes.ARMOR, 4.0F)
-                .add(Attributes.ARMOR_TOUGHNESS, 0f)
-                .add(Attributes.ATTACK_DAMAGE, PlayerStatConstants.BASE_HEALTH * 0.25F)
-                .add(Attributes.FOLLOW_RANGE, 35F)
-                .add(Attributes.KNOCKBACK_RESISTANCE, 0.3f)
-                .add(Attributes.MAX_HEALTH, PlayerStatConstants.BASE_HEALTH * 2F)
-                .add(Attributes.MOVEMENT_SPEED, PlayerStatConstants.BASE_WALK_SPEED * 1F);
+            .add(Attributes.ARMOR, 4.0F)
+            .add(Attributes.ARMOR_TOUGHNESS, 0f)
+            .add(Attributes.ATTACK_DAMAGE, PlayerStatConstants.BASE_HEALTH * 0.25F)
+            .add(Attributes.FOLLOW_RANGE, 35F)
+            .add(Attributes.KNOCKBACK_RESISTANCE, 0.3f)
+            .add(Attributes.MAX_HEALTH, PlayerStatConstants.BASE_HEALTH * 2F)
+            .add(Attributes.MOVEMENT_SPEED, PlayerStatConstants.BASE_WALK_SPEED * 1F);
     }
 
     private final DroneAnimationDispatcher animationDispatcher;
@@ -72,17 +72,17 @@ public class Drone extends Xenomorph implements EggCarrier, GOAPUser<Drone>, Ven
 
     public Drone(EntityType<? extends Drone> entityType, Level level) {
         super(
-                entityType,
-                level,
-                XenomorphConfig.builder(XenomorphPathConfig.MEDIUM_DOOR, Drone::getType)
-                        .attackConfig(
-                                XenomorphAttackConfig.builder()
-                                        .addRegular(CLAW)
-                                        .addRegular(BITE)
-                                        .addRegular(TAIL)
-                                        .build()
-                        )
+            entityType,
+            level,
+            XenomorphConfig.builder(XenomorphPathConfig.MEDIUM_DOOR, Drone::getType)
+                .attackConfig(
+                    XenomorphAttackConfig.builder()
+                        .addRegular(CLAW)
+                        .addRegular(BITE)
+                        .addRegular(TAIL)
                         .build()
+                )
+                .build()
         );
         this.animationDispatcher = new DroneAnimationDispatcher(this);
         this.eggPickupManager = new EggPickupManager(this);
@@ -120,8 +120,8 @@ public class Drone extends Xenomorph implements EggCarrier, GOAPUser<Drone>, Ven
     @Override
     protected boolean canEntityRideAlien(@NotNull Entity passenger) {
         return super.canEntityRideAlien(passenger)
-                || passenger.getType().is(AlienEntityTypeTags.OVOMORPHS)
-                || passenger.getType().is(AlienEntityTypeTags.HOSTS);
+            || passenger.getType().is(AlienEntityTypeTags.OVOMORPHS)
+            || passenger.getType().is(AlienEntityTypeTags.HOSTS);
     }
 
     /** How far up the drone's body its "chest" sits, as a fraction of its height. */

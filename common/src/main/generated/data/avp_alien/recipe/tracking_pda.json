@@ -1,10 +1,21 @@
 {
-  "type": "minecraft:crafting_shapeless",
-  "category": "tools",
-  "ingredients": [
-    { "item": "minecraft:observer" },
-    { "item": "minecraft:amethyst_shard" },
-    { "item": "minecraft:book" }
+  "type": "minecraft:crafting_shaped",
+  "category": "equipment",
+  "key": {
+    "A": {
+      "item": "minecraft:amethyst_shard"
+    },
+    "O": {
+      "item": "minecraft:observer"
+    },
+    "R": {
+      "item": "minecraft:redstone"
+    }
+  },
+  "pattern": [
+    "R",
+    "A",
+    "O"
   ],
   "result": {
     "count": 1,

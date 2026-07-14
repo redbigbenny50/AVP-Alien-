@@ -69,7 +69,7 @@ public final class HostClaims {
      */
     public static void writeOffUnreachable(LivingEntity host, Alien captor) {
         UNREACHABLE.computeIfAbsent(captor, ignored -> new WeakHashMap<>())
-                .put(host, host.level().getGameTime() + WRITE_OFF_TICKS);
+            .put(host, host.level().getGameTime() + WRITE_OFF_TICKS);
         release(host);
     }
 
@@ -91,7 +91,7 @@ public final class HostClaims {
     }
 
     private record Claim(
-            UUID captorId,
-            long expiresAt
+        UUID captorId,
+        long expiresAt
     ) {}
 }

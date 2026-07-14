@@ -28,10 +28,10 @@ public class ResinWebBlock extends Block {
 
     @Override
     protected @NotNull VoxelShape getShape(
-            @NotNull BlockState blockState,
-            @NotNull BlockGetter blockGetter,
-            @NotNull BlockPos blockPos,
-            @NotNull CollisionContext collisionContext
+        @NotNull BlockState blockState,
+        @NotNull BlockGetter blockGetter,
+        @NotNull BlockPos blockPos,
+        @NotNull CollisionContext collisionContext
     ) {
         return SHAPE;
     }
@@ -44,11 +44,11 @@ public class ResinWebBlock extends Block {
      */
     @Override
     protected void onRemove(
-            @NotNull BlockState blockState,
-            @NotNull Level level,
-            @NotNull BlockPos blockPos,
-            @NotNull BlockState newState,
-            boolean movedByPiston
+        @NotNull BlockState blockState,
+        @NotNull Level level,
+        @NotNull BlockPos blockPos,
+        @NotNull BlockState newState,
+        boolean movedByPiston
     ) {
         // Only when the web is actually GOING - not on a state swap of the same block.
         if (!blockState.is(newState.getBlock()) && level instanceof ServerLevel serverLevel) {
@@ -65,8 +65,8 @@ public class ResinWebBlock extends Block {
             var eyeBlockPos = BlockPos.containing(eyePos);
             var eyeBlockState = level.getBlockState(eyeBlockPos);
             var modifier = eyeBlockState.getBlock() instanceof ResinWebBlock
-                    ? STUCK_MOVEMENT_MODIFIER
-                    : MOVEMENT_MODIFIER;
+                ? STUCK_MOVEMENT_MODIFIER
+                : MOVEMENT_MODIFIER;
 
             entity.makeStuckInBlock(blockState, modifier);
         }

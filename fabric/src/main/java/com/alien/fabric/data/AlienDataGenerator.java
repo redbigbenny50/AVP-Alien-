@@ -5,7 +5,6 @@ import com.alien.fabric.data.damage_type.DamageTypeBootstrapper;
 import com.alien.fabric.data.damage_type.DamageTypeProvider;
 import com.alien.fabric.data.dismemberment.AlienLimbDefinitionDataProvider;
 import com.alien.fabric.data.dismemberment.AlienLimbVisualsDataProvider;
-import com.alien.fabric.data.gene_bonus_data.GeneBonusDataSubProvider;
 import com.alien.fabric.data.growth_stages.GrowthStageSubProvider;
 import com.alien.fabric.data.infections.InfectionSubProvider;
 import com.alien.fabric.data.jukebox_song.AlienJukeboxSongsProvider;
@@ -68,7 +67,20 @@ public class AlienDataGenerator implements DataGeneratorEntrypoint {
         pack.addProvider(AlienJukeboxSongsProvider::new);
 
         // Custom Providers
-        pack.addProvider(GeneBonusDataSubProvider::new);
+        // GENE BONUSES - DISABLED FOR DATAGEN, NOT FOR THE GAME.
+        //
+        // GeneBonusDataSubProvider references com.human.common.gameplay.gene.Genes, and avp_human is declared
+        // modCompileOnly - on the COMPILE classpath but not the RUNTIME one. Datagen actually launches a JVM, so
+        // the class is missing and the whole run dies with NoClassDefFoundError before any other provider gets to
+        // write a single file.
+        //
+        // Turning this off costs nothing at runtime: datagen never DELETES, so the already-generated
+        // data/avp_alien/gene_bonus_data/*.json still ships with the mod and gene bonuses still work in full for
+        // anyone who installs avp_human. The only thing lost is the ability to REGENERATE that file.
+        //
+        // Re-enable this line (and put avp_human on the runtime classpath - modLocalRuntime instead of, or as well
+        // as, modCompileOnly in fabric/build.gradle) whenever the gene bonus tables themselves need to change.
+        // pack.addProvider(GeneBonusDataSubProvider::new);
 
         pack.addProvider(MoltingProfileSubProvider::new);
         pack.addProvider(GrowthStageSubProvider::new);

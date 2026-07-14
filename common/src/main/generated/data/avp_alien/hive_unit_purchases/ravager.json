@@ -4,6 +4,11 @@
       "type": "min_entity_count_in_location",
       "entity": "avp_alien:harbinger",
       "value": 1
+    },
+    {
+      "type": "max_entity_count_in_location",
+      "entity": "avp_alien:ravager",
+      "value": 10
     }
   ],
   "input_entities": [
