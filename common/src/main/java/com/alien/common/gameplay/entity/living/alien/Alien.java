@@ -722,6 +722,14 @@ public abstract class Alien extends Monster implements DataUser {
         if (super.isPersistenceRequired()) {
             return true;
         }
+        // Load-window guard: the hive registry is rebuilt from BLib faction data on load, and until that has happened
+        // once it cannot place ANY member in a hive - so every member would read as non-persistent and vanilla would
+        // despawn it the moment it ticks on load. That is the "on join, every xeno but the queen vanished" bug (the
+        // queen has her own registry-independent persistence). Until the registry is ready, hold every hive xenomorph
+        // persistent so nothing is culled in that window.
+        if (!HiveLocationRegistry.INSTANCE.hasRebuilt() && getType().is(AlienEntityTypeTags.XENOMORPHS)) {
+            return true;
+        }
         // Hive: an alien is persistent if it's standing in a hive location and either (a) the location's boss bar
         // is angry (an active fight), or (b) it's the location's current leader.
         var location = HiveLocationRegistry.INSTANCE.getByChunk(level().dimension(), chunkPosition());
@@ -1030,11 +1038,30 @@ public abstract class Alien extends Monster implements DataUser {
         };
     }
 
+    /**
+     * NBT key for {@link #hostBorn}. Deliberately NOT in {@code GrowthManager.TRANSITION_NBT_KEY_BLACKLIST}, so the
+     * flag rides {@code EntityTransitionUtil.transitionInto} through every growth step: the chestburster that crawls
+     * out of a cow is tagged once, and the adult it eventually becomes still knows it was host-born.
+     */
+    private static final String NBT_HOST_BORN = "avp_host_born";
+
+    /** True if this line began inside a host (chestburst), rather than being simulated out of a reserve bank. */
+    private boolean hostBorn;
+
+    public boolean isHostBorn() {
+        return hostBorn;
+    }
+
+    public void setHostBorn(boolean hostBorn) {
+        this.hostBorn = hostBorn;
+    }
+
     @Override
     public void readAdditionalSaveData(@NotNull CompoundTag compoundTag) {
         super.readAdditionalSaveData(compoundTag);
         hiveManager.load(compoundTag);
         moltingManager.load(compoundTag);
+        this.hostBorn = compoundTag.getBoolean(NBT_HOST_BORN);
 
         if (compoundTag.contains(NBT_HOST_TYPE)) {
             var resourceLocationString = compoundTag.getString(NBT_HOST_TYPE);
@@ -1051,6 +1078,7 @@ public abstract class Alien extends Monster implements DataUser {
         super.addAdditionalSaveData(compoundTag);
         hiveManager.save(compoundTag);
         moltingManager.save(compoundTag);
+        compoundTag.putBoolean(NBT_HOST_BORN, hostBorn);
 
         hostTypeOption.ifSome(hostType -> {
             var resourceLocation = BuiltInRegistries.ENTITY_TYPE.getKey(hostTypeOption.unwrap());

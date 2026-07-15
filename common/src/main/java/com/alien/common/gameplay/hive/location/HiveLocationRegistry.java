@@ -59,6 +59,19 @@ public final class HiveLocationRegistry {
 
     private HiveConfig config = HiveConfig.defaults();
 
+    /**
+     * False until {@link #rebuildFromFactions()} has completed at least once this server session.
+     * <p>
+     * The registry is not persisted - it is rebuilt from BLib faction data on {@code onFactionsLoaded}. Entity
+     * persistence ({@code Alien.isPersistenceRequired}) depends on this registry: a hive member is persistent because
+     * the registry can place it in a hive. But on world load, entities can tick - and run their vanilla despawn check -
+     * BEFORE BLib has loaded and this rebuild has run. In that window every member resolves to "no hive", reads as
+     * non-persistent, and vanilla despawns it. That is the "on join, every xeno but the queen vanished" bug: the queen
+     * has her own registry-independent persistence, the rank and file do not. This latch lets members hold persistent
+     * through the load window until the registry is genuinely ready to answer.
+     */
+    private boolean hasRebuilt = false;
+
     private long ticksSinceLastScan = 0L;
 
     /** Reinforcement dispatcher fires on a coarser-than-tick cadence — every 5 seconds is plenty. */
@@ -292,6 +305,11 @@ public final class HiveLocationRegistry {
      * Walk every loaded lineage's nested locations and (re)build all four indexes from scratch. Intended for the
      * server-started callback.
      */
+    /** True once the registry has been built from faction data at least once - see {@link #hasRebuilt}. */
+    public boolean hasRebuilt() {
+        return hasRebuilt;
+    }
+
     public void rebuildFromFactions() {
         byId.clear();
         byLineage.clear();
@@ -301,6 +319,7 @@ public final class HiveLocationRegistry {
         ticksSinceLastDispatch = 0L;
         ticksSinceLastHiveSpawn = 0L;
         HiveLocationSlowTickTask.reset();
+        hasRebuilt = true;
 
         var allIds = Alien.MOD.factions().getAllIds();
         var lineageIdCount = 0;
@@ -644,6 +663,7 @@ public final class HiveLocationRegistry {
         ticksSinceLastScan = 0L;
         ticksSinceLastDispatch = 0L;
         ticksSinceLastHiveSpawn = 0L;
+        hasRebuilt = false;
     }
 
     public int locationCount() {

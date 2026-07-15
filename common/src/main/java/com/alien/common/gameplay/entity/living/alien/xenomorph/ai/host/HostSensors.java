@@ -29,20 +29,20 @@ public final class HostSensors {
     public static final double HOST_SEARCH_RADIUS = 32.0;
 
     public static final Sensor.Mono<Xenomorph, Boolean> HAS_TARGET_HOST = Sensors.map(
-            StateKey.sensed("has_target_host"),
-            xenomorph -> findCaptureTarget(xenomorph) != null
+        StateKey.sensed("has_target_host"),
+        xenomorph -> findCaptureTarget(xenomorph) != null
     );
 
     public static final Sensor.Mono<Xenomorph, Boolean> IS_CARRYING_HOST = Sensors.map(
-            StateKey.sensed("is_carrying_host"),
-            HostSensors::isCarryingHost
+        StateKey.sensed("is_carrying_host"),
+        HostSensors::isCarryingHost
     );
 
     /** True if this xenomorph already has a captured host riding it. */
     public static boolean isCarryingHost(Xenomorph xenomorph) {
         return xenomorph.getPassengers()
-                .stream()
-                .anyMatch(passenger -> passenger.getType().is(AlienEntityTypeTags.HOSTS));
+            .stream()
+            .anyMatch(passenger -> passenger.getType().is(AlienEntityTypeTags.HOSTS));
     }
 
     /**
@@ -80,12 +80,12 @@ public final class HostSensors {
 
         var box = xenomorph.getBoundingBox().inflate(HOST_SEARCH_RADIUS);
         var candidates = xenomorph.level()
-                .getEntitiesOfClass(LivingEntity.class, box)
-                .stream()
-                .filter(candidate -> !sweeping || InteriorSweepDuty.isInsideHive(hive, candidate))
-                .filter(candidate -> !HostClaims.isClaimedByOther(candidate, xenomorph))
-                .filter(candidate -> !HostClaims.isUnreachableFor(candidate, xenomorph))
-                .toList();
+            .getEntitiesOfClass(LivingEntity.class, box)
+            .stream()
+            .filter(candidate -> !sweeping || InteriorSweepDuty.isInsideHive(hive, candidate))
+            .filter(candidate -> !HostClaims.isClaimedByOther(candidate, xenomorph))
+            .filter(candidate -> !HostClaims.isUnreachableFor(candidate, xenomorph))
+            .toList();
         return HostCaptureRules.pickTarget(xenomorph, candidates);
     }
 }

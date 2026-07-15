@@ -164,6 +164,7 @@ public final class SurfacePartyLifecycleTask {
         HiveConfig config
     ) {
         ChunkPos lastKnownChunk = null;
+        BlockPos lastKnownPos = null;
 
         for (var entry : new ArrayList<>(party.materializedMembers().entrySet())) {
             var entity = serverLevel.getEntity(entry.getKey());
@@ -178,6 +179,10 @@ public final class SurfacePartyLifecycleTask {
                 continue; // died this tick, before its death hook untracked it
             }
             lastKnownChunk = new ChunkPos(entity.blockPosition());
+            // The member is STANDING here, so this spot is by definition reachable-and-standable ground - the vent
+            // should anchor to it, not to the chunk's heightmap crest (which in spiky terrain is the top of an ice
+            // spire the party ran along the base of but could never climb).
+            lastKnownPos = entity.blockPosition();
             location.localReserves().addReturningMember(entry.getValue(), 1);
             // EGG DUTY: a carrier is refunded but NEVER discarded - discarding it mid-haul vanished the
             // worker and dropped its egg. It stays alive to finish the delivery.
@@ -198,7 +203,7 @@ public final class SurfacePartyLifecycleTask {
         }
 
         if (lastKnownChunk != null) {
-            maybeDropVentAndResin(serverLevel, location, config, lastKnownChunk);
+            maybeDropVentAndResin(serverLevel, location, config, lastKnownChunk, lastKnownPos);
             dropSurfaceResinPatch(serverLevel, location, lastKnownChunk);
         }
 
@@ -209,7 +214,8 @@ public final class SurfacePartyLifecycleTask {
         ServerLevel serverLevel,
         HiveLocation location,
         HiveConfig config,
-        ChunkPos chunk
+        ChunkPos chunk,
+        BlockPos anchor
     ) {
         // Count the SURFACE vents actually recorded in this chunk. This used to re-derive "near the surface" from the
         // heightmap, which also counted interior and frontier vents that happened to sit high in their own column.
@@ -254,7 +260,7 @@ public final class SurfacePartyLifecycleTask {
 
         // Search the whole chunk for a placeable surface column, not just the exact centre block: on a hillside
         // (or under a tree / in water) the centre column is rarely sturdy, so the drop silently aborted.
-        var ventPos = findSurfaceVentSpot(serverLevel, chunk);
+        var ventPos = findSurfaceVentSpot(serverLevel, chunk, anchor);
         if (ventPos == null) {
             Alien.LOGGER.info(
                 "Hive: surface party made NO vent at {} for {} - no sturdy, open surface column anywhere in the chunk.",
@@ -276,12 +282,26 @@ public final class SurfacePartyLifecycleTask {
         Alien.LOGGER.info("Hive: surface party dropped a SURFACE vent at {} for location {}", ventPos, location.id());
     }
 
-    /** A sturdy, open surface column somewhere in the chunk - rings outward from the centre. */
+    /**
+     * How far, in Y, a vent column may sit from where the party actually stood. A surface vent is a DOORWAY between the
+     * hive and the world; a party member reached the anchor on foot, so a vent within a few blocks of that Y is
+     * reachable too. A column whose surface is far above (an ice spire, a cliff the party skirted the base of) is
+     * rejected: the aliens could get to the anchor but never climb to the vent, and every host-carry would strand at
+     * its foot. Generous enough to allow a normal hillside step-up.
+     */
+    private static final int MAX_VENT_Y_DROP = 5;
+
+    /**
+     * A sturdy, open surface column near where the party actually stood. Rings outward from the ANCHOR (a live member's
+     * position), not the chunk centre, and rejects any column more than {@link #MAX_VENT_Y_DROP} off the anchor's Y so
+     * the vent can never land atop an unreachable spire.
+     */
     private static @org.jetbrains.annotations.Nullable BlockPos findSurfaceVentSpot(
         ServerLevel serverLevel,
-        ChunkPos chunk
+        ChunkPos chunk,
+        @org.jetbrains.annotations.Nullable BlockPos anchor
     ) {
-        var centre = chunk.getMiddleBlockPosition(0);
+        var centre = anchor != null ? anchor : chunk.getMiddleBlockPosition(0);
         for (int radius = 0; radius <= 7; radius++) {
             for (int dx = -radius; dx <= radius; dx++) {
                 for (int dz = -radius; dz <= radius; dz++) {
@@ -291,6 +311,11 @@ public final class SurfacePartyLifecycleTask {
                     int x = centre.getX() + dx;
                     int z = centre.getZ() + dz;
                     int y = serverLevel.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, x, z);
+                    // Reject a column whose surface is far off the anchor's Y - a spire top or a deep pit the party
+                    // could reach but not climb between. Skipped when there is no anchor (legacy callers).
+                    if (anchor != null && Math.abs(y - anchor.getY()) > MAX_VENT_Y_DROP) {
+                        continue;
+                    }
                     var candidate = new BlockPos(x, y, z);
                     var ground = candidate.below();
                     if (!serverLevel.getBlockState(ground).isFaceSturdy(serverLevel, ground, Direction.UP)) {

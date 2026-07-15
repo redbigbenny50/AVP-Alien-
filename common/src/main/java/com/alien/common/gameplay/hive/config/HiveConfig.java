@@ -157,6 +157,8 @@ public record HiveConfig(
     long biomassHuntingPartyDurationTicks,
     int attackPartyBaseSize,
     double attackPartySizePerClaimedChunk,
+    int attackPartyMaxSize,
+    int attackPartyMaxSizeEmpress,
     long attackPartyCooldownTicks,
     long attackPartyWave1DelayTicks,
     long attackIntrusionDwellTicks,
@@ -325,6 +327,8 @@ public record HiveConfig(
             10L * TICKS_PER_MINUTE, // biomassHuntingPartyDurationTicks: active duration before returning home via vent
             2, // attackPartyBaseSize
             0.15, // attackPartySizePerClaimedChunk
+            8, // attackPartyMaxSize: hard ceiling - size scaled with claims unbounded (~20 on a big hive)
+            12, // attackPartyMaxSizeEmpress: raised ceiling under empress influence
             3L * 24L * TICKS_PER_HOUR, // attackPartyCooldownTicks: gap between wave 1 and wave 2 (3 game-days)
             24000L, // attackPartyWave1DelayTicks: wave 1 fires ~1 MC day after the intrusion is logged
             30L * TICKS_PER_SECOND, // attackIntrusionDwellTicks: in-claim-while-hostile dwell before a campaign arms

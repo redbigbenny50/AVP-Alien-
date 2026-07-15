@@ -38,18 +38,40 @@ public final class HostEggDelivery {
     /**
      * How far from a host's egg-drop cell a loose or carried egg counts as "one is already on the way".
      * <p>
-     * MUST match the ferry's inbound radius. An egg the ferry un-roots starts life across the hive and takes seconds
-     * to arrive; if this gate only looked AT the drop cell (as it once did) it would report the host still waiting and
+     * MUST match the ferry's inbound radius. An egg the ferry un-roots starts life across the hive and takes seconds to
+     * arrive; if this gate only looked AT the drop cell (as it once did) it would report the host still waiting and
      * trigger another release every cadence, draining the whole nursery.
      */
     private static final double INBOUND_EGG_RADIUS = 48.0;
 
     /**
-     * The egg-drop cell in front of an embedded host ready for an egg, or empty if none: a free host (alive,
-     * un-implanted, no parasite attached) embedded at least {@link #SETTLE_TICKS} ago, whose {@code eggDropFor} cell
-     * holds no ovomorph yet.
+     * FERRY query - "does any host need a NEW egg released?" A free host (alive, un-implanted, no parasite) settled at
+     * least {@link #SETTLE_TICKS} ago whose drop cell has no ovomorph AND none inbound. The inbound test is the
+     * anti-drain guard: if an egg is already loose or being carried toward the host, no new one is released.
+     * <p>
+     * Do NOT use this to route a carrier that is ALREADY holding an egg - the carrier's own egg counts as "inbound" and
+     * hides the very destination it is looking for. Use {@link #findHostDropForCarrier} for that.
      */
     public static Optional<BlockPos> findAwaitingHostEggDrop(ServerLevel level, HiveLocation location) {
+        return findHostDrop(level, location, null);
+    }
+
+    /**
+     * ROUTING query - "where do I, this carrier, take the egg I am holding?" Identical to the ferry query EXCEPT the
+     * carrier's own egg is ignored when testing for an inbound egg. Without this, a hauler that picks up a host egg
+     * asks where to deliver it, its own egg trips the inbound guard, the method returns empty, and the hauler loses its
+     * destination and mills around unable to reach the chamber - the "too confused to even vent toward the exits"
+     * regression the anti-drain guard introduced.
+     */
+    public static Optional<BlockPos> findHostDropForCarrier(ServerLevel level, HiveLocation location, Ovomorph carriedEgg) {
+        return findHostDrop(level, location, carriedEgg);
+    }
+
+    /**
+     * Shared core. {@code ignoreEgg}, when non-null, is excluded from the inbound-egg test - so a carrier can find the
+     * host its OWN egg is bound for, while the ferry (passing null) still refuses to release a duplicate.
+     */
+    private static Optional<BlockPos> findHostDrop(ServerLevel level, HiveLocation location, @Nullable Ovomorph ignoreEgg) {
         long now = level.getGameTime();
         for (var origin : HostChamberSlots.hostChamberGroups(location)) {
             for (var spot : HostChamberSlots.hostSpots(level, location, origin)) {
@@ -58,8 +80,8 @@ public final class HostEggDelivery {
                     continue;
                 }
                 var eggDrop = HostChamberSlots.eggDropFor(spot);
-                if (hasOvomorphAt(level, eggDrop) || hasInboundEgg(level, eggDrop)) {
-                    continue; // already has its egg, or one is loose and on the way
+                if (hasOvomorphAt(level, eggDrop) || hasInboundEgg(level, eggDrop, ignoreEgg)) {
+                    continue; // already has its egg, or a DIFFERENT egg is loose and on the way
                 }
                 long embedTime = ((Host) host).getEmbedGameTime();
                 if (embedTime != Long.MIN_VALUE && now - embedTime >= SETTLE_TICKS) {
@@ -77,10 +99,10 @@ public final class HostEggDelivery {
                 continue;
             }
             if (
-                    AlienPredicates.isHost(entity)
-                            && entity.isAlive()
-                            && !AlienPredicates.hasEmbryo(entity)
-                            && !hasParasitePassenger(entity)
+                AlienPredicates.isHost(entity)
+                    && entity.isAlive()
+                    && !AlienPredicates.hasEmbryo(entity)
+                    && !hasParasitePassenger(entity)
             ) {
                 return entity;
             }
@@ -101,13 +123,17 @@ public final class HostEggDelivery {
         return !level.getEntitiesOfClass(Ovomorph.class, new AABB(pos).inflate(EGG_DROP_SCAN_RADIUS)).isEmpty();
     }
 
-    /** Is an egg already loose (or being carried) and bound for this drop cell? Then the host is not "awaiting" one. */
-    private static boolean hasInboundEgg(ServerLevel level, BlockPos eggDrop) {
+    /**
+     * Is an egg (other than {@code ignoreEgg}) already loose or being carried toward this drop cell? Then no NEW egg is
+     * needed. {@code ignoreEgg} lets a carrier discount the very egg it is holding, so it does not hide its own
+     * destination from itself.
+     */
+    private static boolean hasInboundEgg(ServerLevel level, BlockPos eggDrop, @Nullable Ovomorph ignoreEgg) {
         var box = new AABB(eggDrop).inflate(INBOUND_EGG_RADIUS);
         return !level.getEntitiesOfClass(
-                Ovomorph.class,
-                box,
-                egg -> egg.isAlive() && (!egg.isRooted.get() || egg.isPassenger())
+            Ovomorph.class,
+            box,
+            egg -> egg != ignoreEgg && egg.isAlive() && (!egg.isRooted.get() || egg.isPassenger())
         ).isEmpty();
     }
 }

@@ -120,6 +120,9 @@ public final class HiveLocationLoadedTickTask {
             com.alien.common.gameplay.hive.structure.HarvestChamberTask.run(serverLevel, location);
             // A webbed host awaiting an egg releases one stored nursery egg, which a carrier then ferries to it.
             com.alien.common.gameplay.hive.structure.HostEggFerryTask.run(serverLevel, location);
+            // Idle host-born adults walk to a vent and fold into the brood bank: uncapped, off the member cap, and
+            // drawn on before the main reserves.
+            com.alien.common.gameplay.hive.economy.BroodBankTask.run(serverLevel, location);
         }
     }
 

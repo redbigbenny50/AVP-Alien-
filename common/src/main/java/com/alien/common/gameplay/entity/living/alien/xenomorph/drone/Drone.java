@@ -149,7 +149,11 @@ public class Drone extends Xenomorph implements EggCarrier, GOAPUser<Drone>, Ven
         if (passenger.getType().is(AlienEntityTypeTags.HOSTS)) {
             var chestHeight = getBbHeight() * CHEST_HEIGHT_FRACTION;
             var feetOffset = chestHeight - passenger.getBbHeight() * 0.5;
-            var forward = CARRY_CLEARANCE + passenger.getBbWidth() * 0.5;
+            // Held to the drone's FRONT/underside, clutched forward - not draped over its back. Every other carried
+            // passenger in the mod (drone/runner/burster eggs) sits at NEGATIVE Z on the body; the host at a positive
+            // offset rode the tail end and showed up behind the drone in testing, so the clutch offset is negative to
+            // match the convention the rest of the code carries by.
+            var forward = -(CARRY_CLEARANCE + passenger.getBbWidth() * 0.5);
 
             var relativePos = EntityUtil.getRelativePosition(this, 0, feetOffset, forward);
             callback.accept(passenger, relativePos.x, relativePos.y, relativePos.z);

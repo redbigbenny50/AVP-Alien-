@@ -126,7 +126,10 @@ public class DropOffEggAction {
                     xenomorph.chunkPosition()
                 );
                 if (hostDropLocation != null) {
-                    hostDrop = HostEggDelivery.findAwaitingHostEggDrop(hostDropLevel, hostDropLocation);
+                    // Route with the CARRIER-aware query so our own egg does not trip the inbound-egg guard and hide
+                    // the destination we are carrying it to. The ferry uses the plain query; a hauler must not.
+                    var ownEgg = getPassengerOvomorphs(xenomorph).stream().findFirst().orElse(null);
+                    hostDrop = HostEggDelivery.findHostDropForCarrier(hostDropLevel, hostDropLocation, ownEgg);
                 }
             }
             // A spot another hauler is ALREADY on its way to is NOT free. An egg in transit is not sitting in the

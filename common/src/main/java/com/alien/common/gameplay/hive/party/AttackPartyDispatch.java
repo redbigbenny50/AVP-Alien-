@@ -47,10 +47,17 @@ public final class AttackPartyDispatch {
         }
         var spawnPos = surfaceVents.get(serverLevel.random.nextInt(surfaceVents.size()));
 
-        var desiredSize = Math.max(
-            1,
-            Math.round(
-                config.attackPartyBaseSize() + config.attackPartySizePerClaimedChunk() * location.claimedChunks().size()
+        // Size scales with claims but is CAPPED - unbounded scaling put ~20 members on a large hive.
+        var attackCap = com.alien.common.gameplay.hive.structure.HiveRouter.isEmpressInfluenced(location)
+            ? config.attackPartyMaxSizeEmpress()
+            : config.attackPartyMaxSize();
+        var desiredSize = Math.min(
+            attackCap,
+            Math.max(
+                1,
+                Math.round(
+                    config.attackPartyBaseSize() + config.attackPartySizePerClaimedChunk() * location.claimedChunks().size()
+                )
             )
         );
 

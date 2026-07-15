@@ -1,5 +1,6 @@
 package com.alien.common.gameplay.entity.living.alien.xenomorph.ai.host.action;
 
+import com.alien.common.data.AlienVariantTypes;
 import com.alien.common.gameplay.entity.living.alien.xenomorph.Xenomorph;
 import com.alien.common.gameplay.entity.living.alien.xenomorph.ai.host.InteriorSweepDuty;
 import com.alien.common.gameplay.hive.location.HiveLocation;
@@ -8,6 +9,8 @@ import com.alien.common.gameplay.hive.party.HostCaptureTask;
 import com.alien.common.gameplay.hive.party.PartyVentUtil;
 import com.alien.common.gameplay.hive.structure.HostChamberSlots;
 import com.alien.common.gameplay.hive.vent.HiveVents;
+import com.alien.common.gameplay.hive.vent.VentKind;
+import com.alien.common.gameplay.hive.vent.VentPlacement;
 import com.blib.api.common.goap.v1.action.impl.NeoMoveToPosAction;
 import com.just.ai.goap.action.Action;
 import net.minecraft.core.BlockPos;
@@ -105,9 +108,15 @@ public final class DeliverHostAction {
         // The vent block itself is unreachable (in a wall, or inside a resin collar). Walk to the standable spot beside
         // it instead, exactly as the egg haul does.
         var approach = HiveVents.emergencePosNear(serverLevel, vent);
-        var ventTarget = approach != null ? Vec3.atBottomCenterOf(approach) : Vec3.atBottomCenterOf(vent);
+        var approachPos = approach != null ? approach : vent;
+        var ventTarget = Vec3.atBottomCenterOf(approachPos);
 
-        if (isAtVent(xenomorph, vent)) {
+        // Arrival is tested against the SPOT WE PATHED TO, not the raw vent block. emergencePosNear can hand back a
+        // standable cell two blocks out and one up from the vent; the carrier would then stand exactly on its target
+        // and still be >VENT_USE_RANGE from the vent on some axis, so the old isAtVent(vent) test never fired - it
+        // walked right up to the vent and then past it, holding the host forever. We are "at the vent" when we have
+        // reached the approach spot (or, as a fallback, are genuinely within use-range of the vent itself).
+        if (isAt(xenomorph, approachPos) || isAtVent(xenomorph, vent)) {
             NeoMoveToPosAction.onFinish(context);
             UNREACHABLE_VENTS.remove(xenomorph);
             HostCaptureTask.deliverToHostChamber(xenomorph, carried, serverLevel, location);
@@ -123,6 +132,14 @@ public final class DeliverHostAction {
                 // than standing here forever hammering an unreachable target with a live host on our back.
                 UNREACHABLE_VENTS.computeIfAbsent(xenomorph, ignored -> new HashSet<>()).add(vent);
                 NeoMoveToPosAction.onFinish(context);
+
+                // A vent the carrier reached the foot of but cannot CLIMB to (a SURFACE vent stamped on a spire top
+                // before the placement Y-guard existed) is not a transient failure - it is unreachable forever. If
+                // this carrier is standing far below such a vent, relocate the vent down to where the carrier IS: it
+                // is standing on reachable, standable ground by definition. This heals the bad vents already stamped
+                // on existing worlds, which the placement fix alone cannot move.
+                maybeRelocateUnreachableVent(serverLevel, location, xenomorph, vent);
+
                 stall(xenomorph, "cannot path to the vent at " + vent + " - writing it off, trying the next nearest");
                 yield Action.Signal.CONTINUE;
             }
@@ -187,6 +204,66 @@ public final class DeliverHostAction {
      * it, diagonally, all count. Vents are embedded in walls and floors, so a straight-line distance to the vent could
      * fail even while the carrier stood right next to it.
      */
+    /** A vent this far above the stalled carrier is a climb it will never make - relocate it, do not just retry it. */
+    private static final int UNREACHABLE_VENT_Y_GAP = 6;
+
+    /**
+     * If a SURFACE vent sits far above a carrier that cannot path to it, move the vent down to the carrier.
+     * <p>
+     * The carrier reached its current spot on foot, so that spot is reachable-and-standable; the vent, stamped on a
+     * spire top by the old heightmap placement, is not. Only fires for a genuine vertical gap
+     * ({@link #UNREACHABLE_VENT_Y_GAP}) and only for SURFACE vents - a frontier/structure vent underground is SUPPOSED
+     * to be below the carrier and must never be dragged to the surface.
+     */
+    private static void maybeRelocateUnreachableVent(
+        ServerLevel level,
+        HiveLocation location,
+        Xenomorph xenomorph,
+        BlockPos vent
+    ) {
+        // isKind is also the spam guard: the moment we relocate, removeVent() clears this vent's kind, so a carrier
+        // that keeps stalling finds it is no longer a known SURFACE vent and does not re-place it.
+        if (!location.ventManager().isKind(vent, VentKind.SURFACE)) {
+            return; // only the surface "front door" relocates (and an already-relocated vent no longer matches)
+        }
+        var carrierPos = xenomorph.blockPosition();
+        if (vent.getY() - carrierPos.getY() < UNREACHABLE_VENT_Y_GAP) {
+            return; // not a big climb - this is an ordinary transient path failure, just retry the vent
+        }
+        // The destination must be a genuine vent cell: an OPEN space resting against a solid face - the same contract
+        // VentPlacement expects. The carrier is standing here, but "standing" is not enough (it could be on a slab, on
+        // web, or mid-step over a gap). If its feet cell does not qualify, do not stamp a floating vent - just leave
+        // the vent written off and let the carrier try the next one.
+        if (!VentPlacement.isOpen(level, carrierPos) || !VentPlacement.restsOnSolidFace(level, carrierPos)) {
+            return;
+        }
+        var variant = location.lineageVariantOrNull();
+        if (variant == null) {
+            return;
+        }
+        // Move the record and the blocks: drop the old vent, stamp a fresh SURFACE vent where the carrier stands.
+        location.ventManager().removeVent(vent);
+        VentPlacement.place(level, carrierPos, AlienVariantTypes.getFor(variant), VentKind.SURFACE);
+        location.ventManager().addVent(carrierPos, VentKind.SURFACE);
+        var writtenOff = UNREACHABLE_VENTS.get(xenomorph);
+        if (writtenOff != null) {
+            writtenOff.remove(vent); // the replacement is reachable; do not carry the old write-off forward
+        }
+        com.alien.Alien.LOGGER.info(
+            "Hive: relocated an unreachable SURFACE vent from {} down to {} where a host carrier could stand.",
+            vent,
+            carrierPos
+        );
+    }
+
+    /** Standing on (or within one block of) a specific cell - used to confirm arrival at the approach spot. */
+    private static boolean isAt(Xenomorph xenomorph, BlockPos target) {
+        var pos = xenomorph.blockPosition();
+        return Math.abs(pos.getX() - target.getX()) <= 1
+            && Math.abs(pos.getY() - target.getY()) <= 1
+            && Math.abs(pos.getZ() - target.getZ()) <= 1;
+    }
+
     private static boolean isAtVent(Xenomorph xenomorph, BlockPos vent) {
         var pos = xenomorph.blockPosition();
         return Math.abs(pos.getX() - vent.getX()) <= VENT_USE_RANGE

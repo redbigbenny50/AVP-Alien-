@@ -167,6 +167,13 @@ public class AlienEmbryoUtil {
             mob.setPersistenceRequired();
         }
 
+        if (embryo instanceof Alien hostBornAlien) {
+            // Born of a host, not simulated out of a reserve bank. The flag is NBT-persisted and rides every growth
+            // transition, so the eventual ADULT still knows - which is what feeds the brood bank (hosts are real
+            // gains the hive earned, banked separately, uncapped, and drawn on before the main reserves).
+            hostBornAlien.setHostBorn(true);
+        }
+
         if (embryo instanceof Alien alien) {
             if (AVPHuman.MOD.isLoaded()) {
                 if (host.getOrCreateParasiteGeneContainer() instanceof GeneContainerProxy.Wrapper(var geneContainer)) {
