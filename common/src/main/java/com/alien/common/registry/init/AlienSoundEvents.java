@@ -42,6 +42,11 @@ public class AlienSoundEvents {
 
     public static final BLibHolder<SoundEvent> ENTITY_QUEEN_BACK_HAND_ATTACK = create("entity.queen.back_hand_attack");
 
+    /** Chain-strain loops for a fully bound queen. Alternated per loop of the bound_struggle animation. */
+    public static final BLibHolder<SoundEvent> ENTITY_QUEEN_CHAIN_STRUGGLE_1 = create("entity.queen.chain_struggle_1");
+
+    public static final BLibHolder<SoundEvent> ENTITY_QUEEN_CHAIN_STRUGGLE_2 = create("entity.queen.chain_struggle_2");
+
     public static final BLibHolder<SoundEvent> ENTITY_QUEEN_DEATH = create("entity.queen.death");
 
     public static final BLibHolder<SoundEvent> ENTITY_QUEEN_HURT = create("entity.queen.hurt");

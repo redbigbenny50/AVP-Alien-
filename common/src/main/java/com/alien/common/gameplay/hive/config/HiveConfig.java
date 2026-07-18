@@ -185,7 +185,8 @@ public record HiveConfig(
             96, // bossBarDisplayRadiusBlocks
             60L * TICKS_PER_SECOND, // angryGraceTicks: 60s
             60L * TICKS_PER_SECOND, // contestTickWindow: 60s
-            16, // minimumHiveLocationDistanceChunks
+            17, // minimumHiveLocationDistanceChunks: 17 so two hive CENTERS are >=17 chunks apart, guaranteeing a
+            // full 16-chunk gap between them (16 would leave centers 16 apart = a <16 edge-to-edge gap).
             1, // initialHiveLocationClaimRadiusChunks: 3x3
 
             // § 3 Reserves
@@ -243,7 +244,9 @@ public record HiveConfig(
             32, // maxLineageSpreadChunks
             30L * TICKS_PER_MINUTE, // lineageSpreadCooldownTicks
             8, // maxLocationsPerLineage: a lineage can have at most 8 member hives
-            5, // maxLocationsUnderEmpress: an empress can control up to 5 hives, including her own origin hive.
+            8, // maxLocationsUnderEmpress: an empress controls up to 8 hives (her origin included) - matched to
+               // maxLocationsPerLineage so the empress (emerging at 4 hives) never freezes lineage growth short of
+               // the 8-hive cap. Was 5, which silently capped every empress-led lineage at 5.
             100, // minimumPopulationForHiveSpread
             4, // abstractSpreadMinFounderGroupSize
             10, // abstractSpreadMaxFounderGroupSize

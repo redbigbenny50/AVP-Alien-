@@ -5,6 +5,8 @@ import com.alien.common.network.payload.S2CCaptureHoldPayload;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.sounds.SoundEvents;
+import net.minecraft.sounds.SoundSource;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.Mob;
 import net.minecraft.world.entity.player.Player;
@@ -59,12 +61,21 @@ public final class CaptureHoldManager {
     /** Register {@code mob} as held by {@code player}, replacing any prior holder. */
     public static void hold(Mob mob, Player player) {
         HELD.put(mob.getUUID(), player.getUUID());
+        // Chain clank when the mob is grabbed to be walked around (the anchor path plays its own in
+        // AnchorBlockEntity.bind; this covers the hand-held hold, which never touches an anchor).
+        if (!mob.level().isClientSide) {
+            mob.level().playSound(null, mob.blockPosition(), SoundEvents.CHAIN_PLACE, SoundSource.NEUTRAL, 1.0F, 1.0F);
+        }
         broadcast(mob, player.getId());
     }
 
     /** Release {@code mob} from whoever holds it. No-op if it was not held. */
     public static void release(Mob mob) {
         if (HELD.remove(mob.getUUID()) != null) {
+            // Chain rattles loose as the hold is dropped.
+            if (!mob.level().isClientSide) {
+                mob.level().playSound(null, mob.blockPosition(), SoundEvents.CHAIN_BREAK, SoundSource.NEUTRAL, 1.0F, 1.0F);
+            }
             broadcast(mob, RELEASE);
         }
     }

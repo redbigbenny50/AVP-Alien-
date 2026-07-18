@@ -2,6 +2,7 @@ package com.alien.common.gameplay.entity.living.alien.xenomorph.queen;
 
 import com.alien.Alien;
 import com.alien.common.gameplay.hive.lifecycle.SpreadZoneCheck;
+import com.alien.common.gameplay.hive.location.HiveLocation;
 import com.alien.common.gameplay.hive.location.HiveLocationRegistry;
 import com.alien.common.registry.tag.AlienBlockTags;
 import com.blib.api.common.nbt.v1.model.NBTSerializable;
@@ -598,14 +599,26 @@ public class QueenLifecyclePhaseManager implements NBTSerializable {
         var minimum = HiveLocationRegistry.INSTANCE.config().minimumHiveLocationDistanceChunks();
         var current = queen.chunkPosition();
 
-        // Match founding's own foundability test (spacing AND spread-zone), not just LOCATION spacing - otherwise she
-        // parks on a spot that clears spacing but sits inside another lineage's spread zone, founding blocks, and she
-        // re-picks the identical spot every restart. wouldAllow keeps her searching until she finds a spot she can
-        // actually found - i.e. she relocates AWAY before re-hibernating.
+        // If she can already found where she stands, she does - no need to relocate at all.
         if (SpreadZoneCheck.wouldAllow(queen, current)) {
             return current;
         }
 
+        // She can't found here (too close to a hive). Rather than crawl outward from HERSELF (which lands her at
+        // a distance that depends on where she happens to stand - up to the neighbour's whole spread zone), aim
+        // directly for the nearest hive's minimum-spacing RING: the closest legal chunk to her that sits exactly
+        // `minimum` chunks from that hive's centre. A daughter queen thus settles right at the 16-chunk gap, on
+        // the side facing her, and never digs further than she must.
+        var nearest = nearestLocation(dimension, current);
+        if (nearest != null) {
+            var ringPick = nearestFoundableOnSpacingRing(nearest, current, minimum);
+            if (ringPick != null) {
+                return ringPick;
+            }
+        }
+
+        // Fallback: no hive found to space away from (or its whole spacing ring was blocked). Crawl outward from
+        // her for the nearest foundable chunk - the old behaviour, kept only as a last resort.
         var random = queen.getRandom();
         for (var radius = 1; radius <= MAX_ANCHOR_SEARCH_RADIUS_CHUNKS; radius++) {
             var ring = farEnoughChunksInRing(current, radius, dimension, minimum);
@@ -615,6 +628,62 @@ public class QueenLifecyclePhaseManager implements NBTSerializable {
         }
 
         return current;
+    }
+
+    /** Nearest hive-location centre (Chebyshev, same-dimension) to {@code from}, or null if there are none. */
+    private HiveLocation nearestLocation(ResourceKey<Level> dimension, ChunkPos from) {
+        HiveLocation best = null;
+        var bestDistance = Integer.MAX_VALUE;
+        for (var location : HiveLocationRegistry.INSTANCE.all()) {
+            if (!location.dimension().equals(dimension)) {
+                continue;
+            }
+            var locChunk = new ChunkPos(location.centerPos());
+            var distance = Math.max(Math.abs(locChunk.x - from.x), Math.abs(locChunk.z - from.z));
+            if (distance < bestDistance) {
+                bestDistance = distance;
+                best = location;
+            }
+        }
+        return best;
+    }
+
+    /**
+     * The foundable chunk on {@code hive}'s minimum-spacing ring (Chebyshev square of radius {@code minimum} around its
+     * centre) that is closest to {@code toward} - i.e. the least she has to move to reach a legal 16-chunk gap. Walks
+     * the ring outward one step at a time so if the ideal ring is partly blocked (another hive's spread zone clips it)
+     * she takes the next-closest legal chunk rather than overshooting. Returns null only if no chunk from the ring out
+     * to the search cap is foundable.
+     */
+    private ChunkPos nearestFoundableOnSpacingRing(HiveLocation hive, ChunkPos toward, int minimum) {
+        var centre = new ChunkPos(hive.centerPos());
+        ChunkPos best = null;
+        var bestToward = Integer.MAX_VALUE;
+        for (var radius = minimum; radius <= MAX_ANCHOR_SEARCH_RADIUS_CHUNKS; radius++) {
+            for (var dx = -radius; dx <= radius; dx++) {
+                for (var dz = -radius; dz <= radius; dz++) {
+                    if (Math.max(Math.abs(dx), Math.abs(dz)) != radius) {
+                        continue; // ring border only
+                    }
+                    var candidate = new ChunkPos(centre.x + dx, centre.z + dz);
+                    if (!SpreadZoneCheck.wouldAllow(queen, candidate)) {
+                        continue;
+                    }
+                    var distToward = Math.max(
+                        Math.abs(candidate.x - toward.x),
+                        Math.abs(candidate.z - toward.z)
+                    );
+                    if (distToward < bestToward) {
+                        bestToward = distToward;
+                        best = candidate;
+                    }
+                }
+            }
+            if (best != null) {
+                return best; // closest ring with ANY foundable chunk wins; take the nearest chunk on it
+            }
+        }
+        return null;
     }
 
     private List<ChunkPos> farEnoughChunksInRing(

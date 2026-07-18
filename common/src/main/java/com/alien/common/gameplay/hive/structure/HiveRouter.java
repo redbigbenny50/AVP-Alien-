@@ -36,6 +36,16 @@ public final class HiveRouter {
     /** Runtime toggle (flip with {@code /hive router}). Off = greedy planner; on = this router. */
     public static volatile boolean ENABLED = true;
 
+    /**
+     * The construction-economy switch (design §8.6). ON (the default): pieces are COMMISSIONED - routed through
+     * {@link #commission}, which creates a {@code CarveSite} and (until the progressive carve tick lands at step 3)
+     * completes it immediately, so behavior is identical to the stamp while the seam is exercised for real. OFF: the
+     * legacy instant stamp, kept as a one-flip fallback for A/B debugging on the tester's world - if a hive is not
+     * building, flip this off; if it builds, the bug is in the carve layer, if it still does not, it is upstream in
+     * routing.
+     */
+    public static volatile boolean CARVE_ENABLED = true;
+
     private static final int BASE_EXTENT = 9; // base footprint radius (19x19)
 
     private static final int EMPRESS_EXTENT = 11; // empress-influenced footprint radius (23x23)
@@ -108,6 +118,15 @@ public final class HiveRouter {
 
     /** Advances the hive one piece toward its next unbuilt blueprint goal. Returns true if something was placed. */
     public static boolean route(MinecraftServer server, ServerLevel level, HiveLocation location) {
+        // Construction economy step 3 (design §8.3/§8.4): a piece mid-carve blocks ALL routing. Its socket was
+        // consumed at commission and finalizePlacement hasn't registered its doorways yet, so building past it is
+        // structurally impossible - and this gate also pauses the merge/redirect/seal passes until the site resolves.
+        // Every placement path in this class (tryDropRoom, advanceToward, placeBridgingStraight, attachAt) is private
+        // and reachable only through route(), so this single gate covers all of them; the only placement callers
+        // outside route() are founding (legacy until step 6) and the pre-router HiveStructurePlanner (ENABLED=false).
+        if (location.hasActiveCarveSite()) {
+            return false;
+        }
         if (Boolean.TRUE.equals(DONE.get(location))) {
             return false; // this hive finished building and stitching - don't re-scan every cycle
         }
@@ -635,20 +654,38 @@ public final class HiveRouter {
         return false;
     }
 
+    /**
+     * Build one routed piece. {@link #CARVE_ENABLED} picks the path: commission (the construction economy) or the
+     * legacy instant stamp. Both share the pre-steps (spawner capture, vermin eviction) and the claims post-step; jelly
+     * vats grow here only on the legacy path (the carve path grows them at completion, when the chamber exists).
+     */
     private static boolean place(ServerLevel level, HiveLocation location, PieceMatch match, FrontierSocket socket, long tick) {
         // Capture terrain mob spawners BEFORE the stamp destroys them - they become pending harvest-chamber stock.
         HarvestSpawnerCapture.captureBeforeStamp(level, location, match.occupiedChunks());
         // And evict any hostile vermin standing in the footprint - construction does not leave cave mobs inside.
         HiveStampEviction.evict(level, location, match.occupiedChunks());
-        if (!HiveStructurePlacer.place(level, location, match, socket)) {
+        if (CARVE_ENABLED ? !commission(level, location, match, socket) : !HiveStructurePlacer.place(level, location, match, socket)) {
             return false;
         }
         for (ChunkPos c : match.occupiedChunks()) {
             HiveLocationClaims.claim(level, location, c, tick);
         }
-        // Functional furniture, stage 1 of the egg/jelly systems: a completed jelly chamber (vault OR the royal
-        // chamber off its special door) grows its vats on its tendril-floor slots immediately. The vats are the
-        // physical storage; the jelly FILL stays with the economy.
+        // Jelly vats grow when the CHAMBER EXISTS: immediately on the legacy instant path, but at carve COMPLETION on
+        // the commission path (CarveSiteWork calls growVatsIfJellyChamber then) - a commissioned chamber is still a
+        // hole in the ground, and its vat slots don't exist until the structure does.
+        if (!CARVE_ENABLED) {
+            growVatsIfJellyChamber(level, location, match);
+        }
+        return true;
+    }
+
+    /**
+     * Functional furniture, stage 1 of the egg/jelly systems: a completed jelly chamber (vault OR the royal chamber off
+     * its special door) grows its vats on its tendril-floor slots. The vats are the physical storage; the jelly FILL
+     * stays with the economy. Public because the carve tick (step 3) calls it at completion - the point where the
+     * chamber physically exists on that path.
+     */
+    public static void growVatsIfJellyChamber(ServerLevel level, HiveLocation location, PieceMatch match) {
         if (
             match.piece().id().getPath().contains("chamber_jelly")
                 || match.piece().id().getPath().contains("chamber_scourge")
@@ -659,6 +696,29 @@ public final class HiveRouter {
             }
             Alien.LOGGER.info("Hive: jelly chamber at {} grew {} vats.", match.originChunk(), vats.size());
         }
+    }
+
+    /**
+     * COMMISSION a routed piece (construction economy step 3, design §2): create the {@code CarveSite} - the record of
+     * an in-progress build, with per-column progress over the piece's footprint - consume the frontier socket, and
+     * register the site as the hive's active build. NO world work happens here: {@code CarveSiteWork} advances the site
+     * on the loaded-location tick (dig clumps, resin patches), and {@code finalizePlacement} runs at TRUE completion -
+     * so a half-built piece exposes no doorways and the router cannot build past it (design §8.3/§8.4; enforced
+     * belt-and-braces by the {@code hasActiveCarveSite} gate at the top of {@link #route}).
+     * <p>
+     * Claims run at commission time (the {@link #place} post-step, unchanged in position but now meaning "ground
+     * reserved when work STARTS"); the ferry/defense systems treat the site's chunks as hive ground while it digs.
+     * Spawner capture and vermin eviction also already ran (the {@link #place} pre-steps) - captured BEFORE the diggers
+     * destroy them over the next ~90s. Persistence is the site's own NBT on the owning location; a save mid-build
+     * resumes where it stopped instead of wedging the consumed socket.
+     */
+    private static boolean commission(ServerLevel level, HiveLocation location, PieceMatch match, FrontierSocket socket) {
+        var site = new com.alien.common.gameplay.hive.structure.carve.CarveSite(match, socket, location);
+        // Consume the socket NOW: the ground is committed, and a mid-build piece must expose no routable doorway in
+        // either direction. finalizePlacement re-removes it at completion (a no-op) and registers the new ones.
+        location.frontierSockets().remove(socket);
+        location.setActiveCarveSite(site);
+        Alien.LOGGER.info("Hive: commissioned {}", site.describe());
         return true;
     }
 

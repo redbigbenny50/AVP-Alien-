@@ -365,10 +365,19 @@ public class OvipositorManager implements NBTSerializable {
     private void createChainedEggsack() {
         var ovipositor = AlienEntityTypes.OVIPOSITOR.get().create(queen.level());
         if (ovipositor != null) {
-            ovipositor.moveTo(queen.position(), queen.getYRot(), queen.getXRot());
+            // Settle her facing authoritatively BEFORE attaching the eggsack: unify yRot / yBodyRot / yHeadRot to
+            // one value so the eggsack (which copies her rotation) and the client-side contained-rotation lock
+            // agree exactly. Without this, yRot and yBodyRot can differ by a few degrees at the capture instant
+            // and the eggsack ends up locked a hair off from her body.
+            var settledYaw = queen.yBodyRot;
+            queen.setYRot(settledYaw);
+            queen.yBodyRot = settledYaw;
+            queen.yHeadRot = settledYaw;
+
+            ovipositor.moveTo(queen.position(), settledYaw, queen.getXRot());
             ovipositor.startRiding(queen, true);
-            ovipositor.yBodyRot = queen.yBodyRot;
-            ovipositor.yHeadRot = queen.yHeadRot;
+            ovipositor.yBodyRot = settledYaw;
+            ovipositor.yHeadRot = settledYaw;
             // A captive breeder's eggsack must not vanish to far-away despawn while she's contained; the teardown above
             // is the only thing that removes it.
             ovipositor.setPersistenceRequired();

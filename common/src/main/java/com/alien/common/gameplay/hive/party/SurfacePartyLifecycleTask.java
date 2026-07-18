@@ -276,7 +276,8 @@ public final class SurfacePartyLifecycleTask {
             serverLevel,
             ventPos,
             variantType,
-            com.alien.common.gameplay.hive.vent.VentKind.SURFACE
+            com.alien.common.gameplay.hive.vent.VentKind.SURFACE,
+            location
         );
 
         Alien.LOGGER.info("Hive: surface party dropped a SURFACE vent at {} for location {}", ventPos, location.id());

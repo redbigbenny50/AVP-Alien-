@@ -2,6 +2,7 @@ package com.alien.common.util;
 
 import com.alien.common.data.AlienVariantTypes;
 import com.alien.common.gameplay.entity.living.alien.Alien;
+import com.alien.common.gameplay.entity.living.alien.ovipositor.Ovipositor;
 import com.alien.common.gameplay.entity.living.alien.parasite.HuggerImmunity;
 import com.alien.common.gameplay.entity.living.alien.royal_cocoon.RoyalCocoon;
 import com.alien.common.gameplay.entity.living.alien.xenomorph.queen.Queen;
@@ -68,7 +69,27 @@ public class AlienPredicates {
             && (!(potentialTarget instanceof Alien targetedAlien) || areAliensEnemies(alien, targetedAlien))
             // AND, for a royal-change cocoon (a plain Mob with its strain encoded in its entity type), only a rival
             // strain may attack it -- a xenomorph never strikes its own strain's forming royal.
-            && (!(potentialTarget instanceof RoyalCocoon cocoon) || alien.getVariant() != cocoon.getVariant());
+            && (!(potentialTarget instanceof RoyalCocoon cocoon) || alien.getVariant() != cocoon.getVariant())
+            // AND, for a royal's eggsack - queen OR empress (a plain Mob riding her, so no ally shield applies) - only
+            // an
+            // ENEMY of that queen may attack it. Untagged, the eggsack fell through every threat tier to the
+            // "low-danger prey" fallback - harmless around a rich hive, but a FRESHLY FOUNDED hive is biomass-starved,
+            // so the second queen's own newly spawned workers entered prey mode and harvested her brand-new eggsack
+            // (reading as "the hive attacking her"). Ally rules sit above the retaliation override, so her own side
+            // can never attack it even after friendly fire; rival strains/lineages still can - hive war intact.
+            // [Flag for teammate review: aggression/threat targeting flow.]
+            && (!(potentialTarget instanceof Ovipositor eggsack) || isEnemyEggsack(alien, eggsack));
+    }
+
+    /**
+     * An eggsack's hive identity is the ROYAL it rides: attacking it is allowed exactly when attacking HER would be.
+     * The carrier is matched as any {@link Alien} (not just {@link Queen}) because the EMPRESS carries the same
+     * Ovipositor entity but extends Xenomorph, not Queen - a Queen-only match would have made her eggsack untouchable
+     * even for rival lineages. An orphaned eggsack (royal dead/gone) is never a target - it self-discards within a tick
+     * anyway.
+     */
+    private static boolean isEnemyEggsack(@NotNull Alien alien, @NotNull Ovipositor eggsack) {
+        return eggsack.getVehicle() instanceof Alien carrier && areAliensEnemies(alien, carrier);
     }
 
     /**

@@ -159,6 +159,8 @@ public final class HiveLocation {
 
     private static final String NBT_REMOVAL_REASON = "RemovalReason";
 
+    private static final String NBT_ACTIVE_CARVE_SITE = "ActiveCarveSite";
+
     private final HiveLocationId id;
 
     private ResourceLocation lineageFactionId;
@@ -351,6 +353,19 @@ public final class HiveLocation {
     private @Nullable HiveLocationBossBar bossBar;
 
     private @Nullable HiveLocationRemovalReason removalReason;
+
+    /**
+     * The hive's one in-progress build (construction economy step 3, design §8.3: one at a time). Null when nothing is
+     * mid-carve. Set by {@code HiveRouter.commission}, advanced and cleared by {@code CarveSiteWork}.
+     */
+    private com.alien.common.gameplay.hive.structure.carve.@Nullable CarveSite activeCarveSite;
+
+    /**
+     * A carve site loaded from NBT but not yet rebuilt into an object - rebuilding needs the piece registry, which
+     * needs the server, so the raw tag waits here until the first loaded tick hydrates it ({@code CarveSiteWork}).
+     * Re-saved verbatim if the hive saves again before that happens, so an unvisited hive never loses its site.
+     */
+    private @Nullable CompoundTag pendingCarveSiteTag;
 
     public HiveLocation(
         HiveLocationId id,
@@ -806,6 +821,30 @@ public final class HiveLocation {
     }
 
     /**
+     * Whether a build is mid-carve - true from commission until {@code finalizePlacement} runs at completion, and ALSO
+     * while a loaded-but-unhydrated site tag is pending. {@code HiveRouter.route} gates on this: a mid-carve piece
+     * exposes no doorways, so there is nothing new to route (design §8.3/§8.4).
+     */
+    public boolean hasActiveCarveSite() {
+        return activeCarveSite != null || pendingCarveSiteTag != null;
+    }
+
+    public com.alien.common.gameplay.hive.structure.carve.@Nullable CarveSite activeCarveSite() {
+        return activeCarveSite;
+    }
+
+    /** Sets (or, with null, clears) the active build. Clearing also drops any pending loaded-but-unhydrated tag. */
+    public void setActiveCarveSite(com.alien.common.gameplay.hive.structure.carve.@Nullable CarveSite site) {
+        this.activeCarveSite = site;
+        this.pendingCarveSiteTag = null;
+    }
+
+    /** The raw NBT of a site loaded from disk, awaiting first-tick hydration by {@code CarveSiteWork}. */
+    public @Nullable CompoundTag pendingCarveSiteTag() {
+        return pendingCarveSiteTag;
+    }
+
+    /**
      * Role of a chunk, or {@link HiveStructureRole#UNASSIGNED} if no role has been assigned (e.g. a plain claimed
      * chunk, or a hive founded before structure state existed).
      */
@@ -1133,6 +1172,15 @@ public final class HiveLocation {
             tag.put(NBT_REMOVAL_REASON, HiveLocationRemovalReason.save(removalReason));
         }
 
+        // Construction economy step 3, persistence option (a): the in-progress build saves on its owning location.
+        // A loaded-but-never-hydrated tag is re-saved verbatim so a hive that saves again without ever ticking loaded
+        // (e.g. far from players the whole session) still keeps its site instead of wedging its consumed socket.
+        if (activeCarveSite != null) {
+            tag.put(NBT_ACTIVE_CARVE_SITE, activeCarveSite.save());
+        } else if (pendingCarveSiteTag != null) {
+            tag.put(NBT_ACTIVE_CARVE_SITE, pendingCarveSiteTag);
+        }
+
         return tag;
     }
 
@@ -1323,6 +1371,12 @@ public final class HiveLocation {
 
         if (tag.contains(NBT_REMOVAL_REASON)) {
             location.removalReason = HiveLocationRemovalReason.load(tag.getCompound(NBT_REMOVAL_REASON));
+        }
+
+        // Lazy carve-site hydration: rebuilding the site needs the piece registry (needs the server), which isn't
+        // available here. Park the raw tag; CarveSiteWork hydrates it on the first loaded tick.
+        if (tag.contains(NBT_ACTIVE_CARVE_SITE)) {
+            location.pendingCarveSiteTag = tag.getCompound(NBT_ACTIVE_CARVE_SITE);
         }
 
         return location;

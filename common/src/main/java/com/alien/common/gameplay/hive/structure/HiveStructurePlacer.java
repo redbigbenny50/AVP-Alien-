@@ -7,10 +7,12 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.util.RandomSource;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.block.Rotation;
+import net.minecraft.world.level.levelgen.structure.BoundingBox;
 import net.minecraft.world.level.levelgen.structure.templatesystem.JigsawReplacementProcessor;
 import net.minecraft.world.level.levelgen.structure.templatesystem.LiquidSettings;
 import net.minecraft.world.level.levelgen.structure.templatesystem.StructurePlaceSettings;
 import net.minecraft.world.level.levelgen.structure.templatesystem.StructureTemplate;
+import org.jetbrains.annotations.Nullable;
 
 /**
  * Stamps a matched hive piece into the world: carves the chunks it occupies (reusing the founding carve primitive -
@@ -39,33 +41,64 @@ public final class HiveStructurePlacer {
      * @param match       the chosen piece placement (piece + rotation + origin chunk)
      * @param connectedTo the frontier socket this piece attached to (its mate is excluded from new sockets)
      */
+    /**
+     * THE SEAM (construction economy step 2, design §2): placement is split into a WORLD half and a BOOKKEEPING half.
+     * <ul>
+     * <li>{@link #placeWorld} - resolve the template, stamp it (clear air cells, write resin), drain liquids. This is
+     * the part the progressive carve replaces at step 3: diggers clear the volume, placers write the resin, over
+     * time.</li>
+     * <li>{@link #finalizePlacement} - roles, socket math, socket swap. Runs ONCE, at completion, whichever way the
+     * world got built. Because new sockets only register here, a half-built piece exposes no doorways and the router
+     * cannot commission past it - the one-build-at-a-time access rule enforces itself (design §8.3).</li>
+     * </ul>
+     * This method is the LEGACY INSTANT STAMP: both halves in one tick, exactly the old behavior. It stays as the
+     * {@code HiveRouter.CARVE_ENABLED=false} fallback for A/B debugging.
+     */
     public static boolean place(ServerLevel level, HiveLocation location, PieceMatch match, FrontierSocket connectedTo) {
+        if (!placeWorld(level, location, match)) {
+            return false;
+        }
+        finalizePlacement(level, location, match, connectedTo);
+        return true;
+    }
+
+    /**
+     * A resolved placement: the template plus the offset and settings the stamp uses. Extracted (step 3) so the
+     * progressive carve resolves EXACTLY the resolution the stamp does - {@code CarveSiteWork}'s air-cell enumeration
+     * ({@code filterBlocks}) and its bounded patch stamps ({@link #placeWorldPatch}) share this object, so they can
+     * never disagree with {@link #placeWorld}/{@link #finishWorld} about where a single block goes.
+     * <p>
+     * {@code settings} carries NO bounding box - it is the full-piece resolution. Patch stamps bound a COPY.
+     */
+    public record ResolvedPlacement(
+        StructureTemplate template,
+        BlockPos placeAt,
+        StructurePlaceSettings settings
+    ) {}
+
+    /**
+     * Resolves {@code match} into the template + placement offset + settings the stamp uses, or null if the template is
+     * missing. Pure resolution: no world reads or writes. The offset is the origin chunk's min corner at the hive floor
+     * row (rotation-corrected); the authored piece sits with its own floor on that row.
+     */
+    public static @Nullable ResolvedPlacement resolvePlacement(ServerLevel level, HiveLocation location, PieceMatch match) {
         var server = level.getServer();
         var templateOpt = server.getStructureManager().get(match.piece().id());
         if (templateOpt.isEmpty()) {
             Alien.LOGGER.warn("Cannot place hive piece {} - template not found.", match.piece().id());
-            return false;
+            return null;
         }
         StructureTemplate template = templateOpt.get();
 
-        int floorY = location.hiveFloorY();
-
-        // Place the template. placeInWorld already honors the carve contract from the authored piece: it writes air
-        // into
-        // the piece's air cells (clearing whatever terrain was there), places the resin structure blocks, and never
-        // touches structure_void cells (they aren't in the block list) - so void regions blend with existing terrain.
-        // No
-        // separate box-carve: that would wrongly clear the void margins. Offset is the origin chunk's min corner at the
-        // hive floor row; the authored piece sits with its own floor on that row.
-        var originChunk = match.originChunk();
         // placeInWorld rotates block positions around pivot (0,0,0), which pushes some rotations into negative coords.
         // Correct the placement offset so the ROTATED footprint's min corner still lands at the origin chunk's min
         // block. The correction is (sizeX-1) and/or (sizeZ-1) depending on rotation (see rotationOffset).
+        var originChunk = match.originChunk();
         var size = template.getSize();
         var correction = rotationOffset(match.rotation(), size.getX(), size.getZ());
         var placeAt = new BlockPos(
             originChunk.getMinBlockX() + correction.getX(),
-            floorY,
+            location.hiveFloorY(),
             originChunk.getMinBlockZ() + correction.getZ()
         );
         var settings = new StructurePlaceSettings()
@@ -78,7 +111,23 @@ public final class HiveStructurePlacer {
             // Replace each authored jigsaw block with its final_state (air, for these pieces) so no raw gray jigsaw
             // blocks are left in the world at doorway seams.
             .addProcessor(JigsawReplacementProcessor.INSTANCE);
-        boolean placed = template.placeInWorld(level, placeAt, placeAt, settings, RandomSource.create(), 2);
+        return new ResolvedPlacement(template, placeAt, settings);
+    }
+
+    /** The WORLD half of placement: template stamp + liquid drain. No roles, no sockets. See {@link #place}. */
+    public static boolean placeWorld(ServerLevel level, HiveLocation location, PieceMatch match) {
+        var resolved = resolvePlacement(level, location, match);
+        if (resolved == null) {
+            return false;
+        }
+        // Place the template. placeInWorld already honors the carve contract from the authored piece: it writes air
+        // into the piece's air cells (clearing whatever terrain was there), places the resin structure blocks, and
+        // never touches structure_void cells (they aren't in the block list) - so void regions blend with existing
+        // terrain. No separate box-carve: that would wrongly clear the void margins. Offset is the origin chunk's min
+        // corner at the hive floor row; the authored piece sits with its own floor on that row.
+        var placeAt = resolved.placeAt();
+        boolean placed = resolved.template()
+            .placeInWorld(level, placeAt, placeAt, resolved.settings(), RandomSource.create(), 2);
         if (!placed) {
             Alien.LOGGER.warn("Structure placement returned false for hive piece {}.", match.piece().id());
             return false;
@@ -88,8 +137,38 @@ public final class HiveStructurePlacer {
         // waterlogging, but it does NOT empty water sitting in the piece's structure_void cells or that seeped back
         // during placement - so an ocean/aquifer hive ends up with pooled interiors. Clear it now: the hive is DRY on
         // build. (Flow-back through still-open doorways/vents over time is the separate submerged-membrane item.)
-        drainLiquids(level, match.occupiedChunks(), floorY, size.getY());
+        drainLiquids(level, match.occupiedChunks(), location.hiveFloorY(), resolved.template().getSize().getY());
+        return true;
+    }
 
+    /**
+     * A BOUNDED stamp (construction economy step 3): places only the authored blocks inside {@code patch}, via the
+     * exact same vanilla {@code placeInWorld} pipeline as the full stamp - the settings are COPIED before the bounding
+     * box is applied, so the shared {@link ResolvedPlacement} stays unbounded for the next patch. Used by the carve
+     * tick's resin fill so a patch can never disagree with what the final stamp would put there.
+     */
+    public static boolean placeWorldPatch(ServerLevel level, ResolvedPlacement resolved, BoundingBox patch) {
+        var bounded = resolved.settings().copy().setBoundingBox(patch);
+        return resolved.template()
+            .placeInWorld(level, resolved.placeAt(), resolved.placeAt(), bounded, RandomSource.create(), 2);
+    }
+
+    /**
+     * The COMPLETION stamp (construction economy step 3): one full, unbounded pass over the piece - idempotent over
+     * everything the progressive carve already built, closes the roof above reach height, catches any straggler cells,
+     * and drains liquids. Identical to {@link #placeWorld}; named separately so the carve tick's call sites read as
+     * what they are.
+     */
+    public static boolean finishWorld(ServerLevel level, HiveLocation location, PieceMatch match) {
+        return placeWorld(level, location, match);
+    }
+
+    /**
+     * The BOOKKEEPING half of placement: chunk roles, socket math, and the frontier swap. Runs once, at completion. See
+     * {@link #place} for why new sockets registering ONLY here is load-bearing.
+     */
+    public static void finalizePlacement(ServerLevel level, HiveLocation location, PieceMatch match, FrontierSocket connectedTo) {
+        var originChunk = match.originChunk();
         // Record roles for the occupied chunks and register the piece's open doorways as new frontier sockets.
         String pieceId = match.piece().id().toString();
         for (ChunkPos chunk : match.occupiedChunks()) {
@@ -124,7 +203,6 @@ public final class HiveStructurePlacer {
             originChunk,
             newSockets.size()
         );
-        return true;
     }
 
     /** Empties water/lava from the stamped volume so hive interiors are dry even when built into a body of liquid. */

@@ -161,6 +161,18 @@
     ],
     "subtitle": "subtitles.entity.queen.back_hand_attack"
   },
+  "entity.queen.chain_struggle_1": {
+    "sounds": [
+      "avp_alien:entity/queen/chain/queen_chain1"
+    ],
+    "subtitle": "subtitles.entity.queen.chain_struggle_1"
+  },
+  "entity.queen.chain_struggle_2": {
+    "sounds": [
+      "avp_alien:entity/queen/chain/queen_chain2"
+    ],
+    "subtitle": "subtitles.entity.queen.chain_struggle_2"
+  },
   "entity.queen.death": {
     "sounds": [
       "avp_alien:entity/queen/death/death"

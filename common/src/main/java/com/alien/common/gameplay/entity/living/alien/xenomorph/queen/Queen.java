@@ -142,6 +142,11 @@ public class Queen extends Xenomorph implements GOAPUser<Queen>, EggLayer {
     private boolean digging;
 
     /**
+     * Facing captured the moment she becomes a pacified captive breeder; held so she doesn't turn under the eggsack.
+     */
+    private Float containedYRotLock = null;
+
+    /**
      * Legacy-recovery state. A queen saved before the lifecycle system existed loads without a {@code lifecyclePhase}
      * tag; {@link #wasLoadedWithoutLifecycleState()} reports that so {@code LegacyHiveRecovery} can treat her as a
      * legacy queen. She is parked {@link #isLegacyDormant() legacy-dormant} until recovery wakes her via
@@ -188,6 +193,23 @@ public class Queen extends Xenomorph implements GOAPUser<Queen>, EggLayer {
         lifecyclePhaseManager.tick();
         bindManager.tick();
         incapacitationManager.tick();
+
+        // A pacified captive breeder holds still AND holds her FACING: idle look control would keep turning her body
+        // in place, twisting her against the eggsack that is anchored to her rotation. Capture her facing once when
+        // she enters the state and pin body + head to it every tick; release it when she is no longer contained.
+        if (isInhibited() && isRidingOvipositor()) {
+            if (containedYRotLock == null) {
+                // Capture the settled facing (yBodyRot is what the eggsack copied at creation) so body and
+                // eggsack hold the exact same angle.
+                containedYRotLock = yBodyRot;
+            }
+            setYRot(containedYRotLock);
+            yBodyRot = containedYRotLock;
+            yHeadRot = containedYRotLock;
+        } else if (containedYRotLock != null) {
+            containedYRotLock = null;
+        }
+
         if (isInhibited() && tickCount % 20 == 0 && level() instanceof ServerLevel serverLevel) {
             QueenInhibitionService.tickFollow(serverLevel, this);
         }
@@ -393,6 +415,25 @@ public class Queen extends Xenomorph implements GOAPUser<Queen>, EggLayer {
             .anyMatch(passenger -> Objects.equals(passenger.getType(), AlienEntityTypes.OVIPOSITOR.get()));
     }
 
+    /**
+     * A CAPTIVE breeder is pacified and stays put: an inhibited queen riding her chained eggsack must not shuffle
+     * around under idle AI, or her body drifts and rotates against the static eggsack that is anchored to her, leaving
+     * her off-centre and contorted. Freeze her movement in that state only. A FOUNDING/reproductive queen (rides an
+     * eggsack but is NOT inhibited) is untouched and can still shuffle to lay.
+     */
+    @Override
+    public void travel(@NotNull Vec3 vec3) {
+        if (isInhibited() && isRidingOvipositor()) {
+            // Freeze horizontal drift only - keep vertical velocity so gravity still settles her onto the ground
+            // if she was caught mid-air or on uneven terrain (a hard Vec3.ZERO would leave her hanging).
+            var v = getDeltaMovement();
+            setDeltaMovement(0.0, v.y, 0.0);
+            super.travel(Vec3.ZERO);
+            return;
+        }
+        super.travel(vec3);
+    }
+
     /** Whether the inhibitor device is attached (synced + persisted). */
     @Override
     public void die(@NotNull DamageSource damageSource) {
@@ -582,6 +623,7 @@ public class Queen extends Xenomorph implements GOAPUser<Queen>, EggLayer {
         queenData.load(compoundTag);
         lifecyclePhaseManager.load(compoundTag);
         bindManager.load(compoundTag);
+        bindManager.onLoaded(); // drop any chain whose anchor was broken while she was unloaded (phantom bind)
         incapacitationManager.load(compoundTag);
         incapacitationManager.onLoaded(); // a downed queen must not come back with her AI switched on
     }

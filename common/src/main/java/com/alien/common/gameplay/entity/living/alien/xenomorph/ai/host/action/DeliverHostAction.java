@@ -243,8 +243,8 @@ public final class DeliverHostAction {
         }
         // Move the record and the blocks: drop the old vent, stamp a fresh SURFACE vent where the carrier stands.
         location.ventManager().removeVent(vent);
-        VentPlacement.place(level, carrierPos, AlienVariantTypes.getFor(variant), VentKind.SURFACE);
-        location.ventManager().addVent(carrierPos, VentKind.SURFACE);
+        // place() now registers into the manager itself, so no separate addVent is needed.
+        VentPlacement.place(level, carrierPos, AlienVariantTypes.getFor(variant), VentKind.SURFACE, location);
         var writtenOff = UNREACHABLE_VENTS.get(xenomorph);
         if (writtenOff != null) {
             writtenOff.remove(vent); // the replacement is reachable; do not carry the old write-off forward

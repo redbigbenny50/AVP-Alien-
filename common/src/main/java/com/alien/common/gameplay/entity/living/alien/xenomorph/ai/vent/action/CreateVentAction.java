@@ -96,11 +96,30 @@ public class CreateVentAction {
     }
 
     private static void placeVent(Xenomorph xenomorph, BlockPos ventSpot) {
+        // Resolve the owning hive so the frontier vent is registered in its manager at placement time (a
+        // frontier vent that never reached the manager could not launch biomass/attack parties).
+        //
+        // Resolve from the BUILDER's chunk, not the vent spot. A frontier vent deliberately sits OUTSIDE the built
+        // structure - out at a cave mouth that is often in an UNCLAIMED chunk - so getByChunk(ventSpot) would
+        // return null and the vent would be placed unowned and unregistered. The builder itself only builds while
+        // standing in its own claimed territory (VentSensors gates on that), so its chunk always resolves.
+        var location = HiveLocationRegistry.INSTANCE.getByChunk(
+            xenomorph.level().dimension(),
+            xenomorph.chunkPosition()
+        );
+        if (location == null) {
+            // Builder somehow not in claimed territory this tick - fall back to the vent spot rather than skip.
+            location = HiveLocationRegistry.INSTANCE.getByChunk(
+                xenomorph.level().dimension(),
+                new net.minecraft.world.level.ChunkPos(ventSpot)
+            );
+        }
         VentPlacement.place(
             xenomorph.level(),
             ventSpot,
             AlienVariantTypes.getFor(xenomorph),
-            VentKind.FRONTIER
+            VentKind.FRONTIER,
+            location
         );
     }
 

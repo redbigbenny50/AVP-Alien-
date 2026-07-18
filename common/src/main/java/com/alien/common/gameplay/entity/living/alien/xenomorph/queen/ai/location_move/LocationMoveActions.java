@@ -14,6 +14,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.particles.BlockParticleOption;
 import net.minecraft.core.particles.ParticleTypes;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.sounds.SoundSource;
 import net.minecraft.util.Mth;
 import net.minecraft.world.phys.Vec3;
 
@@ -60,6 +61,9 @@ public final class LocationMoveActions {
     private static final int WINDUP_PARTICLE_COUNT = 10;
 
     private static final int DESCENT_PARTICLE_COUNT = 18;
+
+    /** Ticks between dig crunches. The particle emitters run every tick; a break sound at 20/s would be unbearable. */
+    private static final int DIG_SOUND_INTERVAL_TICKS = 5;
 
     private static final StateKey<Integer> KEY_WINDUP_REMAINING = StateKey.sensed("location_dig_windup_remaining");
 
@@ -144,6 +148,21 @@ public final class LocationMoveActions {
         // actually cutting through blocks — restoring a "fall" through caves/gaps without leaving noclip.
         var descentSpeed = actor.level().getBlockState(lead).isAir() ? AIR_DESCENT_SPEED : DESCENT_SPEED;
         var velocity = delta.scale(Math.min(descentSpeed, distance) / distance);
+
+        // VOID GUARD: her anchor Y is her intended floor (the weighted band never rolls below it). The bedrock
+        // blacklist stops her cutting THROUGH a bedrock block, but the overworld bedrock layer is a random mix of
+        // bedrock and AIR - and air passes isDiggable - so a descent column that lines up with a gap would let her
+        // clip straight past the floor and free-fall into the void below Y=-64. Never let this tick's clip carry
+        // her BELOW the anchor Y: if the step would overshoot it, cap the downward move to land exactly on it and
+        // settle. She can only ever dig DOWN to her anchor, never past it, gap or no gap.
+        var floorY = anchor.getY();
+        if (current.y + velocity.y < floorY) {
+            actor.setDeltaMovement(0.0, floorY - current.y, 0.0);
+            actor.setPos(actor.getX(), Math.max(actor.getY(), floorY), actor.getZ());
+            spawnDigParticles(actor, DESCENT_PARTICLE_COUNT);
+            return Action.Signal.CONTINUE;
+        }
+
         actor.setDeltaMovement(velocity);
         faceHorizontal(actor, delta);
         spawnDigParticles(actor, DESCENT_PARTICLE_COUNT);
@@ -178,6 +197,23 @@ public final class LocationMoveActions {
         }
         if (state.isAir()) {
             return;
+        }
+
+        // Crunch of the block she is chewing through - the sampled block's OWN break sound, so digging stone,
+        // dirt or gravel each sound right. Throttled: this method runs every tick.
+        if (actor.tickCount % DIG_SOUND_INTERVAL_TICKS == 0) {
+            var breakSound = state.getSoundType().getBreakSound();
+            var pitch = 0.7F + actor.getRandom().nextFloat() * 0.3F;
+            serverLevel.playSound(
+                null,
+                actor.getX(),
+                actor.getY(),
+                actor.getZ(),
+                breakSound,
+                SoundSource.BLOCKS,
+                0.6F,
+                pitch
+            );
         }
 
         var particle = new BlockParticleOption(ParticleTypes.BLOCK, state);

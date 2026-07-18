@@ -729,6 +729,13 @@ public class AlienBlockTagProvider extends FabricTagProvider.BlockTagProvider {
             .addTag(AlienBlockTags.RESIN_VEINS)
             .addTag(AlienBlockTags.RESIN_WEBS);
 
+        // Swords cut resin webbing and veins too, at their efficient mining speed (the same tag cobwebs sit in).
+        // These blocks only drop with Silk Touch regardless, so this is purely about being able to slash them
+        // apart with a blade as well as an axe.
+        getOrCreateTagBuilder(BlockTags.SWORD_EFFICIENT)
+            .addTag(AlienBlockTags.RESIN_VEINS)
+            .addTag(AlienBlockTags.RESIN_WEBS);
+
         getOrCreateTagBuilder(BlockTags.MINEABLE_WITH_PICKAXE)
             .addTag(AlienBlockTags.CHITIN)
             .add(

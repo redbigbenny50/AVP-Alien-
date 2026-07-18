@@ -7,15 +7,23 @@ import com.alien.common.gameplay.entity.living.alien.xenomorph.CocoonSourceForm;
 import com.alien.common.gameplay.entity.living.alien.xenomorph.queen.Queen;
 import com.alien.common.gameplay.entity.living.alien.xenomorph.queen.QueenAnimationRefs;
 import com.alien.common.gameplay.entity.living.alien.xenomorph.queen.QueenBindManager;
+import com.alien.common.registry.init.AlienSoundEvents;
 import com.alien.common.util.AzAlienAnimationUtil;
 import com.alien.common.util.AzAlienHeadAnimationUtil;
 import com.blib.api.client.animation.v1.animator.AzAnimatorConfig;
 import com.blib.api.client.animation.v1.animator.AzEntityAnimator;
+import com.blib.api.client.animation.v1.keyframe.AzKeyframeCallbacks;
+import com.blib.api.client.animation.v1.keyframe.event.AzSoundKeyframeEvent;
 import com.blib.api.client.animation.v1.track.AzAnimationTrack;
 import com.blib.api.client.animation.v1.track.AzAnimationTrackContainer;
 import com.blib.api.common.dismemberment.v1.DismembermentManager;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.sounds.SoundSource;
 import org.jetbrains.annotations.NotNull;
+
+import java.util.Collections;
+import java.util.Map;
+import java.util.WeakHashMap;
 
 public class QueenAnimator extends AzEntityAnimator<Queen> {
 
@@ -48,6 +56,11 @@ public class QueenAnimator extends AzEntityAnimator<Queen> {
         animationTrackContainer.add(
             AzAnimationTrack.builder(this, AzAlienAnimationUtil.BODY)
                 .setTransitionLength(5)
+                .setKeyframeCallbacks(
+                    AzKeyframeCallbacks.<Queen>builder()
+                        .setSoundKeyframeHandler(QueenAnimator::onSoundKeyframe)
+                        .build()
+                )
                 .build()
         );
     }
@@ -76,36 +89,15 @@ public class QueenAnimator extends AzEntityAnimator<Queen> {
             eggSack.setHidden(true);
         }
 
-        // Layer 2: reveal each shackle once its chain is attached (chain 1 -> left arm, 2 -> right arm, 3+ -> neck;
-        // chains 5-8 reuse those same bones). Tracker/inhibitor attachment points stay hidden until their slices land.
-        int chainCount = animatable.bindChainCount.get();
-
-        var leftArmShackle = bakedModel.getBoneOrNull("gLeftArmShackle");
-        if (leftArmShackle != null) {
-            leftArmShackle.setHidden(chainCount < 1);
-            leftArmShackle.setTrackingMatrices(true);
-        }
-
-        var rightArmShackle = bakedModel.getBoneOrNull("gRightArmShackle");
-        if (rightArmShackle != null) {
-            rightArmShackle.setHidden(chainCount < 2);
-            rightArmShackle.setTrackingMatrices(true);
-        }
-
-        var neckShackle = bakedModel.getBoneOrNull("gNeckShackle");
-        if (neckShackle != null) {
-            neckShackle.setHidden(chainCount < 3);
-            neckShackle.setTrackingMatrices(true);
-        }
-
-        var tracker = bakedModel.getBoneOrNull("gTracker");
-        if (tracker != null) {
-            tracker.setHidden(!animatable.isTracked());
-        }
-
-        var inhibitor = bakedModel.getBoneOrNull("gInhibitor");
-        if (inhibitor != null) {
-            inhibitor.setHidden(!animatable.isInhibited());
+        // Shackle bones must keep tracking their world matrices so the ShackleAnchorLayer can publish live anchor
+        // points for the chain render. VISIBILITY (which of them to show) is NOT decided here - it lives on the
+        // renderer's bone-visibility filter, because BLib resets each bone's hidden flag every frame and would
+        // wipe a setHidden() set here before the bone is drawn.
+        for (var shackleBone : new String[] { "gLeftArmShackle", "gRightArmShackle", "gNeckShackle" }) {
+            var bone = bakedModel.getBoneOrNull(shackleBone);
+            if (bone != null) {
+                bone.setTrackingMatrices(true);
+            }
         }
     }
 
@@ -300,5 +292,48 @@ public class QueenAnimator extends AzEntityAnimator<Queen> {
 
     private String chooseAlternatingAnimation(int attackId, String leftAnimationName, String rightAnimationName) {
         return (attackId & 1) == 0 ? leftAnimationName : rightAnimationName;
+    }
+
+    // ---- Chain-strain audio ---------------------------------------------------------------------------------
+
+    /** Keyframe effect name in bound_struggle; see queen.animation.json. */
+    private static final String CHAIN_STRUGGLE_KEYFRAME = "queen_chain_struggle";
+
+    /**
+     * Which of the two chain clips plays next, per queen. Keyed weakly so a despawned queen drops out on its own.
+     * Per-entity rather than a single flag because one animator instance serves every queen on screen.
+     */
+    private static final Map<Queen, Boolean> CHAIN_SOUND_TOGGLE = Collections.synchronizedMap(new WeakHashMap<>());
+
+    /**
+     * Fires from the sound keyframe at tick 0 of bound_struggle, so it lands exactly on every loop restart - the two
+     * clips alternate as she keeps straining, and retiming the animation retimes the audio for free. Keyframes run
+     * client-side, so this plays a LOCAL sound: every client showing her runs the same animation and hears its own copy
+     * positioned at her.
+     */
+    private static void onSoundKeyframe(AzSoundKeyframeEvent<Queen> event) {
+        if (!CHAIN_STRUGGLE_KEYFRAME.equals(event.getKeyframeData().getSound())) {
+            return;
+        }
+        var queen = event.getAnimatable();
+        var level = queen.level();
+        if (!level.isClientSide) {
+            return;
+        }
+        var playFirst = !Boolean.TRUE.equals(CHAIN_SOUND_TOGGLE.get(queen));
+        CHAIN_SOUND_TOGGLE.put(queen, playFirst);
+        var sound = playFirst
+            ? AlienSoundEvents.ENTITY_QUEEN_CHAIN_STRUGGLE_1.get()
+            : AlienSoundEvents.ENTITY_QUEEN_CHAIN_STRUGGLE_2.get();
+        level.playLocalSound(
+            queen.getX(),
+            queen.getY(),
+            queen.getZ(),
+            sound,
+            SoundSource.HOSTILE,
+            1.0F,
+            1.0F,
+            false
+        );
     }
 }

@@ -68,6 +68,8 @@ public final class QueenIncapacitationManager {
 
     private static final String NBT_FIRST_DOWN_TICK = "QueenIncapFirstDownTick";
 
+    private static final String NBT_LAST_BAR_TICK = "QueenIncapLastBarTick";
+
     private final Queen queen;
 
     private float bar;
@@ -75,6 +77,9 @@ public final class QueenIncapacitationManager {
     private int downCount;
 
     private long firstDownGameTime = Long.MIN_VALUE;
+
+    /** Game-time the recovery bar was last advanced. Lets the bar catch up in one step across an unload gap. */
+    private long lastBarGameTime = Long.MIN_VALUE;
 
     /** How near a player must be to watch her go. */
     private static final double BAR_VISIBLE_RADIUS = 48.0;
@@ -122,6 +127,7 @@ public final class QueenIncapacitationManager {
 
     private void goDown() {
         bar = BAR_START;
+        lastBarGameTime = queen.level().getGameTime();
         showBar();
         queen.setIncapacitated(true);
         queen.setHealth(1.0F);
@@ -156,6 +162,7 @@ public final class QueenIncapacitationManager {
 
     private void wake(float health) {
         bar = 0.0F;
+        lastBarGameTime = Long.MIN_VALUE;
         hideBar();
         queen.setIncapacitated(false);
         queen.setHealth(Math.max(1.0F, health));
@@ -167,10 +174,14 @@ public final class QueenIncapacitationManager {
             return;
         }
 
-        // The bar refills on its own. Reaching full IS the self-recovery exit: she gets up at full strength.
-        // FLOAT division on purpose: integer division here is 100 / 12000 == 0, which clamped to 1 point a
-        // tick and filled the whole bar in five seconds instead of ten minutes.
-        bar += (float) BAR_MAX / SELF_RECOVERY_TICKS;
+        // The bar refills on its own toward full (full = the self-recovery exit). Advance by ELAPSED game-time,
+        // not a fixed per-tick step: when she was down in an UNLOADED chunk this one line applies the whole gap in
+        // a single step (same catch-up model the hive CatchUpEngine uses), so a queen left downed offline for the
+        // full window wakes on reload instead of freezing at whatever value she had. FLOAT division on purpose.
+        var now = serverLevel.getGameTime();
+        var elapsed = lastBarGameTime == Long.MIN_VALUE ? 1L : Math.max(0L, now - lastBarGameTime);
+        lastBarGameTime = now;
+        bar += (float) BAR_MAX / SELF_RECOVERY_TICKS * elapsed;
         if (bar >= BAR_MAX) {
             wake(queen.getMaxHealth());
             return;
@@ -277,6 +288,7 @@ public final class QueenIncapacitationManager {
         tag.putFloat(NBT_BAR, bar);
         tag.putInt(NBT_DOWN_COUNT, downCount);
         tag.putLong(NBT_FIRST_DOWN_TICK, firstDownGameTime);
+        tag.putLong(NBT_LAST_BAR_TICK, lastBarGameTime);
     }
 
     public void load(CompoundTag tag) {
@@ -284,6 +296,9 @@ public final class QueenIncapacitationManager {
         downCount = tag.getInt(NBT_DOWN_COUNT);
         if (tag.contains(NBT_FIRST_DOWN_TICK)) {
             firstDownGameTime = tag.getLong(NBT_FIRST_DOWN_TICK);
+        }
+        if (tag.contains(NBT_LAST_BAR_TICK)) {
+            lastBarGameTime = tag.getLong(NBT_LAST_BAR_TICK);
         }
     }
 

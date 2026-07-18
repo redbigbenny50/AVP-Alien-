@@ -48,6 +48,17 @@ public class DropOffEggAction {
 
     private static final StateKey<Integer> KEY_TARGET_SET_TICK = StateKey.sensed("egg_drop_target_set_tick");
 
+    /** How many times this hauler has abandoned its STAMPED host-drop target on this haul. */
+    private static final StateKey<Integer> KEY_STAMP_ATTEMPTS = StateKey.sensed("egg_drop_stamp_attempts");
+
+    /**
+     * A stamped delivery survives this many abandons (stuck, no-path, truncated walk) before the stamp is cleared and
+     * the egg falls back to the nursery. Early abandons do NOT blacklist the cell: the stuck path has already unlocked
+     * the vents (KEY_WALK_FAILED), so the re-search re-picks the SAME cell and tries the duct instead of walking the
+     * egg straight back to a nursery bed - the U-turn the tester kept watching.
+     */
+    private static final int STAMP_MAX_ATTEMPTS = 3;
+
     private static final double DROP_OFF_RANGE_SQUARED = 2.0 * 2.0;
 
     private static final double VENT_REACH_SQUARED = 2.5 * 2.5; // close enough to slip into a vent
@@ -67,6 +78,12 @@ public class DropOffEggAction {
     private static final StateKey<Boolean> KEY_WALK_FAILED = StateKey.sensed("egg_dropoff_walk_failed");
 
     private static final double VENT_WORTHWHILE_DIST_SQUARED = 32.0 * 32.0; // shorter hauls just walk
+
+    /**
+     * The ducted route must beat the direct walk by at least this many blocks to be worth taking. A margin (not just
+     * "any shorter") keeps a hauler from flip-flopping between duct and walk when the two are near-equal.
+     */
+    private static final double VENT_MIN_SHORTCUT_BLOCKS = 8.0;
 
     private static final int VENT_SEARCH_RADIUS_CHUNKS = 1; // vents within ~a chunk of each endpoint
 
@@ -121,21 +138,33 @@ public class DropOffEggAction {
             // front of it and the facehugger attaches. Falls through to nursery/spiral when no host needs one.
             java.util.Optional<net.minecraft.core.BlockPos> hostDrop = java.util.Optional.empty();
             if (xenomorph.level() instanceof net.minecraft.server.level.ServerLevel hostDropLevel) {
-                var hostDropLocation = HiveLocationRegistry.INSTANCE.getByChunk(
-                    hostDropLevel.dimension(),
-                    xenomorph.chunkPosition()
-                );
-                if (hostDropLocation != null) {
-                    // Route with the CARRIER-aware query so our own egg does not trip the inbound-egg guard and hide
-                    // the destination we are carrying it to. The ferry uses the plain query; a hauler must not.
-                    var ownEgg = getPassengerOvomorphs(xenomorph).stream().findFirst().orElse(null);
-                    hostDrop = HostEggDelivery.findHostDropForCarrier(hostDropLevel, hostDropLocation, ownEgg);
+                var hostDropLocation = resolveLocation(hostDropLevel, xenomorph);
+                var ownEgg = getPassengerOvomorphs(xenomorph).stream().findFirst().orElse(null);
+                if (hostDropLocation != null && ownEgg != null) {
+                    // STAMP FIRST: an egg the ferry (or a previous search) designated for a host cell already KNOWS
+                    // where it is going - no query runs, so nothing else in the hive can hide the destination. Only
+                    // re-validate that the host still wants it; a served/dead host clears the stamp and the egg
+                    // becomes an ordinary nursery haul again.
+                    var stamped = ownEgg.getHostDropTarget();
+                    if (stamped != null) {
+                        if (HostEggDelivery.isHostDropStillValid(hostDropLevel, hostDropLocation, stamped)) {
+                            hostDrop = java.util.Optional.of(stamped);
+                        } else {
+                            ownEgg.setHostDropTarget(null);
+                        }
+                    }
+                    if (hostDrop.isEmpty() && ownEgg.getHostDropTarget() == null) {
+                        // UNSTAMPED egg (e.g. a fresh clutch egg being hauled to the nursery): it may still serve a
+                        // waiting host opportunistically. The carrier-aware query ignores our own egg; a spot another
+                        // hauler is already on its way to is NOT free (three drones once queued on ONE webbed host).
+                        hostDrop = HostEggDelivery.findHostDropForCarrier(hostDropLevel, hostDropLocation, ownEgg)
+                            .filter(spot -> !isClaimedByOther(xenomorph, spot));
+                        // Self-stamp on the spot: from this instant the delivery is visible to the ferry gate and
+                        // every other carrier, so no duplicate egg is released or routed for this cell.
+                        hostDrop.ifPresent(ownEgg::setHostDropTarget);
+                    }
                 }
             }
-            // A spot another hauler is ALREADY on its way to is NOT free. An egg in transit is not sitting in the
-            // cell yet, so without this every hauler saw the same empty cell and they all set off for it: three
-            // drones queued on ONE webbed host, all placed an egg, and all three hatched.
-            hostDrop = hostDrop.filter(spot -> !isClaimedByOther(xenomorph, spot));
 
             var isHostDrop = hostDrop.isPresent();
             var freeSpot = isHostDrop
@@ -279,6 +308,7 @@ public class DropOffEggAction {
         placeEggs(xenomorph, targetPos);
         EggSpotClaims.release(BlockPos.containing(targetPos)); // delivered - release the reservation
         blackboard.set(KEY_WALK_FAILED, false); // delivered - stop forcing the duct
+        blackboard.set(KEY_STAMP_ATTEMPTS, 0); // delivered - the next stamped haul starts with a clean slate
         return Action.Signal.CONTINUE;
     }
 
@@ -289,8 +319,29 @@ public class DropOffEggAction {
         Vec3 targetPos,
         int currentTick
     ) {
-        rememberFailedSpot(blackboard, BlockPos.containing(targetPos));
-        EggSpotClaims.release(BlockPos.containing(targetPos)); // giving up - let another hauler have it
+        var target = BlockPos.containing(targetPos);
+        // A STAMPED host delivery is not given up lightly: early abandons keep the cell OFF the failed list so the
+        // re-search re-picks it (with the vents now unlocked via KEY_WALK_FAILED). Only after the attempt cap does
+        // the stamp clear - the egg goes to a nursery and the ferry re-serves the host after its cooldown.
+        var stampedEgg = getPassengerOvomorphs(context.getActor())
+            .stream()
+            .filter(egg -> target.equals(egg.getHostDropTarget()))
+            .findFirst()
+            .orElse(null);
+        if (stampedEgg != null) {
+            var attempts = blackboard.getOrDefault(KEY_STAMP_ATTEMPTS, 0) + 1;
+            blackboard.set(KEY_STAMP_ATTEMPTS, attempts);
+            if (attempts < STAMP_MAX_ATTEMPTS) {
+                EggSpotClaims.release(target); // giving up this leg - but NOT the delivery
+                scheduleSearchRetry(blackboard, currentTick);
+                NeoMoveToPosAction.onFinish(context);
+                return Action.Signal.CONTINUE;
+            }
+            stampedEgg.setHostDropTarget(null);
+            blackboard.set(KEY_STAMP_ATTEMPTS, 0);
+        }
+        rememberFailedSpot(blackboard, target);
+        EggSpotClaims.release(target); // giving up - let another hauler have it
         scheduleSearchRetry(blackboard, currentTick);
         NeoMoveToPosAction.onFinish(context);
         return Action.Signal.CONTINUE;
@@ -336,6 +387,7 @@ public class DropOffEggAction {
         getPassengerOvomorphs(xenomorph).forEach(ovomorph -> {
             xenomorph.level()
                 .playSound(null, ovomorph, AlienSoundEvents.ENTITY_OVOMORPH_ROOT.get(), SoundSource.HOSTILE, 1.0F, 1.0F);
+            ovomorph.setHostDropTarget(null); // rooted = no longer in transit, wherever it landed
             ovomorph.isRooted.set(true);
             ovomorph.stopRiding();
             ovomorph.setPos(center.x, center.y, center.z);
@@ -404,8 +456,23 @@ public class DropOffEggAction {
         if (entry == null || exit == null || entry.equals(exit)) {
             return;
         }
-        if (exit.distSqr(bed) >= xenomorph.blockPosition().distSqr(bed)) {
-            return; // the duct wouldn't shorten the trip
+
+        // The duct is only worth taking if the WHOLE ducted route - walk to the entry vent, then walk from the
+        // exit vent to the bed - is meaningfully shorter than just walking straight to the bed. The old check only
+        // compared the EXIT leg, ignoring how far the entry vent is. That let a hauler commit to an entry vent
+        // sitting BEHIND it (away from the bed): it would trudge backward to the vent, and because that backward
+        // walk kept it 'far enough' the plan kept re-choosing the duct - the walk-vs-vent tug-of-war the tester
+        // saw at certain positions. Requiring the entry leg to pay for itself removes the backward-vent trap.
+        // Skip this route check once the direct walk has already FAILED: at that point any duct beats standing in
+        // a dead end, so we take the shortcut even if it isn't shorter. Only the healthy (not-yet-failed) case
+        // has to justify the detour.
+        if (!walkFailed) {
+            var self = xenomorph.blockPosition();
+            var directToBed = Math.sqrt(self.distSqr(bed));
+            var ductedRoute = Math.sqrt(self.distSqr(entry)) + Math.sqrt(exit.distSqr(bed));
+            if (ductedRoute >= directToBed - VENT_MIN_SHORTCUT_BLOCKS) {
+                return; // the duct wouldn't shorten the trip enough to be worth the detour
+            }
         }
         blackboard.set(KEY_VENT_ENTRY, entry);
         blackboard.set(KEY_VENT_EXIT, exit);

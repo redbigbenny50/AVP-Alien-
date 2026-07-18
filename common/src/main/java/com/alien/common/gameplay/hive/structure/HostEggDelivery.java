@@ -36,13 +36,13 @@ public final class HostEggDelivery {
     private static final double EGG_DROP_SCAN_RADIUS = 0.5;
 
     /**
-     * How far from a host's egg-drop cell a loose or carried egg counts as "one is already on the way".
-     * <p>
-     * MUST match the ferry's inbound radius. An egg the ferry un-roots starts life across the hive and takes seconds to
-     * arrive; if this gate only looked AT the drop cell (as it once did) it would report the host still waiting and
-     * trigger another release every cadence, draining the whole nursery.
+     * How far around a host's egg-drop cell to LOOK for the egg stamped for it. This is a search box, not a meaning:
+     * only an egg whose {@link Ovomorph#getHostDropTarget() stamp} names this exact cell counts as inbound. Sized to
+     * cover a full cross-hive haul (nursery to host chamber measured ~72 blocks in testing) so a just-released egg is
+     * seen from the moment of release. A stamped egg somehow beyond this range is merely missed, and the ferry cooldown
+     * plus the occupied-cell check make a duplicate release self-correcting.
      */
-    private static final double INBOUND_EGG_RADIUS = 48.0;
+    private static final double INBOUND_EGG_RADIUS = 96.0;
 
     /**
      * FERRY query - "does any host need a NEW egg released?" A free host (alive, un-implanted, no parasite) settled at
@@ -124,16 +124,38 @@ public final class HostEggDelivery {
     }
 
     /**
-     * Is an egg (other than {@code ignoreEgg}) already loose or being carried toward this drop cell? Then no NEW egg is
-     * needed. {@code ignoreEgg} lets a carrier discount the very egg it is holding, so it does not hide its own
-     * destination from itself.
+     * Is the egg STAMPED for this drop cell still in flight (other than {@code ignoreEgg})? Then no NEW egg is needed.
+     * <p>
+     * IDENTITY, not proximity: this used to count ANY unrooted or carried egg within range, which made the queen's
+     * fresh clutch (laid unrooted), every ordinary nursery haul passing by, and the OTHER delivery of two simultaneous
+     * host deliveries all read as "an egg is already on the way" - carriers lost their destination, U-turned, and
+     * re-rooted their eggs in the nursery, while the ferry re-released on every cooldown forever. Only an egg whose
+     * stamp names this exact cell counts now.
      */
     private static boolean hasInboundEgg(ServerLevel level, BlockPos eggDrop, @Nullable Ovomorph ignoreEgg) {
         var box = new AABB(eggDrop).inflate(INBOUND_EGG_RADIUS);
         return !level.getEntitiesOfClass(
             Ovomorph.class,
             box,
-            egg -> egg != ignoreEgg && egg.isAlive() && (!egg.isRooted.get() || egg.isPassenger())
+            egg -> egg != ignoreEgg && egg.isHostBoundInTransit(eggDrop)
         ).isEmpty();
+    }
+
+    /**
+     * Whether {@code dropCell} still wants the egg stamped for it: it is a real host-chamber egg-drop cell whose host
+     * spot holds a live, un-implanted, parasite-free host, and no ovomorph already sits in the cell. A carrier holding
+     * a stamped egg re-validates against this on every search; when it fails, the stamp is cleared and the egg falls
+     * back to ordinary nursery routing.
+     */
+    public static boolean isHostDropStillValid(ServerLevel level, HiveLocation location, BlockPos dropCell) {
+        for (var origin : HostChamberSlots.hostChamberGroups(location)) {
+            for (var spot : HostChamberSlots.hostSpots(level, location, origin)) {
+                if (!HostChamberSlots.eggDropFor(spot).equals(dropCell)) {
+                    continue;
+                }
+                return freeHostAt(level, spot.pos()) != null && !hasOvomorphAt(level, dropCell);
+            }
+        }
+        return false;
     }
 }

@@ -5,6 +5,8 @@ import com.alien.common.network.payload.S2CCaptureHoldPayload;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.sounds.SoundEvents;
+import net.minecraft.sounds.SoundSource;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.Mob;
 import net.minecraft.world.phys.Vec3;
@@ -59,6 +61,10 @@ public final class MobChainManager {
         PARTNER.put(b.getUUID(), a.getUUID());
         a.setPersistenceRequired();
         b.setPersistenceRequired();
+        // Chain clank when two mobs are chained together (played once, at the mob being linked to).
+        if (!b.level().isClientSide) {
+            b.level().playSound(null, b.blockPosition(), SoundEvents.CHAIN_PLACE, SoundSource.NEUTRAL, 1.0F, 1.0F);
+        }
         broadcastPair(a, b);
     }
 
@@ -72,6 +78,10 @@ public final class MobChainManager {
             return null;
         }
         PARTNER.remove(partnerId);
+        // Chain snaps apart between the two mobs.
+        if (!mob.level().isClientSide) {
+            mob.level().playSound(null, mob.blockPosition(), SoundEvents.CHAIN_BREAK, SoundSource.NEUTRAL, 1.0F, 1.0F);
+        }
         broadcast(mob, RELEASE);
         if (mob.level() instanceof ServerLevel level && level.getEntity(partnerId) instanceof Mob partner) {
             broadcast(partner, RELEASE);

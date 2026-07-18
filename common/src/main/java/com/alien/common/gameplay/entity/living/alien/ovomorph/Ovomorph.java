@@ -19,6 +19,8 @@ import com.blib.api.common.entity.v1.vibration.VibrationSystemManager;
 import com.blib.api.common.goap.v1.GOAPUser;
 import com.just.ai.goap.graph.Graph;
 import com.just.core.functional.option.Option;
+import net.minecraft.core.BlockPos;
+import net.minecraft.nbt.CompoundTag;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
@@ -76,6 +78,16 @@ public class Ovomorph extends Alien implements GOAPUser<Ovomorph>, Shearable {
     public boolean pickupRequestAcknowledged;
 
     public boolean wantsPickup;
+
+    /**
+     * Host-delivery stamp: the host-chamber egg-drop cell this egg is designated for, or null when it is not
+     * host-bound. The stamp IS the delivery - it lives on the egg (not the hauler), survives reloads and changing
+     * hands, and is the ONLY thing the inbound-egg gate counts. Fresh clutch eggs and ordinary nursery hauls are
+     * unstamped, so they can never hide a host delivery or block one another. Set by the ferry on release (or by a
+     * carrier claiming a drop opportunistically); cleared on rooting or when the delivery is abandoned.
+     */
+    @Nullable
+    private BlockPos hostDropTarget;
 
     public Ovomorph(EntityType<? extends Ovomorph> entityType, Level level) {
         super(entityType, level);
@@ -143,6 +155,44 @@ public class Ovomorph extends Alien implements GOAPUser<Ovomorph>, Shearable {
             return;
         }
         tryHatch();
+    }
+
+    public @Nullable BlockPos getHostDropTarget() {
+        return hostDropTarget;
+    }
+
+    public void setHostDropTarget(@Nullable BlockPos hostDropTarget) {
+        this.hostDropTarget = hostDropTarget == null ? null : hostDropTarget.immutable();
+    }
+
+    /**
+     * True while this egg is the designated in-flight delivery for {@code dropCell}: stamped for that exact cell, still
+     * deliverable (unhatched), and not yet rooted - either loose awaiting pickup or riding a hauler. This is the
+     * identity test the inbound-egg gate runs; proximity alone never counts.
+     */
+    public boolean isHostBoundInTransit(BlockPos dropCell) {
+        return dropCell.equals(hostDropTarget)
+            && isAlive()
+            && getHatchState().contains(HatchState.SLEEPING)
+            && (!isRooted.get() || isPassenger());
+    }
+
+    private static final String NBT_HOST_DROP_TARGET = "HostDropTarget";
+
+    @Override
+    public void addAdditionalSaveData(@NotNull CompoundTag compoundTag) {
+        super.addAdditionalSaveData(compoundTag);
+        if (hostDropTarget != null) {
+            compoundTag.putLong(NBT_HOST_DROP_TARGET, hostDropTarget.asLong());
+        }
+    }
+
+    @Override
+    public void readAdditionalSaveData(@NotNull CompoundTag compoundTag) {
+        super.readAdditionalSaveData(compoundTag);
+        this.hostDropTarget = compoundTag.contains(NBT_HOST_DROP_TARGET)
+            ? BlockPos.of(compoundTag.getLong(NBT_HOST_DROP_TARGET))
+            : null;
     }
 
     public boolean canBeHeld() {

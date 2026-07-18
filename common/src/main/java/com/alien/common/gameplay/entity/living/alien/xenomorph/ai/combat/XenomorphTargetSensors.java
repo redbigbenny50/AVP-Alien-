@@ -162,6 +162,20 @@ public final class XenomorphTargetSensors {
      * </ol>
      */
     private static void applyHostHuntSwitch(Xenomorph xenomorph, List<LivingEntity> targets) {
+        // (0) NEVER target our own passengers - above all, the host we are already carrying. A carried host is a
+        // passenger, so HostCaptureRules.isCapturable returns false for it (rule below), which means filter (1)
+        // does NOT strip it; and findCaptureTarget returns null while carrying, so filter (2) is skipped too. The
+        // captive therefore stayed a valid ATTACK target, the drone set its own rider as its target, and tried to
+        // path to a thing moving with it - the "tug of war" where a carrier chases the host on its own back. This
+        // runs for ALL host-hunters (not gated on isOnHostHunt) since a carrier could leave hunt state mid-haul.
+        if (!xenomorph.getPassengers().isEmpty()) {
+            targets.removeIf(candidate -> candidate.getVehicle() == xenomorph);
+            var riding = xenomorph.getTarget();
+            if (riding != null && riding.getVehicle() == xenomorph) {
+                xenomorph.setTarget(null);
+            }
+        }
+
         if (!com.alien.common.gameplay.entity.living.alien.xenomorph.ai.host.HostHuntDuty.isOnHostHunt(xenomorph)) {
             return;
         }

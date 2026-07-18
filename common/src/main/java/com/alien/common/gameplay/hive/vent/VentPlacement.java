@@ -1,6 +1,7 @@
 package com.alien.common.gameplay.hive.vent;
 
 import com.alien.common.gameplay.block.entity.resin.vent.ResinVentBlockEntity;
+import com.alien.common.gameplay.hive.location.HiveLocation;
 import com.alien.common.model.alien.variant.AlienVariantType;
 import com.alien.common.registry.tag.AlienBlockTags;
 import net.minecraft.core.BlockPos;
@@ -32,9 +33,14 @@ public final class VentPlacement {
     /**
      * Build a vent at {@code ventPos} and stamp it with its role.
      *
-     * @param ventPos an OPEN cell that rests against at least one solid face - see {@link #restsOnSolidFace}
+     * @param ventPos  an OPEN cell that rests against at least one solid face - see {@link #restsOnSolidFace}
+     * @param location the hive location that owns this vent; the vent is registered in its {@code ventManager()} here
+     *                 so the party system can see it immediately. Registration used to rely solely on the block-entity
+     *                 bind tick, which left surface-party and frontier vents stamped on the block entity but ABSENT
+     *                 from the manager - so a real surface vent sat on open ground while host hunts reported "no
+     *                 near-surface vent". Placing and registering together makes that impossible to forget.
      */
-    public static void place(Level level, BlockPos ventPos, AlienVariantType variant, VentKind kind) {
+    public static void place(Level level, BlockPos ventPos, AlienVariantType variant, VentKind kind, HiveLocation location) {
         var resin = variant.resin().get();
         var resinWeb = variant.resinWeb().get();
         var resinVent = variant.resinVent().get();
@@ -44,6 +50,17 @@ public final class VentPlacement {
         // Record what this vent is for, so nothing downstream ever has to infer it from geometry.
         if (level.getBlockEntity(ventPos) instanceof ResinVentBlockEntity vent) {
             vent.setKind(kind);
+            // Bind to the owning hive at birth, so a surface vent on unclaimed frontier ground keeps its owner
+            // across reloads instead of relying on getByChunk (which only knows claimed chunks).
+            if (location != null) {
+                vent.setBoundLocation(location.id());
+            }
+        }
+
+        // Register with the owning hive's vent manager NOW, not on a later block-entity bind tick. This is the
+        // single source of truth the party system queries (findSurfaceVents / findPartyVents).
+        if (location != null) {
+            location.ventManager().addVent(ventPos.immutable(), kind);
         }
 
         // Web every side that touches air. Xenomorphs pass through web freely; nothing else does.

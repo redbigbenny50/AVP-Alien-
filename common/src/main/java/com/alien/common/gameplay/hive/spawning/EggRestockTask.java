@@ -49,11 +49,17 @@ public final class EggRestockTask {
         }
 
         // One in flight at a time: a loose egg near the anchor means a hauler is (or will be) on it already.
+        // HOST-BOUND eggs do not count: an egg the ferry just released from the queen's clutch (stamped for a host
+        // cell) is a delivery in progress, not a pending restock, and must not starve the nursery of new eggs.
         var pendingBox = new AABB(anchor).inflate(PENDING_EGG_RADIUS);
         boolean pending = !level.getEntitiesOfClass(
             Ovomorph.class,
             pendingBox,
-            e -> e.getType() == eggType && !e.isRooted.get() && !e.isPassenger() && e.isAlive()
+            e -> e.getType() == eggType
+                && !e.isRooted.get()
+                && !e.isPassenger()
+                && e.isAlive()
+                && e.getHostDropTarget() == null
         ).isEmpty();
         if (pending) {
             return;

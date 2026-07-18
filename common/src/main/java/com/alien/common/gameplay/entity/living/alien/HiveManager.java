@@ -5,6 +5,8 @@ import com.alien.common.gameplay.entity.living.alien.xenomorph.queen.Queen;
 import com.alien.common.gameplay.hive.faction.HiveMemberLocationResolver;
 import com.alien.common.gameplay.hive.faction.LineageFactionData;
 import com.alien.common.gameplay.hive.faction.VariantFactionRegistry;
+import com.alien.common.gameplay.hive.id.HiveLocationId;
+import com.alien.common.gameplay.hive.id.HiveLocationIds;
 import com.alien.common.gameplay.hive.id.LineageIds;
 import com.alien.common.gameplay.hive.lifecycle.HiveLocationFoundingService;
 import com.alien.common.gameplay.hive.lifecycle.QueenSettlementDetector;
@@ -103,10 +105,27 @@ public class HiveManager implements NBTSerializable {
             return;
         }
 
-        // Already founded (she belongs to a lineage) — stop settling and drop her founding aura. The front-end phase
-        // machine is off by default, so isReadyToFound() stays true forever; without this she perpetually re-banks
-        // settlement after founding, re-firing the ritual and trailing particles nonstop.
-        if (belongsToLineage(queen)) {
+        // Already founded (a registered location names her as FOUNDER) - stop settling and drop her founding aura.
+        // Without this, a founder whose isReadyToFound() stays true perpetually re-banks settlement after founding,
+        // re-firing the ritual and trailing particles nonstop.
+        //
+        // FOUNDER-SHIP, not lineage membership: a hive-born daughter queen is a member of her mother's lineage from
+        // birth, and founding a NEW LOCATION inside that lineage is exactly her job - SpreadZoneCheck rule 2 and
+        // HiveLocationFoundingService.foundNewLocation exist for her. The old lineage-membership test made that whole
+        // expansion path unreachable: a lineage-member queen in FOUNDING_HANDOFF was forgotten every tick, stood at
+        // readyToFound=true forever, and never founded ("-1 biomass" - the no-hive sentinel - was the visible symptom).
+        if (hasFoundedLocation(queen)) {
+            QueenSettlementDetector.forget(queen.getUUID());
+            return;
+        }
+
+        // One queen per location. If she is standing in a location that already has a DIFFERENT living queen (a
+        // hand-summoned second queen, or a daughter/adopted queen lingering in the parent's core), she must not
+        // settle and found HERE. forget() every tick keeps her from banking a founding on the occupied claim; her
+        // idle wander then drifts her off it, and the moment she steps onto free ground the gate stops firing and
+        // she settles and founds her own daughter hive normally. No teleport - she simply can't found on an
+        // occupied spot. Keeps every countCaste(QUEENS) check across the codebase honest (exactly one per hive).
+        if (standingInQueenOccupiedLocation(queen)) {
             QueenSettlementDetector.forget(queen.getUUID());
             return;
         }
@@ -133,11 +152,46 @@ public class HiveManager implements NBTSerializable {
         HiveLocationFoundingService.foundFromResult(queen, settlementPos, result);
     }
 
-    /** True once she has founded — membership in any lineage faction is the phase-independent "founded" signal. */
-    private static boolean belongsToLineage(Queen queen) {
-        for (var factionId : Alien.MOD.factions().getFactionIds(queen.getUUID())) {
-            if (LineageIds.isLineageId(factionId)) {
+    /**
+     * True once SHE has founded: some registered location's {@code founderId} is her UUID. This is the same test the
+     * inspect_queen debug command uses for its "location:" line. Faction membership is deliberately NOT the signal -
+     * every hive-born alien (daughter queens included) is a member of its birth hive's lineage and location factions,
+     * and a daughter queen must still be allowed to settle and found her own location. If her hive was destroyed and
+     * unregistered she may found again, which is the hive-loss/recovery arc working as designed.
+     */
+    private static boolean hasFoundedLocation(Queen queen) {
+        var uuid = queen.getUUID();
+        for (var location : HiveLocationRegistry.INSTANCE.all()) {
+            if (uuid.equals(location.founderId())) {
                 return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * True if the location whose claim the queen currently stands in already has a live queen member that is NOT her.
+     * Membership-based (not proximity): a second queen summoned into a claim auto-joins it via finalizeSpawn, and an
+     * adopted/daughter queen is a member by construction, so both show up here. Excludes herself so a queen who has
+     * already joined a location she is about to found in never blocks herself.
+     */
+    private static boolean standingInQueenOccupiedLocation(Queen queen) {
+        var here = HiveLocationRegistry.INSTANCE.getByChunk(
+            queen.level().dimension(),
+            new ChunkPos(queen.blockPosition())
+        );
+        if (here == null || !here.isAlive()) {
+            return false;
+        }
+        var queens = here.loadedMembersByType();
+        for (var entry : queens.entrySet()) {
+            if (!entry.getKey().is(AlienEntityTypeTags.QUEENS)) {
+                continue;
+            }
+            for (var memberId : entry.getValue()) {
+                if (!memberId.equals(queen.getUUID())) {
+                    return true; // another queen already holds this location
+                }
             }
         }
         return false;
@@ -328,17 +382,26 @@ public class HiveManager implements NBTSerializable {
     }
 
     /**
-     * Returns this alien's primary lineage faction id, if any. "Primary" is the first lineage id encountered in BLib's
-     * membership lookup — for the typical single-lineage case this is the only one. Used by signature-equality checks
-     * (e.g., {@code AlienPredicates.isFromSameHive}) to decide whether two aliens share a hive.
+     * Returns this alien's lineage faction id, if any — its hive "signature" for same-hive equality checks (e.g.
+     * {@code AlienPredicates.areAliensSameHive}). Resolved via LOCATION membership first: a membership set is
+     * unordered, so if an alien ever holds two lineage memberships, returning the first-encountered lineage would make
+     * two genuine hivemates compare unequal and fail to recognize each other. A location membership names exactly one
+     * lineage unambiguously, so it wins; a bare lineage membership is only the fallback. Mirrors
+     * {@code AlienTerritoryWarSystem.lineageFor} so allegiance and same-hive checks always agree.
      */
     public Option<ResourceLocation> signature() {
+        ResourceLocation lineageFallback = null;
         for (var factionId : Alien.MOD.factions().getFactionIds(alien.getUUID())) {
-            if (LineageIds.isLineageId(factionId)) {
-                return Option.some(factionId);
+            if (HiveLocationIds.isHiveLocationId(factionId)) {
+                var location = HiveLocationRegistry.INSTANCE.get(HiveLocationId.of(factionId));
+                if (location != null) {
+                    return Option.some(location.lineageFactionId());
+                }
+            } else if (lineageFallback == null && LineageIds.isLineageId(factionId)) {
+                lineageFallback = factionId; // remember, but keep looking for a location membership
             }
         }
-        return Option.none();
+        return lineageFallback == null ? Option.none() : Option.some(lineageFallback);
     }
 
     @Override

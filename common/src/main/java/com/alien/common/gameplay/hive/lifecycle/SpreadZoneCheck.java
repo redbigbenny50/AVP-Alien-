@@ -66,6 +66,18 @@ public final class SpreadZoneCheck {
                 continue;
             }
             if (isWithinSpreadZone(lineage, candidateChunk, maxSpread)) {
+                // Location cap - a lineage holds at most maxLocationsPerLineage member hives (8 by default); with
+                // an empress the tighter of the two caps applies. When her own lineage is FULL she does not just
+                // get blocked (which would shove her outside the spread zone to found a new lineage by geometric
+                // accident, overshooting the 17-chunk daughter distance). Instead she founds a NEW LINEAGE right
+                // here: overflow deliberately spawns a fresh lineage at the same daughter distance rather than a
+                // 9th hive in this one. Under cap, she founds a daughter LOCATION in this lineage as normal.
+                var cap = lineage.empressId() != null
+                    ? Math.min(config.maxLocationsUnderEmpress(), config.maxLocationsPerLineage())
+                    : config.maxLocationsPerLineage();
+                if (lineage.locationsById().size() >= cap) {
+                    return new SpreadZoneResult.NewLineage();
+                }
                 ownLineageInRange = factionId;
                 break;
             }
@@ -75,8 +87,19 @@ public final class SpreadZoneCheck {
             return new SpreadZoneResult.NewLocation(ownLineageInRange);
         }
 
-        // Rule 3: forager case — she has no lineage in range. Make sure no OTHER same-variant lineage's
-        // spread zone covers this position. If it does, she's blocked from founding here.
+        // Rule 3: she is NOT within any of her own lineages' spread zones (or has no lineage). Territory now
+        // belongs to whoever's spread zone she is standing in:
+        // - Inside another same-variant lineage M's zone, M UNDER its 8-cap -> she is ADOPTED into M and
+        // founds a daughter location of M (foundNewLocation sheds her old lineage). She is an M queen now,
+        // and so is the hive she raises - allegiance fully transfers.
+        // - Inside another same-variant lineage M's zone, but every covering lineage is FULL -> she founds a
+        // NEW rival lineage right here as an INVADER (only the 17-chunk spacing gate applies, not the spread
+        // repulsion - she is allowed inside the 32-chunk zone).
+        // - Inside nobody's zone -> fresh new lineage.
+        // Among covering lineages, adoption is preferred over invasion: she joins the NEAREST under-cap lineage;
+        // only when no covering lineage has room does she invade.
+        ResourceLocation nearestAdopter = null;
+        var nearestAdopterDistance = Integer.MAX_VALUE;
         for (var factionId : Alien.MOD.factions().getAllIds()) {
             if (!LineageIds.isLineageId(factionId)) {
                 continue;
@@ -88,13 +111,28 @@ public final class SpreadZoneCheck {
             if (lineage.variant() != queenVariant || !lineage.dimension().equals(dimension)) {
                 continue;
             }
-            if (isWithinSpreadZone(lineage, candidateChunk, maxSpread)) {
-                return new SpreadZoneResult.Blocked(
-                    "another " + queenVariant + " lineage " + factionId + " covers this spread zone"
-                );
+            if (!isWithinSpreadZone(lineage, candidateChunk, maxSpread)) {
+                continue;
+            }
+            var cap = lineage.empressId() != null
+                ? Math.min(config.maxLocationsUnderEmpress(), config.maxLocationsPerLineage())
+                : config.maxLocationsPerLineage();
+            if (lineage.locationsById().size() >= cap) {
+                continue; // this lineage is full - can't adopt her; she'd invade unless another has room
+            }
+            var distance = nearestLocationDistance(lineage, candidateChunk);
+            if (distance < nearestAdopterDistance) {
+                nearestAdopterDistance = distance;
+                nearestAdopter = factionId;
             }
         }
 
+        if (nearestAdopter != null) {
+            return new SpreadZoneResult.NewLocation(nearestAdopter); // adopted into M as a daughter
+        }
+
+        // Either covered only by FULL lineages (invader) or covered by none (fresh ground): both found a new
+        // lineage here. The 17-chunk spacing gate above already ran, so an invader still can't overlap a hive.
         return new SpreadZoneResult.NewLineage();
     }
 
@@ -108,6 +146,15 @@ public final class SpreadZoneCheck {
     public static boolean wouldAllow(Queen queen, ChunkPos chunk) {
         var probe = chunk.getMiddleBlockPosition(queen.blockPosition().getY());
         return !(evaluate(queen, probe) instanceof SpreadZoneResult.Blocked);
+    }
+
+    /** Chebyshev chunk distance from {@code candidate} to the NEAREST location centre in {@code lineage}. */
+    private static int nearestLocationDistance(LineageFactionData lineage, ChunkPos candidate) {
+        var best = Integer.MAX_VALUE;
+        for (var location : lineage.locationsById().values()) {
+            best = Math.min(best, chunkDistance(location, candidate));
+        }
+        return best;
     }
 
     private static boolean isWithinSpreadZone(LineageFactionData lineage, ChunkPos candidate, int maxSpread) {

@@ -80,6 +80,11 @@ public final class HostEggFerryTask {
             return; // no egg anywhere to ferry - the hive has to lay/restock first
         }
 
+        // The stamp IS the delivery: it names the exact drop cell, travels with the egg through pickups, drops,
+        // hauler swaps and reloads, and is the only thing the inbound gate counts. Whoever picks this egg up
+        // delivers it HERE - no fresh clutch egg or passing nursery haul can hijack or hide the destination.
+        released.setHostDropTarget(dropCell);
+
         // Prune stale entries so this map cannot grow unbounded over a long-running server: anything older than the
         // cooldown is no longer doing any work and can be forgotten.
         LAST_RELEASE.entrySet().removeIf(e -> now - e.getValue() >= RELEASE_COOLDOWN_TICKS);
