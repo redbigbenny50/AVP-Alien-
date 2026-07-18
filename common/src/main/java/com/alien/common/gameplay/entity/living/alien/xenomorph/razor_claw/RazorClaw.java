@@ -68,12 +68,12 @@ public class RazorClaw extends Xenomorph implements GOAPUser<RazorClaw> {
 
     public static AttributeSupplier.Builder createRazorClawAttributes() {
         return Alien.createAlienAttributes()
-            .add(Attributes.ARMOR, 12.0F)
+            .add(Attributes.ARMOR, 10.0F)
             .add(Attributes.ARMOR_TOUGHNESS, 12.0F)
-            .add(Attributes.ATTACK_DAMAGE, PlayerStatConstants.BASE_HEALTH * 0.75F)
+            .add(Attributes.ATTACK_DAMAGE, PlayerStatConstants.BASE_HEALTH * 0.6F)
             .add(Attributes.FOLLOW_RANGE, 35F)
             .add(Attributes.KNOCKBACK_RESISTANCE, 0.7f)
-            .add(Attributes.MAX_HEALTH, PlayerStatConstants.BASE_HEALTH * 5F)
+            .add(Attributes.MAX_HEALTH, PlayerStatConstants.BASE_HEALTH * 6F)
             .add(Attributes.MOVEMENT_SPEED, PlayerStatConstants.BASE_WALK_SPEED * 1.2F);
     }
 

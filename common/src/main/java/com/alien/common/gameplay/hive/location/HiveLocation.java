@@ -845,6 +845,16 @@ public final class HiveLocation {
     }
 
     /**
+     * FACTUAL construction starvation (design §6, step 4): true only while the active build's last resin payment
+     * actually bounced. Discretionary spends (expansion claims, caste purchases) check this and stand aside so incoming
+     * biomass finishes the frozen build first. False when nothing is building, while a build is merely in progress and
+     * paying fine, and for the few seconds after a reload before the site re-attempts its first fill.
+     */
+    public boolean isConstructionStarved() {
+        return activeCarveSite != null && activeCarveSite.isStarved();
+    }
+
+    /**
      * Role of a chunk, or {@link HiveStructureRole#UNASSIGNED} if no role has been assigned (e.g. a plain claimed
      * chunk, or a hive founded before structure state existed).
      */

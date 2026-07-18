@@ -61,9 +61,9 @@ public class Praetorian extends Xenomorph implements GOAPUser<Praetorian> {
 
     public static AttributeSupplier.Builder createPraetorianAttributes() {
         return Alien.createAlienAttributes()
-            .add(Attributes.ARMOR, 12.0F)
+            .add(Attributes.ARMOR, 14.0F)
             .add(Attributes.ARMOR_TOUGHNESS, 12.0F)
-            .add(Attributes.ATTACK_DAMAGE, PlayerStatConstants.BASE_HEALTH * 0.75F)
+            .add(Attributes.ATTACK_DAMAGE, PlayerStatConstants.BASE_HEALTH * 0.45F)
             .add(Attributes.FOLLOW_RANGE, 35F)
             .add(Attributes.KNOCKBACK_RESISTANCE, 0.7f)
             .add(Attributes.MAX_HEALTH, PlayerStatConstants.BASE_HEALTH * 5F)

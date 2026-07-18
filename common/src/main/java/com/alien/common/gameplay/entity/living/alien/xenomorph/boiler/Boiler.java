@@ -47,7 +47,7 @@ public class Boiler extends Xenomorph implements GOAPUser<Boiler> {
 
     public static AttributeSupplier.Builder createBoilerAttributes() {
         return Alien.createAlienAttributes()
-            .add(Attributes.ARMOR, 2.0F)
+            .add(Attributes.ARMOR, 0.0F)
             .add(Attributes.ARMOR_TOUGHNESS, 0f)
             .add(Attributes.ATTACK_DAMAGE, PlayerStatConstants.BASE_HEALTH * 0.25F)
             .add(Attributes.FOLLOW_RANGE, 16F)

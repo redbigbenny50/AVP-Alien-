@@ -260,6 +260,14 @@ public final class HiveBalanceTask {
         int totalPop,
         PurchasePopulationMode populationMode
     ) {
+        // Starvation priority (design §6, step 4): while the active carve site is starved (a resin payment actually
+        // bounced), caste purchases stand aside so incoming biomass finishes the frozen build first. Defense parties,
+        // egg-laying and resin spread are deliberately NOT gated - survival and reproduction outrank construction,
+        // and hunting parties are how a starving hive earns its way out.
+        if (location.isConstructionStarved()) {
+            return false;
+        }
+
         var outputType = CasteResolver.entityTypeForCaste(lineage.variant(), caste);
         if (outputType == null) {
             return false;

@@ -169,6 +169,13 @@ public final class CarveSite {
     long nextFillTick;
 
     /**
+     * FACTUAL starvation (design §6, step 4): true only after a fill patch actually failed to pay - not a prediction
+     * about a low balance. Set by CarveSiteWork when a payment bounces, cleared the moment one succeeds (or the site
+     * completes). Transient on purpose: a reload re-attempts the fill within seconds and re-derives the truth.
+     */
+    boolean starved;
+
+    /**
      * Build a site for a piece the router has chosen. Enumerates the footprint into per-column progress trackers, all
      * starting un-excavated and un-filled. No world reads, no block changes - pure setup.
      *
@@ -319,6 +326,30 @@ public final class CarveSite {
 
     public void setResinBiomassOwed(int owed) {
         this.resinBiomassOwed = owed;
+    }
+
+    /** Pays part of the resin debt. Clamped - the debt never goes negative. */
+    public void payResin(int amount) {
+        this.resinBiomassOwed = Math.max(0, this.resinBiomassOwed - amount);
+    }
+
+    /**
+     * Whether the last fill attempt bounced for lack of biomass (design §6 starvation). While true, the hive's
+     * discretionary spends (expansion claims, caste purchases) stand aside so income finishes this build first.
+     */
+    public boolean isStarved() {
+        return starved;
+    }
+
+    /** Columns not yet resined - the denominator of the pay-as-you-fill price (step 4). */
+    public int unfilledColumnCount() {
+        var count = 0;
+        for (ColumnProgress c : columns.values()) {
+            if (!c.isFilled()) {
+                count++;
+            }
+        }
+        return count;
     }
 
     // ---- Progress queries ----

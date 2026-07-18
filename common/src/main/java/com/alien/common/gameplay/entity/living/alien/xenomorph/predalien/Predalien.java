@@ -60,7 +60,7 @@ public class Predalien extends Xenomorph implements GOAPUser<Predalien> {
 
     public static AttributeSupplier.Builder createPredalienAttributes() {
         return Alien.createAlienAttributes()
-            .add(Attributes.ARMOR, 12.0F)
+            .add(Attributes.ARMOR, 16.0F)
             .add(Attributes.ARMOR_TOUGHNESS, 12.0F)
             .add(Attributes.ATTACK_DAMAGE, PlayerStatConstants.BASE_HEALTH * 0.75F)
             .add(Attributes.FOLLOW_RANGE, 35F)

@@ -105,6 +105,13 @@ public final class CatchUpEngine {
                 return;
             }
 
+            // Starvation priority (design §6, step 4): a frozen half-built piece is the hive's top financial
+            // priority. While the active carve site is starved, expansion claims stand aside so incoming biomass
+            // finishes the build first. Factual flag - set only when a resin payment actually bounced.
+            if (location.isConstructionStarved()) {
+                return;
+            }
+
             if (!hasEnoughPopulationToClaim(location, config)) {
                 return;
             }

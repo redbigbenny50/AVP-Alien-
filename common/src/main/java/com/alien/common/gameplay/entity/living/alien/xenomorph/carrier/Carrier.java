@@ -59,12 +59,12 @@ public class Carrier extends Xenomorph implements GOAPUser<Carrier> {
 
     public static AttributeSupplier.Builder createCarrierAttributes() {
         return Alien.createAlienAttributes()
-            .add(Attributes.ARMOR, 12.0F)
+            .add(Attributes.ARMOR, 8.0F)
             .add(Attributes.ARMOR_TOUGHNESS, 12.0F)
-            .add(Attributes.ATTACK_DAMAGE, PlayerStatConstants.BASE_HEALTH * 0.75F)
+            .add(Attributes.ATTACK_DAMAGE, PlayerStatConstants.BASE_HEALTH * 0.4F)
             .add(Attributes.FOLLOW_RANGE, 35F)
             .add(Attributes.KNOCKBACK_RESISTANCE, 0.7f)
-            .add(Attributes.MAX_HEALTH, PlayerStatConstants.BASE_HEALTH * 5F)
+            .add(Attributes.MAX_HEALTH, PlayerStatConstants.BASE_HEALTH * 4F)
             .add(Attributes.MOVEMENT_SPEED, PlayerStatConstants.BASE_WALK_SPEED * 1.2F);
     }
 

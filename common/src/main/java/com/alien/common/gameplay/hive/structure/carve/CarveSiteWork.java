@@ -123,7 +123,7 @@ public final class CarveSiteWork {
                 site.nextFillTick = now; // fill starts the moment the gate opens
             }
             if (now >= site.nextFillTick) {
-                fillStep(level, site);
+                fillStep(level, location, site);
                 site.nextFillTick = now + FILL_INTERVAL_TICKS;
             }
         }
@@ -273,7 +273,7 @@ public final class CarveSiteWork {
      * rectangle is in the selection; if an UNDUG column with pending air work falls inside the rectangle, the radius
      * shrinks (down to the single front column, which is always safe) so resin never stamps into unexcavated ground.
      */
-    private static void fillStep(ServerLevel level, CarveSite site) {
+    private static void fillStep(ServerLevel level, HiveLocation location, CarveSite site) {
         var center = nextColumn(site, true);
         if (center == null) {
             return; // nothing dug-and-unfilled right now; fill waits on the diggers
@@ -304,6 +304,29 @@ public final class CarveSiteWork {
             if (radius > 0 && rectangleTouchesUndug(site, minX, minZ, maxX, maxZ)) {
                 continue; // shrink: the patch rectangle would stamp resin into ground nobody has dug yet
             }
+
+            // Pay-as-you-fill (design §6, step 4): this patch's share of the resin debt, priced at what's still owed
+            // spread over what's still unfilled - integer-exact and self-correcting, nothing extra persisted. A
+            // bounced payment freezes the FILL only (digging is free and keeps going) and flags factual starvation;
+            // the next fill tick re-tries, so funds arriving resume the resin silently.
+            var cost = patchCost(site, selected.size());
+            if (cost > location.biomass()) {
+                if (!site.starved) {
+                    site.starved = true;
+                    Alien.LOGGER.info(
+                        "Hive at {}: carve starved - {} owed, {} in reserve. Resin frozen; expansion and caste"
+                            + " purchases stand aside until this build is funded.",
+                        location.centerPos(),
+                        site.resinBiomassOwed(),
+                        location.biomass()
+                    );
+                }
+                return;
+            }
+            location.setBiomass(location.biomass() - cost);
+            site.payResin(cost);
+            site.starved = false;
+
             var patch = new BoundingBox(minX, site.floorY(), minZ, maxX, site.reachableCeilingY(), maxZ);
             HiveStructurePlacer.placeWorldPatch(level, site.resolved, patch);
             for (CarveSite.ColumnKey key : selected) {
@@ -311,6 +334,21 @@ public final class CarveSiteWork {
             }
             return;
         }
+    }
+
+    /**
+     * The biomass price of resining {@code patchColumns} columns: remaining debt divided over remaining unfilled
+     * columns, rounded up, clamped to the debt. Recomputing the per-column price from the two persisted numbers every
+     * time means rounding can never strand a remainder and a mid-build reload re-derives the exact same schedule.
+     */
+    private static int patchCost(CarveSite site, int patchColumns) {
+        var owed = site.resinBiomassOwed();
+        if (owed <= 0) {
+            return 0;
+        }
+        var unfilled = Math.max(1, site.unfilledColumnCount());
+        var perColumn = (owed + unfilled - 1) / unfilled; // ceil division
+        return Math.min(owed, perColumn * patchColumns);
     }
 
     /** True if any column inside the rectangle still has authored air to dig - the patch would jump the dig front. */
@@ -335,6 +373,26 @@ public final class CarveSiteWork {
      * design §8.3), jelly-vat growth for the chamber types that grow them, and the site clears.
      */
     private static void complete(ServerLevel level, HiveLocation location, CarveSite site) {
+        // Design §6: "the piece is only finished when this is fully paid." Rounding leaves at most a few units of
+        // residue; settle it here. Can't pay = the roof pass waits, starved, exactly like a frozen fill patch.
+        var residue = site.resinBiomassOwed();
+        if (residue > 0) {
+            if (residue > location.biomass()) {
+                if (!site.starved) {
+                    site.starved = true;
+                    Alien.LOGGER.info(
+                        "Hive at {}: carve starved at the finish - {} still owed. Roof pass waits for funds.",
+                        location.centerPos(),
+                        residue
+                    );
+                }
+                return;
+            }
+            location.setBiomass(location.biomass() - residue);
+            site.payResin(residue);
+        }
+        site.starved = false;
+
         if (!HiveStructurePlacer.finishWorld(level, location, site.match())) {
             // Should be impossible (the template hydrated this session), but a consumed socket must never wedge:
             // finalize anyway - the piece is progressively built minus the roof pass, and the frontier stays alive.

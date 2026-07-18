@@ -61,7 +61,7 @@ public class Warrior extends Xenomorph implements GOAPUser<Warrior> {
         return Alien.createAlienAttributes()
             .add(Attributes.ARMOR, 8.0F)
             .add(Attributes.ARMOR_TOUGHNESS, 0f)
-            .add(Attributes.ATTACK_DAMAGE, PlayerStatConstants.BASE_HEALTH * 0.5F)
+            .add(Attributes.ATTACK_DAMAGE, PlayerStatConstants.BASE_HEALTH * 0.4F)
             .add(Attributes.FOLLOW_RANGE, 35F)
             .add(Attributes.KNOCKBACK_RESISTANCE, 0.5f)
             .add(Attributes.MAX_HEALTH, PlayerStatConstants.BASE_HEALTH * 3F)

@@ -1,8 +1,10 @@
 package com.alien.common.gameplay.hive.structure;
 
 import com.alien.Alien;
+import com.alien.common.gameplay.hive.growth.BiomassIncome;
 import com.alien.common.gameplay.hive.growth.HiveLocationClaims;
 import com.alien.common.gameplay.hive.location.HiveLocation;
+import com.alien.common.gameplay.hive.location.HiveLocationRegistry;
 import com.alien.common.registry.init.block.AlienBlocks;
 import com.alien.common.registry.init.block.AlienResinBlocks;
 import net.minecraft.core.BlockPos;
@@ -45,6 +47,14 @@ public final class HiveRouter {
      * routing.
      */
     public static volatile boolean CARVE_ENABLED = true;
+
+    /**
+     * Resin cost multiplier (design §6, step 4): a piece's resin debt = this factor x the hive's CURRENT per-chunk
+     * claim cost x the piece's footprint chunks, fixed at commission. Riding on claimCost means the price scales
+     * super-linearly with hive size for free; 1.5x makes a healthy hive never visibly stall while a drained one freezes
+     * mid-corridor. Tune here.
+     */
+    public static final double RESIN_COST_FACTOR = 1.5;
 
     private static final int BASE_EXTENT = 9; // base footprint radius (19x19)
 
@@ -714,11 +724,19 @@ public final class HiveRouter {
      */
     private static boolean commission(ServerLevel level, HiveLocation location, PieceMatch match, FrontierSocket socket) {
         var site = new com.alien.common.gameplay.hive.structure.carve.CarveSite(match, socket, location);
+        // Resin debt (design §6): claim cost is paid when ground is claimed; the resin is EXTRA, paid progressively
+        // as the fill stamps in (CarveSiteWork). Fixed at commission so a price that moves mid-build (the hive keeps
+        // claiming) can't reprice work already promised.
+        var config = HiveLocationRegistry.INSTANCE.config();
+        var resinCost = (int) Math.ceil(
+            RESIN_COST_FACTOR * BiomassIncome.claimCost(location, config) * match.occupiedChunks().size()
+        );
+        site.setResinBiomassOwed(resinCost);
         // Consume the socket NOW: the ground is committed, and a mid-build piece must expose no routable doorway in
         // either direction. finalizePlacement re-removes it at completion (a no-op) and registers the new ones.
         location.frontierSockets().remove(socket);
         location.setActiveCarveSite(site);
-        Alien.LOGGER.info("Hive: commissioned {}", site.describe());
+        Alien.LOGGER.info("Hive: commissioned {} (resin cost {})", site.describe(), resinCost);
         return true;
     }
 

@@ -69,12 +69,12 @@ public class Burster extends Xenomorph implements EggCarrier, GOAPUser<Burster>,
 
     public static AttributeSupplier.Builder createBursterAttributes() {
         return Alien.createAlienAttributes()
-            .add(Attributes.ARMOR, 4.0F)
+            .add(Attributes.ARMOR, 0.0F)
             .add(Attributes.ARMOR_TOUGHNESS, 0f)
-            .add(Attributes.ATTACK_DAMAGE, PlayerStatConstants.BASE_HEALTH * 0.25F)
+            .add(Attributes.ATTACK_DAMAGE, PlayerStatConstants.BASE_HEALTH * 0.3F)
             .add(Attributes.FOLLOW_RANGE, 35F)
             .add(Attributes.KNOCKBACK_RESISTANCE, 0.3f)
-            .add(Attributes.MAX_HEALTH, PlayerStatConstants.BASE_HEALTH * 2F)
+            .add(Attributes.MAX_HEALTH, PlayerStatConstants.BASE_HEALTH * 3F)
             .add(Attributes.MOVEMENT_SPEED, PlayerStatConstants.BASE_WALK_SPEED * 1.2F);
     }
 

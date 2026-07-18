@@ -65,12 +65,12 @@ public class Empress extends Xenomorph implements GOAPUser<Empress>, EggLayer {
 
     public static AttributeSupplier.Builder createEmpressAttributes() {
         return Alien.createAlienAttributes()
-            .add(Attributes.ARMOR, 16.0F)
+            .add(Attributes.ARMOR, 20.0F)
             .add(Attributes.ARMOR_TOUGHNESS, 16.0F)
-            .add(Attributes.ATTACK_DAMAGE, PlayerStatConstants.BASE_HEALTH * 2.5F)
+            .add(Attributes.ATTACK_DAMAGE, PlayerStatConstants.BASE_HEALTH * 1.5F)
             .add(Attributes.FOLLOW_RANGE, 35F)
             .add(Attributes.KNOCKBACK_RESISTANCE, 1f)
-            .add(Attributes.MAX_HEALTH, PlayerStatConstants.BASE_HEALTH * 10F)
+            .add(Attributes.MAX_HEALTH, PlayerStatConstants.BASE_HEALTH * 25F)
             .add(Attributes.MOVEMENT_SPEED, PlayerStatConstants.BASE_WALK_SPEED * 0.9F);
     }
 

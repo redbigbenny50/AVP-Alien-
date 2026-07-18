@@ -3734,7 +3734,7 @@
 			"bones": {
 				"gTail1": {
 					"rotation": [
-						"-15+Math.cos(query.anim_time*180-)*1",
+						"-15+Math.cos(query.anim_time*180)*1",
 						"Math.cos(query.anim_time*180)*-1",
 						0
 					]
@@ -19180,18 +19180,18 @@
 				"gTail1": {
 					"rotation": {
 						"0.0": [
-							"-15+Math.cos(query.anim_time*180-)*1",
+							"-15+Math.cos(query.anim_time*180)*1",
 							"Math.cos(query.anim_time*180)*-1",
 							0
 						],
 						"0.5": {
 							"pre": [
-								"-15+Math.cos(query.anim_time*180-)*1",
+								"-15+Math.cos(query.anim_time*180)*1",
 								"Math.cos(query.anim_time*180)*-1",
 								0
 							],
 							"post": [
-								"-15+Math.cos(query.anim_time*180-)*1",
+								"-15+Math.cos(query.anim_time*180)*1",
 								"Math.cos(query.anim_time*180)*-1",
 								0
 							],

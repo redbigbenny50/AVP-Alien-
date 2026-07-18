@@ -100,10 +100,10 @@ public class Queen extends Xenomorph implements GOAPUser<Queen>, EggLayer {
         return Alien.createAlienAttributes()
             .add(Attributes.ARMOR, 16.0F)
             .add(Attributes.ARMOR_TOUGHNESS, 16.0F)
-            .add(Attributes.ATTACK_DAMAGE, PlayerStatConstants.BASE_HEALTH * 2.5F)
+            .add(Attributes.ATTACK_DAMAGE, PlayerStatConstants.BASE_HEALTH * 1F)
             .add(Attributes.FOLLOW_RANGE, 35F)
             .add(Attributes.KNOCKBACK_RESISTANCE, 1f)
-            .add(Attributes.MAX_HEALTH, PlayerStatConstants.BASE_HEALTH * 10F)
+            .add(Attributes.MAX_HEALTH, PlayerStatConstants.BASE_HEALTH * 12.5F)
             .add(Attributes.MOVEMENT_SPEED, PlayerStatConstants.BASE_WALK_SPEED * 1.1F);
     }
 

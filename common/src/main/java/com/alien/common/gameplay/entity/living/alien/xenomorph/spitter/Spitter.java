@@ -70,12 +70,12 @@ public class Spitter extends Xenomorph implements GOAPUser<Spitter> {
 
     public static AttributeSupplier.Builder createSpitterAttributes() {
         return Alien.createAlienAttributes()
-            .add(Attributes.ARMOR, 8.0F)
+            .add(Attributes.ARMOR, 12.0F)
             .add(Attributes.ARMOR_TOUGHNESS, 0f)
-            .add(Attributes.ATTACK_DAMAGE, PlayerStatConstants.BASE_HEALTH * 0.5F)
+            .add(Attributes.ATTACK_DAMAGE, PlayerStatConstants.BASE_HEALTH * 0.4F)
             .add(Attributes.FOLLOW_RANGE, 35F)
             .add(Attributes.KNOCKBACK_RESISTANCE, 0.5f)
-            .add(Attributes.MAX_HEALTH, PlayerStatConstants.BASE_HEALTH * 3F)
+            .add(Attributes.MAX_HEALTH, PlayerStatConstants.BASE_HEALTH * 2F)
             .add(Attributes.MOVEMENT_SPEED, PlayerStatConstants.BASE_WALK_SPEED * 1.1F);
     }
 
