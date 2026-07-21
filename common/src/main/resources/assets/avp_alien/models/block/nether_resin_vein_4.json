@@ -1,0 +1,6 @@
+{
+  "parent": "avp_alien:block/nether_resin_vein",
+  "textures": {
+    "nether_resin_vein": "avp_alien:block/nether_resin_vein_4"
+  }
+}
