@@ -59,6 +59,12 @@ public class DropOffEggAction {
      */
     private static final int STAMP_MAX_ATTEMPTS = 3;
 
+    /** Walk attempts spent on the CURRENT nursery bed before it is written off. See {@code abandonTarget}. */
+    private static final StateKey<Integer> KEY_BED_ATTEMPTS = StateKey.sensed("egg_drop_bed_attempts");
+
+    /** One walk, then one ducted retry, then the bed is blacklisted. */
+    private static final int BED_MAX_ATTEMPTS = 2;
+
     private static final double DROP_OFF_RANGE_SQUARED = 2.0 * 2.0;
 
     private static final double VENT_REACH_SQUARED = 2.5 * 2.5; // close enough to slip into a vent
@@ -185,6 +191,16 @@ public class DropOffEggAction {
                 // Nowhere to put this egg. Report WHY - a hauler frozen holding an egg with no log was the single
                 // hardest thing to troubleshoot in testing.
                 logNoEggDestination(xenomorph, blackboard);
+
+                // AMNESTY ON EXHAUSTION. The size-based amnesty above can only fire while the failed set is still
+                // GROWING - and growth stops at exactly the moment the hauler gets stuck: once every bed is
+                // blacklisted no target is ever chosen, so no new failure is ever recorded. The set froze short of
+                // the threshold (testers saw 14-21 entries against 12-17 genuinely FREE beds) and every retry
+                // re-ran against the same poisoned list, leaving runners standing around holding eggs forever.
+                // Reaching here means nothing at all was accepted, so the blacklist has no value left: drop it and
+                // let the next retry reconsider the whole nursery. Spots that really are bad simply fail again.
+                blackboard.set(KEY_FAILED_SPOTS, List.<BlockPos>of());
+
                 scheduleSearchRetry(blackboard, xenomorph.tickCount);
                 return Action.Signal.CONTINUE;
             }
@@ -309,6 +325,7 @@ public class DropOffEggAction {
         EggSpotClaims.release(BlockPos.containing(targetPos)); // delivered - release the reservation
         blackboard.set(KEY_WALK_FAILED, false); // delivered - stop forcing the duct
         blackboard.set(KEY_STAMP_ATTEMPTS, 0); // delivered - the next stamped haul starts with a clean slate
+        blackboard.set(KEY_BED_ATTEMPTS, 0); // delivered - the next bed starts with its full retry budget
         return Action.Signal.CONTINUE;
     }
 
@@ -340,6 +357,23 @@ public class DropOffEggAction {
             stampedEgg.setHostDropTarget(null);
             blackboard.set(KEY_STAMP_ATTEMPTS, 0);
         }
+        // NURSERY BED, WALK FAILED: give the DUCT its turn before writing the bed off. KEY_WALK_FAILED was just
+        // set, which unlocks ducting for this haul - but blacklisting the bed in the same breath meant the
+        // re-search could never pick it again, so the ducted route to THAT bed was never attempted. Only stamped
+        // host deliveries got the retry the design intended; ordinary nursery hauls were written off on the first
+        // failed walk. A bed that is unreachable on foot but fine through the hive's own ducts therefore poisoned
+        // the failed list one entry at a time until nothing was left to choose.
+        var walkFailed = blackboard.getOrDefault(KEY_WALK_FAILED, false);
+        var bedAttempts = blackboard.getOrDefault(KEY_BED_ATTEMPTS, 0) + 1;
+        if (walkFailed && bedAttempts < BED_MAX_ATTEMPTS) {
+            blackboard.set(KEY_BED_ATTEMPTS, bedAttempts);
+            EggSpotClaims.release(target); // release the claim, but keep the bed selectable
+            scheduleSearchRetry(blackboard, currentTick);
+            NeoMoveToPosAction.onFinish(context);
+            return Action.Signal.CONTINUE;
+        }
+        blackboard.set(KEY_BED_ATTEMPTS, 0);
+
         rememberFailedSpot(blackboard, target);
         EggSpotClaims.release(target); // giving up - let another hauler have it
         scheduleSearchRetry(blackboard, currentTick);

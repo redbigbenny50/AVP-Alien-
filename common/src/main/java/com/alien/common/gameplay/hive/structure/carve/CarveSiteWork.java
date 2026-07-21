@@ -7,10 +7,14 @@ import com.alien.common.gameplay.hive.structure.HivePieceRegistry;
 import com.alien.common.gameplay.hive.structure.HiveRouter;
 import com.alien.common.gameplay.hive.structure.HiveStructurePlacer;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.sounds.SoundSource;
 import net.minecraft.world.level.ChunkPos;
+import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.levelgen.structure.BoundingBox;
 import org.jetbrains.annotations.Nullable;
 
@@ -69,6 +73,25 @@ public final class CarveSiteWork {
     /** Fill starts once this fraction of the columns is dug (design §5: "once excavation is underway"). */
     public static final float FILL_START_FRACTION = 0.25f;
 
+    /** While a site is unstaffed and paused, say so this often: once a minute. */
+    private static final int UNSTAFFED_LOG_INTERVAL_TICKS = 1200;
+
+    /** How many break-effect samples one dig clump plays - crunchy feedback without a machine-gun of sound. */
+    private static final int DIG_SOUND_SAMPLES = 6;
+
+    /**
+     * The queen's founding-core dig cadence (design §8.8: fixed, tunable - the 90s/-30s digger curve doesn't apply to
+     * her). One clump every 5s; on the 3x3-chunk chamber that lands the core carve at a few minutes of visible, solo
+     * queen work, overlapping the founding biomass fill she is doing anyway.
+     */
+    private static final int QUEEN_DIG_INTERVAL_TICKS = 100;
+
+    /**
+     * The §8.7 empty-reserve fallback pace: if no drones exist to place the core resin, the QUEEN places it herself,
+     * slowly - half a lone placer's rate. Founding can stall for lack of drones but never deadlock.
+     */
+    private static final int QUEEN_FALLBACK_FILL_INTERVAL_TICKS = FILL_INTERVAL_TICKS * 2;
+
     /** Dig clump radius in columns (chebyshev) - the ~2-block-radius sphere-erase feel of design §5, columnized. */
     public static final int DIG_RADIUS = 2;
 
@@ -110,21 +133,74 @@ public final class CarveSiteWork {
 
         long now = level.getGameTime();
 
-        if (site.nextDigTick == 0L) {
-            site.nextDigTick = now; // first dig fires immediately - visible progress the moment work starts
-        }
-        if (now >= site.nextDigTick) {
-            digStep(level, site);
-            site.nextDigTick = now + DIG_INTERVAL_TICKS;
+        // Step 5: the crew. Sourcing, release, steering and the dig gait all live in CarveWorkers; what comes back is
+        // the ACTIVE staffing, which sets the pace. The world mutation below fires whenever its track is staffed -
+        // it does NOT wait for a drone to physically arrive at the front (a stuck drone must never wedge the build;
+        // the drones sell the show, the site guarantees the work).
+        var digFrontKey = nextColumn(site, false);
+        var fillFrontKey = nextColumn(site, true);
+        var digFront = digFrontKey == null
+            ? null
+            : new BlockPos(digFrontKey.x(), site.floorY() + 1, digFrontKey.z());
+        var fillFront = fillFrontKey == null
+            ? null
+            : new BlockPos(fillFrontKey.x(), site.floorY() + 1, fillFrontKey.z());
+        var crew = CarveWorkers.tick(level, location, site, digFront, fillFront);
+
+        // Zero workers = zero progress (confirmed design call §8.1/§8.2 taken to its limit): no free drones and an
+        // empty reserve means the hive is in collapse; the build waits, routing waits behind it (§8.4), and the
+        // moment the queen's eggs refill the reserve the crew re-sources and work resumes on its own. The FOUNDING
+        // CORE is exempt: its digger is the queen (axiomatically present - she founded here) and its fill has the
+        // §8.7 queen fallback, so it never pauses for staffing.
+        if (!site.isFoundingCore() && crew.unstaffed() && !site.isComplete()) {
+            if (now >= site.nextUnstaffedLogTick) {
+                site.nextUnstaffedLogTick = now + UNSTAFFED_LOG_INTERVAL_TICKS;
+                Alien.LOGGER.info(
+                    "Hive at {}: carve site for {} is unstaffed - no free drones, nothing in reserve. Build paused.",
+                    location.centerPos(),
+                    site.match().piece().id()
+                );
+            }
+            return;
         }
 
-        if (site.excavatedFraction() >= FILL_START_FRACTION) {
+        // Founding core (step 6, design §7b): the QUEEN is the digger, at her fixed §8.8 pace - drone diggers are
+        // never sourced for it. Her stand-dig sequence (start -> loop -> stop) tracks the excavation.
+        if (site.isFoundingCore()) {
+            tickQueenDig(level, location, site);
+        }
+
+        var digStaffed = site.isFoundingCore() || crew.diggers() > 0;
+        if (digStaffed) {
+            if (site.nextDigTick == 0L) {
+                site.nextDigTick = now; // first dig fires immediately - visible progress the moment work starts
+            }
+            if (now >= site.nextDigTick) {
+                digStep(level, site);
+                site.nextDigTick = now
+                    + (site.isFoundingCore() ? QUEEN_DIG_INTERVAL_TICKS : digIntervalTicks(crew.diggers()));
+            }
+        }
+
+        // Fill: normal placer pace when staffed; on the founding core with NO placers, the queen places her own
+        // resin slowly (§8.7) - founding stalls for lack of drones, never deadlocks.
+        var fillInterval = crew.placers() > 0
+            ? FILL_INTERVAL_TICKS / crew.placers()
+            : site.isFoundingCore() ? QUEEN_FALLBACK_FILL_INTERVAL_TICKS : 0;
+        // Growth pieces trail resin behind the dig front; the FOUNDING CORE resins only after the WHOLE volume is
+        // dug (design §7b order: she carves, THEN the eggsack, THEN the resin). Resin creeping in mid-dig put her
+        // variant resin under her feet and tripped the eggsack's "already prepared" check while she was still
+        // digging - the eggsack-during-excavation bug from testing.
+        var fillGateOpen = site.isFoundingCore()
+            ? site.isFullyExcavated()
+            : site.excavatedFraction() >= FILL_START_FRACTION;
+        if (fillInterval > 0 && fillGateOpen) {
             if (site.nextFillTick == 0L) {
                 site.nextFillTick = now; // fill starts the moment the gate opens
             }
             if (now >= site.nextFillTick) {
                 fillStep(level, location, site);
-                site.nextFillTick = now + FILL_INTERVAL_TICKS;
+                site.nextFillTick = now + fillInterval;
             }
         }
 
@@ -144,9 +220,19 @@ public final class CarveSiteWork {
         var site = CarveSite.load(tag, HivePieceRegistry.get(server), location);
         if (site == null) {
             // Never-wedge: the saved piece no longer exists (datapack changed under the save). The socket was
-            // consumed at commission - restore it from the raw tag so the router can grow something else here.
+            // consumed at commission - restore it from the raw tag so the router can grow something else here. A
+            // FOUNDING tag (no socket) instead resolves via the founding legacy fallback, so the chamber and its
+            // royal ring exist even though the carve cannot resume.
             if (tag.contains(CarveSite.NBT_SOCKET)) {
                 location.frontierSockets().add(FrontierSocket.fromTag(tag.getCompound(CarveSite.NBT_SOCKET)));
+            } else {
+                var level = server.getLevel(location.dimension());
+                if (level != null) {
+                    com.alien.common.gameplay.hive.structure.HiveStructureFounding.legacyFoundingFallback(
+                        level,
+                        location
+                    );
+                }
             }
             Alien.LOGGER.warn(
                 "Hive at {}: saved carve site references a piece missing from the registry - site dropped, socket restored.",
@@ -178,11 +264,26 @@ public final class CarveSiteWork {
             airByColumn.computeIfAbsent(key, k -> new ArrayList<>()).add(info.pos());
         }
 
-        // Sweep order: every footprint column, nearest-to-the-doorway first, so both dig and fill eat OUTWARD from
-        // the connected socket - the build visibly grows away from the existing hive rather than popping randomly.
+        // Sweep order: every footprint column, nearest-to-the-reference first. Growth pieces eat OUTWARD from the
+        // connected socket (the build visibly grows away from the existing hive); the FOUNDING CORE has no socket and
+        // eats outward from its own center - the queen digs the space around herself first (design §7b).
+        int refX;
+        int refZ;
         var socket = site.connectedTo();
-        int refX = socket.chunk().getMinBlockX() + 8 + socket.facing().getStepX() * 8;
-        int refZ = socket.chunk().getMinBlockZ() + 8 + socket.facing().getStepZ() * 8;
+        if (socket != null) {
+            refX = socket.chunk().getMinBlockX() + 8 + socket.facing().getStepX() * 8;
+            refZ = socket.chunk().getMinBlockZ() + 8 + socket.facing().getStepZ() * 8;
+        } else {
+            var chunks = site.match().occupiedChunks();
+            long sumX = 0;
+            long sumZ = 0;
+            for (ChunkPos c : chunks) {
+                sumX += c.getMinBlockX() + 8;
+                sumZ += c.getMinBlockZ() + 8;
+            }
+            refX = (int) (sumX / Math.max(1, chunks.size()));
+            refZ = (int) (sumZ / Math.max(1, chunks.size()));
+        }
         var order = new ArrayList<>(site.columns().keySet());
         order.sort((a, b) -> {
             long da = (long) (a.x() - refX) * (a.x() - refX) + (long) (a.z() - refZ) * (a.z() - refZ);
@@ -218,7 +319,12 @@ public final class CarveSiteWork {
             site.match().piece().id(),
             reason
         );
-        if (HiveStructurePlacer.place(level, location, site.match(), site.connectedTo())) {
+        if (site.isFoundingCore()) {
+            clearQueenStandDig(level, location);
+            // The founding core has no socket to restore and its own legacy path: stamp the chamber + run the
+            // founding tail in one call. Founding always produces a functioning chamber.
+            com.alien.common.gameplay.hive.structure.HiveStructureFounding.legacyFoundingFallback(level, location);
+        } else if (HiveStructurePlacer.place(level, location, site.match(), site.connectedTo())) {
             HiveRouter.growVatsIfJellyChamber(level, location, site.match());
         } else {
             location.frontierSockets().add(site.connectedTo());
@@ -228,6 +334,8 @@ public final class CarveSiteWork {
                 site.match().piece().id()
             );
         }
+        // Belt-and-braces: hydration failure means no crew was ever sourced, but disbanding an empty roster is free.
+        CarveWorkers.disband(level, location, site);
         location.setActiveCarveSite(null);
     }
 
@@ -237,12 +345,67 @@ public final class CarveSiteWork {
      * Clears one clump: the next unexcavated column in the work order plus its unexcavated neighbours within
      * {@link #DIG_RADIUS}, authored-air cells removed FULL height - base dug, remainder collapsed.
      */
+    /** Safety net: whatever ends a founding site also lowers her dig flag, so the loop can never stick. */
+    private static void clearQueenStandDig(ServerLevel level, HiveLocation location) {
+        var founderId = location.founderId();
+        if (
+            founderId != null
+                && level.getEntity(
+                    founderId
+                ) instanceof com.alien.common.gameplay.entity.living.alien.xenomorph.queen.Queen queen
+                && queen.standDiggingSynced.get()
+        ) {
+            queen.standDiggingSynced.set(false);
+        }
+    }
+
+    /**
+     * Keeps the queen's synced stand-dig flag matched to the core's excavation state: TRUE while columns remain, FALSE
+     * once the volume is fully dug. The client-side QueenAnimator turns the flag's edges into the digStandStart /
+     * standDigging / digStandStop triptych - animation dispatch only works client-side (the AzCommand server warning),
+     * so the server's whole job is this one boolean. She is resolved via the location's founder id; if she is dead or
+     * unloaded the carve continues without her show (never-wedge - founding must not hinge on an animation).
+     */
+    private static void tickQueenDig(ServerLevel level, HiveLocation location, CarveSite site) {
+        var founderId = location.founderId();
+        if (founderId == null) {
+            return;
+        }
+        if (
+            !(level.getEntity(
+                founderId
+            ) instanceof com.alien.common.gameplay.entity.living.alien.xenomorph.queen.Queen queen)
+                || !queen.isAlive()
+        ) {
+            return;
+        }
+        var shouldDig = !site.isFullyExcavated();
+        if (queen.standDiggingSynced.get() != shouldDig) {
+            queen.standDiggingSynced.set(shouldDig);
+        }
+    }
+
+    /**
+     * The dig cadence for a given ACTIVE digger count, mapping the design §4 clock (90s / 60s / 30s for 1 / 2 / 3
+     * diggers on a 1x1 piece) onto the step interval: the 1-digger interval is exactly the step-3 ghost cadence, so one
+     * drone digs at the pace the ghost carve was tuned to.
+     */
+    private static int digIntervalTicks(int diggers) {
+        var d = Math.min(diggers, CarveWorkers.MAX_DIGGERS);
+        return (int) Math.round(DIG_INTERVAL_TICKS * (90.0 - 30.0 * (d - 1)) / 90.0);
+    }
+
     private static void digStep(ServerLevel level, CarveSite site) {
         var center = nextColumn(site, false);
         if (center == null) {
             return; // excavation done; fill is still catching up
         }
+        var cleared = 0;
+        var samplePositions = new ArrayList<BlockPos>(DIG_SOUND_SAMPLES);
+        var sampleStates = new ArrayList<BlockState>(DIG_SOUND_SAMPLES);
         var pos = new BlockPos.MutableBlockPos();
+        // Shared scratch for the leak check - a dig step clears hundreds of cells, so this must not allocate per cell.
+        var neighbourScratch = new BlockPos.MutableBlockPos();
         for (CarveSite.ColumnKey key : site.workOrder) {
             if (cheby(key, center) > DIG_RADIUS) {
                 continue;
@@ -255,13 +418,62 @@ public final class CarveSiteWork {
             if (cells != null) {
                 for (BlockPos cell : cells) {
                     pos.set(cell);
-                    if (!level.getBlockState(pos).isAir()) {
+                    var state = level.getBlockState(pos);
+                    if (!state.isAir()) {
+                        // Sample a spread of the blocks actually broken for the vanilla break effect (sound +
+                        // particles of THAT block) - the "block breaking sounds" of a dig, without playing hundreds.
+                        if (samplePositions.size() < DIG_SOUND_SAMPLES && cleared % 8 == 0) {
+                            samplePositions.add(cell.immutable());
+                            sampleStates.add(state);
+                        }
+                        cleared++;
                         level.setBlock(pos, Blocks.AIR.defaultBlockState(), 2);
+                        sealLiquidNeighbours(level, pos, neighbourScratch);
                     }
                 }
             }
             column.markExcavated();
         }
+        for (var i = 0; i < samplePositions.size(); i++) {
+            level.levelEvent(2001, samplePositions.get(i), Block.getId(sampleStates.get(i)));
+        }
+    }
+
+    /**
+     * Plugs any liquid that the cell we just opened is now exposed to.
+     * <p>
+     * Excavation only ran {@code setBlock(AIR)} and moved on, so the moment a dig broke into a lava or water pocket the
+     * reservoir simply poured into the workings. Nothing addressed it until the piece FINISHED - the completion drain
+     * and the upkeep pass both act on completed pieces - which left an actively-carved site flooded for as long as the
+     * dig took, killing workers and blocking the routes through it.
+     * <p>
+     * Sealing the face rather than deleting the fluid keeps the reservoir where it is instead of silently draining a
+     * lava lake through the hive. The plug copies the block underneath the fluid where possible, so a pocket in
+     * deepslate is sealed with deepslate rather than an obvious patch of stone. If the plug happens to sit on a cell
+     * this piece will carve later, that later pass simply removes it again - correct either way.
+     */
+    private static void sealLiquidNeighbours(
+        ServerLevel level,
+        BlockPos.MutableBlockPos openedCell,
+        BlockPos.MutableBlockPos neighbour
+    ) {
+        for (Direction direction : Direction.values()) {
+            neighbour.set(openedCell).move(direction);
+            if (level.getFluidState(neighbour).isEmpty()) {
+                continue;
+            }
+            level.setBlock(neighbour.immutable(), plugFor(level, neighbour), 2);
+        }
+    }
+
+    /** A sealing block that blends with the surrounding rock: the block below the leak, else plain stone. */
+    private static BlockState plugFor(ServerLevel level, BlockPos leak) {
+        var belowPos = leak.below();
+        var below = level.getBlockState(belowPos);
+        if (below.isSolidRender(level, belowPos) && level.getFluidState(belowPos).isEmpty()) {
+            return below;
+        }
+        return Blocks.STONE.defaultBlockState();
     }
 
     // ---- The fill step (design §5 placers / §7a reachable fill) ----
@@ -332,6 +544,16 @@ public final class CarveSiteWork {
             for (CarveSite.ColumnKey key : selected) {
                 site.columns().get(key).markFilled();
             }
+            // The resin creeping in sounds like the resin creeping in: the same spread sound the veins and node
+            // cursors play (sculk-spread under the hood), once per patch at its center.
+            level.playSound(
+                null,
+                new BlockPos((minX + maxX) / 2, site.floorY() + 1, (minZ + maxZ) / 2),
+                com.alien.common.registry.init.AlienSoundEvents.BLOCK_RESIN_SPREAD.get(),
+                SoundSource.BLOCKS,
+                1.0F,
+                1.0F
+            );
             return;
         }
     }
@@ -402,8 +624,22 @@ public final class CarveSiteWork {
                 site.match().piece().id()
             );
         }
-        HiveStructurePlacer.finalizePlacement(level, location, site.match(), site.connectedTo());
-        HiveRouter.growVatsIfJellyChamber(level, location, site.match());
+        if (site.isFoundingCore()) {
+            clearQueenStandDig(level, location);
+            // Founding tail (design §7b step 5): royal ring + open-socket registration + blueprint, deferred from
+            // establishQueenChamber to HERE so routing could not grow halls off an uncarved chamber.
+            com.alien.common.gameplay.hive.structure.HiveStructureFounding.finishFoundingStructure(
+                level,
+                location,
+                false
+            );
+        } else {
+            HiveStructurePlacer.finalizePlacement(level, location, site.match(), site.connectedTo());
+            HiveRouter.growVatsIfJellyChamber(level, location, site.match());
+        }
+        // Step 5: dismiss the crew - materialized workers fold back into reserves, borrowed drones go back to
+        // whatever the hive wants of them.
+        CarveWorkers.disband(level, location, site);
         location.setActiveCarveSite(null);
         Alien.LOGGER.info("Hive at {}: carve complete - {}", location.centerPos(), site.describe());
     }

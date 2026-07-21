@@ -32,6 +32,7 @@ import com.alien.common.registry.init.block.AberrantAlienResinBlocks;
 import com.alien.common.registry.init.block.AlienBlocks;
 import com.alien.common.registry.init.block.AlienChitinBlocks;
 import com.alien.common.registry.init.block.AlienResinBlocks;
+import com.alien.common.registry.init.block.IrradiatedAlienChitinBlocks;
 import com.alien.common.registry.init.block.IrradiatedAlienResinBlocks;
 import com.alien.common.registry.init.block.NetherAlienChitinBlocks;
 import com.alien.common.registry.init.block.NetherAlienResinBlocks;
@@ -44,6 +45,7 @@ import com.alien.common.registry.init.item.block.AberrantAlienResinBlockItems;
 import com.alien.common.registry.init.item.block.AlienBlockItems;
 import com.alien.common.registry.init.item.block.AlienChitinBlockItems;
 import com.alien.common.registry.init.item.block.AlienResinBlockItems;
+import com.alien.common.registry.init.item.block.IrradiatedAlienChitinBlockItems;
 import com.alien.common.registry.init.item.block.IrradiatedAlienResinBlockItems;
 import com.alien.common.registry.init.item.block.NetherAlienChitinBlockItems;
 import com.alien.common.registry.init.item.block.NetherAlienResinBlockItems;
@@ -80,8 +82,10 @@ public class Alien {
         NetherAlienResinBlocks.initialize();
         AberrantAlienChitinBlocks.initialize();
         AberrantAlienResinBlocks.initialize();
+        IrradiatedAlienChitinBlocks.initialize();
         IrradiatedAlienResinBlocks.initialize();
         AlienItems.initialize();
+
         AlienEntityTypes.initialize();
         AlienSoundEvents.initialize();
 
@@ -93,6 +97,7 @@ public class Alien {
         NetherAlienResinBlockItems.initialize();
         AberrantAlienChitinBlockItems.initialize();
         AberrantAlienResinBlockItems.initialize();
+        IrradiatedAlienChitinBlockItems.initialize();
         IrradiatedAlienResinBlockItems.initialize();
         // Depends on sound events.
         AlienArmorMaterials.initialize();

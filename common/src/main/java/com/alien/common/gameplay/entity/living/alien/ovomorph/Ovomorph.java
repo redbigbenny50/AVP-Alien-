@@ -75,7 +75,18 @@ public class Ovomorph extends Alien implements GOAPUser<Ovomorph>, Shearable {
 
     private final HatchManager hatchManager;
 
+    /** How long a reserved-but-uncollected egg waits before it re-broadcasts for a carrier (30s). */
+    private static final int PICKUP_CLAIM_TIMEOUT_TICKS = 20 * 30;
+
     public boolean pickupRequestAcknowledged;
+
+    /**
+     * Ticks this egg has sat reserved without anyone actually collecting it. An acknowledged egg goes SILENT (it stops
+     * broadcasting pickup requests), so if the worker that claimed it dies, unloads, or wanders off, the egg would wait
+     * forever and never be delivered. After {@link #PICKUP_CLAIM_TIMEOUT_TICKS} the claim lapses and it starts calling
+     * for a carrier again.
+     */
+    private int pickupClaimTicks;
 
     public boolean wantsPickup;
 
@@ -131,6 +142,17 @@ public class Ovomorph extends Alien implements GOAPUser<Ovomorph>, Shearable {
             tryRaidFrenzyHatch();
 
             this.wantsPickup = canBePickedUp();
+
+            // Lapse a stale reservation: a claim that never turns into an actual pickup must not mute this egg
+            // forever (the claimer may have died, unloaded, or been pulled onto other work).
+            if (pickupRequestAcknowledged && wantsPickup && !isPassenger()) {
+                if (++pickupClaimTicks > PICKUP_CLAIM_TIMEOUT_TICKS) {
+                    this.pickupRequestAcknowledged = false;
+                    this.pickupClaimTicks = 0;
+                }
+            } else {
+                this.pickupClaimTicks = 0;
+            }
 
             if (!pickupRequestAcknowledged && wantsPickup && tickCount % 20 == 0) {
                 var alienVariantType = AlienVariantTypes.getFor(this);

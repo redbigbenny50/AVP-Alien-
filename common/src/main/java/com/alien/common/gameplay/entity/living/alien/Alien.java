@@ -88,6 +88,15 @@ public abstract class Alien extends Monster implements DataUser {
     // Idle pathing uses 0.5x speed and pursuit uses 1.1x; 0.8x splits the two for animation.
     private static final double RUN_ANIMATION_SPEED_THRESHOLD_MULTIPLIER = 0.8D;
 
+    /**
+     * Drop-out fraction for the run gait. The run/walk decision used a single raw threshold, so an alien travelling
+     * near it flipped state several times a second - and every flip restarts the animation track into its transition,
+     * so neither gait ever advanced. That is what froze the drone's legs while it was digging (start-stop carve work
+     * sits right on the threshold), and it makes every alien's walk/run transition stutter. Enter the run gait at the
+     * full threshold, but keep it until speed falls to this fraction of it.
+     */
+    private static final double RUN_ANIMATION_EXIT_THRESHOLD_FACTOR = 0.7D;
+
     public final DataAccessor<Boolean> hasTarget;
 
     public final DataAccessor<Boolean> isPoisoned;
@@ -217,13 +226,26 @@ public abstract class Alien extends Monster implements DataUser {
             setPathfindingMalus(PathType.DANGER_FIRE, 0.0F);
             setPathfindingMalus(PathType.DAMAGE_FIRE, 0.0F);
         } else {
-            // Hard-avoid lava/fire for non-Nether aliens. Vanilla LAVA malus is only -1 ("avoid but pass if the target
-            // demands it"), which let queens walk into flowing lava while chasing prey and burn to death. A large
-            // positive malus makes the pathfinder treat these as effectively impassable, so pursuit routes around them
-            // instead of through them.
-            setPathfindingMalus(PathType.LAVA, 16.0F);
+            // Hard-avoid lava/fire for non-Nether aliens.
+            //
+            // The SIGN is the whole story here, and it is the opposite of what it looks like. In
+            // WalkNodeEvaluator a path type is traversable when its malus is >= 0; a NEGATIVE malus means the node
+            // is never even offered as a neighbour (-1 is exactly what vanilla stamps on a blocked node). A large
+            // POSITIVE malus does not forbid anything - it just prices the tile, and the pathfinder will happily
+            // pay it when the route is otherwise convenient.
+            //
+            // So an all-positive 16.0F did the reverse of what it intended: vanilla LAVA is already -1
+            // (impassable), and overriding it to +16 turned lava into a merely expensive shortcut - which is why
+            // workers walked into flowing lava at a carve site.
+            // LAVA / DAMAGE_FIRE are the hazard ITSELF (the lava, the fire, the magma block): never step onto one.
+            setPathfindingMalus(PathType.LAVA, -1.0F);
+            setPathfindingMalus(PathType.DAMAGE_FIRE, -1.0F);
+            // DANGER_FIRE is NOT the hazard - vanilla's checkNeighbourBlocks stamps it on any node with lava or
+            // fire in the surrounding 3x3x3, i.e. "within one block of". Making it impassable walled off a
+            // one-block halo around every lava block, which can sever a corridor outright and turn reachable
+            // nursery beds into NO_PATH failures. Keep it steeply priced but PASSABLE, as vanilla does (+8),
+            // so a worker will edge past a lava seam rather than treat the whole area as a wall.
             setPathfindingMalus(PathType.DANGER_FIRE, 16.0F);
-            setPathfindingMalus(PathType.DAMAGE_FIRE, 16.0F);
         }
     }
 
@@ -375,7 +397,15 @@ public abstract class Alien extends Monster implements DataUser {
             getAttributeValue(Attributes.MOVEMENT_SPEED) * RUN_ANIMATION_SPEED_THRESHOLD_MULTIPLIER
         );
 
-        return deltaX * deltaX + deltaZ * deltaZ >= speedThreshold * speedThreshold;
+        // Hysteresis: a moving alien must slow well below the entry threshold before it drops back to a walk, so
+        // jitter around the boundary can no longer flip the gait (and restart the animation) tick after tick.
+        var travelledSquared = deltaX * deltaX + deltaZ * deltaZ;
+        var enterSquared = speedThreshold * speedThreshold;
+        if (isMovingQuickly.get()) {
+            var exitFactorSquared = RUN_ANIMATION_EXIT_THRESHOLD_FACTOR * RUN_ANIMATION_EXIT_THRESHOLD_FACTOR;
+            return travelledSquared >= enterSquared * exitFactorSquared;
+        }
+        return travelledSquared >= enterSquared;
     }
 
     /**

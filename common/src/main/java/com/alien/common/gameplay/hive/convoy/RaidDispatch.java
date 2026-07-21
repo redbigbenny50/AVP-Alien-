@@ -32,7 +32,9 @@ import java.util.UUID;
  * <p>
  * Per {@code HIVE_REDESIGN_06_CONVOYS.md} § 6:
  * <ul>
- * <li>Empress-gated.</li>
+ * <li>HARBINGER-gated, not empress-gated. The harbinger is the raid key (the hive's only scourge-jelly factory, and it
+ * marches in wave 5); an empress is not required to raid at all - she widens the hive footprint and adds a second raid
+ * chamber, which is a capacity bonus, not a prerequisite.</li>
  * <li>Triggered when a player has at least {@code raidThresholdKills} kills in the aggro window.</li>
  * <li>Source = the largest qualifying location ({@code claimedChunks ≥ raidMinLocationSizeChunks}) that can satisfy the
  * lineage variant's raid wave profile.</li>

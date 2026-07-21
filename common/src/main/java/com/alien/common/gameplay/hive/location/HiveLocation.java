@@ -19,6 +19,7 @@ import net.minecraft.server.MinecraftServer;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.Level;
+import net.minecraft.world.level.block.Rotation;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.HashMap;
@@ -52,6 +53,12 @@ public final class HiveLocation {
      * Hardcoded for now.
      */
     private static final int SLAB_HEIGHT = 16;
+
+    /** Upkeep cadence: one built piece re-drained per beat (~5s), so the whole hive cycles cheaply. */
+    private static final int UPKEEP_INTERVAL_TICKS = 100;
+
+    /** Round-robin cursor over the built pieces for the upkeep pass. Transient - order need not survive a reload. */
+    private int upkeepCursor = 0;
 
     /**
      * Extra blocks of leeway added above and below the slab when testing whether a Y is "inside" the hive. A small
@@ -140,6 +147,8 @@ public final class HiveLocation {
     private static final String NBT_STRUCTURE_ROLES = "StructureRoles";
 
     private static final String NBT_STRUCTURE_PIECES = "StructurePieces";
+
+    private static final String NBT_BUILT_PLACEMENTS = "BuiltPlacements";
 
     private static final String NBT_FRONTIER_SOCKETS = "FrontierSockets";
 
@@ -313,6 +322,18 @@ public final class HiveLocation {
 
     private final Map<ChunkPos, String> structurePieceByChunk;
 
+    /**
+     * A finished piece, keyed by its ORIGIN chunk. {@code structurePieceByChunk} records the piece id on every chunk a
+     * piece covers, which is enough to ask "what is here" but NOT enough to rebuild it: re-stamping a template needs
+     * the origin and the rotation as well. The upkeep pass reconstructs a {@code PieceMatch} from this.
+     */
+    public record BuiltPlacement(
+        String pieceId,
+        Rotation rotation
+    ) {}
+
+    private final Map<ChunkPos, BuiltPlacement> builtPlacements;
+
     private final Set<FrontierSocket> frontierSockets;
 
     private final HiveLocationReserves localReserves;
@@ -419,6 +440,7 @@ public final class HiveLocation {
         this.decoratedChunks = new HashSet<>();
         this.structureRoleByChunk = new HashMap<>();
         this.structurePieceByChunk = new HashMap<>();
+        this.builtPlacements = new HashMap<>();
         this.frontierSockets = new LinkedHashSet<>();
         this.localReserves = new HiveLocationReserves(this::lineageVariantOrNull);
         this.parties = new java.util.ArrayList<>();
@@ -816,6 +838,16 @@ public final class HiveLocation {
         return structurePieceByChunk;
     }
 
+    /** Finished pieces by origin chunk - the upkeep pass's work list. */
+    public Map<ChunkPos, BuiltPlacement> builtPlacements() {
+        return builtPlacements;
+    }
+
+    /** Records a completed stamp so the upkeep pass can rebuild it later. */
+    public void recordBuiltPlacement(ChunkPos originChunk, String pieceId, Rotation rotation) {
+        builtPlacements.put(originChunk, new BuiltPlacement(pieceId, rotation));
+    }
+
     public Set<FrontierSocket> frontierSockets() {
         return frontierSockets;
     }
@@ -957,8 +989,45 @@ public final class HiveLocation {
 
         bossBar.tick(server, lineage.variant(), lineage);
 
+        tickStructureUpkeep(server);
+
         // Phase 3 leaves reserve top-up empty here. Phase 4 will hook the
         // periodic outer-edge top-up from HIVE_REDESIGN_05_RESERVES.md § 3 row 3.
+    }
+
+    /**
+     * Hive upkeep: keeps finished pieces matching the shape they were built as - walls repaired, air cells clear of
+     * intruding blocks, interiors dry. Everything a piece is stamped with is only correct at the instant of the stamp;
+     * afterwards liquids seep in, terrain falls, and players can wall off a corridor the routing layer still believes
+     * is open - which is how good nursery beds end up reading as unreachable.
+     * <p>
+     * One built piece per beat, round-robin, loaded chunks only, so the cost never lands on a single tick. It repeats
+     * indefinitely: if a lava source is still feeding a room the next cycle simply clears it again, which is the
+     * intended "keep draining until it is sealed" behaviour.
+     * <p>
+     * See {@code HiveStructureUpkeep} for what is preserved rather than cleared (jelly vats, resin).
+     */
+    private void tickStructureUpkeep(MinecraftServer server) {
+        if (ageInTicks % UPKEEP_INTERVAL_TICKS != 0) {
+            return;
+        }
+        if (builtPlacements.isEmpty()) {
+            return;
+        }
+        var level = server.getLevel(dimension);
+        if (level == null) {
+            return;
+        }
+        var origins = new java.util.ArrayList<>(builtPlacements.keySet());
+        if (upkeepCursor >= origins.size()) {
+            upkeepCursor = 0;
+        }
+        var origin = origins.get(upkeepCursor++);
+        var placement = builtPlacements.get(origin);
+        if (placement == null) {
+            return;
+        }
+        com.alien.common.gameplay.hive.structure.HiveStructureUpkeep.tickPiece(level, this, origin, placement);
     }
 
     private void decayCombatRespite() {
@@ -1121,6 +1190,17 @@ public final class HiveLocation {
             piecesTag.add(entryTag);
         }
         tag.put(NBT_STRUCTURE_PIECES, piecesTag);
+
+        var builtTag = new ListTag();
+        for (var entry : builtPlacements.entrySet()) {
+            var entryTag = new CompoundTag();
+            entryTag.putInt("X", entry.getKey().x);
+            entryTag.putInt("Z", entry.getKey().z);
+            entryTag.putString("Piece", entry.getValue().pieceId());
+            entryTag.putString("Rot", entry.getValue().rotation().name());
+            builtTag.add(entryTag);
+        }
+        tag.put(NBT_BUILT_PLACEMENTS, builtTag);
 
         var socketsTag = new ListTag();
         for (var socket : frontierSockets) {
@@ -1315,6 +1395,23 @@ public final class HiveLocation {
                 location.structurePieceByChunk.put(
                     new ChunkPos(entryTag.getInt("X"), entryTag.getInt("Z")),
                     entryTag.getString("Piece")
+                );
+            }
+        }
+
+        if (tag.contains(NBT_BUILT_PLACEMENTS)) {
+            var builtTag = tag.getList(NBT_BUILT_PLACEMENTS, Tag.TAG_COMPOUND);
+            for (var i = 0; i < builtTag.size(); i++) {
+                var entryTag = builtTag.getCompound(i);
+                Rotation rotation;
+                try {
+                    rotation = Rotation.valueOf(entryTag.getString("Rot"));
+                } catch (IllegalArgumentException ignored) {
+                    continue; // unknown rotation from an older/newer save - skip rather than crash the load
+                }
+                location.builtPlacements.put(
+                    new ChunkPos(entryTag.getInt("X"), entryTag.getInt("Z")),
+                    new BuiltPlacement(entryTag.getString("Piece"), rotation)
                 );
             }
         }

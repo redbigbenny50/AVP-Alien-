@@ -108,12 +108,20 @@ public class DroneAnimationDispatcher {
      * is here so the carve economy can simply call it.
      */
     public void walkDig() {
+        walkDig(DIG_ANIMATION_SPEED);
+    }
+
+    /**
+     * Digging gait at an explicit speed: the carve economy's placers dig at 50% (slower than the diggers' 70%), per the
+     * construction design §5.
+     */
+    public void walkDig(float speed) {
         AzAlienAnimationUtil.singleWithSpeed(
             AzAlienAnimationUtil.BODY,
             DroneAnimationRefs.WALK_DIG_ANIMATION_NAME,
             AzPlayBehaviors.LOOP,
             AzDispatchMode.PLAY_IF_NOT_PLAYING,
-            DIG_ANIMATION_SPEED
+            speed
         ).dispatchForEntity(drone);
     }
 

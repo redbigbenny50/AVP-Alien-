@@ -81,10 +81,53 @@ public final class HiveStructureFounding {
             return;
         }
 
-        // Physically stamp the chamber blocks at the hive floor (rotation NONE; jigsaws replaced with air).
-        stampQueenChamber(level, server, location, originChunk);
+        // Construction economy step 6 (design §7b): the queen CARVES her chamber instead of it appearing whole.
+        // Commission the FOUNDING CORE site - no socket (nothing upstream of the core), dug outward from its center
+        // at her fixed pace, resin placed by her first drones (or by her, slowly, if none hatch - §8.7). The royal
+        // ring + socket registration run at the site's COMPLETION (finishFoundingStructure), so routing cannot grow
+        // halls around a chamber that is still a solid block of ground. Roles were assigned above either way - they
+        // are bookkeeping, invisible until blocks exist. NO resin debt on the core: the founding biomass tank is the
+        // founding cost, and double-taxing the bootstrap could starve a hive that owns nothing yet.
+        if (HiveRouter.CARVE_ENABLED) {
+            var site = new com.alien.common.gameplay.hive.structure.carve.CarveSite(
+                new PieceMatch(chamber, Rotation.NONE, originChunk),
+                null,
+                location
+            );
+            location.setActiveCarveSite(site);
+            Alien.LOGGER.info("Hive: commissioned founding core {} (queen-dug).", site.describe());
+            return;
+        }
 
-        // Royal ring: stamp a royal hallway on each royal exit now. Non-royal doorways (normally none) stay open.
+        // Legacy instant path (CARVE_ENABLED=false): stamp the chamber and finish the founding structure now.
+        stampQueenChamber(level, server, location, originChunk);
+        finishFoundingStructure(level, location, true);
+    }
+
+    /**
+     * The founding TAIL - royal ring, open-socket registration, and the blueprint roll - runs when the chamber
+     * physically exists: immediately on the legacy path, at carve completion on the commission path
+     * ({@code CarveSiteWork} calls this for a founding-core site instead of {@code finalizePlacement}). Self-contained
+     * on purpose: it re-derives the chamber piece and origin from the location so the completion path needs nothing but
+     * the level and the location.
+     */
+    public static void finishFoundingStructure(ServerLevel level, HiveLocation location, boolean stampRoyalRing) {
+        var server = level.getServer();
+        var registry = HivePieceRegistry.get(server);
+        var chamber = registry.get(HivePieceCatalog.QUEEN_CHAMBER);
+        if (chamber == null) {
+            Alien.LOGGER.warn("Queen chamber piece not loaded at founding completion; no royal ring registered.");
+            return;
+        }
+        var centerChunk = new ChunkPos(location.centerPos());
+        int halfX = (chamber.footprintChunksX() - 1) / 2;
+        int halfZ = (chamber.footprintChunksZ() - 1) / 2;
+        var originChunk = new ChunkPos(centerChunk.x - halfX, centerChunk.z - halfZ);
+
+        // Royal ring: on the INSTANT paths (legacy A/B and the never-wedge fallbacks) stamp a royal hallway on each
+        // royal exit now, exactly as before. On the CARVE path, register EVERY doorway - royal included - as an open
+        // frontier socket instead: the router's royal-priority pass picks the royal doors up first thing next cycle
+        // and commissions each hall as an ordinary drone-staffed carve site, dug and paid like the rest of the hive.
         var random = level.getRandom();
         long currentTick = level.getGameTime();
         int royalsPlaced = 0;
@@ -93,10 +136,14 @@ public final class HiveStructureFounding {
             var edgeChunk = new ChunkPos(originChunk.x + doorway.edgeChunkX(), originChunk.z + doorway.edgeChunkZ());
             var socket = new FrontierSocket(edgeChunk, doorway.facing(), doorway.doorType(), 0, 0);
 
-            if (isRoyalDoor(socket.doorType()) && placeRoyalHallway(level, location, registry, socket, random, currentTick)) {
+            if (
+                stampRoyalRing
+                    && isRoyalDoor(socket.doorType())
+                    && placeRoyalHallway(level, location, registry, socket, random, currentTick)
+            ) {
                 royalsPlaced++;
             } else {
-                // Not a royal door, or the royal hall couldn't fit here (blocked): leave it open for the planner.
+                // A royal door awaiting the router, a non-royal door, or a blocked stamp: open on the frontier.
                 location.frontierSockets().add(socket);
                 socketsRegistered++;
             }
@@ -125,6 +172,27 @@ public final class HiveStructureFounding {
         );
     }
 
+    /**
+     * The founding NEVER-WEDGE fallback: the instant path in one call - stamp the chamber, then run the founding tail.
+     * Used by {@code CarveSiteWork} when a founding-core site cannot hydrate or resume, so founding always produces a
+     * functioning chamber even if the carve cannot.
+     */
+    public static void legacyFoundingFallback(ServerLevel level, HiveLocation location) {
+        var server = level.getServer();
+        var registry = HivePieceRegistry.get(server);
+        var chamber = registry.get(HivePieceCatalog.QUEEN_CHAMBER);
+        if (chamber == null) {
+            Alien.LOGGER.warn("Queen chamber piece not loaded; founding fallback cannot stamp the chamber.");
+            return;
+        }
+        var centerChunk = new ChunkPos(location.centerPos());
+        int halfX = (chamber.footprintChunksX() - 1) / 2;
+        int halfZ = (chamber.footprintChunksZ() - 1) / 2;
+        var originChunk = new ChunkPos(centerChunk.x - halfX, centerChunk.z - halfZ);
+        stampQueenChamber(level, server, location, originChunk);
+        finishFoundingStructure(level, location, true);
+    }
+
     /** A royal-door socket is the only place a royal hallway attaches (and only the core chamber has them). */
     private static boolean isRoyalDoor(String doorType) {
         return doorType != null && doorType.contains("royal");
@@ -143,10 +211,21 @@ public final class HiveStructureFounding {
         RandomSource random,
         long currentTick
     ) {
+        // Free-chunk test: STRUCTURE occupancy, not claims. The ring is stamped at founding-carve COMPLETION now
+        // (step 6), and by then the hive's own claim engine has been running for minutes and has usually claimed the
+        // very chunks the ring wants - a claim by THIS hive on empty ground is exactly where its ring belongs. Only
+        // ground already carrying structure (or claimed by a DIFFERENT hive) is off-limits.
         var matches = HivePieceMatcher.matchesFromRegistry(
             socket,
             registry,
-            chunk -> !location.claimedChunks().contains(chunk)
+            chunk -> {
+                if (location.structurePieceByChunk().containsKey(chunk)) {
+                    return false; // already carries a piece of this hive
+                }
+                var owner = com.alien.common.gameplay.hive.location.HiveLocationRegistry.INSTANCE
+                    .getByChunk(level.dimension(), chunk);
+                return owner == null || owner == location; // unclaimed, or this hive's own plain claim
+            }
         );
         if (matches.isEmpty()) {
             return false;

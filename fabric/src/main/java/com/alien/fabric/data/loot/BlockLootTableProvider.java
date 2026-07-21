@@ -5,6 +5,7 @@ import com.alien.common.registry.init.block.AberrantAlienResinBlocks;
 import com.alien.common.registry.init.block.AlienBlocks;
 import com.alien.common.registry.init.block.AlienChitinBlocks;
 import com.alien.common.registry.init.block.AlienResinBlocks;
+import com.alien.common.registry.init.block.IrradiatedAlienChitinBlocks;
 import com.alien.common.registry.init.block.IrradiatedAlienResinBlocks;
 import com.alien.common.registry.init.block.NetherAlienChitinBlocks;
 import com.alien.common.registry.init.block.NetherAlienResinBlocks;
@@ -65,6 +66,16 @@ public class BlockLootTableProvider extends FabricBlockLootTableProvider {
 
     private void generateSelfDrops() {
         dropSelf(AberrantAlienResinBlocks.ABERRANT_RESIN);
+        dropSelf(AberrantAlienResinBlocks.ABERRANT_RESIN_BONE);
+        dropSelf(AberrantAlienResinBlocks.ABERRANT_RESIN_BONE_STAIRS);
+        dropSelf(AberrantAlienResinBlocks.ABERRANT_RESIN_DOORWAY);
+        dropSelf(AberrantAlienResinBlocks.ABERRANT_RESIN_ETCHED);
+        dropSelf(AberrantAlienResinBlocks.ABERRANT_RESIN_ETCHED_STAIRS);
+        dropSelf(AberrantAlienResinBlocks.ABERRANT_RESIN_SPINE);
+        dropSelf(AberrantAlienResinBlocks.ABERRANT_RESIN_STRETCHED);
+        dropSelf(AberrantAlienResinBlocks.ABERRANT_RESIN_STRETCHED_STAIRS);
+        dropSelf(AberrantAlienResinBlocks.ABERRANT_RESIN_TENDRIL);
+        dropSelf(AberrantAlienResinBlocks.ABERRANT_RESIN_TENDRIL_STAIRS);
         dropSelf(AberrantAlienResinBlocks.ABERRANT_RESIN_BRICKS);
         dropSelf(AberrantAlienResinBlocks.ABERRANT_RESIN_BRICK_STAIRS);
         dropSelf(AberrantAlienResinBlocks.ABERRANT_RESIN_BRICK_WALL);
@@ -82,12 +93,43 @@ public class BlockLootTableProvider extends FabricBlockLootTableProvider {
         dropSelf(AberrantAlienChitinBlocks.POLISHED_ABERRANT_CHITIN_WALL);
 
         dropSelf(IrradiatedAlienResinBlocks.IRRADIATED_RESIN);
+        dropSelf(IrradiatedAlienResinBlocks.IRRADIATED_RESIN_BONE);
+        dropSelf(IrradiatedAlienResinBlocks.IRRADIATED_RESIN_BONE_STAIRS);
+        dropSelf(IrradiatedAlienResinBlocks.IRRADIATED_RESIN_DOORWAY);
+        dropSelf(IrradiatedAlienResinBlocks.IRRADIATED_RESIN_ETCHED);
+        dropSelf(IrradiatedAlienResinBlocks.IRRADIATED_RESIN_ETCHED_STAIRS);
+        dropSelf(IrradiatedAlienResinBlocks.IRRADIATED_RESIN_SPINE);
+        dropSelf(IrradiatedAlienResinBlocks.IRRADIATED_RESIN_STRETCHED);
+        dropSelf(IrradiatedAlienResinBlocks.IRRADIATED_RESIN_STRETCHED_STAIRS);
+        dropSelf(IrradiatedAlienResinBlocks.IRRADIATED_RESIN_TENDRIL);
+        dropSelf(IrradiatedAlienResinBlocks.IRRADIATED_RESIN_TENDRIL_STAIRS);
         dropSelf(IrradiatedAlienResinBlocks.IRRADIATED_RESIN_BRICKS);
         dropSelf(IrradiatedAlienResinBlocks.IRRADIATED_RESIN_BRICK_STAIRS);
         dropSelf(IrradiatedAlienResinBlocks.IRRADIATED_RESIN_BRICK_WALL);
         dropSelf(IrradiatedAlienResinBlocks.IRRADIATED_RESIN_STAIRS);
+        dropSelf(IrradiatedAlienChitinBlocks.IRRADIATED_CHITIN_BLOCK);
+        dropSelf(IrradiatedAlienChitinBlocks.IRRADIATED_CHITIN_BLOCK_STAIRS);
+        dropSelf(IrradiatedAlienChitinBlocks.IRRADIATED_CHITIN_BLOCK_WALL);
+        dropSelf(IrradiatedAlienChitinBlocks.IRRADIATED_CHITIN_BRICKS);
+        dropSelf(IrradiatedAlienChitinBlocks.IRRADIATED_CHITIN_BRICK_STAIRS);
+        dropSelf(IrradiatedAlienChitinBlocks.IRRADIATED_CHITIN_BRICK_WALL);
+        dropSelf(IrradiatedAlienChitinBlocks.CHISELED_IRRADIATED_CHITIN_BRICKS);
+        dropSelf(IrradiatedAlienChitinBlocks.CHISELED_IRRADIATED_CHITIN_BRICKS_EMBRYO);
+        dropSelf(IrradiatedAlienChitinBlocks.POLISHED_IRRADIATED_CHITIN);
+        dropSelf(IrradiatedAlienChitinBlocks.POLISHED_IRRADIATED_CHITIN_STAIRS);
+        dropSelf(IrradiatedAlienChitinBlocks.POLISHED_IRRADIATED_CHITIN_WALL);
 
         dropSelf(NetherAlienResinBlocks.NETHER_RESIN);
+        dropSelf(NetherAlienResinBlocks.NETHER_RESIN_BONE);
+        dropSelf(NetherAlienResinBlocks.NETHER_RESIN_BONE_STAIRS);
+        dropSelf(NetherAlienResinBlocks.NETHER_RESIN_DOORWAY);
+        dropSelf(NetherAlienResinBlocks.NETHER_RESIN_ETCHED);
+        dropSelf(NetherAlienResinBlocks.NETHER_RESIN_ETCHED_STAIRS);
+        dropSelf(NetherAlienResinBlocks.NETHER_RESIN_SPINE);
+        dropSelf(NetherAlienResinBlocks.NETHER_RESIN_STRETCHED);
+        dropSelf(NetherAlienResinBlocks.NETHER_RESIN_STRETCHED_STAIRS);
+        dropSelf(NetherAlienResinBlocks.NETHER_RESIN_TENDRIL);
+        dropSelf(NetherAlienResinBlocks.NETHER_RESIN_TENDRIL_STAIRS);
         dropSelf(NetherAlienResinBlocks.NETHER_RESIN_BRICKS);
         dropSelf(NetherAlienResinBlocks.NETHER_RESIN_BRICK_STAIRS);
         dropSelf(NetherAlienResinBlocks.NETHER_RESIN_BRICK_WALL);
@@ -133,8 +175,11 @@ public class BlockLootTableProvider extends FabricBlockLootTableProvider {
         dropSelf(AlienChitinBlocks.POLISHED_CHITIN_WALL);
 
         dropSelf(AberrantAlienResinBlocks.RIBBED_ABERRANT_RESIN);
+        dropSelf(AberrantAlienResinBlocks.RIBBED_ABERRANT_RESIN_STAIRS);
         dropSelf(IrradiatedAlienResinBlocks.RIBBED_IRRADIATED_RESIN);
+        dropSelf(IrradiatedAlienResinBlocks.RIBBED_IRRADIATED_RESIN_STAIRS);
         dropSelf(NetherAlienResinBlocks.RIBBED_NETHER_RESIN);
+        dropSelf(NetherAlienResinBlocks.RIBBED_NETHER_RESIN_STAIRS);
         dropSelf(AlienResinBlocks.RIBBED_RESIN);
         dropSelf(AlienResinBlocks.RIBBED_RESIN_STAIRS);
 
@@ -158,6 +203,11 @@ public class BlockLootTableProvider extends FabricBlockLootTableProvider {
         dropSlab(AberrantAlienResinBlocks.ABERRANT_RESIN_SLAB);
         dropSlab(AberrantAlienResinBlocks.ABERRANT_RESIN_BRICK_SLAB);
         dropSlab(AberrantAlienResinBlocks.SMOOTH_ABERRANT_RESIN_SLAB);
+        dropSlab(AberrantAlienResinBlocks.RIBBED_ABERRANT_RESIN_SLAB);
+        dropSlab(AberrantAlienResinBlocks.ABERRANT_RESIN_BONE_SLAB);
+        dropSlab(AberrantAlienResinBlocks.ABERRANT_RESIN_ETCHED_SLAB);
+        dropSlab(AberrantAlienResinBlocks.ABERRANT_RESIN_STRETCHED_SLAB);
+        dropSlab(AberrantAlienResinBlocks.ABERRANT_RESIN_TENDRIL_SLAB);
 
         dropSlab(AberrantAlienChitinBlocks.ABERRANT_CHITIN_BLOCK_SLAB);
         dropSlab(AberrantAlienChitinBlocks.ABERRANT_CHITIN_BRICK_SLAB);
@@ -167,9 +217,23 @@ public class BlockLootTableProvider extends FabricBlockLootTableProvider {
         dropSlab(IrradiatedAlienResinBlocks.IRRADIATED_RESIN_BRICK_SLAB);
         dropSlab(IrradiatedAlienResinBlocks.SMOOTH_IRRADIATED_RESIN_SLAB);
 
+        dropSlab(IrradiatedAlienChitinBlocks.IRRADIATED_CHITIN_BLOCK_SLAB);
+        dropSlab(IrradiatedAlienChitinBlocks.IRRADIATED_CHITIN_BRICK_SLAB);
+        dropSlab(IrradiatedAlienChitinBlocks.POLISHED_IRRADIATED_CHITIN_SLAB);
+        dropSlab(IrradiatedAlienResinBlocks.RIBBED_IRRADIATED_RESIN_SLAB);
+        dropSlab(IrradiatedAlienResinBlocks.IRRADIATED_RESIN_BONE_SLAB);
+        dropSlab(IrradiatedAlienResinBlocks.IRRADIATED_RESIN_ETCHED_SLAB);
+        dropSlab(IrradiatedAlienResinBlocks.IRRADIATED_RESIN_STRETCHED_SLAB);
+        dropSlab(IrradiatedAlienResinBlocks.IRRADIATED_RESIN_TENDRIL_SLAB);
+
         dropSlab(NetherAlienResinBlocks.NETHER_RESIN_SLAB);
         dropSlab(NetherAlienResinBlocks.NETHER_RESIN_BRICK_SLAB);
         dropSlab(NetherAlienResinBlocks.SMOOTH_NETHER_RESIN_SLAB);
+        dropSlab(NetherAlienResinBlocks.RIBBED_NETHER_RESIN_SLAB);
+        dropSlab(NetherAlienResinBlocks.NETHER_RESIN_BONE_SLAB);
+        dropSlab(NetherAlienResinBlocks.NETHER_RESIN_ETCHED_SLAB);
+        dropSlab(NetherAlienResinBlocks.NETHER_RESIN_STRETCHED_SLAB);
+        dropSlab(NetherAlienResinBlocks.NETHER_RESIN_TENDRIL_SLAB);
 
         dropSlab(NetherAlienChitinBlocks.NETHER_CHITIN_BLOCK_SLAB);
         dropSlab(NetherAlienChitinBlocks.NETHER_CHITIN_BRICK_SLAB);

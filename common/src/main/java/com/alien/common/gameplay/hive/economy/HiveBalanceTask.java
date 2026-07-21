@@ -104,6 +104,12 @@ public final class HiveBalanceTask {
             : MEMBER_CAP;
         var retinueAllowance = Math.min(1, pop.getOrDefault(AlienEntityTypeTags.PRAETORIANS, 0))
             + Math.min(2, pop.getOrDefault(AlienEntityTypeTags.DRONES, 0));
+        // Carve-crew transients (design §8.5): reserve-materialized build workers don't count against the cap while
+        // assigned to the active carve site; they fold back into reserves at completion. Borrowed drones counted
+        // before they picked up a shovel and still do.
+        var carveCrewAllowance = location.activeCarveSite() != null
+            ? location.activeCarveSite().materializedWorkerCount()
+            : 0;
 
         // The member cap counts WORKERS only. Soldiers, spitters and the scourge tier each have their own cap
         // (max_entity_count_in_location on their purchase) and live OUTSIDE this one - otherwise raising an army
@@ -111,7 +117,8 @@ public final class HiveBalanceTask {
         var workingAdults = totalPop
             - pop.getOrDefault(AlienEntityTypeTags.QUEENS, 0)
             - militaryPopulation(pop)
-            - retinueAllowance;
+            - retinueAllowance
+            - carveCrewAllowance;
         if (workingAdults >= memberCap) {
             return;
         }

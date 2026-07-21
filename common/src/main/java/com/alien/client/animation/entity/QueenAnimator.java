@@ -40,7 +40,26 @@ public class QueenAnimator extends AzEntityAnimator<Queen> {
     private int previousAttackId = Integer.MIN_VALUE;
 
     /** Edge-detects the digging state so digdown/digup one-shots fire once on start/stop. */
+    /**
+     * Ticks a dig one-shot still needs before anything else may dispatch. Both dig triptychs fire a short PLAY_ONCE
+     * clip on an edge and then, on the very NEXT tick, the following block dispatched a different animation - which
+     * replaced the one-shot after a single tick, so the plant and the pull-out were never actually seen. Holding
+     * dispatch for the clip's length lets each one play in full.
+     */
+    private int digOneShotHoldTicks = 0;
+
+    /** Lengths of the dig one-shots, in ticks (see queen.animation.json). */
+    private static final int DIG_DOWN_TICKS = 7;
+
+    private static final int DIG_UP_TICKS = 15;
+
+    private static final int DIG_STAND_START_TICKS = 5;
+
+    private static final int DIG_STAND_STOP_TICKS = 5;
+
     private boolean previousDigging = false;
+
+    private boolean previousStandDigging = false;
 
     private boolean previousIncapacitated = false;
 
@@ -158,6 +177,13 @@ public class QueenAnimator extends AzEntityAnimator<Queen> {
             return;
         }
 
+        // Let a dig one-shot finish before anything else takes the track. Higher-priority states (incapacitated,
+        // bound struggle, hibernate) sit above this and still interrupt.
+        if (digOneShotHoldTicks > 0) {
+            digOneShotHoldTicks--;
+            return;
+        }
+
         // Vertical dig (Stage 2b clip-dig to anchor): digdown one-shot on start, digging loop while descending, digup
         // one-shot on stop. Driven off the synced flag since the digging state is server-only. The one-shots fire on
         // the rising/falling edge; the loop holds in between.
@@ -165,15 +191,38 @@ public class QueenAnimator extends AzEntityAnimator<Queen> {
         if (diggingNow && !previousDigging) {
             dispatcher.digDown();
             previousDigging = true;
+            digOneShotHoldTicks = DIG_DOWN_TICKS;
             return;
         }
         if (!diggingNow && previousDigging) {
             dispatcher.digUp();
             previousDigging = false;
+            digOneShotHoldTicks = DIG_UP_TICKS;
             return;
         }
         if (diggingNow) {
             dispatcher.digging();
+            return;
+        }
+
+        // Founding stand-dig (construction economy step 6): she carves her own chamber. Same edge-driven triptych as
+        // the vertical dig, off its own synced flag - a one-shot plant on the rising edge, the stand-dig loop while
+        // the carve runs, a one-shot pull-out on the falling edge.
+        boolean standDiggingNow = queen.standDiggingSynced.get();
+        if (standDiggingNow && !previousStandDigging) {
+            dispatcher.digStandStart();
+            previousStandDigging = true;
+            digOneShotHoldTicks = DIG_STAND_START_TICKS;
+            return;
+        }
+        if (!standDiggingNow && previousStandDigging) {
+            dispatcher.digStandStop();
+            previousStandDigging = false;
+            digOneShotHoldTicks = DIG_STAND_STOP_TICKS;
+            return;
+        }
+        if (standDiggingNow) {
+            dispatcher.standDigging();
             return;
         }
 

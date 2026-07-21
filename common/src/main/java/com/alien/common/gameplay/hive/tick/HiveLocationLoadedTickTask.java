@@ -55,6 +55,14 @@ public final class HiveLocationLoadedTickTask {
 
         location.tick(server, lineage);
 
+        // Persistence: hive locations mutate on practically every loaded tick (timers, biomass, claims, carve
+        // progress, reserves, membership), but BLib only serializes faction data that is MARKED DIRTY - and
+        // per-mutation marking has proven leaky (the "resumed at 86% after quitting at 100%" rollback from testing,
+        // which also despawned every reloaded member the rolled-back registry no longer recognized). Marking here,
+        // once per loaded tick, is a boolean set - effectively free - and guarantees every world save and the
+        // shutdown save capture the live state. Unloaded mutation paths keep their explicit markDirty calls.
+        lineage.markDirty();
+
         var serverLevel = server.getLevel(location.dimension());
         if (serverLevel == null) {
             return;

@@ -15,7 +15,7 @@ import java.util.Optional;
 
 public record RaidWaveProfile(List<Wave> waves) {
 
-    public static final int MIN_WAVE_SIZE = 5;
+    public static final int MIN_WAVE_SIZE = 3;
 
     /** Revenge/recovery waves are small and immediate: six bodies, three times. */
     public static final int REVENGE_WAVE_SIZE = 6;
@@ -36,7 +36,7 @@ public record RaidWaveProfile(List<Wave> waves) {
         return new RaidWaveProfile(
             List.of(
                 new Wave(
-                    5,
+                    3,
                     DEFAULT_BUFFER_TICKS,
                     List.of(),
                     List.of(
@@ -45,7 +45,7 @@ public record RaidWaveProfile(List<Wave> waves) {
                     )
                 ),
                 new Wave(
-                    8,
+                    5,
                     DEFAULT_BUFFER_TICKS,
                     List.of(
                         new Guarantee(
@@ -62,6 +62,18 @@ public record RaidWaveProfile(List<Wave> waves) {
                     )
                 ),
                 new Wave(
+                    8,
+                    DEFAULT_BUFFER_TICKS,
+                    List.of(),
+                    List.of(
+                        PoolEntry.tagPool(AlienEntityTypeTags.WARRIORS, 3, Integer.MAX_VALUE),
+                        PoolEntry.tagPool(AlienEntityTypeTags.PROWLERS, 3, Integer.MAX_VALUE),
+                        PoolEntry.tagPool(AlienEntityTypeTags.CHRYSALISES, 2, 2),
+                        PoolEntry.tagPool(AlienEntityTypeTags.RAZOR_CLAWS, 2, 2),
+                        PoolEntry.tagPool(AlienEntityTypeTags.BURSTERS, 2, 3)
+                    )
+                ),
+                new Wave(
                     13,
                     DEFAULT_BUFFER_TICKS,
                     List.of(),
@@ -70,25 +82,13 @@ public record RaidWaveProfile(List<Wave> waves) {
                         PoolEntry.tagPool(AlienEntityTypeTags.PROWLERS, 3, Integer.MAX_VALUE),
                         PoolEntry.tagPool(AlienEntityTypeTags.CHRYSALISES, 2, 3),
                         PoolEntry.tagPool(AlienEntityTypeTags.RAZOR_CLAWS, 2, 3),
-                        PoolEntry.tagPool(AlienEntityTypeTags.BURSTERS, 2, 4)
+                        PoolEntry.tagPool(AlienEntityTypeTags.BURSTERS, 2, 3),
+                        PoolEntry.tagPool(AlienEntityTypeTags.RAVAGERS, 1, 2),
+                        PoolEntry.tagPool(AlienEntityTypeTags.CARRIERS, 1, 2)
                     )
                 ),
                 new Wave(
                     21,
-                    DEFAULT_BUFFER_TICKS,
-                    List.of(),
-                    List.of(
-                        PoolEntry.tagPool(AlienEntityTypeTags.WARRIORS, 3, Integer.MAX_VALUE),
-                        PoolEntry.tagPool(AlienEntityTypeTags.PROWLERS, 3, Integer.MAX_VALUE),
-                        PoolEntry.tagPool(AlienEntityTypeTags.CHRYSALISES, 2, 4),
-                        PoolEntry.tagPool(AlienEntityTypeTags.RAZOR_CLAWS, 2, 4),
-                        PoolEntry.tagPool(AlienEntityTypeTags.BURSTERS, 2, 5),
-                        PoolEntry.tagPool(AlienEntityTypeTags.RAVAGERS, 1, 3),
-                        PoolEntry.tagPool(AlienEntityTypeTags.CARRIERS, 1, 3)
-                    )
-                ),
-                new Wave(
-                    34,
                     DEFAULT_BUFFER_TICKS,
                     List.of(
                         new Guarantee(
@@ -99,10 +99,10 @@ public record RaidWaveProfile(List<Wave> waves) {
                     List.of(
                         PoolEntry.tagPool(AlienEntityTypeTags.WARRIORS, 3, Integer.MAX_VALUE),
                         PoolEntry.tagPool(AlienEntityTypeTags.PROWLERS, 3, Integer.MAX_VALUE),
-                        PoolEntry.tagPool(AlienEntityTypeTags.CHRYSALISES, 2, 6),
-                        PoolEntry.tagPool(AlienEntityTypeTags.RAZOR_CLAWS, 2, 6),
-                        PoolEntry.tagPool(AlienEntityTypeTags.BURSTERS, 2, 8),
-                        PoolEntry.tagPool(AlienEntityTypeTags.RAVAGERS, 1, 4),
+                        PoolEntry.tagPool(AlienEntityTypeTags.CHRYSALISES, 2, 4),
+                        PoolEntry.tagPool(AlienEntityTypeTags.RAZOR_CLAWS, 2, 4),
+                        PoolEntry.tagPool(AlienEntityTypeTags.BURSTERS, 2, 5),
+                        PoolEntry.tagPool(AlienEntityTypeTags.RAVAGERS, 1, 2),
                         PoolEntry.tagPool(AlienEntityTypeTags.CARRIERS, 1, 4)
                     )
                 )

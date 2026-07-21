@@ -18,6 +18,9 @@ public class RunnerAnimationRefs {
 
     public static final String WALK_ANIMATION_NAME = "walk";
 
+    /** Crew gait: dig/place locomotion, used while rostered onto a carve or repair job. */
+    public static final String WALK_DIG_ANIMATION_NAME = "walkdig";
+
     public static final String FULL_ATTACK_ARM_ANIMATION_NAME = "fullattackarm";
 
     public static final String FULL_ATTACK_BITE_ANIMATION_NAME = "fullattackbite";

@@ -26,25 +26,25 @@ public class Spitter extends Xenomorph implements GOAPUser<Spitter> {
 
     public static final AttackType CLAW = AttackType.builder("spitter_claw")
         .requiresAnyArm()
-        .defaultDurationInTicks(10)
+        .defaultDurationInTicks(20)
         .sound(AlienSoundEvents.ENTITY_XENOMORPH_ATTACK)
         .build();
 
     public static final AttackType BITE = AttackType.builder("spitter_bite")
         .requiresHead()
-        .defaultDurationInTicks(8)
+        .defaultDurationInTicks(10)
         .sound(AlienSoundEvents.ENTITY_XENOMORPH_ATTACK)
         .build();
 
     public static final AttackType TAIL = AttackType.builder("spitter_tail")
         .requiresTail()
-        .defaultDurationInTicks(12)
+        .defaultDurationInTicks(19)
         .sound(AlienSoundEvents.ENTITY_XENOMORPH_ATTACK)
         .build();
 
     public static final AttackType SPIT = AttackType.builder("spitter_spit")
         .requiresHead()
-        .defaultDurationInTicks(18)
+        .defaultDurationInTicks(20)
         .damageApplicator((xenomorph, target) -> {})
         .build();
 

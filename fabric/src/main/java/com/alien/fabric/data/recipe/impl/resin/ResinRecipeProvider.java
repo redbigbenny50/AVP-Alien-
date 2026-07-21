@@ -102,6 +102,69 @@ public class ResinRecipeProvider {
         // + the 4th set's slab/stairs
     );
 
+    private static final DecorativeResinSet NETHER_DECORATIVE = new DecorativeResinSet(
+        NetherAlienResinBlocks.NETHER_RESIN,
+        NetherAlienResinBlocks.NETHER_RESIN_DOORWAY,
+        NetherAlienResinBlocks.NETHER_RESIN_SPINE,
+        NetherAlienResinBlocks.RIBBED_NETHER_RESIN,
+        NetherAlienResinBlocks.RIBBED_NETHER_RESIN_SLAB,
+        NetherAlienResinBlocks.RIBBED_NETHER_RESIN_STAIRS,
+        NetherAlienResinBlocks.NETHER_RESIN_BONE,
+        NetherAlienResinBlocks.NETHER_RESIN_BONE_SLAB,
+        NetherAlienResinBlocks.NETHER_RESIN_BONE_STAIRS,
+        NetherAlienResinBlocks.NETHER_RESIN_ETCHED,
+        NetherAlienResinBlocks.NETHER_RESIN_ETCHED_SLAB,
+        NetherAlienResinBlocks.NETHER_RESIN_ETCHED_STAIRS,
+        NetherAlienResinBlocks.NETHER_RESIN_STRETCHED,
+        NetherAlienResinBlocks.NETHER_RESIN_STRETCHED_SLAB,
+        NetherAlienResinBlocks.NETHER_RESIN_STRETCHED_STAIRS,
+        NetherAlienResinBlocks.NETHER_RESIN_TENDRIL,
+        NetherAlienResinBlocks.NETHER_RESIN_TENDRIL_SLAB,
+        NetherAlienResinBlocks.NETHER_RESIN_TENDRIL_STAIRS
+    );
+
+    private static final DecorativeResinSet ABERRANT_DECORATIVE = new DecorativeResinSet(
+        AberrantAlienResinBlocks.ABERRANT_RESIN,
+        AberrantAlienResinBlocks.ABERRANT_RESIN_DOORWAY,
+        AberrantAlienResinBlocks.ABERRANT_RESIN_SPINE,
+        AberrantAlienResinBlocks.RIBBED_ABERRANT_RESIN,
+        AberrantAlienResinBlocks.RIBBED_ABERRANT_RESIN_SLAB,
+        AberrantAlienResinBlocks.RIBBED_ABERRANT_RESIN_STAIRS,
+        AberrantAlienResinBlocks.ABERRANT_RESIN_BONE,
+        AberrantAlienResinBlocks.ABERRANT_RESIN_BONE_SLAB,
+        AberrantAlienResinBlocks.ABERRANT_RESIN_BONE_STAIRS,
+        AberrantAlienResinBlocks.ABERRANT_RESIN_ETCHED,
+        AberrantAlienResinBlocks.ABERRANT_RESIN_ETCHED_SLAB,
+        AberrantAlienResinBlocks.ABERRANT_RESIN_ETCHED_STAIRS,
+        AberrantAlienResinBlocks.ABERRANT_RESIN_STRETCHED,
+        AberrantAlienResinBlocks.ABERRANT_RESIN_STRETCHED_SLAB,
+        AberrantAlienResinBlocks.ABERRANT_RESIN_STRETCHED_STAIRS,
+        AberrantAlienResinBlocks.ABERRANT_RESIN_TENDRIL,
+        AberrantAlienResinBlocks.ABERRANT_RESIN_TENDRIL_SLAB,
+        AberrantAlienResinBlocks.ABERRANT_RESIN_TENDRIL_STAIRS
+    );
+
+    private static final DecorativeResinSet IRRADIATED_DECORATIVE = new DecorativeResinSet(
+        IrradiatedAlienResinBlocks.IRRADIATED_RESIN,
+        IrradiatedAlienResinBlocks.IRRADIATED_RESIN_DOORWAY,
+        IrradiatedAlienResinBlocks.IRRADIATED_RESIN_SPINE,
+        IrradiatedAlienResinBlocks.RIBBED_IRRADIATED_RESIN,
+        IrradiatedAlienResinBlocks.RIBBED_IRRADIATED_RESIN_SLAB,
+        IrradiatedAlienResinBlocks.RIBBED_IRRADIATED_RESIN_STAIRS,
+        IrradiatedAlienResinBlocks.IRRADIATED_RESIN_BONE,
+        IrradiatedAlienResinBlocks.IRRADIATED_RESIN_BONE_SLAB,
+        IrradiatedAlienResinBlocks.IRRADIATED_RESIN_BONE_STAIRS,
+        IrradiatedAlienResinBlocks.IRRADIATED_RESIN_ETCHED,
+        IrradiatedAlienResinBlocks.IRRADIATED_RESIN_ETCHED_SLAB,
+        IrradiatedAlienResinBlocks.IRRADIATED_RESIN_ETCHED_STAIRS,
+        IrradiatedAlienResinBlocks.IRRADIATED_RESIN_STRETCHED,
+        IrradiatedAlienResinBlocks.IRRADIATED_RESIN_STRETCHED_SLAB,
+        IrradiatedAlienResinBlocks.IRRADIATED_RESIN_STRETCHED_STAIRS,
+        IrradiatedAlienResinBlocks.IRRADIATED_RESIN_TENDRIL,
+        IrradiatedAlienResinBlocks.IRRADIATED_RESIN_TENDRIL_SLAB,
+        IrradiatedAlienResinBlocks.IRRADIATED_RESIN_TENDRIL_STAIRS
+    );
+
     public static void provide(RecipeBuilder builder) {
         createResinRecipes(builder);
     }
@@ -111,7 +174,10 @@ public class ResinRecipeProvider {
         createResinRecipesFromSet(builder, NETHER_SET);
         createResinRecipesFromSet(builder, ABERRANT_SET);
         createResinRecipesFromSet(builder.withCondition(AVPHumanFabric.IS_LOADED), IRRADIATED_SET);
-        createDecorativeRecipesFromSet(builder, BASE_DECORATIVE); // later: NETHER_DECORATIVE, etc.
+        createDecorativeRecipesFromSet(builder, BASE_DECORATIVE);
+        createDecorativeRecipesFromSet(builder, NETHER_DECORATIVE);
+        createDecorativeRecipesFromSet(builder, ABERRANT_DECORATIVE);
+        createDecorativeRecipesFromSet(builder.withCondition(AVPHumanFabric.IS_LOADED), IRRADIATED_DECORATIVE);
     }
 
     private static void createResinRecipesFromSet(RecipeBuilder builder, ResinSet set) {

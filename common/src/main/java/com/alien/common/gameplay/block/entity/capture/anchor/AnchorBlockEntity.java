@@ -133,7 +133,30 @@ public class AnchorBlockEntity extends BlockEntity {
 
     // ---- tick ----------------------------------------------------------------------------------------------------
 
+    /**
+     * Whether this anchor has announced itself to {@link AnchorIndex} yet. Registration happens on the first server
+     * tick rather than in a load hook: vanilla {@code BlockEntity} has no {@code onLoad} (that is a NeoForge addition,
+     * unavailable in common multiloader code), and ticking is the first point at which the level is reliably present.
+     */
+    private boolean indexed = false;
+
+    /** Covers unload and destruction alike - either way this anchor stops being a target for hive defenders. */
+    @Override
+    public void setRemoved() {
+        if (level != null) {
+            AnchorIndex.remove(level, getBlockPos());
+        }
+        indexed = false;
+        super.setRemoved();
+    }
+
     public void serverTick() {
+        // Announce to the index once. Defenders search that index rather than scanning the world for anchor
+        // blocks, which would be far too costly from a GOAP sensor.
+        if (!indexed && level != null) {
+            AnchorIndex.add(level, getBlockPos());
+            indexed = true;
+        }
         if (boundMobId == null || !(level instanceof ServerLevel server)) {
             return;
         }

@@ -137,6 +137,12 @@ public class Queen extends Xenomorph implements GOAPUser<Queen>, EggLayer {
     public final DataAccessor<Boolean> incapacitated;
 
     /**
+     * Synced, transient: true while she is carving her founding chamber (construction economy step 6). Set by the carve
+     * tick server-side; the client QueenAnimator drives the stand-dig animation triptych off its edges.
+     */
+    public final DataAccessor<Boolean> standDiggingSynced;
+
+    /**
      * Transient: true while clip-digging to her location anchor (Stage 2b). Not saved — a reload never stays noclip.
      */
     private boolean digging;
@@ -169,6 +175,7 @@ public class Queen extends Xenomorph implements GOAPUser<Queen>, EggLayer {
         this.hasInhibitor = new DataAccessor<>(this, AlienDataSyncKeys.QUEEN_HAS_INHIBITOR.get());
         this.tracked = new DataAccessor<>(this, AlienDataSyncKeys.QUEEN_IS_TRACKED.get());
         this.incapacitated = new DataAccessor<>(this, AlienDataSyncKeys.QUEEN_IS_INCAPACITATED.get());
+        this.standDiggingSynced = new DataAccessor<>(this, AlienDataSyncKeys.QUEEN_IS_STAND_DIGGING.get());
     }
 
     @Override

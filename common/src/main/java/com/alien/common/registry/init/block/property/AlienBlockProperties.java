@@ -19,7 +19,10 @@ public class AlienBlockProperties {
     private static final Supplier<BlockPropertyBuilder> CHITIN_PROPERTIES_SUPPLIER = () -> BlockPropertyBuilder.of()
         .mapColor(MapColor.COLOR_BLACK)
         .requiresCorrectToolForDrops()
-        .strength(5, 6);
+        .strength(5, 6)
+        // Hive material, so only the hive nests on it - same rule the resin blocks carry. Without this, chitin was
+        // an ordinary spawn surface and vanilla mobs bred happily on any chitin floor inside a hive.
+        .isValidSpawn(($1, $2, $3, entityType) -> entityType.is(AlienEntityTypeTags.ALIENS));
 
     private static final Supplier<BlockPropertyBuilder> RESIN_PROPERTIES_SUPPLIER = () -> BlockPropertyBuilder.of()
         .mapColor(MapColor.COLOR_BLACK)
@@ -59,21 +62,28 @@ public class AlienBlockProperties {
         .noOcclusion()
         .pushReaction(PushReaction.DESTROY);
 
+    public static final BlockPropertyBuilder IRRADIATED_CHITIN = CHITIN_PROPERTIES_SUPPLIER.get()
+        .mapColor(MapColor.COLOR_BLACK)
+        .lightLevel(state -> 6);
+
     public static final BlockPropertyBuilder IRRADIATED_RESIN = IRRADIATED_RESIN_BLOCK_PROPERTIES_SUPPLIER.get()
-        .mapColor(MapColor.COLOR_BLACK);
+        .mapColor(MapColor.COLOR_BLACK)
+        .lightLevel(state -> 6);
 
     public static final BlockPropertyBuilder IRRADIATED_RESIN_VEIN = RESIN_PROPERTIES_SUPPLIER.get()
         .mapColor(MapColor.COLOR_BLACK)
         .noCollision()
         .noOcclusion()
         .pushReaction(PushReaction.DESTROY)
-        .replaceable();
+        .replaceable()
+        .lightLevel(state -> 6);
 
     public static final BlockPropertyBuilder IRRADIATED_RESIN_WEB = IRRADIATED_RESIN_BLOCK_PROPERTIES_SUPPLIER.get()
         .mapColor(MapColor.COLOR_BLACK)
         .noCollision()
         .noOcclusion()
-        .pushReaction(PushReaction.DESTROY);
+        .pushReaction(PushReaction.DESTROY)
+        .lightLevel(state -> 6);
 
     public static final BlockPropertyBuilder NETHER_CHITIN = CHITIN_PROPERTIES_SUPPLIER.get()
         .mapColor(MapColor.COLOR_RED);

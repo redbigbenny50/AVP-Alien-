@@ -102,6 +102,12 @@ public class OvipositorManager implements NBTSerializable {
         // create. Prep runs once; afterwards the gates pass and the normal flow below creates the ovipositor.
         prepareFoundingChamberIfNeeded();
 
+        // Belt-and-braces on the same §7b rule: even if every creation gate passes (resin underfoot, room clear),
+        // the eggsack does not form while her founding core is still being excavated.
+        if (foundingCoreStillExcavating()) {
+            return;
+        }
+
         if (!canCreateOvipositor()) {
             return;
         }
@@ -125,11 +131,20 @@ public class OvipositorManager implements NBTSerializable {
         if (
             location == null
                 || location.founderId() == null
+                // Hers, not merely someone's - see hasSuitableHiveLocation.
+                || !location.founderId().equals(queen.getUUID())
                 || location.reproductiveEstablished()
                 || !isNearHiveCenter(location)
         ) {
             return;
         }
+        // Construction economy step 6 (design §7b): "the eggsack cannot form until the core is carved." This gate
+        // sits ABOVE the standing-on-resin check on purpose: any resin that ends up under her mid-dig (spread creep,
+        // pre-existing hive ground) must not read as "already prepared" while she is still excavating.
+        if (foundingCoreStillExcavating()) {
+            return;
+        }
+
         // Already prepared? (resin already under her - don't re-carve/re-stamp every tick)
         if (isStandingOnVariantResin()) {
             return;
@@ -142,7 +157,21 @@ public class OvipositorManager implements NBTSerializable {
             return;
         }
 
-        carveFoundingChamber();
+        // NO HOLLOWING HERE. This used to carve the whole slab of her centre chunk out to air before stamping the
+        // floor - a leftover from when the queen cleared her own chunk to make room for the eggsack. The carve
+        // system now builds the core properly, so by the time she is ready to grow the sack the chamber and its
+        // dome already exist; re-hollowing simply deleted a chunk-sized hole through the roof she had just built.
+        // Only the floor pad is stamped now.
+        //
+        // The floor stamp still REPLACES the floor layer, so spawners are harvested first - the founding core does
+        // not go through HiveRouter.place(), which is where every routed piece does this.
+        if (queen.level() instanceof net.minecraft.server.level.ServerLevel serverLevel) {
+            com.alien.common.gameplay.hive.structure.HarvestSpawnerCapture.captureBeforeStamp(
+                serverLevel,
+                location,
+                java.util.List.of(new ChunkPos(location.centerPos()))
+            );
+        }
         stampFoundingResinFloor();
 
         // Place the queen at the chunk center on top of the fresh bone floor, so she's standing on resin at the middle
@@ -260,36 +289,23 @@ public class OvipositorManager implements NBTSerializable {
      * {@link #stampFoundingResinFloor()} to surface with resin, so she doesn't fall through. Instant block-deletion for
      * now; animated excavation comes with the structure system (same carve primitive). See carve-contract design.
      */
-    private void carveFoundingChamber() {
+    /**
+     * The §7b founding order gate: TRUE while this queen's founding-core carve site is still excavating (or is a
+     * loaded-but-unhydrated site whose state is unknown for another tick). Everything eggsack-shaped waits on this.
+     */
+    private boolean foundingCoreStillExcavating() {
+        if (!com.alien.common.gameplay.hive.structure.HiveRouter.CARVE_ENABLED) {
+            return false;
+        }
         var location = currentLocation();
-        if (location == null) {
-            return;
+        if (location == null || location.founderId() == null || location.reproductiveEstablished()) {
+            return false;
         }
-        var level = queen.level();
-        var center = location.centerPos();
-        var centerChunk = new ChunkPos(center);
-        var minX = centerChunk.getMinBlockX();
-        var minZ = centerChunk.getMinBlockZ();
-        var maxX = centerChunk.getMaxBlockX();
-        var maxZ = centerChunk.getMaxBlockZ();
-
-        // Floor is the bottom of the slab band; clear from floor+1 up to the ceiling, leaving the floor layer intact.
-        var floorY = location.hiveFloorY();
-        var ceilingY = location.hiveCeilingY();
-        var air = net.minecraft.world.level.block.Blocks.AIR.defaultBlockState();
-
-        var pos = new BlockPos.MutableBlockPos();
-        for (var x = minX; x <= maxX; x++) {
-            for (var z = minZ; z <= maxZ; z++) {
-                for (var y = floorY + 1; y < ceilingY; y++) {
-                    pos.set(x, y, z);
-                    if (!level.getBlockState(pos).isAir()) {
-                        // setBlock with flag 3 (update + notify) so fluids drain and lighting updates correctly.
-                        level.setBlock(pos, air, 3);
-                    }
-                }
-            }
+        var carveSite = location.activeCarveSite();
+        if (carveSite != null) {
+            return carveSite.isFoundingCore() && !carveSite.isFullyExcavated();
         }
+        return location.hasActiveCarveSite(); // loaded from save, not yet hydrated - wait for it to resolve
     }
 
     /**
@@ -307,10 +323,10 @@ public class OvipositorManager implements NBTSerializable {
         // spawnable resin. Used for the founding floor as a distinct, bone-like pad.
         var floorState = com.alien.common.registry.init.block.AlienResinBlocks.RESIN_BONE.get().defaultBlockState();
 
-        // Anchor the disc to the CENTER CHUNK's middle at the slab floor Y (the row the carve left as the base), NOT
-        // under the queen - so the floor is deterministic and aligned with the carved chamber regardless of exactly
-        // where she's standing. FILL every cell in the circle (including air/gaps from drained fluids or caves) so the
-        // chamber has a complete, hole-free floor for the ovipositor support points.
+        // Anchor the disc to the CENTER CHUNK's middle at the slab floor Y, NOT under the queen - so the floor is
+        // deterministic and aligned with the built chamber regardless of exactly where she's standing. FILL every
+        // cell in the circle (including air/gaps from caves) so the chamber has a complete, hole-free floor for the
+        // ovipositor support points.
         var centerChunk = new ChunkPos(location.centerPos());
         var centerX = centerChunk.getMiddleBlockX();
         var centerZ = centerChunk.getMiddleBlockZ();
@@ -408,6 +424,14 @@ public class OvipositorManager implements NBTSerializable {
     private boolean hasSuitableHiveLocation() {
         var location = currentLocation();
         if (location == null || !location.isAlive()) {
+            return false;
+        }
+        // THIS location must be hers. Every gate here only asked whether the location had A founder, never whether
+        // it was this queen - so a second queen who wandered into an established hive, stood on its resin near the
+        // centre, and passed the ordinary checks simply grew her own eggsack in someone else's core. The settlement
+        // rule already pushes a surplus queen off to found her own hive nearby; without this she never had to go.
+        var founderId = location.founderId();
+        if (founderId != null && !founderId.equals(queen.getUUID())) {
             return false;
         }
         if (!isNearHiveCenter(location)) {

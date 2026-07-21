@@ -85,9 +85,24 @@ public class DroneAnimator extends AzEntityAnimator<Drone> {
 
         var isMoving = drone.isMovingHorizontally.get() && drone.onGround();
         var isCrawling = drone.getCrawlingManager().isCrawling();
+        // Carve-crew gait (construction economy step 5): a rostered digger (1) or placer (2) plays walk dig -
+        // diggers at the default 70%, placers at 50% so the two read differently side by side.
+        //
+        // While rostered this is the ONLY passive animation the drone plays. It deliberately outranks swim, crawl,
+        // carry, run and idle: the carve gait is a long cycle (2.5s at 0.7 speed = 3.57s; placers 5s) and every
+        // switch to another animation restarts the track into its 5-tick transition. Carve work is start-stop by
+        // nature - step, dig, turn, step - and isMovingQuickly is a raw per-tick position-delta test with no
+        // hysteresis, so it chatters many times a second. Letting any of those states interleave meant the gait
+        // never advanced past its opening frames and the legs sat frozen in the t=0 stride pose.
+        //
+        // Real interruptions still win: lunge, attacks and the cocoon state all return above this point, and the
+        // roster clears carveDigMode the moment the drone leaves the crew.
+        var carveDigMode = drone.carveDigMode.get();
         Runnable animFunction;
 
-        if (drone.isUnderWater()) {
+        if (carveDigMode > 0) {
+            animFunction = carveDigMode == 2 ? () -> dispatcher.walkDig(0.5F) : dispatcher::walkDig;
+        } else if (drone.isUnderWater()) {
             // TODO: idle swim
             animFunction = dispatcher::swim;
         } else if (isMoving) {

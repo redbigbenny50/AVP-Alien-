@@ -295,7 +295,9 @@ public final class HiveDebugCommands {
                     .then(
                         Commands.argument(LOCATION_ID_ARG, ResourceLocationArgument.id())
                             .then(
-                                Commands.argument(COUNT_ARG, IntegerArgumentType.integer(1))
+                                // Negative amounts allowed on purpose: draining biomass is how testers trigger
+                                // construction starvation on demand. The executor clamps the balance at zero.
+                                Commands.argument(COUNT_ARG, IntegerArgumentType.integer())
                                     .executes(HiveDebugCommands::addBiomass)
                             )
                     )
@@ -1341,7 +1343,7 @@ public final class HiveDebugCommands {
             ctx.getSource().sendFailure(Component.literal("No hive location with id " + locationId));
             return 0;
         }
-        location.setBiomass(location.biomass() + amount);
+        location.setBiomass(Math.max(0, location.biomass() + amount));
         ctx.getSource()
             .sendSuccess(
                 () -> Component.literal("Biomass for " + locationId + " is now " + location.biomass() + "."),
@@ -2130,7 +2132,7 @@ public final class HiveDebugCommands {
                     ok
                         ? "Raid dispatched against " + player.getGameProfile().getName()
                             + " from largest eligible source — see /list_convoys"
-                        : "Raid declined (no eligible source — needs empress + a location with " +
+                        : "Raid declined (no eligible source — needs a HARBINGER in a location with " +
                             HiveLocationRegistry.INSTANCE.config().raidMinLocationSizeChunks() + "+ chunks, " +
                             "and reserves that satisfy the " + waveProfile.totalSize() + "-member " +
                             lineage.variant().name() + " raid wave profile)"

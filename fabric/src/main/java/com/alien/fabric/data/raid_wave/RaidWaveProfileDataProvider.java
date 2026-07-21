@@ -101,22 +101,22 @@ public class RaidWaveProfileDataProvider implements DataProvider {
             List.of(
                 // Wave 1 - the probe. Bursters lead from the very first wave.
                 wave(
-                    5,
+                    3,
                     List.of(guaranteed(2, List.of(pool(entities.burster())))),
                     List.of(
-                        pool(entities.warrior(), 3, 2),
+                        pool(entities.warrior(), 3, 1),
                         pool(entities.prowler(), 2, 1)
                     )
                 ),
                 // Wave 2 - the first specialists arrive.
                 wave(
-                    8,
+                    5,
                     List.of(
                         guaranteed(1, List.of(pool(entities.chrysalis()))),
                         guaranteed(1, List.of(pool(entities.razorClaw())))
                     ),
                     List.of(
-                        pool(entities.warrior(), 3, 2),
+                        pool(entities.warrior(), 3, 1),
                         pool(entities.prowler(), 3, 1),
                         pool(entities.spitter(), 2, 1),
                         pool(entities.burster(), 3, 2)
@@ -124,44 +124,44 @@ public class RaidWaveProfileDataProvider implements DataProvider {
                 ),
                 // Wave 3 - the scourge takes over the bulk of the fighting.
                 wave(
-                    13,
+                    8,
                     List.of(),
                     List.of(
-                        pool(entities.warrior(), 3, 3),
-                        pool(entities.prowler(), 3, 2),
-                        pool(entities.spitter(), 2, 2),
-                        pool(entities.burster(), 3, 3),
-                        pool(entities.chrysalis(), 2, 2),
+                        pool(entities.warrior(), 3, 2),
+                        pool(entities.prowler(), 3, 1),
+                        pool(entities.spitter(), 2, 1),
+                        pool(entities.burster(), 3, 2),
+                        pool(entities.chrysalis(), 2, 1),
                         pool(entities.razorClaw(), 2, 1)
                     )
                 ),
                 // Wave 4 - the heavies.
                 wave(
-                    21,
+                    13,
                     List.of(),
                     List.of(
-                        pool(entities.warrior(), 3, 4),
-                        pool(entities.prowler(), 3, 3),
-                        pool(entities.spitter(), 2, 2),
-                        pool(entities.burster(), 3, 4),
-                        pool(entities.chrysalis(), 2, 3),
-                        pool(entities.razorClaw(), 2, 3),
+                        pool(entities.warrior(), 3, 2),
+                        pool(entities.prowler(), 3, 2),
+                        pool(entities.spitter(), 2, 1),
+                        pool(entities.burster(), 3, 3),
+                        pool(entities.chrysalis(), 2, 2),
+                        pool(entities.razorClaw(), 2, 2),
                         pool(entities.ravager(), 1, 1),
                         pool(entities.carrier(), 1, 1)
                     )
                 ),
                 // Wave 5 - everything, led by the harbinger itself.
                 wave(
-                    34,
+                    21,
                     List.of(guaranteed(1, List.of(pool(entities.harbinger())))),
                     List.of(
-                        pool(entities.warrior(), 3, 5),
-                        pool(entities.prowler(), 3, 5),
-                        pool(entities.spitter(), 2, 4),
-                        pool(entities.burster(), 3, 6),
-                        pool(entities.chrysalis(), 2, 5),
-                        pool(entities.razorClaw(), 2, 4),
-                        pool(entities.ravager(), 1, 2),
+                        pool(entities.warrior(), 3, 3),
+                        pool(entities.prowler(), 3, 3),
+                        pool(entities.spitter(), 2, 2),
+                        pool(entities.burster(), 3, 4),
+                        pool(entities.chrysalis(), 2, 3),
+                        pool(entities.razorClaw(), 2, 2),
+                        pool(entities.ravager(), 1, 1),
                         pool(entities.carrier(), 1, 2)
                     )
                 )

@@ -57,13 +57,13 @@ public class Burster extends Xenomorph implements EggCarrier, GOAPUser<Burster>,
 
     public static final AttackType BITE = AttackType.builder("burster_bite")
         .requiresHead()
-        .defaultDurationInTicks(8)
+        .defaultDurationInTicks(10)
         .sound(AlienSoundEvents.ENTITY_XENOMORPH_ATTACK)
         .build();
 
     public static final AttackType TAIL = AttackType.builder("burster_tail")
         .requiresTail()
-        .defaultDurationInTicks(12)
+        .defaultDurationInTicks(17)
         .sound(AlienSoundEvents.ENTITY_XENOMORPH_ATTACK)
         .build();
 

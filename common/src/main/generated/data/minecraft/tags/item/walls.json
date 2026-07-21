@@ -15,6 +15,9 @@
     "avp_alien:polished_aberrant_chitin_wall",
     "avp_alien:aberrant_resin_brick_wall",
     "avp_alien:smooth_aberrant_resin_wall",
+    "avp_alien:irradiated_chitin_block_wall",
+    "avp_alien:irradiated_chitin_brick_wall",
+    "avp_alien:polished_irradiated_chitin_wall",
     "avp_alien:irradiated_resin_brick_wall",
     "avp_alien:smooth_irradiated_resin_wall"
   ]

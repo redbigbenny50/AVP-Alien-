@@ -20,6 +20,8 @@ public class AlienBlockTags {
 
     public static final TagKey<Block> IRRADIATED_ACID_IMMUNE = create("irradiated_acid_immune");
 
+    public static final TagKey<Block> IRRADIATED_CHITIN = create("irradiated_chitin");
+
     public static final TagKey<Block> IRRADIATED_RESIN = create("irradiated_resin");
 
     public static final TagKey<Block> IRRADIATED_RESIN_REPLACEABLE = create("irradiated_resin_replaceable");

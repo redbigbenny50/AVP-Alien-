@@ -30,26 +30,9 @@ public class PredalienAnimator extends AzEntityAnimator<Predalien> {
 
     @Override
     public void registerTracks(AzAnimationTrackContainer<Predalien> animationTrackContainer) {
+        // Single track. Rebuilt from per-body-part clips onto whole-body ones, so the seven-track limb rig is gone.
         animationTrackContainer.add(
             AzAnimationTrack.builder(this, AzAlienAnimationUtil.BODY)
-                .setTransitionLength(5)
-                .build(),
-            AzAnimationTrack.builder(this, AzAlienAnimationUtil.HEAD)
-                .setTransitionLength(5)
-                .build(),
-            AzAnimationTrack.builder(this, AzAlienAnimationUtil.LEFT_ARM)
-                .setTransitionLength(5)
-                .build(),
-            AzAnimationTrack.builder(this, AzAlienAnimationUtil.LEFT_LEG)
-                .setTransitionLength(5)
-                .build(),
-            AzAnimationTrack.builder(this, AzAlienAnimationUtil.RIGHT_ARM)
-                .setTransitionLength(5)
-                .build(),
-            AzAnimationTrack.builder(this, AzAlienAnimationUtil.RIGHT_LEG)
-                .setTransitionLength(5)
-                .build(),
-            AzAnimationTrack.builder(this, AzAlienAnimationUtil.TAIL)
                 .setTransitionLength(5)
                 .build()
         );
@@ -75,6 +58,12 @@ public class PredalienAnimator extends AzEntityAnimator<Predalien> {
 
     private void runPassiveAnimations(Predalien predalien) {
         var dispatcher = predalien.getAnimationDispatcher();
+
+        // Pounce owns the body for its duration, exactly as it does on the runner and prowler.
+        if (predalien.isLunging.get()) {
+            dispatcher.lunge();
+            return;
+        }
 
         var attackType = predalien.attackType.get();
         var attackId = predalien.attackId.get();
@@ -122,11 +111,11 @@ public class PredalienAnimator extends AzEntityAnimator<Predalien> {
         String animationName;
 
         if (attackType == Predalien.BITE) {
-            animationName = PredalienAnimationRefs.ATTACKBITE_HEAD_ANIMATION_NAME;
+            animationName = PredalienAnimationRefs.FULL_ATTACK_BITE_ANIMATION_NAME;
         } else if (attackType == Predalien.CLAW) {
-            animationName = PredalienAnimationRefs.ATTACKCLAW_RIGHTARM_ANIMATION_NAME;
+            animationName = PredalienAnimationRefs.FULL_ATTACK_CLAW_ANIMATION_NAME;
         } else if (attackType == Predalien.TAIL) {
-            animationName = PredalienAnimationRefs.ATTACKTAIL_TAIL_ANIMATION_NAME;
+            animationName = PredalienAnimationRefs.FULL_ATTACK_TAIL_ANIMATION_NAME;
         } else {
             animationName = null;
         }

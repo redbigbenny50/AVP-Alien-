@@ -36,19 +36,19 @@ public class Chrysalis extends Xenomorph implements GOAPUser<Chrysalis> {
 
     public static final AttackType CLAW = AttackType.builder("chrysalis_claw")
         .requiresAnyArm()
-        .defaultDurationInTicks(10)
+        .defaultDurationInTicks(20)
         .sound(AlienSoundEvents.ENTITY_XENOMORPH_ATTACK)
         .build();
 
     public static final AttackType BITE = AttackType.builder("chrysalis_bite")
         .requiresHead()
-        .defaultDurationInTicks(8)
+        .defaultDurationInTicks(10)
         .sound(AlienSoundEvents.ENTITY_XENOMORPH_ATTACK)
         .build();
 
     public static final AttackType TAIL = AttackType.builder("chrysalis_tail")
         .requiresTail()
-        .defaultDurationInTicks(12)
+        .defaultDurationInTicks(19)
         .sound(AlienSoundEvents.ENTITY_XENOMORPH_ATTACK)
         .build();
 

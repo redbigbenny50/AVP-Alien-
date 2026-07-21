@@ -150,6 +150,22 @@ public class XenomorphGOAP {
         return graphBuilder;
     }
 
+    /**
+     * Anchor demolition: a royal defender tears capture anchors out of its own hive claim.
+     * <p>
+     * Deliberately NOT part of the base graph. Only praetorians and crushers get it - they are the royal guard, and the
+     * queen must never have it: she is what the anchors are for, and a queen who could free herself would make capture
+     * pointless.
+     */
+    public static <T extends Xenomorph> Graph.Builder<T> addAnchorBreakPackage(Graph.Builder<T> graphBuilder) {
+        graphBuilder.addGoal(com.alien.common.gameplay.entity.living.alien.xenomorph.ai.anchor_break.AnchorBreakActions.BREAK_ANCHOR_GOAL);
+        graphBuilder.addAction(com.alien.common.gameplay.entity.living.alien.xenomorph.ai.anchor_break.AnchorBreakActions.BREAK_ANCHOR);
+        graphBuilder.addSensor(
+            com.alien.common.gameplay.entity.living.alien.xenomorph.ai.anchor_break.AnchorBreakSensors.HAS_TARGET_ANCHOR
+        );
+        return graphBuilder;
+    }
+
     /** Host hunt: walk to a host, grab it, carry it to a vent, hand it into the host chamber. */
     public static <T extends Xenomorph> Graph.Builder<T> addHostCapturePackage(Graph.Builder<T> graphBuilder) {
         graphBuilder.addGoal(com.alien.common.gameplay.entity.living.alien.xenomorph.ai.host.HostActions.CAPTURE_HOST_GOAL);

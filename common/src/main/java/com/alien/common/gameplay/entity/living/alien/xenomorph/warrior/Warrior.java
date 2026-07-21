@@ -24,19 +24,19 @@ public class Warrior extends Xenomorph implements GOAPUser<Warrior> {
 
     public static final AttackType CLAW = AttackType.builder("warrior_claw")
         .requiresAnyArm()
-        .defaultDurationInTicks(10)
+        .defaultDurationInTicks(20)
         .sound(AlienSoundEvents.ENTITY_XENOMORPH_ATTACK)
         .build();
 
     public static final AttackType BITE = AttackType.builder("warrior_bite")
         .requiresHead()
-        .defaultDurationInTicks(8)
+        .defaultDurationInTicks(10)
         .sound(AlienSoundEvents.ENTITY_XENOMORPH_ATTACK)
         .build();
 
     public static final AttackType TAIL = AttackType.builder("warrior_tail")
         .requiresTail()
-        .defaultDurationInTicks(12)
+        .defaultDurationInTicks(19)
         .sound(AlienSoundEvents.ENTITY_XENOMORPH_ATTACK)
         .build();
 

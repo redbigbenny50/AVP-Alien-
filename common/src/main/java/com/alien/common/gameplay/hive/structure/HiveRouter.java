@@ -177,6 +177,18 @@ public final class HiveRouter {
         // (straight/corner -> tee, tee -> cross) so they join instead of dead-ending - circuit-board style.
         mergeIntoHallways(level, registry, location, center);
 
+        // ROYAL PRIORITY (router royal support): an open royal doorway is attempted FIRST, every single cycle,
+        // before special rooms, goals, and corridors - the queen's ring outranks all other growth. The matcher's
+        // door-type filter makes the pairing safe in both directions for free: a royal socket only ever yields
+        // royal-hallway matches, and ordinary sockets can never yield royal pieces. SOFT priority by design: a
+        // royal door with no fit THIS cycle (terrain, another hive) falls through so ordinary growth continues,
+        // and because the socket stays on the frontier it is re-attempted at the top of every future cycle until
+        // it fits - a standing guarantee, unlike the old stamp-once-at-founding which skipped a blocked hall
+        // forever. Hard-stalling instead would let one permanently blocked door freeze the whole hive (never-wedge).
+        if (placeRoyalHallways(level, registry, location, random, currentTick)) {
+            return true;
+        }
+
         // Special doors (scourge / jelly) attach their chamber DIRECTLY, the moment the door exists - these are
         // mandatory companion rooms (the raid chamber's scourge room, a royal hallway's jelly room), not routed goals.
         if (attachSpecialRooms(level, registry, location, center, currentTick)) {
@@ -669,6 +681,41 @@ public final class HiveRouter {
      * legacy instant stamp. Both share the pre-steps (spawner capture, vermin eviction) and the claims post-step; jelly
      * vats grow here only on the legacy path (the carve path grows them at completion, when the chamber exists).
      */
+    /**
+     * Attempts one open royal doorway: standard structure-occupancy free test, random fitting royal variant, and the
+     * ordinary {@link #place} path - so under {@code CARVE_ENABLED} the hall is COMMISSIONED as a normal drone-staffed
+     * carve site (dug, paid, resined) rather than stamped. Returns true if a hall was placed/commissioned this cycle.
+     */
+    private static boolean placeRoyalHallways(
+        ServerLevel level,
+        HivePieceRegistry registry,
+        HiveLocation location,
+        net.minecraft.util.RandomSource random,
+        long currentTick
+    ) {
+        var built = location.structurePieceByChunk().keySet();
+        Predicate<ChunkPos> chunkIsFree = c -> !built.contains(c);
+        for (FrontierSocket socket : new ArrayList<>(location.frontierSockets())) {
+            if (!isRoyalDoor(socket.doorType())) {
+                continue;
+            }
+            var matches = HivePieceMatcher.matchesFromRegistry(socket, registry, chunkIsFree);
+            if (matches.isEmpty()) {
+                continue; // soft priority: no fit this cycle - ordinary growth proceeds, this door retries next cycle
+            }
+            var match = matches.get(random.nextInt(matches.size()));
+            if (place(level, location, match, socket, currentTick)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /** A royal door: the grand connections off the queen chamber, buildable only with royal-hallway pieces. */
+    private static boolean isRoyalDoor(String doorType) {
+        return doorType != null && doorType.contains("royal");
+    }
+
     private static boolean place(ServerLevel level, HiveLocation location, PieceMatch match, FrontierSocket socket, long tick) {
         // Capture terrain mob spawners BEFORE the stamp destroys them - they become pending harvest-chamber stock.
         HarvestSpawnerCapture.captureBeforeStamp(level, location, match.occupiedChunks());

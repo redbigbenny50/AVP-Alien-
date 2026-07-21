@@ -1,6 +1,7 @@
 package com.alien.mixin;
 
 import com.alien.common.gameplay.entity.living.alien.parasite.Parasite;
+import com.alien.common.gameplay.hive.structure.HostParking;
 import com.alien.common.model.alien.Host;
 import com.alien.common.registry.InfectionRegistry;
 import com.alien.common.util.AlienEmbryoUtil;
@@ -9,6 +10,8 @@ import com.just.core.functional.option.Option;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.world.damagesource.DamageSource;
+import net.minecraft.world.damagesource.DamageTypes;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.LivingEntity;
@@ -20,6 +23,7 @@ import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
+import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 @Mixin(LivingEntity.class)
 public abstract class MixinLivingEntity_Host extends Entity implements Host {
@@ -50,6 +54,31 @@ public abstract class MixinLivingEntity_Host extends Entity implements Host {
 
     public MixinLivingEntity_Host(EntityType<?> entityType, Level level) {
         super(entityType, level);
+    }
+
+    /**
+     * A webbed host does not suffocate.
+     * <p>
+     * Hosts are stored embedded in resin webbing, and anything taller or wider than one block ends up with part of
+     * itself inside a solid - which vanilla reads as being buried and applies IN_WALL damage for. The hive was quietly
+     * killing its own larder: small mobs kept fine, anything bigger died in the chamber. Cargo in storage is not buried
+     * alive, so suffocation is refused for as long as it is parked.
+     * <p>
+     * Scoped to {@link HostParking#isParked} (noAi AND carrying the hive's embed stamp), so it cannot be abused to make
+     * an ordinary mob suffocation-proof - a host that is cut loose starts suffocating again like anything else.
+     */
+    @Inject(at = @At("HEAD"), method = "hurt", cancellable = true)
+    public void avp_alien$parkedHostsDoNotSuffocate(
+        DamageSource source,
+        float amount,
+        CallbackInfoReturnable<Boolean> callbackInfo
+    ) {
+        if (!source.is(DamageTypes.IN_WALL)) {
+            return;
+        }
+        if (HostParking.isParked(LivingEntity.class.cast(this))) {
+            callbackInfo.setReturnValue(false); // no damage dealt
+        }
     }
 
     @Inject(at = @At("HEAD"), method = "tick")

@@ -13,9 +13,12 @@ import net.minecraft.world.level.block.Rotation;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.UUID;
 
 /**
  * An in-progress hive build - one structure piece being physically dug out and resined, instead of instant-stamped.
@@ -127,7 +130,7 @@ public final class CarveSite {
 
     private final PieceMatch match;
 
-    private final FrontierSocket connectedTo;
+    private final @Nullable FrontierSocket connectedTo;
 
     /** The slab band this piece occupies vertically: [floorY, ceilingY). Captured at commission from the hive. */
     private final int floorY;
@@ -176,19 +179,49 @@ public final class CarveSite {
     boolean starved;
 
     /**
+     * The live crew (step 5): worker UUID -> role, insertion-ordered. Transient like the timers - workers are
+     * re-sourced after a reload rather than persisted, per design §8.2 ("a build is never lost, only slowed"). Managed
+     * exclusively by {@link CarveWorkers}.
+     */
+    final Map<UUID, CarveWorkers.Role> workers = new LinkedHashMap<>();
+
+    /**
+     * The subset of {@link #workers} that was materialized from reserves (vs borrowed loaded drones). These fold back
+     * into reserves at completion, and are exempt from the working-adult member cap while assigned (design §8.5).
+     */
+    final Set<UUID> materializedWorkers = new HashSet<>();
+
+    /**
+     * Founding-core animation state (step 6): whether the queen's stand-dig sequence has started (digStandStart fired)
+     * and whether it has been stopped (digStandStop fired after full excavation). Transient - a reload mid-dig just
+     * restarts the loop.
+     */
+    boolean queenDigStarted;
+
+    boolean queenDigStopped;
+
+    /** Game time of the next crew top-up / steering pass, and of the next unstaffed warning. 0 = immediately. */
+    long nextCrewTick;
+
+    long nextUnstaffedLogTick;
+
+    /**
      * Build a site for a piece the router has chosen. Enumerates the footprint into per-column progress trackers, all
      * starting un-excavated and un-filled. No world reads, no block changes - pure setup.
      *
      * @param match       the piece + rotation + origin, straight from the router
-     * @param connectedTo the frontier socket this piece attaches to (needed at completion, not before)
+     * @param connectedTo the frontier socket this piece attaches to (needed at completion, not before). NULL marks the
+     *                    FOUNDING CORE (step 6): the queen chamber has no upstream doorway - the queen digs it around
+     *                    herself, ordered outward from its center, and completion runs the founding tail (royal ring +
+     *                    socket registration) instead of {@code finalizePlacement}.
      * @param location    the hive (only to read its floor/ceiling band - not mutated)
      */
-    public CarveSite(PieceMatch match, FrontierSocket connectedTo, HiveLocation location) {
+    public CarveSite(PieceMatch match, @Nullable FrontierSocket connectedTo, HiveLocation location) {
         this(match, connectedTo, location.hiveFloorY(), location.hiveCeilingY());
     }
 
     /** Shared by the commission path and the NBT loader: same setup, the band passed explicitly. */
-    private CarveSite(PieceMatch match, FrontierSocket connectedTo, int floorY, int ceilingY) {
+    private CarveSite(PieceMatch match, @Nullable FrontierSocket connectedTo, int floorY, int ceilingY) {
         this.match = match;
         this.connectedTo = connectedTo;
         this.floorY = floorY;
@@ -222,7 +255,9 @@ public final class CarveSite {
         tag.putString(NBT_ROTATION, match.rotation().name());
         tag.putInt(NBT_ORIGIN_X, match.originChunk().x);
         tag.putInt(NBT_ORIGIN_Z, match.originChunk().z);
-        tag.put(NBT_SOCKET, connectedTo.toTag());
+        if (connectedTo != null) {
+            tag.put(NBT_SOCKET, connectedTo.toTag());
+        }
         tag.putInt(NBT_FLOOR_Y, floorY);
         tag.putInt(NBT_CEILING_Y, ceilingY);
         if (resinBiomassOwed > 0) {
@@ -263,7 +298,7 @@ public final class CarveSite {
             return null;
         }
         var origin = new ChunkPos(tag.getInt(NBT_ORIGIN_X), tag.getInt(NBT_ORIGIN_Z));
-        var socket = FrontierSocket.fromTag(tag.getCompound(NBT_SOCKET));
+        var socket = tag.contains(NBT_SOCKET) ? FrontierSocket.fromTag(tag.getCompound(NBT_SOCKET)) : null;
         int floor = tag.contains(NBT_FLOOR_Y) ? tag.getInt(NBT_FLOOR_Y) : location.hiveFloorY();
         int ceiling = tag.contains(NBT_CEILING_Y) ? tag.getInt(NBT_CEILING_Y) : location.hiveCeilingY();
         var site = new CarveSite(new PieceMatch(piece, rotation, origin), socket, floor, ceiling);
@@ -295,8 +330,17 @@ public final class CarveSite {
         return match;
     }
 
-    public FrontierSocket connectedTo() {
+    public @Nullable FrontierSocket connectedTo() {
         return connectedTo;
+    }
+
+    /**
+     * The FOUNDING CORE (step 6, design §7b): the queen chamber, dug by the queen herself. No upstream socket, dig
+     * ordered outward from the chamber center, fixed queen pace, eggsack gated on {@link #isFullyExcavated()}, and
+     * completion runs the founding tail (royal ring, socket registration) instead of {@code finalizePlacement}.
+     */
+    public boolean isFoundingCore() {
+        return connectedTo == null;
     }
 
     public int floorY() {
@@ -339,6 +383,11 @@ public final class CarveSite {
      */
     public boolean isStarved() {
         return starved;
+    }
+
+    /** Reserve-materialized workers currently assigned - exempt from the member cap while digging (design §8.5). */
+    public int materializedWorkerCount() {
+        return materializedWorkers.size();
     }
 
     /** Columns not yet resined - the denominator of the pay-as-you-fill price (step 4). */

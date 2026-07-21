@@ -14,6 +14,7 @@ public class EnUsBlockTagProvider {
         builder.add(AlienBlockTags.ACID_IMMUNE, "Acid Immune");
         builder.add(AlienBlockTags.CHITIN, "Chitins");
         builder.add(AlienBlockTags.IRRADIATED_ACID_IMMUNE, "Irradiated Acid Immune");
+        builder.add(AlienBlockTags.IRRADIATED_CHITIN, "Irradiated Chitin");
         builder.add(AlienBlockTags.IRRADIATED_RESIN, "Irradiated Resin");
         builder.add(AlienBlockTags.IRRADIATED_RESIN_REPLACEABLE, "Irradiated Resin Replaceable");
         builder.add(AlienBlockTags.NETHER_ACID_IMMUNE, "Nether Acid Immune");

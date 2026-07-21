@@ -45,9 +45,28 @@ public abstract class MixinNaturalSpawner_HiveSlabSpawnDeny {
             return;
         }
 
-        // Anything else: cancel the spawn if this candidate position is inside a hive location's slab.
-        var location = HiveLocationRegistry.INSTANCE.getByChunk(level.dimension(), new ChunkPos(pos));
-        if (location != null && location.withinSlab(pos.getY())) {
+        // Anything else: cancel the spawn if this candidate position belongs to the hive.
+        var chunk = new ChunkPos(pos);
+        var location = HiveLocationRegistry.INSTANCE.getByChunk(level.dimension(), chunk);
+        if (location == null) {
+            return;
+        }
+
+        // A chunk holding a BUILT piece is hive interior, full stop - the vanilla equivalent of a structure
+        // declaring empty spawn_overrides the way the ancient city does. Real spawn_overrides cannot be used here:
+        // vanilla resolves them from a StructureStart, and hive pieces are stamped from templates at runtime, so
+        // the StructureManager has never heard of them. This is the same statement made where it can be seen.
+        //
+        // Checked BEFORE the slab test on purpose. The slab band is derived from the location's centre, so a piece
+        // built off that band - or a claim whose bookkeeping has drifted - fell straight through the old test and
+        // spawned freely on any vanilla block inside it. Being inside a piece the hive actually built is the more
+        // direct question, and the one that matches what a player sees.
+        if (location.structurePieceByChunk().containsKey(chunk)) {
+            cir.setReturnValue(false);
+            return;
+        }
+
+        if (location.withinSlab(pos.getY())) {
             cir.setReturnValue(false);
         }
     }

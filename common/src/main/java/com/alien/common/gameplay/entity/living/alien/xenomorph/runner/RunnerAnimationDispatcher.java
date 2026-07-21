@@ -91,6 +91,21 @@ public class RunnerAnimationDispatcher {
         WALK.dispatchForEntity(runner);
     }
 
+    /** Crew gait. Speed matches the drone convention: diggers at the default, placers slower. */
+    public void walkDig() {
+        walkDig(0.7F);
+    }
+
+    public void walkDig(float speed) {
+        AzAlienAnimationUtil.singleWithSpeed(
+            AzAlienAnimationUtil.BODY,
+            RunnerAnimationRefs.WALK_DIG_ANIMATION_NAME,
+            AzPlayBehaviors.LOOP,
+            AzDispatchMode.PLAY_IF_NOT_PLAYING,
+            speed
+        ).dispatchForEntity(runner);
+    }
+
     public void biteAttack() {
         BITE_ATTACK.dispatchForEntity(runner);
     }

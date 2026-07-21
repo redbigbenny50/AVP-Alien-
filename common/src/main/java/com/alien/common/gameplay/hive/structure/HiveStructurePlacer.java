@@ -174,6 +174,9 @@ public final class HiveStructurePlacer {
         for (ChunkPos chunk : match.occupiedChunks()) {
             location.assignStructure(chunk, roleFor(match.piece()), pieceId);
         }
+        // Origin + rotation, so the upkeep pass can re-stamp this piece later. The per-chunk map above answers
+        // "what is here"; only this answers "how do I rebuild it".
+        location.recordBuiltPlacement(originChunk, pieceId, match.rotation());
 
         // The socket that connected back to the frontier: its cell is the frontier's target chunk (relative to origin)
         // and its facing is the mate of the frontier's facing. Exclude it from the new open sockets.
@@ -203,6 +206,16 @@ public final class HiveStructurePlacer {
             originChunk,
             newSockets.size()
         );
+    }
+
+    /**
+     * Public entry for the upkeep pass: re-drain a BUILT piece's chunk. The build-time drain is a one-shot, so a lava
+     * pocket opened next door - or a flow through a doorway or vent that is still open - seeps straight back into a
+     * finished interior and stays there. Re-running the same sweep on a cadence keeps draining until the source is
+     * actually sealed off.
+     */
+    public static void drainPieceLiquids(ServerLevel level, ChunkPos chunk, int floorY, int height) {
+        drainLiquids(level, java.util.List.of(chunk), floorY, height);
     }
 
     /** Empties water/lava from the stamped volume so hive interiors are dry even when built into a body of liquid. */

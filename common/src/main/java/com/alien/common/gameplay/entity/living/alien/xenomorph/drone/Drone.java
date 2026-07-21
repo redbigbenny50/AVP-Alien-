@@ -33,23 +33,23 @@ import org.jetbrains.annotations.Nullable;
 
 import java.util.function.BiConsumer;
 
-public class Drone extends Xenomorph implements EggCarrier, GOAPUser<Drone>, VentBuilder {
+public class Drone extends Xenomorph implements com.alien.common.gameplay.hive.structure.carve.CarveWorker, EggCarrier, GOAPUser<Drone>, VentBuilder {
 
     public static final AttackType CLAW = AttackType.builder("drone_claw")
         .requiresAnyArm()
-        .defaultDurationInTicks(10)
+        .defaultDurationInTicks(20)
         .sound(AlienSoundEvents.ENTITY_XENOMORPH_ATTACK)
         .build();
 
     public static final AttackType BITE = AttackType.builder("drone_bite")
         .requiresHead()
-        .defaultDurationInTicks(8)
+        .defaultDurationInTicks(10)
         .sound(AlienSoundEvents.ENTITY_XENOMORPH_ATTACK)
         .build();
 
     public static final AttackType TAIL = AttackType.builder("drone_tail")
         .requiresTail()
-        .defaultDurationInTicks(12)
+        .defaultDurationInTicks(19)
         .sound(AlienSoundEvents.ENTITY_XENOMORPH_ATTACK)
         .build();
 
@@ -65,6 +65,12 @@ public class Drone extends Xenomorph implements EggCarrier, GOAPUser<Drone>, Ven
     }
 
     private final DroneAnimationDispatcher animationDispatcher;
+
+    /**
+     * Synced, transient: this drone's carve-crew gait (construction economy step 5). 0 = none, 1 = digger (70% walk
+     * dig), 2 = placer (50%). Set by CarveWorkers server-side; the client DroneAnimator folds it into locomotion.
+     */
+    public final com.blib.api.common.data_sync.v1.DataAccessor<Integer> carveDigMode;
 
     private final EggPickupManager eggPickupManager;
 
@@ -85,6 +91,10 @@ public class Drone extends Xenomorph implements EggCarrier, GOAPUser<Drone>, Ven
                 .build()
         );
         this.animationDispatcher = new DroneAnimationDispatcher(this);
+        this.carveDigMode = new com.blib.api.common.data_sync.v1.DataAccessor<>(
+            this,
+            com.alien.common.registry.init.AlienDataSyncKeys.DRONE_CARVE_DIG_MODE.get()
+        );
         this.eggPickupManager = new EggPickupManager(this);
         this.ventData = new VentData();
     }
@@ -189,6 +199,11 @@ public class Drone extends Xenomorph implements EggCarrier, GOAPUser<Drone>, Ven
     public void addAdditionalSaveData(@NotNull CompoundTag compoundTag) {
         super.addAdditionalSaveData(compoundTag);
         ventData.save(compoundTag);
+    }
+
+    @Override
+    public com.blib.api.common.data_sync.v1.DataAccessor<Integer> carveDigMode() {
+        return carveDigMode;
     }
 
     public DroneAnimationDispatcher getAnimationDispatcher() {

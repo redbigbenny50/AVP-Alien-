@@ -221,6 +221,36 @@ public class AlienDataSyncKeys {
             .build(false)
     );
 
+    /**
+     * Founding-core stand-dig (construction economy step 6): true while the queen is carving her own chamber. Synced,
+     * NOT persisted - the carve site re-derives it on the first loaded tick after a reload. The client QueenAnimator
+     * drives the digStandStart / standDigging / digStandStop triptych off its edges, because animation dispatch only
+     * works client-side.
+     */
+    public static final BLibHolder<DataSyncKey<Boolean>> QUEEN_IS_STAND_DIGGING = create(
+        "queen_is_stand_digging",
+        builder -> builder.networkSynchronized(StreamCodecs.BOOLEAN)
+            .build(false)
+    );
+
+    /**
+     * Carve-crew dig gait (construction economy step 5): 0 = not on a carve crew, 1 = digger (walk dig at 70%), 2 =
+     * placer (walk dig at 50%). Synced, NOT persisted - crews are transient and re-sourced after a reload. The client
+     * DroneAnimator folds it into the locomotion selection, because animation dispatch only works client-side.
+     */
+    public static final BLibHolder<DataSyncKey<Integer>> DRONE_CARVE_DIG_MODE = create(
+        "drone_carve_dig_mode",
+        builder -> builder.networkSynchronized(StreamCodecs.INT)
+            .build(0)
+    );
+
+    /** Runner counterpart of {@link #DRONE_CARVE_DIG_MODE} - runners crew the same digs, placements and repairs. */
+    public static final BLibHolder<DataSyncKey<Integer>> RUNNER_CARVE_DIG_MODE = create(
+        "runner_carve_dig_mode",
+        builder -> builder.networkSynchronized(StreamCodecs.INT)
+            .build(0)
+    );
+
     public static final BLibHolder<DataSyncKey<Boolean>> XENOMORPH_IS_CRAWLING = create(
         "xenomorph_is_crawling",
         builder -> builder.networkSynchronized(StreamCodecs.BOOLEAN)
