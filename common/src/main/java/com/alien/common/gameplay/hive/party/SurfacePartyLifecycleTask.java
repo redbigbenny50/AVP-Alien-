@@ -293,6 +293,18 @@ public final class SurfacePartyLifecycleTask {
     private static final int MAX_VENT_Y_DROP = 5;
 
     /**
+     * Player base protection (vanilla-style spawn rules for the scout party and the hive's doorways). Neither the
+     * runner scout party ({@code SurfacePartyDispatch}) nor a surface vent may appear where BLOCK light exceeds this
+     * (torches, lanterns, glowstone - deliberately not sky light, or daylight would forbid all surface activity
+     * everywhere), nor within {@link #VENT_PROTECTED_PLAYER_RADIUS} blocks of a player. Since every later surface party
+     * (host, biomass, attack, defense) emerges through surface vents, lighting an area to 8+ keeps the scouts, the
+     * hive's doors, and therefore its parties out of it permanently.
+     */
+    static final int MAX_VENT_BLOCK_LIGHT = 7;
+
+    static final double VENT_PROTECTED_PLAYER_RADIUS = 32.0;
+
+    /**
      * A sturdy, open surface column near where the party actually stood. Rings outward from the ANCHOR (a live member's
      * position), not the chunk centre, and rejects any column more than {@link #MAX_VENT_Y_DROP} off the anchor's Y so
      * the vent can never land atop an unreachable spire.
@@ -318,6 +330,14 @@ public final class SurfacePartyLifecycleTask {
                         continue;
                     }
                     var candidate = new BlockPos(x, y, z);
+                    // Base protection: lit-up ground (block light 8+) and ground within 32 blocks of a player
+                    // never receives a vent - see MAX_VENT_BLOCK_LIGHT.
+                    if (serverLevel.getBrightness(net.minecraft.world.level.LightLayer.BLOCK, candidate) > MAX_VENT_BLOCK_LIGHT) {
+                        continue;
+                    }
+                    if (serverLevel.hasNearbyAlivePlayer(x + 0.5, y, z + 0.5, VENT_PROTECTED_PLAYER_RADIUS)) {
+                        continue;
+                    }
                     var ground = candidate.below();
                     if (!serverLevel.getBlockState(ground).isFaceSturdy(serverLevel, ground, Direction.UP)) {
                         continue;

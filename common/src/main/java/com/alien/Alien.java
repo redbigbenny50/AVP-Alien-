@@ -225,6 +225,10 @@ public class Alien {
 
         QueenSpawnChunkData.getOrCreate(level)
             .ifSome(QueenSpawnChunkData::tick);
+
+        if (level instanceof net.minecraft.server.level.ServerLevel serverLevel) {
+            com.alien.common.gameplay.entity.living.alien.xenomorph.queen.QueenNaturalSpawnTask.tick(serverLevel);
+        }
     }
 
     private static void onTagsUpdated(RegistryAccess registryAccess, boolean flag) {

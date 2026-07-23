@@ -54,7 +54,7 @@ public class ParasiteAttachmentManager {
         Objects.requireNonNull(host);
 
         if (!AlienPredicates.isHost(host)) {
-            parasite.unRide();
+            parasite.detach();
 
             if (host instanceof ServerPlayer serverPlayer) {
                 serverPlayer.connection.send(new ClientboundSetPassengersPacket(host));
@@ -63,7 +63,7 @@ public class ParasiteAttachmentManager {
         }
 
         if (parasite.isDeadOrDying()) {
-            parasite.unRide();
+            parasite.detach();
             return;
         }
 
@@ -87,7 +87,7 @@ public class ParasiteAttachmentManager {
         if (ticksAttachedToHost() < 20 * 10) {
             host.hurt(parasite.damageSources().source(AlienDamageTypeKeys.SMOTHERING), 0.01F);
         } else if (ticksAttachedToHost() > falloffTimeInTicks) {
-            parasite.stopRiding();
+            parasite.detach();
 
             if (host instanceof ServerPlayer player) {
                 player.connection.send(new ClientboundSetPassengersPacket(host));

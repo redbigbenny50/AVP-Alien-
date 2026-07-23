@@ -405,6 +405,14 @@ public final class HiveBalanceTask {
         desired.put(AlienEntityTypeTags.PRAETORIANS, warrior / 12);
         desired.put(AlienEntityTypeTags.CRUSHERS, runner / 12);
         desired.put(AlienEntityTypeTags.RAVAGERS, warrior / 8);
+        // The rest of the scourge tier (caps set in the economy spec: burster 40, razor claw 20, chrysalis 20,
+        // carrier 10). These were purchasable on paper - recipes, jelly costs, and caps all existed - but had no
+        // desired entry here, so the balance task never asked for them and the ravager was the only scourge unit
+        // hives ever produced. Their harbinger>=1 purchase condition still gates when they can actually commit.
+        desired.put(AlienEntityTypeTags.BURSTERS, runner / 4);
+        desired.put(AlienEntityTypeTags.RAZOR_CLAWS, runner / 8);
+        desired.put(AlienEntityTypeTags.CHRYSALISES, prowler / 3);
+        desired.put(AlienEntityTypeTags.CARRIERS, drone / 10);
         desired.put(AlienEntityTypeTags.HARBINGERS, totalPop >= 100 && harbinger == 0 ? 1 : 0);
 
         var deficits = new LinkedHashMap<TagKey<EntityType<?>>, Integer>();

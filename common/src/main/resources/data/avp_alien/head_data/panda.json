@@ -1,0 +1,15 @@
+{
+  "entity": "minecraft:panda",
+  "size": [
+    13.0,
+    10.0,
+    9.0
+  ],
+  "pivot": [
+    0.0,
+    12.5,
+    -17.0
+  ],
+  "vertical_offset": -15,
+  "face_offset": 22
+}

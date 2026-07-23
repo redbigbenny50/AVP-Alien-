@@ -5,6 +5,7 @@
   "refmap": "${mod_id}.refmap.json",
   "compatibilityLevel": "JAVA_21",
   "mixins": [
+    "MixinBlockBehaviour_ResinConversion",
     "MixinItem_ChorusEmbryo",
     "MixinItem_GigeresqueSurgeryKit",
     "MixinLivingEntity_BloodLoss",

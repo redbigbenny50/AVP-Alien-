@@ -3,6 +3,7 @@ package com.alien.common.gameplay.entity.living.alien.parasite;
 import com.alien.common.gameplay.entity.living.alien.Alien;
 import com.alien.common.model.alien.FreeMob;
 import com.alien.common.registry.init.AlienDataSyncKeys;
+import com.alien.common.registry.tag.AlienEntityTypeTags;
 import com.alien.common.util.AlienPredicates;
 import com.blib.api.common.data_sync.v1.DataAccessor;
 import com.blib.api.common.entity.v1.BLibEntityPredicates;
@@ -18,6 +19,16 @@ import org.jetbrains.annotations.NotNull;
 public abstract class Parasite extends Alien {
 
     public final DataAccessor<Boolean> isFertile;
+
+    /**
+     * Consent flag for {@link #stopRiding()}. Rideable host mobs buck unrecognized riders off — vanilla untamed horses
+     * and llamas, Naturalist's giraffe/zebra/elephant (their taming aiStep calls
+     * {@code getControllingPassenger().stopRiding()} on ANY living first passenger, every tick, until tamed). An
+     * attached facehugger must not be dislodgeable that way, so {@link #stopRiding()} refuses while legitimately
+     * attached unless the detach came through {@link #detach()} (or entity removal). All of the mod's own detach paths
+     * (attachment falloff, implant completion, struggle win, invalid host, death) go through consent.
+     */
+    private boolean detachConsented;
 
     protected final ParasiteAttachmentManager attachmentManager;
 
@@ -126,8 +137,45 @@ public abstract class Parasite extends Alien {
         return isRiding;
     }
 
+    /** The mod's own detach entry point: consents to the dismount, then performs it. */
+    public void detach() {
+        detachConsented = true;
+
+        try {
+            stopRiding();
+        } finally {
+            detachConsented = false;
+        }
+    }
+
+    /**
+     * True while this parasite is legitimately latched onto a non-alien host and must resist host-side ejection. Alien
+     * vehicles (carrier spine rides) stay freely dismountable for hive logistics; dead/dying/removed states on either
+     * side always allow the dismount so vanilla cleanup is never fought.
+     */
+    private boolean shouldClingToHost() {
+        if (detachConsented || isDeadOrDying() || isRemoved()) {
+            return false;
+        }
+
+        if (!(getVehicle() instanceof LivingEntity host)) {
+            return false;
+        }
+
+        if (host.getType().is(AlienEntityTypeTags.ALIENS)) {
+            return false;
+        }
+
+        return host.isAlive() && !host.isRemoved() && AlienPredicates.isHost(host);
+    }
+
     @Override
     public void stopRiding() {
+        if (shouldClingToHost()) {
+            // A host-side buck (untamed horse/llama/giraffe taming logic and the like): refuse it.
+            return;
+        }
+
         var host = attachmentManager.getHost();
 
         if (host instanceof Mob mob) {
@@ -138,6 +186,19 @@ public abstract class Parasite extends Alien {
 
         // Will update the player's riding entities properly after the parasite detaches.
         tryUpdatePlayerRiding(host);
+    }
+
+    @Override
+    public void remove(@NotNull Entity.RemovalReason removalReason) {
+        // Removal (discard, kill command, chunk cleanup) must always win over clinging, or the host would keep a
+        // ghost passenger reference to an entity that no longer exists.
+        detachConsented = true;
+
+        try {
+            super.remove(removalReason);
+        } finally {
+            detachConsented = false;
+        }
     }
 
     @Override

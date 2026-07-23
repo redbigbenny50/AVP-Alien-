@@ -1,0 +1,15 @@
+{
+  "entity": "minecraft:goat",
+  "size": [
+    5.0,
+    7.0,
+    10.0
+  ],
+  "pivot": [
+    -0.5,
+    10.0,
+    0.0
+  ],
+  "vertical_offset": -8.75,
+  "face_offset": 14.3333
+}

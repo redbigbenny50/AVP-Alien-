@@ -1,0 +1,15 @@
+{
+  "entity": "minecraft:witch",
+  "size": [
+    8.0,
+    10.0,
+    8.0
+  ],
+  "pivot": [
+    0.0,
+    24.0,
+    0.0
+  ],
+  "vertical_offset": -16.6667,
+  "face_offset": 4
+}

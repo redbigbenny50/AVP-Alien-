@@ -30,9 +30,14 @@ public class QueenSpawnChunkData extends SavedData {
 
     private static final String NBT_SPAWN_COOLDOWN_IN_TICKS = "spawnCooldownInTicks";
 
+    private static final String NBT_WILD_QUEEN_CHUNKS = "wildQueenChunks";
+
     private final Map<RegionPos, BitSet> regionChunkBits;
 
     private final Cooldown spawnCooldown;
+
+    /** Chunks where a naturally spawned (wild) queen took root — used to keep wild queens far apart. */
+    private final java.util.Set<Long> wildQueenChunks = new java.util.HashSet<>();
 
     private QueenSpawnChunkData() {
         this(Map.of());
@@ -46,6 +51,22 @@ public class QueenSpawnChunkData extends SavedData {
 
     public void tick() {
         spawnCooldown.tick();
+    }
+
+    public void addWildQueenChunk(ChunkPos pos) {
+        wildQueenChunks.add(pos.toLong());
+        setDirty();
+    }
+
+    /** True when no wild queen has taken root within {@code minChebyshevChunks} chunks of {@code pos}. */
+    public boolean isFarFromWildQueenChunks(ChunkPos pos, int minChebyshevChunks) {
+        for (var packed : wildQueenChunks) {
+            var other = new ChunkPos(packed);
+            if (Math.max(Math.abs(other.x - pos.x), Math.abs(other.z - pos.z)) < minChebyshevChunks) {
+                return false;
+            }
+        }
+        return true;
     }
 
     public void addChunkToBlacklist(BlockPos pos) {
@@ -94,6 +115,7 @@ public class QueenSpawnChunkData extends SavedData {
 
         compoundTag.put(NBT_REGIONS, regionsTag);
         spawnCooldown.save(compoundTag);
+        compoundTag.putLongArray(NBT_WILD_QUEEN_CHUNKS, wildQueenChunks.stream().mapToLong(Long::longValue).toArray());
 
         return compoundTag;
     }
@@ -117,6 +139,10 @@ public class QueenSpawnChunkData extends SavedData {
         var queenSpawnChunkData = new QueenSpawnChunkData(regionMap);
 
         queenSpawnChunkData.spawnCooldown.load(compoundTag);
+
+        for (var packed : compoundTag.getLongArray(NBT_WILD_QUEEN_CHUNKS)) {
+            queenSpawnChunkData.wildQueenChunks.add(packed);
+        }
 
         return queenSpawnChunkData;
     }

@@ -181,6 +181,24 @@ public final class SurfacePartyDispatch {
         if (!level.getBlockState(pos).isAir() || !level.getBlockState(pos.above()).isAir()) {
             return false;
         }
+        // Base protection (same rules as vent planting - see SurfacePartyLifecycleTask.MAX_VENT_BLOCK_LIGHT):
+        // the runner scout party itself never materializes on lit-up ground (block light 8+) or within 32
+        // blocks of a player.
+        if (
+            level.getBrightness(net.minecraft.world.level.LightLayer.BLOCK, pos) > SurfacePartyLifecycleTask.MAX_VENT_BLOCK_LIGHT
+        ) {
+            return false;
+        }
+        if (
+            level.hasNearbyAlivePlayer(
+                pos.getX() + 0.5,
+                pos.getY(),
+                pos.getZ() + 0.5,
+                SurfacePartyLifecycleTask.VENT_PROTECTED_PLAYER_RADIUS
+            )
+        ) {
+            return false;
+        }
         return level.canSeeSky(pos);
     }
 

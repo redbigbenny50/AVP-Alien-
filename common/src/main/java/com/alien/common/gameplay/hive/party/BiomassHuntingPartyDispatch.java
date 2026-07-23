@@ -53,6 +53,13 @@ public final class BiomassHuntingPartyDispatch {
         // Biomass hunters go wherever the hive opens onto the world: the surface doors, or a frontier vent at a cave
         // mouth.
         var surfaceVents = PartyVentUtil.findPartyVents(serverLevel, location);
+        // Surface doors are NIGHT doors for biomass hunts: by day only frontier vents (cave mouths, already out of
+        // the sun) may launch one. Host hunts and attack parties keep using surface vents at any hour.
+        if (serverLevel.isDay()) {
+            surfaceVents.removeIf(
+                ventPos -> location.ventManager().isKind(ventPos, com.alien.common.gameplay.hive.vent.VentKind.SURFACE)
+            );
+        }
         if (surfaceVents.isEmpty()) {
             return;
         }

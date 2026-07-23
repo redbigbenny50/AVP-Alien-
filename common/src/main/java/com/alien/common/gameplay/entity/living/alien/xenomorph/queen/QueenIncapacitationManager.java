@@ -193,8 +193,10 @@ public final class QueenIncapacitationManager {
             return;
         }
 
-        // Rescue: any adult xenomorph of the hive standing over her brings her round. Facehuggers cannot - by design
-        // they can neither harm nor help her, which is what stops an unattended breeder freeing herself.
+        // Rescue: an adult xenomorph OF HER OWN STRAIN standing over her brings her round. Facehuggers cannot - by
+        // design they can neither harm nor help her, which is what stops an unattended breeder freeing herself. A
+        // rival strain's xenomorph never wakes her: strains are always hostile to one another, and a rival standing
+        // over a downed queen is there to finish her, not tend her.
         var box = queen.getBoundingBox().inflate(HEAL_RADIUS);
         for (var candidate : serverLevel.getEntitiesOfClass(LivingEntity.class, box)) {
             if (candidate == queen || !candidate.isAlive()) {
@@ -204,6 +206,12 @@ public final class QueenIncapacitationManager {
                 continue;
             }
             if (candidate.getType().is(AlienEntityTypeTags.PARASITES)) {
+                continue;
+            }
+            if (
+                !(candidate instanceof com.alien.common.gameplay.entity.living.alien.Alien rescuer)
+                    || !java.util.Objects.equals(rescuer.getVariant(), queen.getVariant())
+            ) {
                 continue;
             }
             healRescue();

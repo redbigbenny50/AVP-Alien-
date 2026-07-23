@@ -1,0 +1,15 @@
+{
+  "entity": "minecraft:ravager",
+  "size": [
+    16.0,
+    20.0,
+    16.0
+  ],
+  "pivot": [
+    0.0,
+    14.0,
+    -12.5
+  ],
+  "vertical_offset": -25,
+  "face_offset": 29.1429
+}

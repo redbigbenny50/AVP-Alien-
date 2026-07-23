@@ -1207,6 +1207,10 @@ public abstract class Xenomorph extends Alien implements ResinProducer, EntitySe
             if (
                 entity instanceof Xenomorph xenomorph
                     && xenomorph != this
+                    // Only rally OWN-STRAIN xenomorphs: strains are always hostile to one another, so a rival
+                    // strain never answers this one's distress - if anything it is glad someone else is doing
+                    // the hurting.
+                    && java.util.Objects.equals(xenomorph.getVariant(), getVariant())
                     && xenomorph.getTarget() == null
                     && AlienPredicates.canAcquireTarget(xenomorph, attacker)
             ) {

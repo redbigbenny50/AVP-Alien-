@@ -154,7 +154,7 @@ public final class HuggerStruggle {
     private static void win(ServerPlayer player, Parasite parasite) {
         end(player);
 
-        parasite.stopRiding();
+        parasite.detach();
 
         // Fling it off the face rather than letting it land on the player's toes and immediately re-touch.
         var look = player.getLookAngle();

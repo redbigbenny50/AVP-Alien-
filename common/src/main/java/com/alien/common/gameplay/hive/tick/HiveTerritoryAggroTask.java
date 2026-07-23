@@ -122,7 +122,11 @@ public final class HiveTerritoryAggroTask {
             }
         }
 
-        // Hated non-player enemies (marines, predators, etc.) — scan each claimed chunk's column for tagged threats.
+        // Hated non-player enemies (marines, predators, etc.) AND rival-strain xenomorphs — scan each claimed
+        // chunk's column for tagged threats. Strains are always hostile to one another, so a rival strain's
+        // xenomorph inside the claim is an invasion the whole location responds to, not something only the
+        // members who happen to see it will fight.
+        var locationVariant = location.lineageVariantOrNull();
         for (var chunk : location.claimedChunks()) {
             var box = new AABB(
                 chunk.getMinBlockX(),
@@ -132,12 +136,31 @@ public final class HiveTerritoryAggroTask {
                 level.getMaxBuildHeight(),
                 chunk.getMaxBlockZ() + 1
             );
-            for (var entity : level.getEntitiesOfClass(LivingEntity.class, box, HiveTerritoryAggroTask::isHatedNonPlayer)) {
+            for (
+                var entity : level.getEntitiesOfClass(
+                    LivingEntity.class,
+                    box,
+                    entity -> isHatedNonPlayer(entity) || isRivalStrainXenomorph(entity, locationVariant)
+                )
+            ) {
                 intruders.add(entity);
             }
         }
 
         return intruders;
+    }
+
+    /** A living xenomorph of a DIFFERENT strain than this location's lineage. */
+    private static boolean isRivalStrainXenomorph(
+        LivingEntity entity,
+        @Nullable com.alien.common.model.alien.variant.AlienVariant locationVariant
+    ) {
+        if (locationVariant == null || !entity.isAlive() || entity.isRemoved()) {
+            return false;
+        }
+        return entity.getType().is(AlienEntityTypeTags.XENOMORPHS)
+            && entity instanceof com.alien.common.gameplay.entity.living.alien.Alien alien
+            && !java.util.Objects.equals(alien.getVariant(), locationVariant);
     }
 
     private static boolean isHatedNonPlayer(LivingEntity entity) {

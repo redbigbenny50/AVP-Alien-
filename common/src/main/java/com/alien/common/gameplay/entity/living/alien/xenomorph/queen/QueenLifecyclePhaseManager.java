@@ -112,6 +112,20 @@ public class QueenLifecyclePhaseManager implements NBTSerializable {
 
     private static final String HIBERNATION_TICKS_REMAINING_TAG = "lifecycleHibernationTicksRemaining";
 
+    private static final String WILD_SPAWNED_TAG = "lifecycleWildSpawned";
+
+    /** How often a hibernating WILD queen checks whether a nearby lineage should adopt her. */
+    private static final int WILD_ADOPTION_CHECK_INTERVAL_TICKS = 200;
+
+    /** A hive within this many chunks of a sleeping wild queen wakes and adopts her (matches the spawn margin). */
+    private static final int WILD_ADOPTION_RANGE_CHUNKS = 32;
+
+    /** Adoption only proceeds while the lineage is under its member-hive cap (mirrors maxLocationsPerLineage = 8). */
+    private static final int WILD_ADOPTION_LINEAGE_CAP = 8;
+
+    /** Players within this range hear the awakening broadcast when a wild queen's sleep runs out. */
+    private static final double WILD_AWAKENING_BROADCAST_RANGE = 256.0;
+
     private final Queen queen;
 
     private QueenLifecyclePhase phase;
@@ -124,6 +138,9 @@ public class QueenLifecyclePhaseManager implements NBTSerializable {
      * Sub-state within HIBERNATION (Stage 3b). Transient — a reload simply restarts her ASLEEP, which is acceptable.
      */
     private HibernationActivity hibernationActivity = HibernationActivity.ASLEEP;
+
+    /** True for naturally spawned (wild) queens: enables the adoption check and the awakening broadcast. */
+    private boolean wildSpawned;
 
     /** Ticks she has been threat-free while DEFENDING; at {@link #HIBERNATION_CALM_TICKS} she heads back. Transient. */
     private int disturbanceCalmTicks;
@@ -250,6 +267,25 @@ public class QueenLifecyclePhaseManager implements NBTSerializable {
      * re-hibernates before trying to found again. If she is genuinely boxed in (no far-enough chunk within the search
      * radius) the re-pick returns her current chunk and she simply retries on the next cycle.
      */
+    /**
+     * Entry point for naturally spawned WILD queens: she takes root where she spawned and sleeps. The hibernation
+     * clock only runs while her chunk is entity-ticking, so undisturbed wilderness queens sleep indefinitely - it is
+     * sustained player activity in the area that accumulates the {@link #HIBERNATION_DURATION_TICKS} that finally
+     * wakes her. A solid hit rouses her to defend as usual; a nearby lineage may adopt her (see
+     * {@code tryWildAdoption}).
+     */
+    public void beginWildHibernation() {
+        if (!isEnabled()) {
+            return;
+        }
+        this.wildSpawned = true;
+        this.anchor = queen.blockPosition();
+        this.hibernationTicksRemaining = HIBERNATION_DURATION_TICKS;
+        this.hibernationActivity = HibernationActivity.ASLEEP;
+        this.phase = QueenLifecyclePhase.HIBERNATION;
+        queen.isHibernating.set(true);
+    }
+
     public void restartLocationPhase() {
         if (!isEnabled()) {
             return;
@@ -355,6 +391,10 @@ public class QueenLifecyclePhaseManager implements NBTSerializable {
     private void tickHibernationAsleep() {
         queen.isHibernating.set(true);
 
+        if (wildSpawned && queen.tickCount % WILD_ADOPTION_CHECK_INTERVAL_TICKS == 0 && tryWildAdoption()) {
+            return;
+        }
+
         if (hibernationTicksRemaining > 0) {
             hibernationTicksRemaining--;
             return;
@@ -366,7 +406,85 @@ public class QueenLifecyclePhaseManager implements NBTSerializable {
             queen.getUUID(),
             anchor
         );
+
+        if (wildSpawned) {
+            broadcastWildAwakening();
+        }
+
         phase = QueenLifecyclePhase.FOUNDING_HANDOFF;
+    }
+
+    /**
+     * A sleeping wild queen inside a same-strain lineage's 32-chunk reach wakes and is adopted: she joins that
+     * lineage's membership (variant-gated by {@code LocationMembership.join}) and hands off to founding, so her hive
+     * becomes another member of the adopting lineage instead of starting a fresh one. Lineages at their member-hive
+     * cap leave her sleeping.
+     */
+    private boolean tryWildAdoption() {
+        if (!(queen.level() instanceof ServerLevel serverLevel)) {
+            return false;
+        }
+
+        var queenChunk = queen.chunkPosition();
+
+        for (var location : com.alien.common.gameplay.hive.location.HiveLocationRegistry.INSTANCE.all()) {
+            if (!location.dimension().equals(serverLevel.dimension())) {
+                continue;
+            }
+            if (!java.util.Objects.equals(location.lineageVariantOrNull(), queen.getVariant())) {
+                continue;
+            }
+
+            var withinRange = false;
+            for (var chunk : location.claimedChunks()) {
+                if (
+                    Math.max(Math.abs(chunk.x - queenChunk.x), Math.abs(chunk.z - queenChunk.z))
+                        <= WILD_ADOPTION_RANGE_CHUNKS
+                ) {
+                    withinRange = true;
+                    break;
+                }
+            }
+            if (!withinRange) {
+                continue;
+            }
+
+            var faction = Alien.MOD.factions().get(location.lineageFactionId());
+            if (
+                faction == null
+                    || !(faction.data() instanceof com.alien.common.gameplay.hive.faction.LineageFactionData lineage)
+                    || lineage.locationsById().size() >= WILD_ADOPTION_LINEAGE_CAP
+            ) {
+                continue;
+            }
+
+            com.alien.common.gameplay.hive.faction.LocationMembership.join(location, queen);
+            queen.isHibernating.set(false);
+            phase = QueenLifecyclePhase.FOUNDING_HANDOFF;
+            Alien.LOGGER.info(
+                "Queen lifecycle: wild queen {} adopted by lineage {} — waking to found",
+                queen.getUUID(),
+                location.lineageFactionId()
+            );
+            return true;
+        }
+
+        return false;
+    }
+
+    /** "You have awakened a slumbering nightmare" — sent to every player whose activity accumulated her sleep clock. */
+    private void broadcastWildAwakening() {
+        if (!(queen.level() instanceof ServerLevel serverLevel)) {
+            return;
+        }
+        var message = net.minecraft.network.chat.Component
+            .literal("You have awakened a slumbering nightmare")
+            .withStyle(net.minecraft.ChatFormatting.DARK_RED);
+        for (var player : serverLevel.players()) {
+            if (player.distanceToSqr(queen) <= WILD_AWAKENING_BROADCAST_RANGE * WILD_AWAKENING_BROADCAST_RANGE) {
+                player.sendSystemMessage(message);
+            }
+        }
     }
 
     /**
@@ -760,6 +878,8 @@ public class QueenLifecyclePhaseManager implements NBTSerializable {
         if (compoundTag.contains(HIBERNATION_TICKS_REMAINING_TAG)) {
             this.hibernationTicksRemaining = compoundTag.getInt(HIBERNATION_TICKS_REMAINING_TAG);
         }
+
+        this.wildSpawned = compoundTag.getBoolean(WILD_SPAWNED_TAG);
     }
 
     @Override
@@ -767,6 +887,7 @@ public class QueenLifecyclePhaseManager implements NBTSerializable {
         compoundTag.putString(PHASE_TAG, phase.name());
         compoundTag.putInt(DEVELOPING_TICKS_REMAINING_TAG, developingTicksRemaining);
         compoundTag.putInt(HIBERNATION_TICKS_REMAINING_TAG, hibernationTicksRemaining);
+        compoundTag.putBoolean(WILD_SPAWNED_TAG, wildSpawned);
         if (anchor != null) {
             compoundTag.putLong(ANCHOR_TAG, anchor.asLong());
         }
