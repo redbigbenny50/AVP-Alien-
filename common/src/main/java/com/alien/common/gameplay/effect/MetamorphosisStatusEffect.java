@@ -13,7 +13,11 @@ import org.jetbrains.annotations.NotNull;
  * growth-stage requirement, applying it now does two things at the moment it lands:
  * <ul>
  * <li>On a xenomorph: clears the growth-suppression flag set by the Growth Suppression potion, resuming molting and
- * growth.</li>
+ * growth - and if the alien is still growing into its full size (the phased molt cycle with the dark molt-skin
+ * overlay: a fresh adult normally works through its phases one by one), every remaining phase collapses at once via
+ * {@code MoltingManager#skipToFullMaturity()}. One solid phase, not three broken ones: potion + undersized queen =
+ * full-size queen. A fully grown alien is untouched here - the effect instead satisfies the growth-stage requirement
+ * as it always has, sending a full-grown drone into its molt toward warrior, and so on up the ladder.</li>
  * <li>On a host carrying a chestburster: slams the gestation clock to the burst threshold - the chest-bursting phase
  * begins immediately. The accelerant accelerates; be careful what you drink.</li>
  * </ul>
@@ -34,6 +38,13 @@ public class MetamorphosisStatusEffect extends MobEffect {
 
         if (livingEntity instanceof Alien alien) {
             alien.setPoisoned(false);
+
+            // Accelerate any in-progress size growth: all remaining molt phases complete in one step. No-ops for
+            // aliens without a molting profile or already at full size, so the data (molting_profiles) decides scope.
+            if (!alien.getMoltingManager().hasReachedTargetScale()) {
+                alien.getMoltingManager().skipToFullMaturity();
+            }
+
             return;
         }
 
