@@ -36,7 +36,7 @@ public final class HiveStructureFounding {
      */
     public static void establishQueenChamber(MinecraftServer server, HiveLocation location, ChunkPos centerChunk) {
         var registry = HivePieceRegistry.get(server);
-        var chamber = registry.get(HivePieceCatalog.QUEEN_CHAMBER);
+        var chamber = registry.get(HivePieceCatalog.queenChamber(location.lineageVariantOrNull()));
         if (chamber == null) {
             Alien.LOGGER.warn("Queen chamber piece not loaded; founding without structure roles/sockets.");
             return;
@@ -48,7 +48,7 @@ public final class HiveStructureFounding {
         int halfZ = (chamber.footprintChunksZ() - 1) / 2;
         var originChunk = new ChunkPos(centerChunk.x - halfX, centerChunk.z - halfZ);
 
-        String pieceId = HivePieceCatalog.QUEEN_CHAMBER.toString();
+        String pieceId = HivePieceCatalog.queenChamber(location.lineageVariantOrNull()).toString();
 
         // Roles: center cell -> CENTER (carrying the piece id), every other cell -> PART.
         for (int cx = 0; cx < chamber.footprintChunksX(); cx++) {
@@ -107,7 +107,7 @@ public final class HiveStructureFounding {
     public static void finishFoundingStructure(ServerLevel level, HiveLocation location, boolean stampRoyalRing) {
         var server = level.getServer();
         var registry = HivePieceRegistry.get(server);
-        var chamber = registry.get(HivePieceCatalog.QUEEN_CHAMBER);
+        var chamber = registry.get(HivePieceCatalog.queenChamber(location.lineageVariantOrNull()));
         if (chamber == null) {
             Alien.LOGGER.warn("Queen chamber piece not loaded at founding completion; no royal ring registered.");
             return;
@@ -173,7 +173,7 @@ public final class HiveStructureFounding {
     public static void legacyFoundingFallback(ServerLevel level, HiveLocation location) {
         var server = level.getServer();
         var registry = HivePieceRegistry.get(server);
-        var chamber = registry.get(HivePieceCatalog.QUEEN_CHAMBER);
+        var chamber = registry.get(HivePieceCatalog.queenChamber(location.lineageVariantOrNull()));
         if (chamber == null) {
             Alien.LOGGER.warn("Queen chamber piece not loaded; founding fallback cannot stamp the chamber.");
             return;
@@ -245,9 +245,10 @@ public final class HiveStructureFounding {
         HiveLocation location,
         ChunkPos originChunk
     ) {
-        var templateOpt = server.getStructureManager().get(HivePieceCatalog.QUEEN_CHAMBER);
+        var chamberId = HivePieceCatalog.queenChamber(location.lineageVariantOrNull());
+        var templateOpt = server.getStructureManager().get(chamberId);
         if (templateOpt.isEmpty()) {
-            Alien.LOGGER.warn("Queen chamber not stamped: template {} not found.", HivePieceCatalog.QUEEN_CHAMBER);
+            Alien.LOGGER.warn("Queen chamber not stamped: template {} not found.", chamberId);
             return;
         }
 

@@ -52,19 +52,19 @@ public class AlienPotions {
         )
     );
 
-    public static final BLibHolder<Potion> LONG_METAMORPHOSIS = REGISTRY.createHolder(
-        "long_metamorphosis",
-        () -> new Potion(
-            "metamorphosis",
-            new MobEffectInstance(AlienMobEffects.getMetamorphosisHolder(), THREE_MINUTES_IN_TICKS)
-        )
-    );
+    // Metamorphosis is deliberately untiered: the effect is an on/off growth accelerant, so longer or stronger
+    // variants would be meaningless. Existing long/strong bottles in old worlds become "uncraftable potion" items.
 
-    public static final BLibHolder<Potion> STRONG_METAMORPHOSIS = REGISTRY.createHolder(
-        "strong_metamorphosis",
+    /**
+     * Single-tier by design, like Metamorphosis. Instant effect: on a xenomorph it freezes growth (reversed only by
+     * Metamorphosis); on a host carrying a chestburster it resets the burst clock to five days out, with an
+     * escalating jelly-sickness gamble - see {@code GrowthSuppressionStatusEffect}.
+     */
+    public static final BLibHolder<Potion> GROWTH_SUPPRESSION = REGISTRY.createHolder(
+        "growth_suppression",
         () -> new Potion(
-            "metamorphosis",
-            new MobEffectInstance(AlienMobEffects.getMetamorphosisHolder(), THIRTY_SECONDS_IN_TICKS, 1)
+            "growth_suppression",
+            new MobEffectInstance(AlienMobEffects.getGrowthSuppressionHolder(), 1)
         )
     );
 
@@ -123,18 +123,11 @@ public class AlienPotions {
             METAMORPHOSIS
         );
 
-        // Metamorphosis + Redstone -> Long Metamorphosis
+        // Awkward + Poison Jelly -> Growth Suppression
         brewingRegistry.registerMix(
-            METAMORPHOSIS,
-            () -> Items.REDSTONE,
-            LONG_METAMORPHOSIS
-        );
-
-        // Metamorphosis + Glowstone -> Strong Metamorphosis
-        brewingRegistry.registerMix(
-            METAMORPHOSIS,
-            () -> Items.GLOWSTONE_DUST,
-            STRONG_METAMORPHOSIS
+            Potions.AWKWARD,
+            AlienItems.POISON_JELLY,
+            GROWTH_SUPPRESSION
         );
 
         // Awkward + Raw Scourge Jelly -> Scourge

@@ -55,14 +55,82 @@ public final class HivePieceCatalog {
         hive("chamber/chamber_scourge_1x1")
     );
 
-    /** Every hive piece id the loader should parse at startup. */
+    /**
+     * The strain mirror folders under {@code hive/} that hold full copies of the piece set. The NORMAL set lives at
+     * the root ({@code hive/<type>/...}); each strain here has an identical tree at {@code hive/<strain>/<type>/...}.
+     * IRRADIATED has no set yet and falls back to the normal pieces until its folder exists (then add it here).
+     */
+    private static final List<String> STRAIN_FOLDER_PREFIXES = List.of("aberrant/", "nether/");
+
+    /**
+     * The strain folder prefix for a lineage variant: {@code ""} (normal set) for normal, irradiated (no set yet),
+     * and unknown/null variants; {@code "aberrant/"} / {@code "nether/"} for their mirror sets.
+     */
+    public static String strainFolderPrefix(
+        @org.jetbrains.annotations.Nullable com.alien.common.model.alien.variant.AlienVariant variant
+    ) {
+        if (variant == null) {
+            return "";
+        }
+        var type = com.alien.common.data.AlienVariantTypes.getFor(variant);
+        if (type == com.alien.common.data.AlienVariantTypes.ABERRANT) {
+            return "aberrant/";
+        }
+        if (type == com.alien.common.data.AlienVariantTypes.NETHER) {
+            return "nether/";
+        }
+        return "";
+    }
+
+    /** The founding queen chamber for a lineage variant (the strain's own core piece). */
+    public static ResourceLocation queenChamber(
+        @org.jetbrains.annotations.Nullable com.alien.common.model.alien.variant.AlienVariant variant
+    ) {
+        var prefix = strainFolderPrefix(variant);
+        return prefix.isEmpty() ? QUEEN_CHAMBER : withStrainFolder(QUEEN_CHAMBER, prefix);
+    }
+
+    /** True for ANY strain's queen chamber - the founding seed must never be selected as a growth piece. */
+    public static boolean isQueenChamber(ResourceLocation id) {
+        return id.getPath().endsWith("core/queen_chamber_3x3");
+    }
+
+    /** True when the piece id belongs to the given lineage variant's strain set (normal set for null/no-set strains). */
+    public static boolean belongsToStrain(
+        ResourceLocation id,
+        @org.jetbrains.annotations.Nullable com.alien.common.model.alien.variant.AlienVariant variant
+    ) {
+        var rest = id.getPath().substring("hive/".length());
+        var owner = "";
+        for (var prefix : STRAIN_FOLDER_PREFIXES) {
+            if (rest.startsWith(prefix)) {
+                owner = prefix;
+                break;
+            }
+        }
+        return owner.equals(strainFolderPrefix(variant));
+    }
+
+    private static ResourceLocation withStrainFolder(ResourceLocation normalId, String prefix) {
+        var rest = normalId.getPath().substring("hive/".length());
+        return ResourceLocation.fromNamespaceAndPath(Alien.MOD_ID, "hive/" + prefix + rest);
+    }
+
+    /** Every hive piece id the loader should parse at startup: the normal set plus every strain mirror set. */
     public static List<ResourceLocation> all() {
-        var all = new java.util.ArrayList<ResourceLocation>();
-        all.add(QUEEN_CHAMBER);
-        all.addAll(HALLWAYS);
-        all.addAll(ROYAL_HALLWAYS);
-        all.addAll(HUBS);
-        all.addAll(CHAMBERS);
+        var normal = new java.util.ArrayList<ResourceLocation>();
+        normal.add(QUEEN_CHAMBER);
+        normal.addAll(HALLWAYS);
+        normal.addAll(ROYAL_HALLWAYS);
+        normal.addAll(HUBS);
+        normal.addAll(CHAMBERS);
+
+        var all = new java.util.ArrayList<>(normal);
+        for (var prefix : STRAIN_FOLDER_PREFIXES) {
+            for (var id : normal) {
+                all.add(withStrainFolder(id, prefix));
+            }
+        }
         return List.copyOf(all);
     }
 

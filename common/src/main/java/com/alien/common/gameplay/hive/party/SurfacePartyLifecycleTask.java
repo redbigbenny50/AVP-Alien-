@@ -46,7 +46,9 @@ public final class SurfacePartyLifecycleTask {
         }
 
         var currentTick = serverLevel.getGameTime();
-        var isDay = serverLevel.isDay();
+        // Hive-rhythm day (synthetic in fixed-time dimensions like the Nether, or dawn would never come and
+        // parties would never resolve).
+        var isDay = com.alien.common.gameplay.hive.dimension.DimensionHiveProfiles.isHiveDay(serverLevel);
 
         var iterator = location.parties().iterator();
         while (iterator.hasNext()) {
@@ -245,6 +247,19 @@ public final class SurfacePartyLifecycleTask {
             );
             return;
         }
+        // PRIORITY STRUCTURE VENT (100% - skips the drop roll): a profile-tagged structure within reach of the
+        // party (Nether: bastion remnants - the piglin larder) gets a GUARANTEED vent so host parties gain a
+        // permanent door into it. One vent per structure: skipped while any SURFACE vent already sits inside the
+        // structure's bounds, so the guarantee never stacks. Deliberately ignores the per-claim vent cap - the
+        // structure chunk is its own claim, and the one-per-structure guard is the real limiter.
+        var dimensionProfile = com.alien.common.gameplay.hive.dimension.DimensionHiveProfiles.get(serverLevel);
+        if (
+            dimensionProfile.priorityVentStructures() != null
+                && tryPlacePriorityStructureVent(serverLevel, location, chunk, anchor, dimensionProfile)
+        ) {
+            return;
+        }
+
         // Roll LAST: burning the 10% chance and THEN bailing on a bad spot wasted the drop entirely.
         if (serverLevel.random.nextDouble() >= config.surfacePartyVentDropChance()) {
             Alien.LOGGER.info(
@@ -260,7 +275,7 @@ public final class SurfacePartyLifecycleTask {
 
         // Search the whole chunk for a placeable surface column, not just the exact centre block: on a hillside
         // (or under a tree / in water) the centre column is rarely sturdy, so the drop silently aborted.
-        var ventPos = findSurfaceVentSpot(serverLevel, chunk, anchor);
+        var ventPos = findSurfaceVentSpot(serverLevel, chunk, anchor, location.lineageVariantOrNull());
         if (ventPos == null) {
             Alien.LOGGER.info(
                 "Hive: surface party made NO vent at {} for {} - no sturdy, open surface column anywhere in the chunk.",
@@ -304,6 +319,100 @@ public final class SurfacePartyLifecycleTask {
 
     static final double VENT_PROTECTED_PLAYER_RADIUS = 32.0;
 
+    /** How far out (chunks, chebyshev) a wrapping party looks for a priority structure to vent. */
+    private static final int PRIORITY_STRUCTURE_SEARCH_RADIUS_CHUNKS = 3;
+
+    /**
+     * The 100% structure vent: searches the ring around the party's wrap-up chunk for a piece of a profile-tagged
+     * structure (probing several Y levels per column - bastions are tall), refuses if any SURFACE vent already sits
+     * inside that structure's bounds, and otherwise plants a guaranteed vent on a legal spot inside the structure
+     * chunk (all normal vent rules - shelf surface, base protection, lava safety for non-fireproof strains - still
+     * apply). Returns true only when a vent was actually placed.
+     */
+    private static boolean tryPlacePriorityStructureVent(
+        ServerLevel serverLevel,
+        com.alien.common.gameplay.hive.location.HiveLocation location,
+        ChunkPos partyChunk,
+        @org.jetbrains.annotations.Nullable BlockPos anchor,
+        com.alien.common.gameplay.hive.dimension.DimensionHiveProfiles.Profile profile
+    ) {
+        var variant = location.lineageVariantOrNull();
+        if (variant == null) {
+            return false;
+        }
+        var nearY = anchor != null ? anchor.getY() : location.centerPos().getY();
+        var midY = (profile.depthMinY() + profile.depthMaxY()) / 2;
+        int[] probeYs = { nearY, midY, profile.depthMaxY() - 12, profile.depthMinY() + 12 };
+
+        for (var radius = 0; radius <= PRIORITY_STRUCTURE_SEARCH_RADIUS_CHUNKS; radius++) {
+            for (var dx = -radius; dx <= radius; dx++) {
+                for (var dz = -radius; dz <= radius; dz++) {
+                    if (radius > 0 && Math.max(Math.abs(dx), Math.abs(dz)) != radius) {
+                        continue;
+                    }
+                    var probeChunk = new ChunkPos(partyChunk.x + dx, partyChunk.z + dz);
+                    if (!serverLevel.hasChunk(probeChunk.x, probeChunk.z)) {
+                        continue;
+                    }
+
+                    net.minecraft.world.level.levelgen.structure.StructureStart hit = null;
+                    for (var probeY : probeYs) {
+                        var probe = probeChunk.getMiddleBlockPosition(probeY);
+                        var start = serverLevel.structureManager()
+                            .getStructureWithPieceAt(probe, profile.priorityVentStructures());
+                        if (start.isValid()) {
+                            hit = start;
+                            break;
+                        }
+                    }
+                    if (hit == null) {
+                        continue;
+                    }
+
+                    // One door per larder: any existing SURFACE vent inside the structure's bounds means it is
+                    // already served - fall through to the ordinary drop roll instead.
+                    var bounds = hit.getBoundingBox();
+                    for (var vent : location.ventManager().ventsOfKind(com.alien.common.gameplay.hive.vent.VentKind.SURFACE)) {
+                        if (bounds.isInside(vent)) {
+                            return false;
+                        }
+                    }
+
+                    var anchorY = com.alien.common.gameplay.hive.dimension.DimensionHiveProfiles.surfaceY(
+                        serverLevel, profile, probeChunk.getMiddleBlockPosition(0).getX(),
+                        probeChunk.getMiddleBlockPosition(0).getZ(), nearY
+                    );
+                    if (anchorY == com.alien.common.gameplay.hive.dimension.DimensionHiveProfiles.NO_SURFACE) {
+                        continue;
+                    }
+                    var structureAnchor = new BlockPos(
+                        probeChunk.getMiddleBlockPosition(0).getX(), anchorY, probeChunk.getMiddleBlockPosition(0).getZ()
+                    );
+                    var ventPos = findSurfaceVentSpot(serverLevel, probeChunk, structureAnchor, variant);
+                    if (ventPos == null) {
+                        continue;
+                    }
+
+                    com.alien.common.gameplay.hive.vent.VentPlacement.place(
+                        serverLevel,
+                        ventPos,
+                        AlienVariantTypes.getFor(variant),
+                        com.alien.common.gameplay.hive.vent.VentKind.SURFACE,
+                        location
+                    );
+                    Alien.LOGGER.info(
+                        "Hive: surface party planted a GUARANTEED structure vent at {} for {} (priority structure at {})",
+                        ventPos,
+                        location.id(),
+                        probeChunk
+                    );
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
     /**
      * A sturdy, open surface column near where the party actually stood. Rings outward from the ANCHOR (a live member's
      * position), not the chunk centre, and rejects any column more than {@link #MAX_VENT_Y_DROP} off the anchor's Y so
@@ -312,9 +421,12 @@ public final class SurfacePartyLifecycleTask {
     private static @org.jetbrains.annotations.Nullable BlockPos findSurfaceVentSpot(
         ServerLevel serverLevel,
         ChunkPos chunk,
-        @org.jetbrains.annotations.Nullable BlockPos anchor
+        @org.jetbrains.annotations.Nullable BlockPos anchor,
+        @org.jetbrains.annotations.Nullable com.alien.common.model.alien.variant.AlienVariant variant
     ) {
         var centre = anchor != null ? anchor : chunk.getMiddleBlockPosition(0);
+        var profile = com.alien.common.gameplay.hive.dimension.DimensionHiveProfiles.get(serverLevel);
+        var lavaSafety = com.alien.common.gameplay.hive.dimension.DimensionHiveProfiles.needsLavaSafety(profile, variant);
         for (int radius = 0; radius <= 7; radius++) {
             for (int dx = -radius; dx <= radius; dx++) {
                 for (int dz = -radius; dz <= radius; dz++) {
@@ -323,7 +435,10 @@ public final class SurfacePartyLifecycleTask {
                     }
                     int x = centre.getX() + dx;
                     int z = centre.getZ() + dz;
-                    int y = serverLevel.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, x, z);
+                    int y = com.alien.common.gameplay.hive.dimension.DimensionHiveProfiles.surfaceY(serverLevel, profile, x, z, centre.getY());
+                    if (y == com.alien.common.gameplay.hive.dimension.DimensionHiveProfiles.NO_SURFACE) {
+                        continue;
+                    }
                     // Reject a column whose surface is far off the anchor's Y - a spire top or a deep pit the party
                     // could reach but not climb between. Skipped when there is no anchor (legacy callers).
                     if (anchor != null && Math.abs(y - anchor.getY()) > MAX_VENT_Y_DROP) {
@@ -336,6 +451,10 @@ public final class SurfacePartyLifecycleTask {
                         continue;
                     }
                     if (serverLevel.hasNearbyAlivePlayer(x + 0.5, y, z + 0.5, VENT_PROTECTED_PLAYER_RADIUS)) {
+                        continue;
+                    }
+                    // Lava safety: a non-fireproof strain's DOORWAY never opens beside lava.
+                    if (lavaSafety && !com.alien.common.gameplay.hive.dimension.DimensionHiveProfiles.isLavaSafe(serverLevel, candidate, 2)) {
                         continue;
                     }
                     var ground = candidate.below();
@@ -378,15 +497,23 @@ public final class SurfacePartyLifecycleTask {
         }
         var variantType = AlienVariantTypes.getFor(variant);
         var centerBlock = chunk.getMiddleBlockPosition(0);
+        var profile = com.alien.common.gameplay.hive.dimension.DimensionHiveProfiles.get(serverLevel);
+        var lavaSafety = com.alien.common.gameplay.hive.dimension.DimensionHiveProfiles.needsLavaSafety(profile, variant);
 
         // The node at the heart of the patch (skipped if something already occupies the spot - repeated parties
         // in the same chunk just thicken the resin around the existing node).
-        var centerY = serverLevel.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, centerBlock.getX(), centerBlock.getZ());
+        var centerY = com.alien.common.gameplay.hive.dimension.DimensionHiveProfiles.surfaceY(
+            serverLevel, profile, centerBlock.getX(), centerBlock.getZ(), location.centerPos().getY()
+        );
+        if (centerY == com.alien.common.gameplay.hive.dimension.DimensionHiveProfiles.NO_SURFACE) {
+            return;
+        }
         var nodePos = new BlockPos(centerBlock.getX(), centerY, centerBlock.getZ());
         var nodeGround = nodePos.below();
         if (
             serverLevel.getBlockState(nodePos).isAir()
                 && serverLevel.getBlockState(nodeGround).isFaceSturdy(serverLevel, nodeGround, Direction.UP)
+                && !(lavaSafety && !com.alien.common.gameplay.hive.dimension.DimensionHiveProfiles.isLavaSafe(serverLevel, nodePos, 2))
         ) {
             serverLevel.setBlock(nodePos, variantType.resinNode().get().defaultBlockState(), 3);
         }
@@ -395,8 +522,14 @@ public final class SurfacePartyLifecycleTask {
         for (int i = 0; i < RESIN_PATCH_ATTEMPTS; i++) {
             int x = centerBlock.getX() + serverLevel.random.nextInt(RESIN_PATCH_RADIUS * 2 + 1) - RESIN_PATCH_RADIUS;
             int z = centerBlock.getZ() + serverLevel.random.nextInt(RESIN_PATCH_RADIUS * 2 + 1) - RESIN_PATCH_RADIUS;
-            int y = serverLevel.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, x, z);
+            int y = com.alien.common.gameplay.hive.dimension.DimensionHiveProfiles.surfaceY(serverLevel, profile, x, z, centerY);
+            if (y == com.alien.common.gameplay.hive.dimension.DimensionHiveProfiles.NO_SURFACE) {
+                continue;
+            }
             var pos = new BlockPos(x, y, z);
+            if (lavaSafety && !com.alien.common.gameplay.hive.dimension.DimensionHiveProfiles.isLavaSafe(serverLevel, pos, 1)) {
+                continue;
+            }
             var ground = pos.below();
             if (
                 !serverLevel.getBlockState(pos).isAir()

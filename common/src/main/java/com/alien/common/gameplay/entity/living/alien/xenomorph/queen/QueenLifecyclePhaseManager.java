@@ -880,12 +880,22 @@ public class QueenLifecyclePhaseManager implements NBTSerializable {
     private int pickTargetY() {
         var random = queen.getRandom();
         var roll = random.nextInt(COMMON_WEIGHT + RARE_WEIGHT + VERY_RARE_WEIGHT);
+        int rolled;
         if (roll < COMMON_WEIGHT) {
-            return randomBetween(random, COMMON_Y_MIN, COMMON_Y_MAX);
+            rolled = randomBetween(random, COMMON_Y_MIN, COMMON_Y_MAX);
         } else if (roll < COMMON_WEIGHT + RARE_WEIGHT) {
-            return randomBetween(random, RARE_Y_MIN, RARE_Y_MAX);
+            rolled = randomBetween(random, RARE_Y_MIN, RARE_Y_MAX);
+        } else {
+            rolled = randomBetween(random, VERY_RARE_Y_MIN, VERY_RARE_Y_MAX);
         }
-        return randomBetween(random, VERY_RARE_Y_MIN, VERY_RARE_Y_MAX);
+        // The bands above are hand-tuned OVERWORLD depths; other dimensions have fundamentally different vertical
+        // shape (the Nether's floor is Y 0 - the deep bands would aim below its bedrock). Remap the rolled Y into
+        // this dimension's own depth band, preserving the weighted shape; identity in the overworld.
+        if (queen.level() instanceof ServerLevel bandLevel) {
+            var profile = com.alien.common.gameplay.hive.dimension.DimensionHiveProfiles.get(bandLevel);
+            rolled = com.alien.common.gameplay.hive.dimension.DimensionHiveProfiles.remapFromOverworldBand(rolled, profile);
+        }
+        return rolled;
     }
 
     private static int randomBetween(RandomSource random, int minInclusive, int maxInclusive) {

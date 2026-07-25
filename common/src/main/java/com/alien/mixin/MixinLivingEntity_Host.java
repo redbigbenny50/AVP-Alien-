@@ -50,6 +50,30 @@ public abstract class MixinLivingEntity_Host extends Entity implements Host {
     private Option<EntityType<?>> embryoTypeOption = Option.none();
 
     @Unique
+    private static final String NBT_SUPPRESSION_DOSE_COUNT = "suppressionDoseCount";
+
+    @Unique
+    private int suppressionDoseCount;
+
+    @Unique
+    private static final String NBT_JELLY_TOXICITY = "jellyToxicity";
+
+    @Unique
+    private int jellyToxicity;
+
+    @Unique
+    private static final String NBT_SUPPRESSION_SPENT = "suppressionSpent";
+
+    @Unique
+    private boolean suppressionSpent;
+
+    @Unique
+    private static final String NBT_EMBRYO_WITHERED = "embryoWithered";
+
+    @Unique
+    private boolean embryoWithered;
+
+    @Unique
     private GeneContainerProxy parasiteGeneContainer;
 
     public MixinLivingEntity_Host(EntityType<?> entityType, Level level) {
@@ -108,6 +132,11 @@ public abstract class MixinLivingEntity_Host extends Entity implements Host {
         if (compoundTag.contains(NBT_HOST_EMBED_GAME_TIME)) {
             this.hostEmbedGameTime = compoundTag.getLong(NBT_HOST_EMBED_GAME_TIME);
         }
+
+        this.suppressionDoseCount = compoundTag.getInt(NBT_SUPPRESSION_DOSE_COUNT);
+        this.jellyToxicity = compoundTag.getInt(NBT_JELLY_TOXICITY);
+        this.suppressionSpent = compoundTag.getBoolean(NBT_SUPPRESSION_SPENT);
+        this.embryoWithered = compoundTag.getBoolean(NBT_EMBRYO_WITHERED);
     }
 
     @Inject(at = @At("HEAD"), method = "addAdditionalSaveData")
@@ -125,6 +154,40 @@ public abstract class MixinLivingEntity_Host extends Entity implements Host {
         if (this.hostEmbedGameTime != Long.MIN_VALUE) {
             compoundTag.putLong(NBT_HOST_EMBED_GAME_TIME, this.hostEmbedGameTime);
         }
+
+        compoundTag.putInt(NBT_SUPPRESSION_DOSE_COUNT, suppressionDoseCount);
+        compoundTag.putInt(NBT_JELLY_TOXICITY, jellyToxicity);
+        compoundTag.putBoolean(NBT_SUPPRESSION_SPENT, suppressionSpent);
+        compoundTag.putBoolean(NBT_EMBRYO_WITHERED, embryoWithered);
+    }
+
+    /**
+     * "You die and the burster appears." A host whose embryo carries the death-sentence mark chest-bursts on death -
+     * whatever killed them - instead of taking the embryo to the grave. The factory reads the withered mark off this
+     * host, so the emerging burster is born withered.
+     */
+    @Inject(at = @At("HEAD"), method = "die")
+    public void avp_alien$witheredEmbryoDeathBurst(DamageSource damageSource, CallbackInfo callbackInfo) {
+        var self = LivingEntity.class.cast(this);
+
+        if (self.level().isClientSide) {
+            return;
+        }
+        if (!isEmbryoWithered() || getEmbryoType().isNone()) {
+            return;
+        }
+
+        AlienEmbryoUtil.birthEmbryos(self);
+        self.level()
+            .playSound(
+                null,
+                self,
+                com.alien.common.registry.init.AlienSoundEvents.ENTITY_CHESTBURSTER_BURST.get(),
+                net.minecraft.sounds.SoundSource.HOSTILE,
+                0.25F,
+                1
+            );
+        removeEmbryo();
     }
 
     @Override
@@ -174,6 +237,46 @@ public abstract class MixinLivingEntity_Host extends Entity implements Host {
     @Override
     public void setEmbryoGrowthTimeInTicks(int embryoGrowthTimeInTicks) {
         this.embryoGrowthTimeInTicks = embryoGrowthTimeInTicks;
+    }
+
+    @Override
+    public int getSuppressionDoseCount() {
+        return suppressionDoseCount;
+    }
+
+    @Override
+    public void setSuppressionDoseCount(int doseCount) {
+        this.suppressionDoseCount = doseCount;
+    }
+
+    @Override
+    public int getJellyToxicity() {
+        return jellyToxicity;
+    }
+
+    @Override
+    public void setJellyToxicity(int toxicity) {
+        this.jellyToxicity = toxicity;
+    }
+
+    @Override
+    public boolean isSuppressionSpent() {
+        return suppressionSpent;
+    }
+
+    @Override
+    public void setSuppressionSpent(boolean spent) {
+        this.suppressionSpent = spent;
+    }
+
+    @Override
+    public boolean isEmbryoWithered() {
+        return embryoWithered;
+    }
+
+    @Override
+    public void setEmbryoWithered(boolean withered) {
+        this.embryoWithered = withered;
     }
 
     @Override

@@ -3,6 +3,8 @@ package com.alien.common.registry.init;
 import com.alien.Alien;
 import com.alien.common.gameplay.effect.BloodLossStatusEffect;
 import com.alien.common.gameplay.effect.FrenzyStatusEffect;
+import com.alien.common.gameplay.effect.GrowthSuppressionStatusEffect;
+import com.alien.common.gameplay.effect.JellySicknessStatusEffect;
 import com.alien.common.gameplay.effect.MarkedForDeathStatusEffect;
 import com.alien.common.gameplay.effect.MetamorphosisStatusEffect;
 import com.alien.common.gameplay.effect.ScourgeStatusEffect;
@@ -22,6 +24,13 @@ public class AlienMobEffects {
 
     private static final BLibHolder<MobEffect> FRENZY = create("frenzy", FrenzyStatusEffect::new);
 
+    private static final BLibHolder<MobEffect> GROWTH_SUPPRESSION = create(
+        "growth_suppression",
+        GrowthSuppressionStatusEffect::new
+    );
+
+    private static final BLibHolder<MobEffect> JELLY_SICKNESS = create("jelly_sickness", JellySicknessStatusEffect::new);
+
     private static final BLibHolder<MobEffect> METAMORPHOSIS = create("metamorphosis", MetamorphosisStatusEffect::new);
 
     private static final BLibHolder<MobEffect> SCOURGE = create("scourge", ScourgeStatusEffect::new);
@@ -37,6 +46,14 @@ public class AlienMobEffects {
 
     public static Holder<MobEffect> getFrenzyHolder() {
         return FRENZY.getBackingHolder();
+    }
+
+    public static Holder<MobEffect> getGrowthSuppressionHolder() {
+        return GROWTH_SUPPRESSION.getBackingHolder();
+    }
+
+    public static Holder<MobEffect> getJellySicknessHolder() {
+        return JELLY_SICKNESS.getBackingHolder();
     }
 
     public static Holder<MobEffect> getMetamorphosisHolder() {

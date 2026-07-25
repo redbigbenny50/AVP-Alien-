@@ -43,7 +43,7 @@ public final class SurfacePartyDispatch {
         }
 
         var serverLevel = server.getLevel(location.dimension());
-        if (serverLevel == null || serverLevel.isDay()) {
+        if (serverLevel == null || com.alien.common.gameplay.hive.dimension.DimensionHiveProfiles.isHiveDay(serverLevel)) {
             return;
         }
 
@@ -151,6 +151,13 @@ public final class SurfacePartyDispatch {
         var origin = claimed.get(level.random.nextInt(claimed.size()));
         var originBlock = origin.getMiddleBlockPosition(0);
 
+        // Dimension shape: SKY worlds use the heightmap; ceiled worlds (Nether-like) treat any open SHELF as
+        // surface, searched near the hive's own level. Host-rich biomes are PREFERRED (first match wins), any
+        // valid spot is the fallback - a preference, never a hard filter.
+        var profile = com.alien.common.gameplay.hive.dimension.DimensionHiveProfiles.get(level);
+        var nearY = location.centerPos().getY();
+        BlockPos fallback = null;
+
         for (var radius = 0; radius <= SPAWN_SEARCH_RADIUS_CHUNKS; radius++) {
             for (var dx = -radius; dx <= radius; dx++) {
                 for (var dz = -radius; dz <= radius; dz++) {
@@ -159,18 +166,32 @@ public final class SurfacePartyDispatch {
                     }
                     var x = originBlock.getX() + dx * 16 + level.random.nextInt(16);
                     var z = originBlock.getZ() + dz * 16 + level.random.nextInt(16);
-                    var surfaceY = level.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, x, z);
+                    var surfaceY = com.alien.common.gameplay.hive.dimension.DimensionHiveProfiles.surfaceY(level, profile, x, z, nearY);
+                    if (surfaceY == com.alien.common.gameplay.hive.dimension.DimensionHiveProfiles.NO_SURFACE) {
+                        continue;
+                    }
                     var pos = new BlockPos(x, surfaceY, z);
-                    if (isValidSurfaceSpawnPos(level, pos)) {
+                    if (!isValidSurfaceSpawnPos(level, profile, location, pos)) {
+                        continue;
+                    }
+                    if (com.alien.common.gameplay.hive.dimension.DimensionHiveProfiles.isHostRichPreferred(level, profile, pos)) {
                         return pos;
+                    }
+                    if (fallback == null) {
+                        fallback = pos;
                     }
                 }
             }
         }
-        return null;
+        return fallback;
     }
 
-    private static boolean isValidSurfaceSpawnPos(ServerLevel level, BlockPos pos) {
+    private static boolean isValidSurfaceSpawnPos(
+        ServerLevel level,
+        com.alien.common.gameplay.hive.dimension.DimensionHiveProfiles.Profile profile,
+        HiveLocation location,
+        BlockPos pos
+    ) {
         if (!level.getWorldBorder().isWithinBounds(pos)) {
             return false;
         }
@@ -199,7 +220,15 @@ public final class SurfacePartyDispatch {
         ) {
             return false;
         }
-        return level.canSeeSky(pos);
+        // Lava safety: in lava-rich dimensions, non-fireproof strains never surface next to lava - nether morphs
+        // do not care, everyone else digs and walks AROUND it.
+        if (
+            com.alien.common.gameplay.hive.dimension.DimensionHiveProfiles.needsLavaSafety(profile, location.lineageVariantOrNull())
+                && !com.alien.common.gameplay.hive.dimension.DimensionHiveProfiles.isLavaSafe(level, pos, 2)
+        ) {
+            return false;
+        }
+        return com.alien.common.gameplay.hive.dimension.DimensionHiveProfiles.isOpenToWorld(level, profile, pos);
     }
 
     private static int materialize(ServerLevel level, HiveParty.SurfaceSpawn party, BlockPos spawnPos) {

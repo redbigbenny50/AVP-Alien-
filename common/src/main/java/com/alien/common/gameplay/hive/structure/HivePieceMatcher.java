@@ -73,8 +73,18 @@ public final class HivePieceMatcher {
         HivePieceRegistry registry,
         Predicate<ChunkPos> chunkIsFree
     ) {
+        return matchesFromRegistry(frontier, registry, chunkIsFree, null);
+    }
+
+    /** Strain-scoped variant: only pieces of the lineage variant's own strain set are considered. */
+    public static List<PieceMatch> matchesFromRegistry(
+        FrontierSocket frontier,
+        HivePieceRegistry registry,
+        Predicate<ChunkPos> chunkIsFree,
+        @org.jetbrains.annotations.Nullable com.alien.common.model.alien.variant.AlienVariant variant
+    ) {
         var results = new ArrayList<PieceMatch>();
-        for (HivePiece piece : registry.piecesWithDoorType(frontier.doorType())) {
+        for (HivePiece piece : registry.piecesWithDoorType(frontier.doorType(), variant)) {
             results.addAll(matches(frontier, piece, chunkIsFree));
         }
         return results;

@@ -29,6 +29,14 @@ import java.util.concurrent.TimeUnit;
 
 public class AlienEmbryoUtil {
 
+    /**
+     * Gestation length: when {@code embryoGrowthTimeInTicks} passes this, the chest-bursting phase begins. Public so
+     * the Metamorphosis effect can slam the clock here (burst now) and the Growth Suppression effect can rewind
+     * relative to it (five days out).
+     */
+    // TODO: Use data pack values here.
+    public static final int BURST_TIME_IN_TICKS = (int) (TimeUnit.MINUTES.toSeconds(5) * 20);
+
     public static void runAlienEmbryoRoutines(LivingEntity hostEntity) {
         var host = (Host) hostEntity;
         var level = hostEntity.level();
@@ -59,8 +67,7 @@ public class AlienEmbryoUtil {
 
         host.incrementEmbryoGrowthTimeInTicks();
 
-        // TODO: Use data pack values here.
-        var burstTimeInTicks = TimeUnit.MINUTES.toSeconds(5) * 20;
+        var burstTimeInTicks = BURST_TIME_IN_TICKS;
         if (host.getEmbryoGrowthTimeInTicks() <= burstTimeInTicks) {
 
             if (hostEntity instanceof Player player) {
@@ -172,6 +179,11 @@ public class AlienEmbryoUtil {
             // transition, so the eventual ADULT still knows - which is what feeds the brood bank (hosts are real
             // gains the hive earned, banked separately, uncapped, and drawn on before the main reserves).
             hostBornAlien.setHostBorn(true);
+        }
+
+        if (embryo instanceof Alien witheredCandidate && host.isEmbryoWithered()) {
+            // The death sentence marked this embryo: it emerges withered - the player played god and made a demon.
+            witheredCandidate.setWithered(true);
         }
 
         if (embryo instanceof Alien alien) {

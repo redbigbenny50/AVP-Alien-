@@ -155,7 +155,10 @@ public final class HiveRouter {
                 (role == HiveStructureRole.QUEEN_CHAMBER_CENTER || role == HiveStructureRole.QUEEN_CHAMBER_PART)
                     && !location.structurePieceByChunk().containsKey(roleEntry.getKey())
             ) {
-                location.structurePieceByChunk().put(roleEntry.getKey(), HivePieceCatalog.QUEEN_CHAMBER.toString());
+                location.structurePieceByChunk().put(
+                    roleEntry.getKey(),
+                    HivePieceCatalog.queenChamber(location.lineageVariantOrNull()).toString()
+                );
             }
         }
 
@@ -532,7 +535,7 @@ public final class HiveRouter {
             if (cheby(growthChunk(socket), goalChunk) > GOAL_REACH) {
                 continue;
             }
-            for (PieceMatch match : HivePieceMatcher.matchesFromRegistry(socket, registry, chunkIsFree)) {
+            for (PieceMatch match : HivePieceMatcher.matchesFromRegistry(socket, registry, chunkIsFree, location.lineageVariantOrNull())) {
                 if (
                     matchesType(match, roomType) && withinExtent(match, center)
                         && !occupiesReserved(match, forbidden)
@@ -600,7 +603,7 @@ public final class HiveRouter {
         FrontierSocket bestSocket = null;
         var candidates = (only != null) ? java.util.List.of(only) : new ArrayList<>(frontier);
         for (FrontierSocket socket : candidates) {
-            for (PieceMatch match : HivePieceMatcher.matchesFromRegistry(socket, registry, chunkIsFree)) {
+            for (PieceMatch match : HivePieceMatcher.matchesFromRegistry(socket, registry, chunkIsFree, location.lineageVariantOrNull())) {
                 if (!withinExtent(match, center) || !isCorridor(match) || occupiesReserved(match, reserved)) {
                     continue;
                 }
@@ -684,7 +687,7 @@ public final class HiveRouter {
             if (!isRoyalDoor(socket.doorType())) {
                 continue;
             }
-            var matches = HivePieceMatcher.matchesFromRegistry(socket, registry, chunkIsFree);
+            var matches = HivePieceMatcher.matchesFromRegistry(socket, registry, chunkIsFree, location.lineageVariantOrNull());
             if (matches.isEmpty()) {
                 continue; // soft priority: no fit this cycle - ordinary growth proceeds, this door retries next cycle
             }
@@ -1281,7 +1284,7 @@ public final class HiveRouter {
         // without building, and claimed-but-empty ground is exactly where the hive is allowed to build.
         var built = location.structurePieceByChunk().keySet();
         Predicate<ChunkPos> chunkIsFree = c -> !built.contains(c);
-        for (PieceMatch match : HivePieceMatcher.matchesFromRegistry(socket, registry, chunkIsFree)) {
+        for (PieceMatch match : HivePieceMatcher.matchesFromRegistry(socket, registry, chunkIsFree, location.lineageVariantOrNull())) {
             if (withinExtent(match, center) && place(level, location, match, socket, currentTick)) {
                 return true;
             }
@@ -1583,7 +1586,7 @@ public final class HiveRouter {
             var it = desired.iterator();
             want = (it.next().getOpposite() == it.next()) ? "hallway_straight" : "hallway_corner";
         }
-        for (HivePiece piece : registry.piecesWithDoorType("avp_alien:hive_door")) {
+        for (HivePiece piece : registry.piecesWithDoorType("avp_alien:hive_door", location.lineageVariantOrNull())) {
             if (!piece.id().getPath().contains(want) || piece.footprintChunksX() != 1 || piece.footprintChunksZ() != 1) {
                 continue;
             }

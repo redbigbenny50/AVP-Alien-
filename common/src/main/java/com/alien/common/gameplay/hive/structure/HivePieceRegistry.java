@@ -78,13 +78,26 @@ public final class HivePieceRegistry {
         return Collections.unmodifiableMap(pieces);
     }
 
-    /** All loaded pieces that expose at least one socket of the given door type (in their authored orientation). */
+    /** Normal-set pieces with the given door type. Prefer the variant overload - growth is strain-scoped. */
     public List<HivePiece> piecesWithDoorType(String doorType) {
+        return piecesWithDoorType(doorType, null);
+    }
+
+    /**
+     * All loaded pieces of the given lineage variant's STRAIN SET that expose at least one socket of the given door
+     * type (in their authored orientation). A nether lineage grows from nether pieces, an aberrant lineage from
+     * aberrant pieces, everything else from the normal set - strain hives are built from their own architecture.
+     */
+    public List<HivePiece> piecesWithDoorType(
+        String doorType,
+        @org.jetbrains.annotations.Nullable com.alien.common.model.alien.variant.AlienVariant variant
+    ) {
         return pieces.values()
             .stream()
-            // The queen chamber is the founding seed only - it must never be selected as a growth piece, or the
-            // planner would stamp a second core off an open royal socket.
-            .filter(p -> !p.id().equals(HivePieceCatalog.QUEEN_CHAMBER))
+            // The queen chamber (ANY strain's) is the founding seed only - it must never be selected as a growth
+            // piece, or the planner would stamp a second core off an open royal socket.
+            .filter(p -> !HivePieceCatalog.isQueenChamber(p.id()))
+            .filter(p -> HivePieceCatalog.belongsToStrain(p.id(), variant))
             .filter(p -> p.hasSocketType(doorType))
             .toList();
     }

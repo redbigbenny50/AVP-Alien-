@@ -63,9 +63,8 @@ public class QueenNaturalSpawnTask {
      * VERY_RARE_Y_MAX in {@code QueenLifecyclePhaseManager}) - she takes root anywhere she would normally dig to. "Deep
      * underground" is enforced by the no-sky check on the sampled spot, not by darkness.
      */
-    private static final int WILD_SPAWN_MIN_Y = -50;
+    // Depth now comes from DimensionHiveProfiles.get(level) — the overworld profile encodes -50..45.
 
-    private static final int WILD_SPAWN_MAX_Y = 45;
 
     private static final int POSITION_SAMPLES_PER_CHUNK = 32;
 
@@ -182,12 +181,12 @@ public class QueenNaturalSpawnTask {
             return false;
         }
 
-        var maxY = serverLevel.dimension() == Level.NETHER
-            ? serverLevel.dimensionType().logicalHeight()
-            : WILD_SPAWN_MAX_Y;
-        var minY = serverLevel.dimension() == Level.NETHER
-            ? serverLevel.getMinBuildHeight() + 5
-            : Math.max(serverLevel.getMinBuildHeight() + 5, WILD_SPAWN_MIN_Y);
+        // Depth band per dimension profile (overworld = the queen's tuned -50..45 envelope; ceiled dimensions get
+        // their real floor-to-logical-height range; modded dimensions derive from their own shape).
+        var profile = com.alien.common.gameplay.hive.dimension.DimensionHiveProfiles.get(serverLevel);
+        var maxY = profile.depthMaxY();
+        var minY = Math.max(serverLevel.getMinBuildHeight() + 5, profile.depthMinY());
+        var lavaSafety = com.alien.common.gameplay.hive.dimension.DimensionHiveProfiles.needsLavaSafety(profile, variant);
         if (maxY <= minY) {
             return false;
         }
@@ -212,8 +211,19 @@ public class QueenNaturalSpawnTask {
                 continue;
             }
 
-            // UNDERGROUND, not merely low: a ravine floor open to the sky is not a den. (Always false in the Nether.)
-            if (serverLevel.canSeeSky(pos)) {
+            // UNDERGROUND, not merely low: in sky dimensions a ravine floor open to the sky is not a den; in
+            // ceiled dimensions everything under the roof qualifies (the Nether's stacked caverns are all fair
+            // dens for her).
+            if (
+                profile.surfaceMode() == com.alien.common.gameplay.hive.dimension.DimensionHiveProfiles.SurfaceMode.SKY_SURFACE
+                    && serverLevel.canSeeSky(pos)
+            ) {
+                diagNoValidPosition++;
+                continue;
+            }
+
+            // Lava safety: a non-fireproof strain's queen never takes root beside lava.
+            if (lavaSafety && !com.alien.common.gameplay.hive.dimension.DimensionHiveProfiles.isLavaSafe(serverLevel, pos, 2)) {
                 diagNoValidPosition++;
                 continue;
             }

@@ -65,6 +65,12 @@ public class EnglishLanguageProvider extends FabricLanguageProvider {
         builder.add("item.minecraft.splash_potion.effect.metamorphosis", "Splash Potion of Metamorphosis");
         builder.add("item.minecraft.lingering_potion.effect.metamorphosis", "Lingering Potion of Metamorphosis");
         builder.add("item.minecraft.tipped_arrow.effect.metamorphosis", "Arrow of Metamorphosis");
+        builder.add("item.minecraft.potion.effect.growth_suppression", "Potion of Growth Suppression");
+        builder.add("item.minecraft.splash_potion.effect.growth_suppression", "Splash Potion of Growth Suppression");
+        builder.add("item.minecraft.lingering_potion.effect.growth_suppression", "Lingering Potion of Growth Suppression");
+        builder.add("item.minecraft.tipped_arrow.effect.growth_suppression", "Arrow of Growth Suppression");
+        builder.add("effect.avp_alien.growth_suppression", "Growth Suppression");
+        builder.add("effect.avp_alien.jelly_sickness", "Jelly Sickness");
         builder.add("item.minecraft.potion.effect.scourge", "Potion of Scourge");
         builder.add("item.minecraft.splash_potion.effect.scourge", "Splash Potion of Scourge");
         builder.add("item.minecraft.lingering_potion.effect.scourge", "Lingering Potion of Scourge");

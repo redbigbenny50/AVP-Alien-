@@ -44,6 +44,18 @@ public class AlienDataSyncKeys {
             .build(0F)
     );
 
+    /**
+     * Withered mark: wither-immune already (effect tag), black smoke aura, attacks inflict wither. NBT-persisted and
+     * deliberately NOT in {@code GrowthManager.TRANSITION_NBT_KEY_BLACKLIST}, so it rides every growth transition -
+     * a withered burster becomes a withered adult becomes, potentially, a withered queen.
+     */
+    public static final BLibHolder<DataSyncKey<Boolean>> ALIEN_IS_WITHERED = create(
+        "alien_is_withered",
+        builder -> builder.networkSynchronized(StreamCodecs.BOOLEAN)
+            .persistent("avpWithered", Codec.BOOL)
+            .build(false)
+    );
+
     public static final BLibHolder<DataSyncKey<Boolean>> ALIEN_IS_POISONED = create(
         "alien_is_poisoned",
         builder -> builder.networkSynchronized(StreamCodecs.BOOLEAN)

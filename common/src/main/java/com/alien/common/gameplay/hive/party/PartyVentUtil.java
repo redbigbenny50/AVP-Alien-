@@ -51,10 +51,15 @@ public final class PartyVentUtil {
         var minX = chunk.getMinBlockX();
         var minZ = chunk.getMinBlockZ();
 
+        var profile = com.alien.common.gameplay.hive.dimension.DimensionHiveProfiles.get(level);
         var candidates = new ArrayList<BlockPos>();
         for (int x = minX; x < minX + 16; x++) {
             for (int z = minZ; z < minZ + 16; z++) {
-                var y = level.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, x, z);
+                // Ceiled dimensions: emerge on the vent's own cavern shelf, not the bedrock roof the heightmap reports.
+                var y = com.alien.common.gameplay.hive.dimension.DimensionHiveProfiles.surfaceY(level, profile, x, z, vent.getY());
+                if (y == com.alien.common.gameplay.hive.dimension.DimensionHiveProfiles.NO_SURFACE) {
+                    continue;
+                }
                 var pos = new BlockPos(x, y, z);
                 if (isStandable(level, pos)) {
                     candidates.add(pos);

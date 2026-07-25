@@ -1,36 +1,15 @@
 package com.alien.common.gameplay.item;
 
-import com.alien.common.gameplay.entity.living.alien.Alien;
-import net.minecraft.world.InteractionHand;
-import net.minecraft.world.InteractionResult;
-import net.minecraft.world.entity.LivingEntity;
-import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.Item;
-import net.minecraft.world.item.ItemStack;
-import org.jetbrains.annotations.NotNull;
 
+/**
+ * Poison jelly is a brewing ingredient only: Awkward + Poison Jelly brews the Growth Suppression potion (see
+ * {@code AlienPotions}). The old direct right-click-a-xeno interaction is deliberately gone - suppressing a
+ * xenomorph's growth now requires the potion, mirroring how royal jelly requires the Metamorphosis potion.
+ */
 public class PoisonJellyItem extends Item {
 
     public PoisonJellyItem() {
         super(new Properties());
-    }
-
-    @Override
-    public @NotNull InteractionResult interactLivingEntity(
-        @NotNull ItemStack itemStack,
-        @NotNull Player player,
-        @NotNull LivingEntity livingEntity,
-        @NotNull InteractionHand interactionHand
-    ) {
-        if (
-            livingEntity instanceof Alien alien
-                && !alien.isPoisoned()
-        ) {
-            alien.setPoisoned(true);
-            itemStack.consume(1, player);
-            return InteractionResult.SUCCESS;
-        }
-
-        return super.interactLivingEntity(itemStack, player, livingEntity, interactionHand);
     }
 }

@@ -29,6 +29,7 @@ import net.minecraft.world.InteractionResult;
 import net.minecraft.world.damagesource.DamageSource;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.entity.LightningBolt;
 import net.minecraft.world.entity.Shearable;
 import net.minecraft.world.entity.ai.attributes.AttributeSupplier;
 import net.minecraft.world.entity.ai.attributes.Attributes;
@@ -52,13 +53,13 @@ public class Ovomorph extends Alien implements GOAPUser<Ovomorph>, Shearable {
 
     public static AttributeSupplier.Builder createOvomorphAttributes() {
         return Alien.createAlienAttributes()
-            .add(Attributes.ARMOR, 0f)
-            .add(Attributes.ARMOR_TOUGHNESS, 0f)
-            .add(Attributes.ATTACK_DAMAGE, 0f)
-            .add(Attributes.FOLLOW_RANGE, 0f)
-            .add(Attributes.KNOCKBACK_RESISTANCE, 1f)
-            .add(Attributes.MAX_HEALTH, PlayerStatConstants.BASE_HEALTH * 1.5F)
-            .add(Attributes.MOVEMENT_SPEED, 0f);
+                .add(Attributes.ARMOR, 0f)
+                .add(Attributes.ARMOR_TOUGHNESS, 0f)
+                .add(Attributes.ATTACK_DAMAGE, 0f)
+                .add(Attributes.FOLLOW_RANGE, 0f)
+                .add(Attributes.KNOCKBACK_RESISTANCE, 1f)
+                .add(Attributes.MAX_HEALTH, PlayerStatConstants.BASE_HEALTH * 1.5F)
+                .add(Attributes.MOVEMENT_SPEED, 0f);
     }
 
     public final DataAccessor<Byte> hatchStateId;
@@ -194,9 +195,9 @@ public class Ovomorph extends Alien implements GOAPUser<Ovomorph>, Shearable {
      */
     public boolean isHostBoundInTransit(BlockPos dropCell) {
         return dropCell.equals(hostDropTarget)
-            && isAlive()
-            && getHatchState().contains(HatchState.SLEEPING)
-            && (!isRooted.get() || isPassenger());
+                && isAlive()
+                && getHatchState().contains(HatchState.SLEEPING)
+                && (!isRooted.get() || isPassenger());
     }
 
     private static final String NBT_HOST_DROP_TARGET = "HostDropTarget";
@@ -213,29 +214,93 @@ public class Ovomorph extends Alien implements GOAPUser<Ovomorph>, Shearable {
     public void readAdditionalSaveData(@NotNull CompoundTag compoundTag) {
         super.readAdditionalSaveData(compoundTag);
         this.hostDropTarget = compoundTag.contains(NBT_HOST_DROP_TARGET)
-            ? BlockPos.of(compoundTag.getLong(NBT_HOST_DROP_TARGET))
-            : null;
+                ? BlockPos.of(compoundTag.getLong(NBT_HOST_DROP_TARGET))
+                : null;
+    }
+
+    /**
+     * Natural aberrant genesis, mirroring the villager-to-witch precedent: lightning striking a normal or nether egg
+     * mutates it into an aberrant egg (royal eggs mutate into royal aberrant eggs). This is the only way to create
+     * aberrants in avp_alien without the AVPHuman genetic system. Eggs only - adults are never converted. Aberrant
+     * and irradiated eggs take the strike like any other mob.
+     * <p>
+     * The replacement keeps the egg's physical state (hatch state, spawn count, rooted, name, persistence) but
+     * deliberately drops hive-logistics state (pickup claims, host-delivery stamp) and lineage membership - the old
+     * lineage would treat the mutated egg as a rival anyway, and the variant-faction auto-join on entity load slots
+     * the new egg into the aberrant variant faction on its own. When the nether-aberrant strain exists, the nether
+     * egg mapping here is the one line to retarget.
+     */
+    @Override
+    public void thunderHit(@NotNull ServerLevel serverLevel, @NotNull LightningBolt lightningBolt) {
+        var target = aberrantConversionTarget();
+
+        if (target == null) {
+            super.thunderHit(serverLevel, lightningBolt);
+            return;
+        }
+
+        var converted = target.create(serverLevel);
+
+        if (converted == null) {
+            super.thunderHit(serverLevel, lightningBolt);
+            return;
+        }
+
+        converted.copyPosition(this);
+        converted.hatchStateId.set(this.hatchStateId.get());
+        converted.maxSpawnCount.set(this.maxSpawnCount.get());
+        converted.isRooted.set(this.isRooted.get());
+
+        if (hasCustomName()) {
+            converted.setCustomName(getCustomName());
+            converted.setCustomNameVisible(isCustomNameVisible());
+        }
+
+        if (isPersistenceRequired()) {
+            converted.setPersistenceRequired();
+        }
+
+        serverLevel.addFreshEntity(converted);
+        discard();
+    }
+
+    /**
+     * The aberrant egg type a lightning strike turns this egg into, or {@code null} when this egg's strain does not
+     * convert (aberrant and irradiated lines).
+     */
+    private @Nullable EntityType<Ovomorph> aberrantConversionTarget() {
+        var type = getType();
+
+        if (type == AlienEntityTypes.OVOMORPH.get() || type == AlienEntityTypes.NETHER_OVOMORPH.get()) {
+            return AlienEntityTypes.ABERRANT_OVOMORPH.get();
+        }
+
+        if (type == AlienEntityTypes.ROYAL_OVOMORPH.get() || type == AlienEntityTypes.ROYAL_NETHER_OVOMORPH.get()) {
+            return AlienEntityTypes.ROYAL_ABERRANT_OVOMORPH.get();
+        }
+
+        return null;
     }
 
     public boolean canBeHeld() {
         return isAlive()
-            && !isDeadOrDying()
-            && !isRooted.get()
-            && getHatchState().contains(HatchState.SLEEPING);
+                && !isDeadOrDying()
+                && !isRooted.get()
+                && getHatchState().contains(HatchState.SLEEPING);
     }
 
     public boolean canBePickedUp() {
         return canBeHeld()
-            && onGround()
-            && !isPassenger();
+                && onGround()
+                && !isPassenger();
     }
 
     public void tryHatch() {
         if (
-            !level().isClientSide
-                && !hatchManager.isHatching()
-                && !hatchManager.isHatched()
-                && !isIrradiated()
+                !level().isClientSide
+                        && !hatchManager.isHatching()
+                        && !hatchManager.isHatched()
+                        && !isIrradiated()
         ) {
             hatchManager.hatch();
         }
@@ -276,12 +341,12 @@ public class Ovomorph extends Alien implements GOAPUser<Ovomorph>, Shearable {
 
         if (itemEntity != null) {
             itemEntity.setDeltaMovement(
-                itemEntity.getDeltaMovement()
-                    .add(
-                        (random.nextFloat() - random.nextFloat()) * 0.1F,
-                        random.nextFloat() * 0.05F,
-                        (random.nextFloat() - random.nextFloat()) * 0.1F
-                    )
+                    itemEntity.getDeltaMovement()
+                            .add(
+                                    (random.nextFloat() - random.nextFloat()) * 0.1F,
+                                    random.nextFloat() * 0.05F,
+                                    (random.nextFloat() - random.nextFloat()) * 0.1F
+                            )
             );
         }
     }
@@ -315,9 +380,9 @@ public class Ovomorph extends Alien implements GOAPUser<Ovomorph>, Shearable {
 
         if (
             // Entity is not an alien...
-            !entity.getType().is(AlienEntityTypeTags.ALIENS)
-                // OR entity is an ovomorph.
-                || entity.getType().is(AlienEntityTypeTags.OVOMORPHS)
+                !entity.getType().is(AlienEntityTypeTags.ALIENS)
+                        // OR entity is an ovomorph.
+                        || entity.getType().is(AlienEntityTypeTags.OVOMORPHS)
         ) {
             super.doPush(entity);
         }
@@ -326,7 +391,7 @@ public class Ovomorph extends Alien implements GOAPUser<Ovomorph>, Shearable {
     @Override
     protected boolean canBleedAcid() {
         return !hatchManager.isHatching()
-            && !hatchManager.isHatched();
+                && !hatchManager.isHatched();
     }
 
     @Override
@@ -353,8 +418,8 @@ public class Ovomorph extends Alien implements GOAPUser<Ovomorph>, Shearable {
     @Override
     protected boolean canHeal() {
         return !hatchManager.isHatching()
-            && !hatchManager.isHatched()
-            && super.canHeal();
+                && !hatchManager.isHatched()
+                && super.canHeal();
     }
 
     @Override

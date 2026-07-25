@@ -101,6 +101,8 @@ public abstract class Alien extends Monster implements DataUser {
 
     public final DataAccessor<Boolean> isPoisoned;
 
+    public final DataAccessor<Boolean> isWithered;
+
     public final DataAccessor<Float> moltAlpha;
 
     public final DataAccessor<Boolean> isMovingHorizontally;
@@ -132,6 +134,7 @@ public abstract class Alien extends Monster implements DataUser {
 
         this.hasTarget = new DataAccessor<>(this, BLibDataSyncKeys.ENTITY_HAS_TARGET.get());
         this.isPoisoned = new DataAccessor<>(this, AlienDataSyncKeys.ALIEN_IS_POISONED.get());
+        this.isWithered = new DataAccessor<>(this, AlienDataSyncKeys.ALIEN_IS_WITHERED.get());
         this.moltAlpha = new DataAccessor<>(this, AlienDataSyncKeys.ALIEN_MOLT_ALPHA.get());
         this.isMovingHorizontally = new DataAccessor<>(this, BLibDataSyncKeys.ENTITY_IS_MOVING_HORIZONTALLY.get());
         this.isMovingQuickly = new DataAccessor<>(this, AlienDataSyncKeys.ALIEN_IS_MOVING_QUICKLY.get());
@@ -253,6 +256,15 @@ public abstract class Alien extends Monster implements DataUser {
         return isPoisoned.get();
     }
 
+    /** Withered mark - see {@code AlienDataSyncKeys.ALIEN_IS_WITHERED}. Rides growth transitions via NBT. */
+    public boolean isWithered() {
+        return isWithered.get();
+    }
+
+    public void setWithered(boolean withered) {
+        this.isWithered.set(withered);
+    }
+
     public void setPoisoned(boolean isPoisoned) {
         this.isPoisoned.set(isPoisoned);
     }
@@ -339,6 +351,19 @@ public abstract class Alien extends Monster implements DataUser {
         }
 
         super.tick();
+
+        if (level().isClientSide && isWithered() && random.nextInt(4) == 0) {
+            level()
+                .addParticle(
+                    net.minecraft.core.particles.ParticleTypes.SMOKE,
+                    getRandomX(0.6),
+                    getRandomY(),
+                    getRandomZ(0.6),
+                    0,
+                    0.02,
+                    0
+                );
+        }
 
         if (!level().isClientSide) {
             movementAnalyzer.tick();
@@ -735,6 +760,22 @@ public abstract class Alien extends Monster implements DataUser {
         }
 
         return super.canBeAffected(mobEffectInstance);
+    }
+
+    @Override
+    public boolean doHurtTarget(@NotNull net.minecraft.world.entity.Entity target) {
+        var hurt = super.doHurtTarget(target);
+
+        // Withered aliens fight like wither skeletons: every landed hit inflicts the wither. Fellow aliens are
+        // untouched - wither sits in the does_not_affect_aliens effect tag.
+        if (hurt && isWithered() && target instanceof net.minecraft.world.entity.LivingEntity livingTarget) {
+            livingTarget.addEffect(
+                new MobEffectInstance(net.minecraft.world.effect.MobEffects.WITHER, 200, 0),
+                this
+            );
+        }
+
+        return hurt;
     }
 
     @Override
