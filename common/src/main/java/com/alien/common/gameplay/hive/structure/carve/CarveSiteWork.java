@@ -307,10 +307,10 @@ public final class CarveSiteWork {
     }
 
     /**
-     * THE NEVER-WEDGE FALLBACK: a site that cannot hydrate resolves via the legacy instant stamp (world + bookkeeping
-     * in one tick, exactly the {@code CARVE_ENABLED=false} path). If even the stamp is impossible - the template is
-     * truly gone - the consumed socket is restored so the frontier stays routable. Either way the site clears: a
-     * half-carved hole with a consumed socket and no site must never exist.
+     * THE NEVER-WEDGE FALLBACK: a site that cannot hydrate resolves via the instant stamp (world + bookkeeping in one
+     * tick). If even the stamp is impossible - the template is truly gone - the consumed socket is restored so the
+     * frontier stays routable. Either way the site clears: a half-carved hole with a consumed socket and no site must
+     * never exist.
      */
     private static void fallbackInstant(ServerLevel level, HiveLocation location, CarveSite site, String reason) {
         Alien.LOGGER.warn(

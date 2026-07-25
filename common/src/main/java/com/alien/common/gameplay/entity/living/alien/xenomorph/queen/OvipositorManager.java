@@ -294,9 +294,6 @@ public class OvipositorManager implements NBTSerializable {
      * loaded-but-unhydrated site whose state is unknown for another tick). Everything eggsack-shaped waits on this.
      */
     private boolean foundingCoreStillExcavating() {
-        if (!com.alien.common.gameplay.hive.structure.HiveRouter.CARVE_ENABLED) {
-            return false;
-        }
         var location = currentLocation();
         if (location == null || location.founderId() == null || location.reproductiveEstablished()) {
             return false;

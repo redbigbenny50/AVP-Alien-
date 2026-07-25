@@ -121,6 +121,18 @@ public class AlienDataSyncKeys {
             .build(0)
     );
 
+    /**
+     * The SERVER'S OWN TRUTH about a parasite's attachment: the entity id of the host it is riding, or -1 when
+     * detached. Entity ids are per-session, so this is deliberately NOT persistent - it is a live wire for clients,
+     * whose passenger lists can go stale (a refused or lost dismount leaves a ghost hugger glued on). The client
+     * self-heals from this value in {@code Parasite.tick}.
+     */
+    public static final BLibHolder<DataSyncKey<Integer>> PARASITE_ATTACHED_HOST_ID = create(
+        "parasite_attached_host_id",
+        builder -> builder.networkSynchronized(StreamCodecs.INT)
+            .build(-1)
+    );
+
     public static final BLibHolder<DataSyncKey<Integer>> QUEEN_BIND_CHAIN_COUNT = create(
         "queen_bind_chain_count",
         builder -> builder.networkSynchronized(StreamCodecs.INT)

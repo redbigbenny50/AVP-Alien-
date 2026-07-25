@@ -51,8 +51,8 @@ public final class HiveStructurePlacer {
      * world got built. Because new sockets only register here, a half-built piece exposes no doorways and the router
      * cannot commission past it - the one-build-at-a-time access rule enforces itself (design §8.3).</li>
      * </ul>
-     * This method is the LEGACY INSTANT STAMP: both halves in one tick, exactly the old behavior. It stays as the
-     * {@code HiveRouter.CARVE_ENABLED=false} fallback for A/B debugging.
+     * This method is the INSTANT STAMP: both halves in one tick. The routed build path always commissions carve sites
+     * instead; this stays for the never-wedge fallbacks and the carve-completion stamp itself.
      */
     public static boolean place(ServerLevel level, HiveLocation location, PieceMatch match, FrontierSocket connectedTo) {
         if (!placeWorld(level, location, match)) {

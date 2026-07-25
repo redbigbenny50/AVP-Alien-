@@ -10,6 +10,7 @@ import com.alien.common.gameplay.hive.lifecycle.QueenSettlementDetector;
 import com.alien.common.gameplay.hive.location.HiveLocationRegistry;
 import com.alien.common.gameplay.level.saveddata.QueenSpawnChunkData;
 import com.alien.common.network.AlienNetworking;
+import com.alien.common.network.HeadAttachmentSync;
 import com.alien.common.property.AlienPropertyAccess;
 import com.alien.common.registry.GrowthStageRegistry;
 import com.alien.common.registry.InfectionRegistry;
@@ -132,6 +133,9 @@ public class Alien {
 
         // Networking: hive inspection payloads (request/reply) for the engine workspace inspector.
         AlienNetworking.initialize();
+
+        // Facehugger head-attachment data: join/reload sync of the datapack-driven head profiles to clients.
+        HeadAttachmentSync.initialize();
 
         // Data Migration
         AlienDataMigrations.initialize();

@@ -268,11 +268,10 @@ public class QueenLifecyclePhaseManager implements NBTSerializable {
      * radius) the re-pick returns her current chunk and she simply retries on the next cycle.
      */
     /**
-     * Entry point for naturally spawned WILD queens: she takes root where she spawned and sleeps. The hibernation
-     * clock only runs while her chunk is entity-ticking, so undisturbed wilderness queens sleep indefinitely - it is
-     * sustained player activity in the area that accumulates the {@link #HIBERNATION_DURATION_TICKS} that finally
-     * wakes her. A solid hit rouses her to defend as usual; a nearby lineage may adopt her (see
-     * {@code tryWildAdoption}).
+     * Entry point for naturally spawned WILD queens: she takes root where she spawned and sleeps. The hibernation clock
+     * only runs while her chunk is entity-ticking, so undisturbed wilderness queens sleep indefinitely - it is
+     * sustained player activity in the area that accumulates the {@link #HIBERNATION_DURATION_TICKS} that finally wakes
+     * her. A solid hit rouses her to defend as usual; a nearby lineage may adopt her (see {@code tryWildAdoption}).
      */
     public void beginWildHibernation() {
         if (!isEnabled()) {
@@ -284,6 +283,36 @@ public class QueenLifecyclePhaseManager implements NBTSerializable {
         this.hibernationActivity = HibernationActivity.ASLEEP;
         this.phase = QueenLifecyclePhase.HIBERNATION;
         queen.isHibernating.set(true);
+
+        // A sleeping queen taking root nearby is not announced outright - but instincts notice. The italic whisper
+        // in her strain's color is the quiet tier: no scream, just dread. Waking her earns the scream.
+        broadcastToNearbyPlayers(
+            net.minecraft.network.chat.Component
+                .literal("Your instincts warn you danger is near...")
+                .withStyle(com.alien.common.data.AlienVariantTypes.getFor(queen).chatColor(), net.minecraft.ChatFormatting.ITALIC)
+        );
+    }
+
+    /**
+     * Entry point for THE FIRST wild queen of a world: no slumber, no waiting - she founds right away where she
+     * spawned, with her own genesis line as the world's hive-genesis announcement. Later wild queens use
+     * {@link #beginWildHibernation()} and are discovered, not announced.
+     */
+    public void beginWildImmediateFounding() {
+        if (!isEnabled()) {
+            return;
+        }
+        this.wildSpawned = true;
+        this.anchor = queen.blockPosition();
+        this.hibernationActivity = HibernationActivity.ASLEEP;
+        this.phase = QueenLifecyclePhase.FOUNDING_HANDOFF;
+        queen.isHibernating.set(false);
+        broadcastToNearbyPlayers(
+            net.minecraft.network.chat.Component
+                .literal("Something ancient screams towards the heavens...")
+                .withStyle(com.alien.common.data.AlienVariantTypes.getFor(queen).chatColor()),
+            true
+        );
     }
 
     public void restartLocationPhase() {
@@ -417,8 +446,8 @@ public class QueenLifecyclePhaseManager implements NBTSerializable {
     /**
      * A sleeping wild queen inside a same-strain lineage's 32-chunk reach wakes and is adopted: she joins that
      * lineage's membership (variant-gated by {@code LocationMembership.join}) and hands off to founding, so her hive
-     * becomes another member of the adopting lineage instead of starting a fresh one. Lineages at their member-hive
-     * cap leave her sleeping.
+     * becomes another member of the adopting lineage instead of starting a fresh one. Lineages at their member-hive cap
+     * leave her sleeping.
      */
     private boolean tryWildAdoption() {
         if (!(queen.level() instanceof ServerLevel serverLevel)) {
@@ -427,7 +456,7 @@ public class QueenLifecyclePhaseManager implements NBTSerializable {
 
         var queenChunk = queen.chunkPosition();
 
-        for (var location : com.alien.common.gameplay.hive.location.HiveLocationRegistry.INSTANCE.all()) {
+        for (var location : HiveLocationRegistry.INSTANCE.all()) {
             if (!location.dimension().equals(serverLevel.dimension())) {
                 continue;
             }
@@ -438,8 +467,7 @@ public class QueenLifecyclePhaseManager implements NBTSerializable {
             var withinRange = false;
             for (var chunk : location.claimedChunks()) {
                 if (
-                    Math.max(Math.abs(chunk.x - queenChunk.x), Math.abs(chunk.z - queenChunk.z))
-                        <= WILD_ADOPTION_RANGE_CHUNKS
+                    Math.max(Math.abs(chunk.x - queenChunk.x), Math.abs(chunk.z - queenChunk.z)) <= WILD_ADOPTION_RANGE_CHUNKS
                 ) {
                     withinRange = true;
                     break;
@@ -474,14 +502,38 @@ public class QueenLifecyclePhaseManager implements NBTSerializable {
 
     /** "You have awakened a slumbering nightmare" — sent to every player whose activity accumulated her sleep clock. */
     private void broadcastWildAwakening() {
+        broadcastToNearbyPlayers(
+            net.minecraft.network.chat.Component
+                .literal("You have awakened a slumbering nightmare")
+                .withStyle(com.alien.common.data.AlienVariantTypes.getFor(queen).chatColor()),
+            true
+        );
+    }
+
+    /** Sends a wild-queen message to every player within {@link #WILD_AWAKENING_BROADCAST_RANGE} blocks of her. */
+    private void broadcastToNearbyPlayers(net.minecraft.network.chat.Component message) {
+        broadcastToNearbyPlayers(message, false);
+    }
+
+    /**
+     * As {@link #broadcastToNearbyPlayers(net.minecraft.network.chat.Component)}, optionally led by the queen's
+     * scream for the loud tiers (genesis and awakening). Sound and text share one audience so no player ever hears
+     * a scream without its line or reads a line without its scream. The hibernating whisper stays silent by design.
+     */
+    private void broadcastToNearbyPlayers(net.minecraft.network.chat.Component message, boolean withQueenScream) {
         if (!(queen.level() instanceof ServerLevel serverLevel)) {
             return;
         }
-        var message = net.minecraft.network.chat.Component
-            .literal("You have awakened a slumbering nightmare")
-            .withStyle(net.minecraft.ChatFormatting.DARK_RED);
         for (var player : serverLevel.players()) {
             if (player.distanceToSqr(queen) <= WILD_AWAKENING_BROADCAST_RANGE * WILD_AWAKENING_BROADCAST_RANGE) {
+                if (withQueenScream) {
+                    player.playNotifySound(
+                        com.alien.common.registry.init.AlienSoundEvents.ENTITY_QUEEN_SCREAM.get(),
+                        net.minecraft.sounds.SoundSource.MASTER,
+                        1,
+                        1
+                    );
+                }
                 player.sendSystemMessage(message);
             }
         }

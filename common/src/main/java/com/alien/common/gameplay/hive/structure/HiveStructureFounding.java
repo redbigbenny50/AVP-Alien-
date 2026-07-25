@@ -88,25 +88,18 @@ public final class HiveStructureFounding {
         // halls around a chamber that is still a solid block of ground. Roles were assigned above either way - they
         // are bookkeeping, invisible until blocks exist. NO resin debt on the core: the founding biomass tank is the
         // founding cost, and double-taxing the bootstrap could starve a hive that owns nothing yet.
-        if (HiveRouter.CARVE_ENABLED) {
-            var site = new com.alien.common.gameplay.hive.structure.carve.CarveSite(
-                new PieceMatch(chamber, Rotation.NONE, originChunk),
-                null,
-                location
-            );
-            location.setActiveCarveSite(site);
-            Alien.LOGGER.info("Hive: commissioned founding core {} (queen-dug).", site.describe());
-            return;
-        }
-
-        // Legacy instant path (CARVE_ENABLED=false): stamp the chamber and finish the founding structure now.
-        stampQueenChamber(level, server, location, originChunk);
-        finishFoundingStructure(level, location, true);
+        var site = new com.alien.common.gameplay.hive.structure.carve.CarveSite(
+            new PieceMatch(chamber, Rotation.NONE, originChunk),
+            null,
+            location
+        );
+        location.setActiveCarveSite(site);
+        Alien.LOGGER.info("Hive: commissioned founding core {} (queen-dug).", site.describe());
     }
 
     /**
      * The founding TAIL - royal ring, open-socket registration, and the blueprint roll - runs when the chamber
-     * physically exists: immediately on the legacy path, at carve completion on the commission path
+     * physically exists: at carve completion on the commission path, or immediately on the never-wedge fallback
      * ({@code CarveSiteWork} calls this for a founding-core site instead of {@code finalizePlacement}). Self-contained
      * on purpose: it re-derives the chamber piece and origin from the location so the completion path needs nothing but
      * the level and the location.
@@ -124,7 +117,7 @@ public final class HiveStructureFounding {
         int halfZ = (chamber.footprintChunksZ() - 1) / 2;
         var originChunk = new ChunkPos(centerChunk.x - halfX, centerChunk.z - halfZ);
 
-        // Royal ring: on the INSTANT paths (legacy A/B and the never-wedge fallbacks) stamp a royal hallway on each
+        // Royal ring: on the INSTANT paths (the never-wedge fallbacks) stamp a royal hallway on each
         // royal exit now, exactly as before. On the CARVE path, register EVERY doorway - royal included - as an open
         // frontier socket instead: the router's royal-priority pass picks the royal doors up first thing next cycle
         // and commissions each hall as an ordinary drone-staffed carve site, dug and paid like the rest of the hive.

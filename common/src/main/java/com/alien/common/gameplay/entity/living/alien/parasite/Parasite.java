@@ -54,10 +54,58 @@ public abstract class Parasite extends Alien {
     /** The pounce scan is cheap, but there can be a lot of huggers. Every quarter second is plenty. */
     private static final int POUNCE_INTERVAL_TICKS = 5;
 
+    /** Client-side: consecutive ticks our vehicle has disagreed with the synced server truth. */
+    private int clientAttachmentMismatchTicks;
+
+    /**
+     * Client-side: TRUE once this client has actually received a synced positive attachment id for this parasite. The
+     * self-heal may only trust a "-1, detached" truth after this - BLib's sync is dirty-flag (change) based, so a
+     * client that starts tracking an ALREADY-attached parasite may simply never have received the id and reads the
+     * default -1. Ghost huggers can only afflict clients that WITNESSED the attach (they got the mount packet), and
+     * every witness was tracking at attach time and so also got the id sync - witnesses can always heal, late arrivals
+     * can never false-dismount a valid attachment.
+     */
+    private boolean clientSawSyncedAttachment;
+
+    /** The client tolerates this much truth/vehicle disagreement (sync latency at attach) before self-healing. */
+    private static final int CLIENT_ATTACHMENT_MISMATCH_GRACE_TICKS = 60;
+
     @Override
     public void tick() {
         super.tick();
         attachmentManager.tick();
+
+        // CLIENT SELF-HEAL: the client's passenger list can go stale in both directions (a dismount the cling gate
+        // refused, or a lost packet), leaving a ghost hugger glued to a host the server no longer rides - which
+        // freezes a hugged player's input and decorates animals forever. The synced attachedHostId is the server's
+        // own truth: when the client's vehicle disagrees with it for longer than the sync-latency grace, the client
+        // dismounts itself through detach() (consented, so the cling gate cannot refuse it). Placement is untouched:
+        // while genuinely attached, truth and vehicle agree and nothing here fires.
+        if (level().isClientSide) {
+            var clientVehicleId = getVehicle() != null ? getVehicle().getId() : -1;
+            var truthfulHostId = attachmentManager.attachedHostId();
+            if (truthfulHostId > -1) {
+                clientSawSyncedAttachment = true;
+            }
+            // A -1 truth is only actionable for a WITNESS (see clientSawSyncedAttachment); a positive truth pointing
+            // at a different entity is unambiguous on its own.
+            var truthIsActionable = truthfulHostId > -1 || clientSawSyncedAttachment;
+            if (clientVehicleId != -1 && clientVehicleId != truthfulHostId && truthIsActionable) {
+                clientAttachmentMismatchTicks++;
+                if (clientAttachmentMismatchTicks > CLIENT_ATTACHMENT_MISMATCH_GRACE_TICKS) {
+                    clientAttachmentMismatchTicks = 0;
+                    com.alien.Alien.LOGGER.info(
+                        "Parasite client self-heal: dismounting ghost hugger {} (synced truth={}, client vehicle={})",
+                        getId(),
+                        truthfulHostId,
+                        clientVehicleId
+                    );
+                    detach();
+                }
+            } else {
+                clientAttachmentMismatchTicks = 0;
+            }
+        }
 
         if (!level().isClientSide) {
             var currentTarget = getTarget();
@@ -172,7 +220,10 @@ public abstract class Parasite extends Alien {
     @Override
     public void stopRiding() {
         if (shouldClingToHost()) {
-            // A host-side buck (untamed horse/llama/giraffe taming logic and the like): refuse it.
+            // A host-side buck (untamed horse/llama/giraffe taming logic and the like): refuse it. This runs on BOTH
+            // sides on purpose - the client-side refusal is what keeps face placement alive against gameplay logic
+            // leaking onto the client. Stale client passenger lists (a genuinely detached hugger the client still
+            // wears) are healed by the synced-truth check in tick(), not by weakening this gate.
             return;
         }
 

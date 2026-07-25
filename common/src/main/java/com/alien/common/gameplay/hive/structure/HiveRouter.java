@@ -39,16 +39,6 @@ public final class HiveRouter {
     public static volatile boolean ENABLED = true;
 
     /**
-     * The construction-economy switch (design §8.6). ON (the default): pieces are COMMISSIONED - routed through
-     * {@link #commission}, which creates a {@code CarveSite} and (until the progressive carve tick lands at step 3)
-     * completes it immediately, so behavior is identical to the stamp while the seam is exercised for real. OFF: the
-     * legacy instant stamp, kept as a one-flip fallback for A/B debugging on the tester's world - if a hive is not
-     * building, flip this off; if it builds, the bug is in the carve layer, if it still does not, it is upstream in
-     * routing.
-     */
-    public static volatile boolean CARVE_ENABLED = true;
-
-    /**
      * Resin cost multiplier (design §6, step 4): a piece's resin debt = this factor x the hive's CURRENT per-chunk
      * claim cost x the piece's footprint chunks, fixed at commission. Riding on claimCost means the price scales
      * super-linearly with hive size for free; 1.5x makes a healthy hive never visibly stall while a drained one freezes
@@ -677,14 +667,9 @@ public final class HiveRouter {
     }
 
     /**
-     * Build one routed piece. {@link #CARVE_ENABLED} picks the path: commission (the construction economy) or the
-     * legacy instant stamp. Both share the pre-steps (spawner capture, vermin eviction) and the claims post-step; jelly
-     * vats grow here only on the legacy path (the carve path grows them at completion, when the chamber exists).
-     */
-    /**
      * Attempts one open royal doorway: standard structure-occupancy free test, random fitting royal variant, and the
-     * ordinary {@link #place} path - so under {@code CARVE_ENABLED} the hall is COMMISSIONED as a normal drone-staffed
-     * carve site (dug, paid, resined) rather than stamped. Returns true if a hall was placed/commissioned this cycle.
+     * ordinary {@link #place} path - the hall is COMMISSIONED as a normal drone-staffed carve site (dug, paid,
+     * resined). Returns true if a hall was commissioned this cycle.
      */
     private static boolean placeRoyalHallways(
         ServerLevel level,
@@ -721,18 +706,14 @@ public final class HiveRouter {
         HarvestSpawnerCapture.captureBeforeStamp(level, location, match.occupiedChunks());
         // And evict any hostile vermin standing in the footprint - construction does not leave cave mobs inside.
         HiveStampEviction.evict(level, location, match.occupiedChunks());
-        if (CARVE_ENABLED ? !commission(level, location, match, socket) : !HiveStructurePlacer.place(level, location, match, socket)) {
+        if (!commission(level, location, match, socket)) {
             return false;
         }
         for (ChunkPos c : match.occupiedChunks()) {
             HiveLocationClaims.claim(level, location, c, tick);
         }
-        // Jelly vats grow when the CHAMBER EXISTS: immediately on the legacy instant path, but at carve COMPLETION on
-        // the commission path (CarveSiteWork calls growVatsIfJellyChamber then) - a commissioned chamber is still a
-        // hole in the ground, and its vat slots don't exist until the structure does.
-        if (!CARVE_ENABLED) {
-            growVatsIfJellyChamber(level, location, match);
-        }
+        // Jelly vats grow when the CHAMBER EXISTS - at carve COMPLETION (CarveSiteWork calls growVatsIfJellyChamber
+        // then), because a freshly commissioned chamber is still a hole in the ground with no vat slots.
         return true;
     }
 

@@ -24,9 +24,18 @@ public class ParasiteAttachmentManager {
 
     private final DataAccessor<Integer> ticksAttachedToHost;
 
+    /** Server truth, synced: the host's entity id while attached, -1 when not. Clients self-heal from it. */
+    private final DataAccessor<Integer> attachedHostId;
+
     public ParasiteAttachmentManager(Parasite parasite) {
         this.parasite = parasite;
         this.ticksAttachedToHost = new DataAccessor<>(parasite, AlienDataSyncKeys.PARASITE_TICKS_ATTACHED_TO_HOST.get());
+        this.attachedHostId = new DataAccessor<>(parasite, AlienDataSyncKeys.PARASITE_ATTACHED_HOST_ID.get());
+    }
+
+    /** The synced server-truth host id (-1 = detached). Readable on both sides. */
+    public int attachedHostId() {
+        return attachedHostId.get();
     }
 
     public void tick() {
@@ -35,6 +44,12 @@ public class ParasiteAttachmentManager {
         }
 
         var host = getHost();
+
+        // Publish the server's attachment truth so stale client passenger lists can self-correct.
+        var truthfulHostId = host != null && parasite.isAlive() ? host.getId() : -1;
+        if (attachedHostId.get() != truthfulHostId) {
+            attachedHostId.set(truthfulHostId);
+        }
 
         if (host != null && host.getType().is(AlienEntityTypeTags.ALIENS)) {
             ticksAttachedToHost.reset();
@@ -81,7 +96,10 @@ public class ParasiteAttachmentManager {
             );
         }
 
-        var falloffTimeInTicks = (host instanceof ServerPlayer ? 1.5 : 2.5) * 20 * 60;
+        // Players shed a spent hugger at 1.5 minutes; ANIMALS shed theirs ~12 seconds after the 20-second implant
+        // (a zebra wearing a face ornament for 2.5 minutes read as a bug in the field - the short linger still sells
+        // "it did its job" without looking stuck).
+        var falloffTimeInTicks = host instanceof ServerPlayer ? 1.5 * 20 * 60 : (20 * 20) + (20 * 12);
 
         // TODO: Make time configurable
         if (ticksAttachedToHost() < 20 * 10) {
