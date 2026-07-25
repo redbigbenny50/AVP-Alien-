@@ -293,7 +293,6 @@ public class Queen extends Xenomorph implements GOAPUser<Queen>, EggLayer {
             .ifSome(strainLeakData -> strainLeakData.add(getVariant(), -1));
     }
 
-
     private void spawnGuards() {
         var droneType = Drone.getType(getVariant());
 

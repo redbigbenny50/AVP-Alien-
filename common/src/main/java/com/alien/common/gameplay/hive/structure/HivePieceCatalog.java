@@ -56,15 +56,15 @@ public final class HivePieceCatalog {
     );
 
     /**
-     * The strain mirror folders under {@code hive/} that hold full copies of the piece set. The NORMAL set lives at
-     * the root ({@code hive/<type>/...}); each strain here has an identical tree at {@code hive/<strain>/<type>/...}.
+     * The strain mirror folders under {@code hive/} that hold full copies of the piece set. The NORMAL set lives at the
+     * root ({@code hive/<type>/...}); each strain here has an identical tree at {@code hive/<strain>/<type>/...}.
      * IRRADIATED has no set yet and falls back to the normal pieces until its folder exists (then add it here).
      */
     private static final List<String> STRAIN_FOLDER_PREFIXES = List.of("aberrant/", "nether/");
 
     /**
-     * The strain folder prefix for a lineage variant: {@code ""} (normal set) for normal, irradiated (no set yet),
-     * and unknown/null variants; {@code "aberrant/"} / {@code "nether/"} for their mirror sets.
+     * The strain folder prefix for a lineage variant: {@code ""} (normal set) for normal, irradiated (no set yet), and
+     * unknown/null variants; {@code "aberrant/"} / {@code "nether/"} for their mirror sets.
      */
     public static String strainFolderPrefix(
         @org.jetbrains.annotations.Nullable com.alien.common.model.alien.variant.AlienVariant variant
@@ -95,7 +95,9 @@ public final class HivePieceCatalog {
         return id.getPath().endsWith("core/queen_chamber_3x3");
     }
 
-    /** True when the piece id belongs to the given lineage variant's strain set (normal set for null/no-set strains). */
+    /**
+     * True when the piece id belongs to the given lineage variant's strain set (normal set for null/no-set strains).
+     */
     public static boolean belongsToStrain(
         ResourceLocation id,
         @org.jetbrains.annotations.Nullable com.alien.common.model.alien.variant.AlienVariant variant

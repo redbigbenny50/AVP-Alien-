@@ -19,24 +19,26 @@ import org.jetbrains.annotations.Nullable;
  * surface and depth below sea level; the Nether has a bedrock ceiling, a floor at Y 0, stacked open caverns instead of
  * one surface, and lava everywhere - so every system that asks "where is the surface", "how deep is deep", or "is this
  * ground safe to dig" resolves its answer through the profile instead of assuming overworld shape.
- *
- * <p>Known dimensions get exact hand-tuned profiles (the OVERWORLD profile encodes today's behavior verbatim). Unknown
+ * <p>
+ * Known dimensions get exact hand-tuned profiles (the OVERWORLD profile encodes today's behavior verbatim). Unknown
  * MODDED dimensions get a profile DERIVED from their own {@code DimensionType} flags - a ceiled dimension behaves
  * nether-like (open shelves as surface, capped at logical height), an ultrawarm one gets lava safety - so packs work
- * without configuration. The END is deliberately unprofiled for now (derived default applies) - parked by design.</p>
- *
- * <p>Core concepts:</p>
+ * without configuration. The END is deliberately unprofiled for now (derived default applies) - parked by design.
+ * </p>
+ * <p>
+ * Core concepts:
+ * </p>
  * <ul>
- *   <li><b>Surface mode:</b> {@code SKY_SURFACE} = the heightmap/canSeeSky world everyone knows. {@code OPEN_SHELF} =
- *       ceiled dimensions where "surface" is a PROPERTY, not a place: any sturdy floor with at least
- *       {@link Profile#minShelfAirHeight()} blocks of open air above it counts, at ANY level - the Nether's stacked
- *       exposed caverns are all valid party ground.</li>
- *   <li><b>Depth band:</b> where queens dig to and wild queens take root, resolved against the dimension's REAL
- *       vertical range (the Nether's floor is Y 0, not -64).</li>
- *   <li><b>Lava safety:</b> in lava-rich dimensions, strains that are not fireproof refuse to found, vent, or surface
- *       adjacent to lava - nether morphs ignore it, everyone else digs AROUND it.</li>
- *   <li><b>Host-rich biomes:</b> an optional biome tag party site selection PREFERS (hosts are scarce in the Nether,
- *       so scouts favor piglin/hoglin country) - a preference with fallback, never a hard filter.</li>
+ * <li><b>Surface mode:</b> {@code SKY_SURFACE} = the heightmap/canSeeSky world everyone knows. {@code OPEN_SHELF} =
+ * ceiled dimensions where "surface" is a PROPERTY, not a place: any sturdy floor with at least
+ * {@link Profile#minShelfAirHeight()} blocks of open air above it counts, at ANY level - the Nether's stacked exposed
+ * caverns are all valid party ground.</li>
+ * <li><b>Depth band:</b> where queens dig to and wild queens take root, resolved against the dimension's REAL vertical
+ * range (the Nether's floor is Y 0, not -64).</li>
+ * <li><b>Lava safety:</b> in lava-rich dimensions, strains that are not fireproof refuse to found, vent, or surface
+ * adjacent to lava - nether morphs ignore it, everyone else digs AROUND it.</li>
+ * <li><b>Host-rich biomes:</b> an optional biome tag party site selection PREFERS (hosts are scarce in the Nether, so
+ * scouts favor piglin/hoglin country) - a preference with fallback, never a hard filter.</li>
  * </ul>
  */
 public final class DimensionHiveProfiles {
@@ -49,10 +51,10 @@ public final class DimensionHiveProfiles {
     private static final long SYNTHETIC_DAY_TICKS = 12000L;
 
     /**
-     * Day/night for HIVE RHYTHMS - the drop-in replacement for {@code level.isDay()} in party logic. Dimensions with
-     * a frozen clock (the Nether's fixed time sits permanently mid-night, so a real dawn never comes and nocturnal
-     * parties would launch forever and resolve never) synthesize a cycle from GAME TIME instead: 10 minutes of
-     * "day", 10 of "night", the same pacing the overworld gives - driven by ticks, because the dimension has no sun.
+     * Day/night for HIVE RHYTHMS - the drop-in replacement for {@code level.isDay()} in party logic. Dimensions with a
+     * frozen clock (the Nether's fixed time sits permanently mid-night, so a real dawn never comes and nocturnal
+     * parties would launch forever and resolve never) synthesize a cycle from GAME TIME instead: 10 minutes of "day",
+     * 10 of "night", the same pacing the overworld gives - driven by ticks, because the dimension has no sun.
      */
     public static boolean isHiveDay(ServerLevel level) {
         if (!level.dimensionType().hasFixedTime()) {
@@ -72,8 +74,8 @@ public final class DimensionHiveProfiles {
 
     /**
      * Structures that get a GUARANTEED surface vent when a scout party wraps up within reach (the drop roll is
-     * skipped): host parties gain a permanent door into them. The Nether points this at bastion remnants - the
-     * piglin larder. Datapack-editable, so packs can add their own structure targets.
+     * skipped): host parties gain a permanent door into them. The Nether points this at bastion remnants - the piglin
+     * larder. Datapack-editable, so packs can add their own structure targets.
      */
     public static final TagKey<net.minecraft.world.level.levelgen.structure.Structure> PRIORITY_VENT_STRUCTURES =
         TagKey.create(

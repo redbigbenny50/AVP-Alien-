@@ -13,7 +13,6 @@ import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.level.ChunkPos;
-import net.minecraft.world.level.levelgen.Heightmap;
 
 import java.util.ArrayList;
 
@@ -325,9 +324,9 @@ public final class SurfacePartyLifecycleTask {
     /**
      * The 100% structure vent: searches the ring around the party's wrap-up chunk for a piece of a profile-tagged
      * structure (probing several Y levels per column - bastions are tall), refuses if any SURFACE vent already sits
-     * inside that structure's bounds, and otherwise plants a guaranteed vent on a legal spot inside the structure
-     * chunk (all normal vent rules - shelf surface, base protection, lava safety for non-fireproof strains - still
-     * apply). Returns true only when a vent was actually placed.
+     * inside that structure's bounds, and otherwise plants a guaranteed vent on a legal spot inside the structure chunk
+     * (all normal vent rules - shelf surface, base protection, lava safety for non-fireproof strains - still apply).
+     * Returns true only when a vent was actually placed.
      */
     private static boolean tryPlacePriorityStructureVent(
         ServerLevel serverLevel,
@@ -379,14 +378,19 @@ public final class SurfacePartyLifecycleTask {
                     }
 
                     var anchorY = com.alien.common.gameplay.hive.dimension.DimensionHiveProfiles.surfaceY(
-                        serverLevel, profile, probeChunk.getMiddleBlockPosition(0).getX(),
-                        probeChunk.getMiddleBlockPosition(0).getZ(), nearY
+                        serverLevel,
+                        profile,
+                        probeChunk.getMiddleBlockPosition(0).getX(),
+                        probeChunk.getMiddleBlockPosition(0).getZ(),
+                        nearY
                     );
                     if (anchorY == com.alien.common.gameplay.hive.dimension.DimensionHiveProfiles.NO_SURFACE) {
                         continue;
                     }
                     var structureAnchor = new BlockPos(
-                        probeChunk.getMiddleBlockPosition(0).getX(), anchorY, probeChunk.getMiddleBlockPosition(0).getZ()
+                        probeChunk.getMiddleBlockPosition(0).getX(),
+                        anchorY,
+                        probeChunk.getMiddleBlockPosition(0).getZ()
                     );
                     var ventPos = findSurfaceVentSpot(serverLevel, probeChunk, structureAnchor, variant);
                     if (ventPos == null) {
@@ -435,7 +439,13 @@ public final class SurfacePartyLifecycleTask {
                     }
                     int x = centre.getX() + dx;
                     int z = centre.getZ() + dz;
-                    int y = com.alien.common.gameplay.hive.dimension.DimensionHiveProfiles.surfaceY(serverLevel, profile, x, z, centre.getY());
+                    int y = com.alien.common.gameplay.hive.dimension.DimensionHiveProfiles.surfaceY(
+                        serverLevel,
+                        profile,
+                        x,
+                        z,
+                        centre.getY()
+                    );
                     if (y == com.alien.common.gameplay.hive.dimension.DimensionHiveProfiles.NO_SURFACE) {
                         continue;
                     }
@@ -454,7 +464,9 @@ public final class SurfacePartyLifecycleTask {
                         continue;
                     }
                     // Lava safety: a non-fireproof strain's DOORWAY never opens beside lava.
-                    if (lavaSafety && !com.alien.common.gameplay.hive.dimension.DimensionHiveProfiles.isLavaSafe(serverLevel, candidate, 2)) {
+                    if (
+                        lavaSafety && !com.alien.common.gameplay.hive.dimension.DimensionHiveProfiles.isLavaSafe(serverLevel, candidate, 2)
+                    ) {
                         continue;
                     }
                     var ground = candidate.below();
@@ -503,7 +515,11 @@ public final class SurfacePartyLifecycleTask {
         // The node at the heart of the patch (skipped if something already occupies the spot - repeated parties
         // in the same chunk just thicken the resin around the existing node).
         var centerY = com.alien.common.gameplay.hive.dimension.DimensionHiveProfiles.surfaceY(
-            serverLevel, profile, centerBlock.getX(), centerBlock.getZ(), location.centerPos().getY()
+            serverLevel,
+            profile,
+            centerBlock.getX(),
+            centerBlock.getZ(),
+            location.centerPos().getY()
         );
         if (centerY == com.alien.common.gameplay.hive.dimension.DimensionHiveProfiles.NO_SURFACE) {
             return;

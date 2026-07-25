@@ -24,14 +24,14 @@ import org.jetbrains.annotations.Nullable;
  * cannot molt or grow until a Metamorphosis potion clears the flag (see
  * {@code MetamorphosisStatusEffect#onEffectStarted}).</li>
  * <li><b>Hosts carrying a chestburster</b> - each dose RESETS the burst clock to {@link #DELAY_IN_TICKS} (five
- * Minecraft days) remaining. It never stacks, so the optimal play is dosing at the last moment. Every dose gambles
- * with jelly sickness: {@link #BASE_SICKNESS_CHANCE} on the first dose, climbing {@link #SICKNESS_CHANCE_PER_DOSE}
- * per dose taken this implantation. Each hit ratchets the host's hidden toxicity one tier (Jelly Sickness I-IV; IV is
+ * Minecraft days) remaining. It never stacks, so the optimal play is dosing at the last moment. Every dose gambles with
+ * jelly sickness: {@link #BASE_SICKNESS_CHANCE} on the first dose, climbing {@link #SICKNESS_CHANCE_PER_DOSE} per dose
+ * taken this implantation. Each hit ratchets the host's hidden toxicity one tier (Jelly Sickness I-IV; IV is
  * wither-grade). Once toxicity sits at IV, the NEXT dose grants no time and instead flips the coin:
  * <ul>
  * <li><b>Death sentence</b> - the embryo is marked withered on the spot and Wither II runs for 30 seconds as the
- * execution. Cheating death (milk, heavy healing) is possible - but the potion is spent for this implantation, and
- * the withered burster still comes on whatever clock remains.</li>
+ * execution. Cheating death (milk, heavy healing) is possible - but the potion is spent for this implantation, and the
+ * withered burster still comes on whatever clock remains.</li>
  * <li><b>Mercy</b> - the burster dies instead; the host lives, but must last through the same withering.</li>
  * </ul>
  * All the hidden counters live on the {@link Host} and reset only when the embryo leaves the body.</li>

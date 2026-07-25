@@ -57,8 +57,8 @@ public class AlienPotions {
 
     /**
      * Single-tier by design, like Metamorphosis. Instant effect: on a xenomorph it freezes growth (reversed only by
-     * Metamorphosis); on a host carrying a chestburster it resets the burst clock to five days out, with an
-     * escalating jelly-sickness gamble - see {@code GrowthSuppressionStatusEffect}.
+     * Metamorphosis); on a host carrying a chestburster it resets the burst clock to five days out, with an escalating
+     * jelly-sickness gamble - see {@code GrowthSuppressionStatusEffect}.
      */
     public static final BLibHolder<Potion> GROWTH_SUPPRESSION = REGISTRY.createHolder(
         "growth_suppression",

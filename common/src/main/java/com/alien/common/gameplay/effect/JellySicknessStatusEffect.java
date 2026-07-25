@@ -8,8 +8,8 @@ import org.jetbrains.annotations.NotNull;
 /**
  * The Growth Suppression potion's toll, in four tiers (amplifiers 0-3 shown as I-IV). Tiers I-III behave like poison -
  * quickening magic damage that cannot kill. Tier IV is wither-grade: it damages like the withering and CAN kill. The
- * durations are deliberately brief (see {@code GrowthSuppressionStatusEffect}) - the real threat is the hidden
- * toxicity ratchet on the host, not the tick damage itself.
+ * durations are deliberately brief (see {@code GrowthSuppressionStatusEffect}) - the real threat is the hidden toxicity
+ * ratchet on the host, not the tick damage itself.
  */
 public class JellySicknessStatusEffect extends MobEffect {
 

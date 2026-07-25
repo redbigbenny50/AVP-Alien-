@@ -516,9 +516,9 @@ public class QueenLifecyclePhaseManager implements NBTSerializable {
     }
 
     /**
-     * As {@link #broadcastToNearbyPlayers(net.minecraft.network.chat.Component)}, optionally led by the queen's
-     * scream for the loud tiers (genesis and awakening). Sound and text share one audience so no player ever hears
-     * a scream without its line or reads a line without its scream. The hibernating whisper stays silent by design.
+     * As {@link #broadcastToNearbyPlayers(net.minecraft.network.chat.Component)}, optionally led by the queen's scream
+     * for the loud tiers (genesis and awakening). Sound and text share one audience so no player ever hears a scream
+     * without its line or reads a line without its scream. The hibernating whisper stays silent by design.
      */
     private void broadcastToNearbyPlayers(net.minecraft.network.chat.Component message, boolean withQueenScream) {
         if (!(queen.level() instanceof ServerLevel serverLevel)) {

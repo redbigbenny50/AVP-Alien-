@@ -155,10 +155,11 @@ public final class HiveRouter {
                 (role == HiveStructureRole.QUEEN_CHAMBER_CENTER || role == HiveStructureRole.QUEEN_CHAMBER_PART)
                     && !location.structurePieceByChunk().containsKey(roleEntry.getKey())
             ) {
-                location.structurePieceByChunk().put(
-                    roleEntry.getKey(),
-                    HivePieceCatalog.queenChamber(location.lineageVariantOrNull()).toString()
-                );
+                location.structurePieceByChunk()
+                    .put(
+                        roleEntry.getKey(),
+                        HivePieceCatalog.queenChamber(location.lineageVariantOrNull()).toString()
+                    );
             }
         }
 

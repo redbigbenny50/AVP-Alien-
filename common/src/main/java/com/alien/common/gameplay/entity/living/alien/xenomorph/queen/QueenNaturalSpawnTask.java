@@ -65,7 +65,6 @@ public class QueenNaturalSpawnTask {
      */
     // Depth now comes from DimensionHiveProfiles.get(level) — the overworld profile encodes -50..45.
 
-
     private static final int POSITION_SAMPLES_PER_CHUNK = 32;
 
     /**
