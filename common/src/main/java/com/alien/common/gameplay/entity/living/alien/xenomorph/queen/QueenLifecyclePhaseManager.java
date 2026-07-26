@@ -273,6 +273,50 @@ public class QueenLifecyclePhaseManager implements NBTSerializable {
      * sustained player activity in the area that accumulates the {@link #HIBERNATION_DURATION_TICKS} that finally wakes
      * her. A solid hit rouses her to defend as usual; a nearby lineage may adopt her (see {@code tryWildAdoption}).
      */
+    /**
+     * RESCUE AFTERMATH, path B (rescuers belong to a lineage): the freed queen joins their lineage as a DAUGHTER QUEEN
+     * through the same adoption recipe wild hibernating queens use - faction resolved, lineage cap enforced, membership
+     * joined, straight to FOUNDING_HANDOFF so she founds her own location UNDER that lineage. Returns false (and
+     * changes nothing) when the lineage is at its location cap - the caller then releases the rescuers home and the
+     * queen strikes out on her own.
+     */
+    public boolean tryAdoptIntoLineage(com.alien.common.gameplay.hive.location.HiveLocation location) {
+        if (!isEnabled()) {
+            return false;
+        }
+        var faction = Alien.MOD.factions().get(location.lineageFactionId());
+        if (
+            faction == null
+                || !(faction.data() instanceof com.alien.common.gameplay.hive.faction.LineageFactionData lineage)
+                || lineage.locationsById().size() >= WILD_ADOPTION_LINEAGE_CAP
+        ) {
+            return false;
+        }
+        com.alien.common.gameplay.hive.faction.LocationMembership.join(location, queen);
+        queen.isHibernating.set(false);
+        phase = QueenLifecyclePhase.FOUNDING_HANDOFF;
+        Alien.LOGGER.info(
+            "Queen lifecycle: freed queen {} adopted by lineage {} as a daughter queen — rescue debt honored",
+            queen.getUUID(),
+            location.lineageFactionId()
+        );
+        return true;
+    }
+
+    /**
+     * RESCUE AFTERMATH, paths A/B-overflow (no lineage to join): the freed queen strikes out for a den of her own
+     * through the SAME locating machinery every queen uses - {@code enterLocation()} commits a weighted-Y anchor and
+     * she digs to it, founding a fresh lineage at the end. No-op if she already holds a location or the machine is
+     * disabled.
+     */
+    public void beginFreedRelocation() {
+        if (!isEnabled() || phase == QueenLifecyclePhase.LOCATION || phase == QueenLifecyclePhase.FOUNDING_HANDOFF) {
+            return;
+        }
+        queen.isHibernating.set(false);
+        enterLocation();
+    }
+
     public void beginWildHibernation() {
         if (!isEnabled()) {
             return;

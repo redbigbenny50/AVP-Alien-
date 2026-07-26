@@ -110,10 +110,10 @@ public class AberrantAlienGrowthStageProvider {
             new GrowthRequirement.MobEffectRequirement(AlienMobEffects.getMetamorphosisHolder(), 0)
         );
 
-        biConsumer.accept(
-            "aberrant_ovomorph_to_royal_aberrant_ovomorph",
-            new GrowthStage(AlienEntityTypes.ABERRANT_OVOMORPH.get(), AlienEntityTypes.ROYAL_ABERRANT_OVOMORPH.get(), metamorphosis)
-        );
+        // Eggs are NO LONGER promoted by the Metamorphosis potion (splash or otherwise). Royalty is conferred by
+        // feeding RAW ROYAL JELLY directly to an ovomorph - see Ovomorph.mobInteract. Deleting the stage rather
+        // than un-gating it is deliberate: a requirement-less growth stage is treated as immediately matching, so
+        // an un-gated stage would turn every egg royal on its own.
         biConsumer.accept(
             "aberrant_drone_to_aberrant_warrior",
             new GrowthStage(AlienEntityTypes.ABERRANT_DRONE.get(), AlienEntityTypes.ABERRANT_WARRIOR.get(), metamorphosis)

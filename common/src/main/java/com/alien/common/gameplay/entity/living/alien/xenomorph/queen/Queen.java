@@ -120,6 +120,8 @@ public class Queen extends Xenomorph implements GOAPUser<Queen>, EggLayer {
 
     private final QueenBindManager bindManager;
 
+    private final QueenRescueManager rescueManager;
+
     /**
      * Synced + persisted: whether the inhibitor device is attached. Drives the {@code gInhibitor} bone reveal and (in
      * later slices) the contained-breeder behaviour — hive autonomy off, claim capped at one chunk.
@@ -167,6 +169,7 @@ public class Queen extends Xenomorph implements GOAPUser<Queen>, EggLayer {
         this.lifecyclePhaseManager = new QueenLifecyclePhaseManager(this);
         this.bindChainCount = new DataAccessor<>(this, AlienDataSyncKeys.QUEEN_BIND_CHAIN_COUNT.get());
         this.bindManager = new QueenBindManager(this);
+        this.rescueManager = new QueenRescueManager(this);
         this.hasInhibitor = new DataAccessor<>(this, AlienDataSyncKeys.QUEEN_HAS_INHIBITOR.get());
         this.tracked = new DataAccessor<>(this, AlienDataSyncKeys.QUEEN_IS_TRACKED.get());
         this.incapacitated = new DataAccessor<>(this, AlienDataSyncKeys.QUEEN_IS_INCAPACITATED.get());
@@ -194,6 +197,7 @@ public class Queen extends Xenomorph implements GOAPUser<Queen>, EggLayer {
         queenData.tick();
         lifecyclePhaseManager.tick();
         bindManager.tick();
+        rescueManager.tick();
         incapacitationManager.tick();
 
         // A pacified captive breeder holds still AND holds her FACING: idle look control would keep turning her body
@@ -614,6 +618,7 @@ public class Queen extends Xenomorph implements GOAPUser<Queen>, EggLayer {
         queenData.load(compoundTag);
         lifecyclePhaseManager.load(compoundTag);
         bindManager.load(compoundTag);
+        rescueManager.load(compoundTag);
         bindManager.onLoaded(); // drop any chain whose anchor was broken while she was unloaded (phantom bind)
         incapacitationManager.load(compoundTag);
         incapacitationManager.onLoaded(); // a downed queen must not come back with her AI switched on
@@ -627,6 +632,7 @@ public class Queen extends Xenomorph implements GOAPUser<Queen>, EggLayer {
         queenData.save(compoundTag);
         lifecyclePhaseManager.save(compoundTag);
         bindManager.save(compoundTag);
+        rescueManager.save(compoundTag);
         incapacitationManager.save(compoundTag);
     }
 

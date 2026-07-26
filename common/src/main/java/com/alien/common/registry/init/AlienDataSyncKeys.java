@@ -49,6 +49,17 @@ public class AlienDataSyncKeys {
      * deliberately NOT in {@code GrowthManager.TRANSITION_NBT_KEY_BLACKLIST}, so it rides every growth transition - a
      * withered burster becomes a withered adult becomes, potentially, a withered queen.
      */
+    /**
+     * Born of an irradiated host: this alien grows into a BOILER instead of the drone/runner it would otherwise become.
+     * Persistent and deliberately NOT transition-blacklisted, so the mark rides chestburster -> adolescent -> adult and
+     * is still readable at the one transition that matters. Not networked - no client visual.
+     */
+    public static final BLibHolder<DataSyncKey<Boolean>> ALIEN_IS_BOILER_DESTINED = create(
+        "alien_is_boiler_destined",
+        builder -> builder.persistent("avpBoilerDestined", Codec.BOOL)
+            .build(false)
+    );
+
     public static final BLibHolder<DataSyncKey<Boolean>> ALIEN_IS_WITHERED = create(
         "alien_is_withered",
         builder -> builder.networkSynchronized(StreamCodecs.BOOLEAN)

@@ -239,11 +239,24 @@ public class Ovomorph extends Alien implements GOAPUser<Ovomorph>, Shearable {
             return;
         }
 
+        if (replaceWith(serverLevel, target) == null) {
+            super.thunderHit(serverLevel, lightningBolt);
+        }
+    }
+
+    /**
+     * Swaps this egg for one of another type in place, carrying the state an egg should keep across a mutation: hatch
+     * progress, spawn count, rooting, custom name, persistence. Deliberately DROPS hive-logistics state (pickup claims,
+     * host-delivery stamps) and lineage membership - the variant faction re-homes the new egg on load, and a mutated
+     * egg's old lineage would treat it as a rival anyway. Shared by every egg conversion (lightning aberrant genesis,
+     * royal jelly promotion) so the paths cannot drift apart. Returns the new egg, or null when the type could not be
+     * created.
+     */
+    private @Nullable Ovomorph replaceWith(ServerLevel serverLevel, EntityType<? extends Ovomorph> target) {
         var converted = target.create(serverLevel);
 
         if (converted == null) {
-            super.thunderHit(serverLevel, lightningBolt);
-            return;
+            return null;
         }
 
         converted.copyPosition(this);
@@ -262,6 +275,8 @@ public class Ovomorph extends Alien implements GOAPUser<Ovomorph>, Shearable {
 
         serverLevel.addFreshEntity(converted);
         discard();
+
+        return converted;
     }
 
     /**
@@ -321,6 +336,20 @@ public class Ovomorph extends Alien implements GOAPUser<Ovomorph>, Shearable {
             itemStack.hurtAndBreak(1, player, getSlotForHand(interactionHand));
 
             return InteractionResult.SUCCESS;
+        } else if (!isRoyal() && itemStack.is(com.alien.common.registry.init.item.AlienItems.RAW_ROYAL_JELLY.get())) {
+            // ROYAL JELLY PROMOTION: feeding raw royal jelly to an ordinary egg makes it a ROYAL egg. This replaces
+            // the old Metamorphosis-potion path (removed from the growth stages) - royalty is now something you
+            // deliberately invest in, one egg and one jelly at a time, instead of a side effect of splashing a
+            // potion across a clutch. Irradiated eggs have no royal form, so getType returns null and the jelly is
+            // left in hand.
+            var royalType = getType(getVariant(), true);
+
+            if (royalType != null && level() instanceof ServerLevel serverLevel) {
+                if (replaceWith(serverLevel, royalType) != null) {
+                    itemStack.consume(1, player);
+                    return InteractionResult.SUCCESS;
+                }
+            }
         } else if (!isRooted.get() && itemStack.is(resinBallItem)) {
             level().playSound(null, this, AlienSoundEvents.ENTITY_OVOMORPH_ROOT.get(), SoundSource.PLAYERS, 1.0F, 1.0F);
             isRooted.set(true);

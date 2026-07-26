@@ -34,6 +34,7 @@ public interface Host {
         setJellyToxicity(0);
         setSuppressionSpent(false);
         setEmbryoWithered(false);
+        setEmbryoIrradiated(false);
     }
 
     /** Growth Suppression doses taken during this implantation (drives the escalating sickness chance). */
@@ -52,6 +53,16 @@ public interface Host {
     void setSuppressionSpent(boolean spent);
 
     /** True once the death sentence marked this embryo: whenever and however it emerges, it emerges withered. */
+    /**
+     * Set once the host takes AVPHuman radiation while carrying this embryo, and never unset until the embryo leaves
+     * the body - a dose is a dose, curing the host afterwards does not un-mutate what is already growing. Two
+     * consequences: the burster emerges DESTINED FOR BOILER (see {@code Alien.isBoilerDestined}), and the embryo
+     * survives the host's death - a host that dies early to the rads still gives birth.
+     */
+    boolean isEmbryoIrradiated();
+
+    void setEmbryoIrradiated(boolean irradiated);
+
     boolean isEmbryoWithered();
 
     void setEmbryoWithered(boolean withered);

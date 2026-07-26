@@ -50,6 +50,18 @@ public class AlienPredicates {
         if (alien instanceof Queen boundQueen && boundQueen.getBindManager().isFullyBound()) {
             return false;
         }
+        // KIN MERCY: a HELPLESS queen of the attacker's OWN STRAIN - chained OR incapacitated (downed) - is never
+        // a valid target, not even for a rival lineage at war with hers. Helpless royalty transcends the hive feud:
+        // her kind break chains (QueenRescueManager), never necks. Rival STRAINS retain execution rights - a
+        // helpless rival queen is a war prize. Consequence, accepted by design: a same-strain hive war cannot
+        // finish a DOWNED queen - she must be beaten while standing.
+        if (
+            potentialTarget instanceof Queen helplessQueen
+                && (helplessQueen.getBindManager().hasAnyChain() || helplessQueen.isIncapacitated())
+                && !areAliensDifferentStrains(alien, helplessQueen)
+        ) {
+            return false;
+        }
         // A host on a drone's back is CARGO, not prey. The hive spent a whole party fetching it and is carrying it
         // home to a chamber to be implanted - killing it on the way is pure self-sabotage. A tester watched a spitter
         // shoot the wolf a drone was hauling, purely because a wolf reads as a low-tier threat.

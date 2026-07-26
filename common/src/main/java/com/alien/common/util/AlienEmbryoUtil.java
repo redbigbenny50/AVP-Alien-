@@ -51,9 +51,25 @@ public class AlienEmbryoUtil {
         }
 
         if (host.getEmbryoType().isSome()) {
+            markIrradiatedEmbryo(hostEntity, host);
             tickAlienEmbryoGrowth(hostEntity);
         } else {
             host.removeEmbryo();
+        }
+    }
+
+    /**
+     * A host carrying an embryo who takes AVPHuman radiation marks that embryo for life: it will emerge destined for
+     * BOILER, and it will emerge even if the rads kill its host first. The mark is one-way - curing the host later does
+     * not un-mutate what is already growing. Soft dependency: no avp_human, no marking.
+     */
+    private static void markIrradiatedEmbryo(LivingEntity hostEntity, Host host) {
+        if (host.isEmbryoIrradiated()) {
+            return;
+        }
+        var radiation = Alien.radiationEffect();
+        if (radiation.isPresent() && hostEntity.hasEffect(radiation.get())) {
+            host.setEmbryoIrradiated(true);
         }
     }
 
@@ -184,6 +200,12 @@ public class AlienEmbryoUtil {
         if (embryo instanceof Alien witheredCandidate && host.isEmbryoWithered()) {
             // The death sentence marked this embryo: it emerges withered - the player played god and made a demon.
             witheredCandidate.setWithered(true);
+        }
+
+        if (embryo instanceof Alien irradiatedCandidate && host.isEmbryoIrradiated()) {
+            // Cooked in an irradiated womb: this one grows into a BOILER instead of the drone or runner its host
+            // would otherwise have produced. The mark rides every growth step to the adolescent -> adult transition.
+            irradiatedCandidate.setBoilerDestined(true);
         }
 
         if (embryo instanceof Alien alien) {

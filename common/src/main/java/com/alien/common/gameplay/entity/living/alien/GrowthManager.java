@@ -207,7 +207,13 @@ public class GrowthManager implements NBTSerializable {
         var canBecomeBoiler = canBecomeBoiler(nextFormType);
 
         if (canBecomeBoiler) {
-            nextFormType = Boiler.getType(entity.getVariant());
+            // The IRRADIATED strain has no boiler form yet (Boiler.getType returns null for it). Substituting a null
+            // here would transition the alien into nothing - fall through to its natural adult form instead. Remove
+            // this guard the day an irradiated boiler is registered.
+            var boilerType = Boiler.getType(entity.getVariant());
+            if (boilerType != null) {
+                nextFormType = boilerType;
+            }
         }
 
         removeRequirementEffects(growthStage);
@@ -260,7 +266,10 @@ public class GrowthManager implements NBTSerializable {
             return false;
         }
 
-        return shouldBecomeBoilerFromGeneDecay() || shouldBecomeBoilerFromAcidVolatility();
+        // Born of an irradiated host: guaranteed, not a roll - the rads did their work in the womb.
+        return entity.isBoilerDestined()
+            || shouldBecomeBoilerFromGeneDecay()
+            || shouldBecomeBoilerFromAcidVolatility();
     }
 
     private boolean isProperTransition(EntityType<?> nextFormType) {

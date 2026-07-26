@@ -57,17 +57,15 @@ public class CombatCreativeModeTabInitializer {
     }
 
     private static void addIrradiatedXenomorphArmors(CreativeModeTab.Output output) {
-        // TODO: Re-implement these at some point in the future.
-        // CreativeModeTabUtil.accept(output, AlienArmorItems.IRRADIATED_CHITIN_HELMET);
-        // CreativeModeTabUtil.accept(output, AlienArmorItems.IRRADIATED_CHITIN_CHESTPLATE);
-        // CreativeModeTabUtil.accept(output, AlienArmorItems.IRRADIATED_CHITIN_LEGGINGS);
-        // CreativeModeTabUtil.accept(output, AlienArmorItems.IRRADIATED_CHITIN_BOOTS);
+        CreativeModeTabUtil.accept(output, AlienArmorItems.IRRADIATED_CHITIN_HELMET);
+        CreativeModeTabUtil.accept(output, AlienArmorItems.IRRADIATED_CHITIN_CHESTPLATE);
+        CreativeModeTabUtil.accept(output, AlienArmorItems.IRRADIATED_CHITIN_LEGGINGS);
+        CreativeModeTabUtil.accept(output, AlienArmorItems.IRRADIATED_CHITIN_BOOTS);
 
-        // TODO: Re-implement these at some point in the future.
-        // CreativeModeTabUtil.accept(output, AlienArmorItems.PLATED_IRRADIATED_CHITIN_HELMET);
-        // CreativeModeTabUtil.accept(output, AlienArmorItems.PLATED_IRRADIATED_CHITIN_CHESTPLATE);
-        // CreativeModeTabUtil.accept(output, AlienArmorItems.PLATED_IRRADIATED_CHITIN_LEGGINGS);
-        // CreativeModeTabUtil.accept(output, AlienArmorItems.PLATED_IRRADIATED_CHITIN_BOOTS);
+        CreativeModeTabUtil.accept(output, AlienArmorItems.PLATED_IRRADIATED_CHITIN_HELMET);
+        CreativeModeTabUtil.accept(output, AlienArmorItems.PLATED_IRRADIATED_CHITIN_CHESTPLATE);
+        CreativeModeTabUtil.accept(output, AlienArmorItems.PLATED_IRRADIATED_CHITIN_LEGGINGS);
+        CreativeModeTabUtil.accept(output, AlienArmorItems.PLATED_IRRADIATED_CHITIN_BOOTS);
     }
 
 }

@@ -74,6 +74,16 @@ public abstract class MixinLivingEntity_Host extends Entity implements Host {
     private boolean embryoWithered;
 
     @Unique
+    private static final String NBT_EMBRYO_IRRADIATED = "embryoIrradiated";
+
+    /** Jelly Sickness IV - the wither-grade lethal tier (amplifier 3 = tier IV). */
+    @Unique
+    private static final int LETHAL_JELLY_SICKNESS_AMPLIFIER = 3;
+
+    @Unique
+    private boolean embryoIrradiated;
+
+    @Unique
     private GeneContainerProxy parasiteGeneContainer;
 
     public MixinLivingEntity_Host(EntityType<?> entityType, Level level) {
@@ -137,6 +147,7 @@ public abstract class MixinLivingEntity_Host extends Entity implements Host {
         this.jellyToxicity = compoundTag.getInt(NBT_JELLY_TOXICITY);
         this.suppressionSpent = compoundTag.getBoolean(NBT_SUPPRESSION_SPENT);
         this.embryoWithered = compoundTag.getBoolean(NBT_EMBRYO_WITHERED);
+        this.embryoIrradiated = compoundTag.getBoolean(NBT_EMBRYO_IRRADIATED);
     }
 
     @Inject(at = @At("HEAD"), method = "addAdditionalSaveData")
@@ -159,21 +170,35 @@ public abstract class MixinLivingEntity_Host extends Entity implements Host {
         compoundTag.putInt(NBT_JELLY_TOXICITY, jellyToxicity);
         compoundTag.putBoolean(NBT_SUPPRESSION_SPENT, suppressionSpent);
         compoundTag.putBoolean(NBT_EMBRYO_WITHERED, embryoWithered);
+        compoundTag.putBoolean(NBT_EMBRYO_IRRADIATED, embryoIrradiated);
     }
 
     /**
-     * "You die and the burster appears." A host whose embryo carries the death-sentence mark chest-bursts on death -
-     * whatever killed them - instead of taking the embryo to the grave. The factory reads the withered mark off this
-     * host, so the emerging burster is born withered.
+     * "You die and the burster appears." Poisoning the host is never a way to cheat the birth: a marked embryo
+     * chest-bursts on its host's death, whatever killed them, instead of going to the grave. Three marks qualify:
+     * <ul>
+     * <li>the jelly DEATH SENTENCE ({@code embryoWithered}) - the burster emerges withered;</li>
+     * <li>JELLY SICKNESS IV, the lethal tier - a host who dies mid-sickness marks the embryo withered here, so dying
+     * early to the sickness still produces the demon rather than a clean escape;</li>
+     * <li>RADIATION ({@code embryoIrradiated}) - a host who dies early to the rads still gives birth, and the burster
+     * carries its boiler destiny out of the corpse.</li>
+     * </ul>
      */
     @Inject(at = @At("HEAD"), method = "die")
     public void avp_alien$witheredEmbryoDeathBurst(DamageSource damageSource, CallbackInfo callbackInfo) {
         var self = LivingEntity.class.cast(this);
 
-        if (self.level().isClientSide) {
+        if (self.level().isClientSide || getEmbryoType().isNone()) {
             return;
         }
-        if (!isEmbryoWithered() || getEmbryoType().isNone()) {
+
+        // Dying while the lethal sickness tier is on the host counts as the death sentence landing.
+        var jellySickness = self.getEffect(com.alien.common.registry.init.AlienMobEffects.getJellySicknessHolder());
+        if (jellySickness != null && jellySickness.getAmplifier() >= LETHAL_JELLY_SICKNESS_AMPLIFIER) {
+            setEmbryoWithered(true);
+        }
+
+        if (!isEmbryoWithered() && !isEmbryoIrradiated()) {
             return;
         }
 
@@ -277,6 +302,16 @@ public abstract class MixinLivingEntity_Host extends Entity implements Host {
     @Override
     public void setEmbryoWithered(boolean withered) {
         this.embryoWithered = withered;
+    }
+
+    @Override
+    public boolean isEmbryoIrradiated() {
+        return embryoIrradiated;
+    }
+
+    @Override
+    public void setEmbryoIrradiated(boolean irradiated) {
+        this.embryoIrradiated = irradiated;
     }
 
     @Override

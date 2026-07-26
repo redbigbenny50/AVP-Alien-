@@ -103,6 +103,9 @@ public abstract class Alien extends Monster implements DataUser {
 
     public final DataAccessor<Boolean> isWithered;
 
+    /** Born of an irradiated host - see {@code AlienDataSyncKeys.ALIEN_IS_BOILER_DESTINED}. */
+    public final DataAccessor<Boolean> isBoilerDestined;
+
     public final DataAccessor<Float> moltAlpha;
 
     public final DataAccessor<Boolean> isMovingHorizontally;
@@ -135,6 +138,7 @@ public abstract class Alien extends Monster implements DataUser {
         this.hasTarget = new DataAccessor<>(this, BLibDataSyncKeys.ENTITY_HAS_TARGET.get());
         this.isPoisoned = new DataAccessor<>(this, AlienDataSyncKeys.ALIEN_IS_POISONED.get());
         this.isWithered = new DataAccessor<>(this, AlienDataSyncKeys.ALIEN_IS_WITHERED.get());
+        this.isBoilerDestined = new DataAccessor<>(this, AlienDataSyncKeys.ALIEN_IS_BOILER_DESTINED.get());
         this.moltAlpha = new DataAccessor<>(this, AlienDataSyncKeys.ALIEN_MOLT_ALPHA.get());
         this.isMovingHorizontally = new DataAccessor<>(this, BLibDataSyncKeys.ENTITY_IS_MOVING_HORIZONTALLY.get());
         this.isMovingQuickly = new DataAccessor<>(this, AlienDataSyncKeys.ALIEN_IS_MOVING_QUICKLY.get());
@@ -263,6 +267,18 @@ public abstract class Alien extends Monster implements DataUser {
 
     public void setWithered(boolean withered) {
         this.isWithered.set(withered);
+    }
+
+    /**
+     * Boiler destiny - the irradiated-host birthright. Read by {@code GrowthManager.canBecomeBoiler} at the adolescent
+     * -> adult transition; rides every growth step until then.
+     */
+    public boolean isBoilerDestined() {
+        return isBoilerDestined.get();
+    }
+
+    public void setBoilerDestined(boolean boilerDestined) {
+        this.isBoilerDestined.set(boilerDestined);
     }
 
     public void setPoisoned(boolean isPoisoned) {
@@ -762,6 +778,31 @@ public abstract class Alien extends Monster implements DataUser {
         return super.canBeAffected(mobEffectInstance);
     }
 
+    /**
+     * AVPHuman's full-suit radiation armor tag, referenced BY ID so no avp_human class is touched - the tag simply has
+     * no members when the mod is absent.
+     */
+    private static final net.minecraft.tags.TagKey<net.minecraft.world.item.Item> RADIATION_RESISTANT_ARMORS =
+        net.minecraft.tags.TagKey.create(
+            net.minecraft.core.registries.Registries.ITEM,
+            net.minecraft.resources.ResourceLocation.fromNamespaceAndPath("avp_human", "radiation_resistant_armors")
+        );
+
+    /**
+     * AVPHuman's radiation effect, resolved lazily by id - a SOFT dependency: empty when avp_human is absent and the
+     * irradiated touch simply does nothing. Cached after the first lookup (registries are frozen by then).
+     */
+    private static java.util.Optional<net.minecraft.core.Holder.Reference<net.minecraft.world.effect.MobEffect>> radiationEffect;
+
+    public static java.util.Optional<net.minecraft.core.Holder.Reference<net.minecraft.world.effect.MobEffect>> radiationEffect() {
+        if (radiationEffect == null) {
+            radiationEffect = net.minecraft.core.registries.BuiltInRegistries.MOB_EFFECT.getHolder(
+                net.minecraft.resources.ResourceLocation.fromNamespaceAndPath("avp_human", "radiation")
+            );
+        }
+        return radiationEffect;
+    }
+
     @Override
     public boolean doHurtTarget(@NotNull net.minecraft.world.entity.Entity target) {
         var hurt = super.doHurtTarget(target);
@@ -775,7 +816,49 @@ public abstract class Alien extends Monster implements DataUser {
             );
         }
 
+        // IRRADIATED strain: every landed hit dose-touches AVPHuman radiation (Radiation I, 15s - a short
+        // incubation, then ramping damage plus weakness and hunger). Soft dependency: no avp_human, no effect.
+        if (
+            hurt
+                && target instanceof net.minecraft.world.entity.LivingEntity irradiatedTarget
+                && canBeIrradiatedByTouch(irradiatedTarget)
+                && AlienVariantTypes.getFor(getVariant()) == AlienVariantTypes.IRRADIATED
+        ) {
+            radiationEffect().ifPresent(
+                effect -> irradiatedTarget.addEffect(
+                    new MobEffectInstance(effect, 300, 0),
+                    this
+                )
+            );
+        }
+
         return hurt;
+    }
+
+    /**
+     * Whether the irradiated touch may dose this victim. Deliberately mirrors AVPHuman's own {@code canBeIrradiated}
+     * gate, because this hook calls {@code addEffect} directly and would otherwise bypass every protection the mod
+     * grants its players:
+     * <ul>
+     * <li><b>A full radiation-resistant armor set stops it outright.</b> The MK50 suit trades armor points and mobility
+     * for radiation protection - a claw through it must not make that trade worthless.</li>
+     * <li><b>Fellow aliens are never dosed</b> - the species is radiation-immune by decree.</li>
+     * <li><b>An active radiation effect is never refreshed.</b> AVPHuman's damage curve is driven by how much of the
+     * ORIGINAL duration has elapsed; re-applying on every claw would keep resetting a victim into the harmless
+     * incubation window, so a dose is a dose and it must be allowed to run.</li>
+     * </ul>
+     */
+    private boolean canBeIrradiatedByTouch(net.minecraft.world.entity.LivingEntity victim) {
+        if (victim instanceof Alien) {
+            return false;
+        }
+        if (radiationEffect().map(victim::hasEffect).orElse(false)) {
+            return false;
+        }
+        return !com.blib.api.common.entity.v1.BLibEntityPredicates.hasFullArmorSetMatching(
+            victim,
+            stack -> stack.is(RADIATION_RESISTANT_ARMORS)
+        );
     }
 
     @Override
