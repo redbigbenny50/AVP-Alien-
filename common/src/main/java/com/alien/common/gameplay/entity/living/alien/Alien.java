@@ -816,20 +816,17 @@ public abstract class Alien extends Monster implements DataUser {
             );
         }
 
-        // IRRADIATED strain: every landed hit dose-touches AVPHuman radiation (Radiation I, 15s - a short
-        // incubation, then ramping damage plus weakness and hunger). Soft dependency: no avp_human, no effect.
+        // IRRADIATED strain: every landed hit adds to the victim's AVPHuman radiation EXPOSURE, so a fight
+        // escalates them up the sickness ladder instead of handing out one fixed dose. Optional dependency - the
+        // compat class is only touched when avp_human is actually present.
         if (
             hurt
                 && target instanceof net.minecraft.world.entity.LivingEntity irradiatedTarget
                 && canBeIrradiatedByTouch(irradiatedTarget)
                 && AlienVariantTypes.getFor(getVariant()) == AlienVariantTypes.IRRADIATED
+                && com.alien.compatibility.avp_human.AVPHuman.MOD.isLoaded()
         ) {
-            radiationEffect().ifPresent(
-                effect -> irradiatedTarget.addEffect(
-                    new MobEffectInstance(effect, 300, 0),
-                    this
-                )
-            );
+            com.alien.compatibility.avp_human.RadiationCompat.irradiateOnHit(irradiatedTarget);
         }
 
         return hurt;
@@ -852,9 +849,9 @@ public abstract class Alien extends Monster implements DataUser {
         if (victim instanceof Alien) {
             return false;
         }
-        if (radiationEffect().map(victim::hasEffect).orElse(false)) {
-            return false;
-        }
+        // NOTE: deliberately NOT refused for an already-irradiated victim any more. Under AVPHuman's exposure
+        // counter, repeat hits are supposed to accumulate - refusing them would mean a swarm could never take you
+        // past the first rung of the ladder.
         return !com.blib.api.common.entity.v1.BLibEntityPredicates.hasFullArmorSetMatching(
             victim,
             stack -> stack.is(RADIATION_RESISTANT_ARMORS)
