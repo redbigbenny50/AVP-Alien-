@@ -1,0 +1,10 @@
+{
+  "type": "minecraft:stonecutting",
+  "ingredient": {
+    "item": "avp_alien:aberrant_resin"
+  },
+  "result": {
+    "count": 4,
+    "id": "avp_alien:aberrant_resin_vein"
+  }
+}

@@ -1,0 +1,31 @@
+{
+  "values": [
+    "avp_alien:adolescent",
+    "avp_alien:boiler",
+    "avp_alien:carrier",
+    "avp_alien:chestburster",
+    "avp_alien:chrysalis",
+    "avp_alien:crusher",
+    "avp_alien:drone",
+    "avp_alien:facehugger",
+    "avp_alien:harbinger",
+    "avp_alien:ovomorph",
+    "avp_alien:praetorian",
+    "avp_alien:predalien",
+    "avp_alien:predalien_adolescent",
+    "avp_alien:predalien_chestburster",
+    "avp_alien:prowler",
+    "avp_alien:razor_claw",
+    "avp_alien:ravager",
+    "avp_alien:queen",
+    "avp_alien:empress",
+    "avp_alien:royal_adolescent",
+    "avp_alien:royal_chestburster",
+    "avp_alien:royal_facehugger",
+    "avp_alien:royal_ovomorph",
+    "avp_alien:burster",
+    "avp_alien:runner",
+    "avp_alien:spitter",
+    "avp_alien:warrior"
+  ]
+}

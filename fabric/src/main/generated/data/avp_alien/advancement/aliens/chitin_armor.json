@@ -1,0 +1,82 @@
+{
+  "parent": "avp_alien:aliens/kill_an_alien",
+  "criteria": {
+    "aberrant_chitin_armor": {
+      "conditions": {
+        "items": [
+          {
+            "items": "avp_alien:aberrant_chitin_helmet"
+          },
+          {
+            "items": "avp_alien:aberrant_chitin_chestplate"
+          },
+          {
+            "items": "avp_alien:aberrant_chitin_leggings"
+          },
+          {
+            "items": "avp_alien:aberrant_chitin_boots"
+          }
+        ]
+      },
+      "trigger": "minecraft:inventory_changed"
+    },
+    "chitin_armor": {
+      "conditions": {
+        "items": [
+          {
+            "items": "avp_alien:chitin_helmet"
+          },
+          {
+            "items": "avp_alien:chitin_chestplate"
+          },
+          {
+            "items": "avp_alien:chitin_leggings"
+          },
+          {
+            "items": "avp_alien:chitin_boots"
+          }
+        ]
+      },
+      "trigger": "minecraft:inventory_changed"
+    },
+    "nether_chitin_armor": {
+      "conditions": {
+        "items": [
+          {
+            "items": "avp_alien:nether_chitin_helmet"
+          },
+          {
+            "items": "avp_alien:nether_chitin_chestplate"
+          },
+          {
+            "items": "avp_alien:nether_chitin_leggings"
+          },
+          {
+            "items": "avp_alien:nether_chitin_boots"
+          }
+        ]
+      },
+      "trigger": "minecraft:inventory_changed"
+    }
+  },
+  "display": {
+    "description": {
+      "translate": "advancements.aliens.chitin_armor.description"
+    },
+    "icon": {
+      "count": 1,
+      "id": "avp_alien:chitin_helmet"
+    },
+    "title": {
+      "translate": "advancements.aliens.chitin_armor.title"
+    }
+  },
+  "requirements": [
+    [
+      "aberrant_chitin_armor",
+      "chitin_armor",
+      "nether_chitin_armor"
+    ]
+  ],
+  "sends_telemetry_event": true
+}

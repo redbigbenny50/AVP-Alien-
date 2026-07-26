@@ -1,0 +1,30 @@
+{
+  "parent": "avp_alien:aliens/defeat_a_raid",
+  "criteria": {
+    "dual_variant_raids": {
+      "trigger": "minecraft:impossible"
+    }
+  },
+  "display": {
+    "description": {
+      "translate": "advancements.aliens.dual_variant_raids.description"
+    },
+    "frame": "challenge",
+    "icon": {
+      "count": 1,
+      "id": "avp_alien:raw_scourge_jelly"
+    },
+    "title": {
+      "translate": "advancements.aliens.dual_variant_raids.title"
+    }
+  },
+  "requirements": [
+    [
+      "dual_variant_raids"
+    ]
+  ],
+  "rewards": {
+    "experience": 100
+  },
+  "sends_telemetry_event": true
+}

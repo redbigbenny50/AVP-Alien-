@@ -1,0 +1,5 @@
+{
+  "biomass": 50,
+  "output_entity": "avp_alien:aberrant_drone",
+  "population_biomass_cost_scale": 0.05
+}

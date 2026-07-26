@@ -1,0 +1,30 @@
+{
+  "parent": "avp_alien:aliens/kill_a_royal_alien",
+  "criteria": {
+    "kill_a_hive": {
+      "trigger": "minecraft:impossible"
+    }
+  },
+  "display": {
+    "description": {
+      "translate": "advancements.aliens.kill_a_hive.description"
+    },
+    "frame": "challenge",
+    "icon": {
+      "count": 1,
+      "id": "avp_alien:raw_royal_jelly"
+    },
+    "title": {
+      "translate": "advancements.aliens.kill_a_hive.title"
+    }
+  },
+  "requirements": [
+    [
+      "kill_a_hive"
+    ]
+  ],
+  "rewards": {
+    "experience": 100
+  },
+  "sends_telemetry_event": true
+}

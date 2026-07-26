@@ -1,0 +1,18 @@
+{
+  "values": [
+    "avp_alien:irradiated_resin",
+    "avp_alien:irradiated_resin_node",
+    "avp_alien:irradiated_resin_vein",
+    "avp_alien:irradiated_resin_web",
+    "avp_alien:irradiated_resin_bricks",
+    "avp_alien:irradiated_resin_brick_slab",
+    "avp_alien:irradiated_resin_brick_stairs",
+    "avp_alien:irradiated_resin_brick_wall",
+    "avp_alien:irradiated_resin_vent",
+    "avp_alien:ribbed_irradiated_resin",
+    "avp_alien:smooth_irradiated_resin",
+    "avp_alien:smooth_irradiated_resin_slab",
+    "avp_alien:smooth_irradiated_resin_stairs",
+    "avp_alien:smooth_irradiated_resin_wall"
+  ]
+}

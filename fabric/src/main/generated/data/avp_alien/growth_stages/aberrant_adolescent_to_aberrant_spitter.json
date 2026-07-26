@@ -1,0 +1,9 @@
+{
+  "from": "avp_alien:aberrant_adolescent",
+  "growthTimeInTicks": 3000,
+  "hostTypePredicate": [
+    "minecraft:llama",
+    "minecraft:trader_llama"
+  ],
+  "to": "avp_alien:aberrant_spitter"
+}

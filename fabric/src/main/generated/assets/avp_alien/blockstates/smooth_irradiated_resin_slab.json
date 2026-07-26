@@ -1,0 +1,13 @@
+{
+  "variants": {
+    "type=bottom": {
+      "model": "avp_alien:block/smooth_irradiated_resin_slab"
+    },
+    "type=double": {
+      "model": "avp_alien:block/smooth_irradiated_resin"
+    },
+    "type=top": {
+      "model": "avp_alien:block/smooth_irradiated_resin_slab_top"
+    }
+  }
+}

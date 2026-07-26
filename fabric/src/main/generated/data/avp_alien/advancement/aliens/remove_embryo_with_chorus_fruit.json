@@ -1,0 +1,26 @@
+{
+  "parent": "avp_alien:aliens/root",
+  "criteria": {
+    "remove_embryo_with_chorus_fruit": {
+      "trigger": "minecraft:impossible"
+    }
+  },
+  "display": {
+    "description": {
+      "translate": "advancements.aliens.remove_embryo_with_chorus_fruit.description"
+    },
+    "icon": {
+      "count": 1,
+      "id": "minecraft:chorus_fruit"
+    },
+    "title": {
+      "translate": "advancements.aliens.remove_embryo_with_chorus_fruit.title"
+    }
+  },
+  "requirements": [
+    [
+      "remove_embryo_with_chorus_fruit"
+    ]
+  ],
+  "sends_telemetry_event": true
+}

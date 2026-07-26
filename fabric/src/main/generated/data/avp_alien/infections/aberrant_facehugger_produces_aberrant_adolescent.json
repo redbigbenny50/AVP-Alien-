@@ -1,0 +1,8 @@
+{
+  "detachDelayInTicks": 1200,
+  "embryoType": "avp_alien:aberrant_adolescent",
+  "gestationTimeInTicks": 3000,
+  "hostTypePredicate": "#avp_alien:runner_hosts",
+  "impregnationDelayInTicks": 60,
+  "parasiteType": "avp_alien:aberrant_facehugger"
+}

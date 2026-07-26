@@ -1,0 +1,18 @@
+{
+  "conditions": [
+    {
+      "type": "min_entity_count_in_location",
+      "entity": "avp_alien:harbinger",
+      "value": 1
+    }
+  ],
+  "input_entities": [
+    {
+      "count": 1,
+      "entity": "avp_alien:prowler"
+    }
+  ],
+  "output_entity": "avp_alien:chrysalis",
+  "population_biomass_cost_scale": 0.05,
+  "scourge_jelly": 1
+}

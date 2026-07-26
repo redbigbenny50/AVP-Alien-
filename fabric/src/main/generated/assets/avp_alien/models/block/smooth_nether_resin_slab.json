@@ -1,0 +1,8 @@
+{
+  "parent": "minecraft:block/slab",
+  "textures": {
+    "bottom": "avp_alien:block/smooth_nether_resin",
+    "side": "avp_alien:block/smooth_nether_resin",
+    "top": "avp_alien:block/smooth_nether_resin"
+  }
+}

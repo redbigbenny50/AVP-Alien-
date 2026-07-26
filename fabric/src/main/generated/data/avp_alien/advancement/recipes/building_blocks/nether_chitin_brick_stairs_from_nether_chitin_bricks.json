@@ -1,0 +1,32 @@
+{
+  "parent": "minecraft:recipes/root",
+  "criteria": {
+    "has_nether_chitin_bricks": {
+      "conditions": {
+        "items": [
+          {
+            "items": "avp_alien:nether_chitin_bricks"
+          }
+        ]
+      },
+      "trigger": "minecraft:inventory_changed"
+    },
+    "has_the_recipe": {
+      "conditions": {
+        "recipe": "avp_alien:nether_chitin_brick_stairs_from_nether_chitin_bricks"
+      },
+      "trigger": "minecraft:recipe_unlocked"
+    }
+  },
+  "requirements": [
+    [
+      "has_the_recipe",
+      "has_nether_chitin_bricks"
+    ]
+  ],
+  "rewards": {
+    "recipes": [
+      "avp_alien:nether_chitin_brick_stairs_from_nether_chitin_bricks"
+    ]
+  }
+}

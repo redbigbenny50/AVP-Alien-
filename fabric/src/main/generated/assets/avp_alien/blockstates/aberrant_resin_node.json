@@ -1,0 +1,21 @@
+{
+  "variants": {
+    "": [
+      {
+        "model": "avp_alien:block/aberrant_resin_node"
+      },
+      {
+        "model": "avp_alien:block/aberrant_resin_node",
+        "y": 90
+      },
+      {
+        "model": "avp_alien:block/aberrant_resin_node",
+        "y": 180
+      },
+      {
+        "model": "avp_alien:block/aberrant_resin_node",
+        "y": 270
+      }
+    ]
+  }
+}

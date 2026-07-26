@@ -1,0 +1,16 @@
+{
+  "type": "minecraft:crafting_shapeless",
+  "category": "equipment",
+  "ingredients": [
+    {
+      "item": "avp_alien:nether_spitter_head"
+    },
+    {
+      "item": "minecraft:shield"
+    }
+  ],
+  "result": {
+    "count": 1,
+    "id": "avp_alien:nether_spitter_head_shield"
+  }
+}

@@ -1,0 +1,17 @@
+{
+  "values": [
+    "#avp_alien:runner_hosts",
+    {
+      "id": "#minecraft:illager",
+      "required": false
+    },
+    "minecraft:llama",
+    "minecraft:piglin",
+    "minecraft:piglin_brute",
+    "minecraft:player",
+    "minecraft:trader_llama",
+    "minecraft:villager",
+    "minecraft:wandering_trader",
+    "minecraft:witch"
+  ]
+}

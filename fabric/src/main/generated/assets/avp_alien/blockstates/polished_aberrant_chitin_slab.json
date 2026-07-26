@@ -1,0 +1,13 @@
+{
+  "variants": {
+    "type=bottom": {
+      "model": "avp_alien:block/polished_aberrant_chitin_slab"
+    },
+    "type=double": {
+      "model": "avp_alien:block/polished_aberrant_chitin"
+    },
+    "type=top": {
+      "model": "avp_alien:block/polished_aberrant_chitin_slab_top"
+    }
+  }
+}

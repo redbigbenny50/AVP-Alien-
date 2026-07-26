@@ -8,7 +8,6 @@ import com.alien.common.registry.tag.AlienEntityTypeTags;
 import net.minecraft.server.MinecraftServer;
 import org.jetbrains.annotations.Nullable;
 
-import java.util.Comparator;
 import java.util.UUID;
 
 /**
@@ -66,10 +65,10 @@ public final class EmpressCandidatePicker {
                     }
 
                     var candidate = new Candidate(
-                            queen,
-                            location.claimedChunks().size(),
-                            CastePopulation.totalTrackedPopulation(location),
-                            location.ageInTicks()
+                        queen,
+                        location.claimedChunks().size(),
+                        CastePopulation.totalTrackedPopulation(location),
+                        location.ageInTicks()
                     );
 
                     if (best == null || compare(candidate, best, lineage) > 0) {
@@ -132,5 +131,10 @@ public final class EmpressCandidatePicker {
     }
 
     /** Cached per-candidate metrics so comparisons don't repeatedly re-walk {@link HiveLocation} lookups. */
-    private record Candidate(Queen queen, int claimCount, int memberCount, long locationAgeTicks) {}
+    private record Candidate(
+        Queen queen,
+        int claimCount,
+        int memberCount,
+        long locationAgeTicks
+    ) {}
 }

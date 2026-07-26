@@ -1,0 +1,6 @@
+{
+  "parent": "minecraft:block/wall_inventory",
+  "textures": {
+    "wall": "avp_alien:block/aberrant_chitin_block"
+  }
+}

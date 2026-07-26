@@ -1,0 +1,6 @@
+{
+  "parent": "minecraft:item/generated",
+  "textures": {
+    "layer0": "avp_alien:item/predalien_chestburster_spawn_egg"
+  }
+}

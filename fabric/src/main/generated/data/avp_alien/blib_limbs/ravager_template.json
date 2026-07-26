@@ -1,0 +1,29 @@
+{
+  "limbs": [
+    {
+      "category": "blib:head",
+      "fatal": true,
+      "id": "avp_alien:ravager_head"
+    },
+    {
+      "category": "blib:arm",
+      "id": "avp_alien:ravager_left_arm"
+    },
+    {
+      "category": "blib:arm",
+      "id": "avp_alien:ravager_right_arm"
+    },
+    {
+      "category": "blib:leg",
+      "id": "avp_alien:ravager_left_leg"
+    },
+    {
+      "category": "blib:leg",
+      "id": "avp_alien:ravager_right_leg"
+    },
+    {
+      "category": "blib:tail",
+      "id": "avp_alien:ravager_tail"
+    }
+  ]
+}

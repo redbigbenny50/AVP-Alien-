@@ -1,0 +1,13 @@
+{
+  "variants": {
+    "type=bottom": {
+      "model": "avp_alien:block/chitin_block_slab"
+    },
+    "type=double": {
+      "model": "avp_alien:block/chitin_block"
+    },
+    "type=top": {
+      "model": "avp_alien:block/chitin_block_slab_top"
+    }
+  }
+}

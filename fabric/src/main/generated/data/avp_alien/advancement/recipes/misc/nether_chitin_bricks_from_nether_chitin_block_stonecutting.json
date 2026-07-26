@@ -1,0 +1,32 @@
+{
+  "parent": "minecraft:recipes/root",
+  "criteria": {
+    "has_nether_chitin_block": {
+      "conditions": {
+        "items": [
+          {
+            "items": "avp_alien:nether_chitin_block"
+          }
+        ]
+      },
+      "trigger": "minecraft:inventory_changed"
+    },
+    "has_the_recipe": {
+      "conditions": {
+        "recipe": "avp_alien:nether_chitin_bricks_from_nether_chitin_block_stonecutting"
+      },
+      "trigger": "minecraft:recipe_unlocked"
+    }
+  },
+  "requirements": [
+    [
+      "has_the_recipe",
+      "has_nether_chitin_block"
+    ]
+  ],
+  "rewards": {
+    "recipes": [
+      "avp_alien:nether_chitin_bricks_from_nether_chitin_block_stonecutting"
+    ]
+  }
+}

@@ -48,14 +48,14 @@ public final class ChunkPicker {
         // corners (e.g., (2,2)), so partial fills are rotationally symmetric — a cross filling out toward a
         // square, rather than a square with one column missing.
         return frontier
-                .stream()
-                .min(
-                        Comparator.<ChunkPos>comparingInt(c -> chebyshev(c, centerChunk))
-                                .thenComparingInt(c -> manhattan(c, centerChunk))
-                                .thenComparingInt(c -> c.x)
-                                .thenComparingInt(c -> c.z)
-                )
-                .orElse(null);
+            .stream()
+            .min(
+                Comparator.<ChunkPos>comparingInt(c -> chebyshev(c, centerChunk))
+                    .thenComparingInt(c -> manhattan(c, centerChunk))
+                    .thenComparingInt(c -> c.x)
+                    .thenComparingInt(c -> c.z)
+            )
+            .orElse(null);
     }
 
     public static @Nullable ChunkPos pickPassiveChunk(ServerLevel level, HiveLocation location, HiveConfig config) {
@@ -72,10 +72,10 @@ public final class ChunkPicker {
     }
 
     private static Set<ChunkPos> collectFrontier(
-            ServerLevel level,
-            HiveLocation location,
-            boolean requireLoadedMember,
-            HiveConfig config
+        ServerLevel level,
+        HiveLocation location,
+        boolean requireLoadedMember,
+        HiveConfig config
     ) {
         var dimension = location.dimension();
         var frontier = new HashSet<ChunkPos>();
@@ -127,9 +127,9 @@ public final class ChunkPicker {
     }
 
     private static boolean hasMemberInChunk(
-            ServerLevel level,
-            @Nullable com.blib.api.common.faction.v1.Faction<?> locationFaction,
-            ChunkPos chunk
+        ServerLevel level,
+        @Nullable com.blib.api.common.faction.v1.Faction<?> locationFaction,
+        ChunkPos chunk
     ) {
         if (locationFaction == null) {
             return false;

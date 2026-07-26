@@ -1,0 +1,19 @@
+{
+  "endScale": 1.0,
+  "entityType": "avp_alien:nether_burster",
+  "phases": [
+    {
+      "idleTicks": 200,
+      "moltTicks": 200
+    },
+    {
+      "idleTicks": 200,
+      "moltTicks": 200
+    },
+    {
+      "idleTicks": 200,
+      "moltTicks": 200
+    }
+  ],
+  "startScale": 0.9
+}

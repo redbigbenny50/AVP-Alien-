@@ -69,8 +69,8 @@ public final class LineageInvariantTask {
     }
 
     private static void scanLineage(
-            com.blib.api.common.faction.v1.FactionMembership membership,
-            LineageFactionData lineage
+        com.blib.api.common.faction.v1.FactionMembership membership,
+        LineageFactionData lineage
     ) {
         var lineageVariant = lineage.variant();
         var mismatchedUuids = new HashSet<UUID>();
@@ -89,9 +89,9 @@ public final class LineageInvariantTask {
         if (removedReserveEntries > 0) {
             lineage.markDirty();
             Alien.LOGGER.info(
-                    "Hive: LineageInvariantTask removed {} variant-mismatched reserve entries from lineage variant={}",
-                    removedReserveEntries,
-                    lineageVariant
+                "Hive: LineageInvariantTask removed {} variant-mismatched reserve entries from lineage variant={}",
+                removedReserveEntries,
+                lineageVariant
             );
         }
 
@@ -103,9 +103,9 @@ public final class LineageInvariantTask {
     }
 
     private static void evictAll(
-            com.blib.api.common.faction.v1.FactionMembership membership,
-            Set<UUID> uuids,
-            LineageFactionData lineage
+        com.blib.api.common.faction.v1.FactionMembership membership,
+        Set<UUID> uuids,
+        LineageFactionData lineage
     ) {
         // Snapshot to avoid concurrent-modification when removeMember fires onMemberRemoved which mutates
         // location loadedMembersByType.
@@ -115,9 +115,9 @@ public final class LineageInvariantTask {
         }
 
         Alien.LOGGER.info(
-                "Hive: LineageInvariantTask evicted {} variant-mismatched member(s) from lineage variant={}",
-                snapshot.size(),
-                lineage.variant()
+            "Hive: LineageInvariantTask evicted {} variant-mismatched member(s) from lineage variant={}",
+            snapshot.size(),
+            lineage.variant()
         );
     }
 }

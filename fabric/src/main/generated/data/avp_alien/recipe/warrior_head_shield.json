@@ -1,0 +1,16 @@
+{
+  "type": "minecraft:crafting_shapeless",
+  "category": "equipment",
+  "ingredients": [
+    {
+      "item": "avp_alien:warrior_head"
+    },
+    {
+      "item": "minecraft:shield"
+    }
+  ],
+  "result": {
+    "count": 1,
+    "id": "avp_alien:warrior_head_shield"
+  }
+}

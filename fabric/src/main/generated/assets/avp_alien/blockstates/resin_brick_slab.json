@@ -1,0 +1,13 @@
+{
+  "variants": {
+    "type=bottom": {
+      "model": "avp_alien:block/resin_brick_slab"
+    },
+    "type=double": {
+      "model": "avp_alien:block/resin_bricks"
+    },
+    "type=top": {
+      "model": "avp_alien:block/resin_brick_slab_top"
+    }
+  }
+}

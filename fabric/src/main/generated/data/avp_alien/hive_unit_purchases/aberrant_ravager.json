@@ -1,0 +1,18 @@
+{
+  "conditions": [
+    {
+      "type": "min_entity_count_in_location",
+      "entity": "avp_alien:aberrant_harbinger",
+      "value": 1
+    }
+  ],
+  "input_entities": [
+    {
+      "count": 1,
+      "entity": "avp_alien:aberrant_warrior"
+    }
+  ],
+  "output_entity": "avp_alien:aberrant_ravager",
+  "population_biomass_cost_scale": 0.05,
+  "scourge_jelly": 1
+}

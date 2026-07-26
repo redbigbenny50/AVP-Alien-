@@ -1,0 +1,50 @@
+{
+  "random": {
+    "pools": [
+      {
+        "tag": "avp_alien:runners",
+        "weight": 3
+      },
+      {
+        "tag": "avp_alien:drones",
+        "weight": 3
+      },
+      {
+        "tag": "avp_alien:warriors",
+        "weight": 2
+      },
+      {
+        "tag": "avp_alien:prowlers",
+        "weight": 2
+      },
+      {
+        "max_count": 2,
+        "tag": "avp_alien:chrysalises"
+      },
+      {
+        "max_count": 2,
+        "tag": "avp_alien:razor_claws"
+      },
+      {
+        "max_count": 3,
+        "tag": "avp_alien:bursters"
+      },
+      {
+        "max_count": 1,
+        "tag": "avp_alien:ravagers"
+      },
+      {
+        "max_count": 1,
+        "tag": "avp_alien:carriers"
+      },
+      {
+        "max_count": 1,
+        "tag": "avp_alien:praetorians"
+      },
+      {
+        "max_count": 1,
+        "tag": "avp_alien:crushers"
+      }
+    ]
+  }
+}

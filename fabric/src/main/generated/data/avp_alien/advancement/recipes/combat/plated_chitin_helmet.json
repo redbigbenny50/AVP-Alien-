@@ -1,0 +1,43 @@
+{
+  "parent": "minecraft:recipes/root",
+  "criteria": {
+    "has_chitin_helmet": {
+      "conditions": {
+        "items": [
+          {
+            "items": "avp_alien:chitin_helmet"
+          }
+        ]
+      },
+      "trigger": "minecraft:inventory_changed"
+    },
+    "has_plated_chitin": {
+      "conditions": {
+        "items": [
+          {
+            "items": "avp_alien:plated_chitin"
+          }
+        ]
+      },
+      "trigger": "minecraft:inventory_changed"
+    },
+    "has_the_recipe": {
+      "conditions": {
+        "recipe": "avp_alien:plated_chitin_helmet"
+      },
+      "trigger": "minecraft:recipe_unlocked"
+    }
+  },
+  "requirements": [
+    [
+      "has_the_recipe",
+      "has_chitin_helmet",
+      "has_plated_chitin"
+    ]
+  ],
+  "rewards": {
+    "recipes": [
+      "avp_alien:plated_chitin_helmet"
+    ]
+  }
+}

@@ -418,7 +418,12 @@ public abstract class Alien extends Monster implements DataUser {
             return;
 
         if (canHeal()) {
+            var healthBefore = getHealth();
             heal(getHealthRegenPerSecond());
+            var healed = getHealth() - healthBefore;
+            if (healed > 0.0F && this instanceof Dismemberable dismemberable) {
+                dismemberable.getDismembermentManager().healLimbDamage(healed);
+            }
         }
     }
 

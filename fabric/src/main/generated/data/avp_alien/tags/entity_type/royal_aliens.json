@@ -1,0 +1,19 @@
+{
+  "values": [
+    "#avp_alien:royal_xenomorphs",
+    "#avp_alien:predalien_adolescents",
+    "#avp_alien:predalien_chestbursters",
+    "avp_alien:royal_aberrant_adolescent",
+    "avp_alien:royal_aberrant_chestburster",
+    "avp_alien:royal_aberrant_facehugger",
+    "avp_alien:royal_aberrant_ovomorph",
+    "avp_alien:royal_adolescent",
+    "avp_alien:royal_chestburster",
+    "avp_alien:royal_facehugger",
+    "avp_alien:royal_nether_adolescent",
+    "avp_alien:royal_nether_chestburster",
+    "avp_alien:royal_nether_facehugger",
+    "avp_alien:royal_nether_ovomorph",
+    "avp_alien:royal_ovomorph"
+  ]
+}
