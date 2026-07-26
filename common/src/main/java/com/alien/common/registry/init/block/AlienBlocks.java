@@ -6,6 +6,7 @@ import com.alien.common.gameplay.block.crusher.CrusherHeadBlock;
 import com.alien.common.gameplay.block.crusher.CrusherHeadVariant;
 import com.alien.common.gameplay.block.crusher.CrusherWallHeadBlock;
 import com.alien.common.gameplay.block.jelly.JellyBlock;
+import com.alien.common.gameplay.block.jelly.JellyVatBlock;
 import com.alien.common.gameplay.block.queen.QueenHeadBlock;
 import com.alien.common.gameplay.block.queen.QueenHeadVariant;
 import com.alien.common.gameplay.block.queen.QueenWallHeadBlock;
@@ -41,6 +42,11 @@ public class AlienBlocks {
     public static final BLibHolder<AnchorBlock> ANCHOR = create(
         "anchor",
         () -> new AnchorBlock(anchorProperties())
+    );
+
+    public static final BLibHolder<JellyVatBlock> JELLY_VAT = create(
+        "jelly_vat",
+        () -> new JellyVatBlock(AlienBlockProperties.RESIN.build().noOcclusion())
     );
 
     public static final BLibHolder<QueenHeadBlock> QUEEN_HEAD = create(

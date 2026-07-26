@@ -24,7 +24,7 @@ public class Prowler extends Xenomorph implements GOAPUser<Prowler> {
 
     public static final AttackType CLAW = AttackType.builder("prowler_claw")
         .requiresAnyArm()
-        .defaultDurationInTicks(10)
+        .defaultDurationInTicks(20)
         .sound(AlienSoundEvents.ENTITY_XENOMORPH_ATTACK)
         .build();
 
@@ -36,7 +36,7 @@ public class Prowler extends Xenomorph implements GOAPUser<Prowler> {
 
     public static final AttackType TAIL_QUAD = AttackType.builder("prowler_tail_quad")
         .requiresTail()
-        .defaultDurationInTicks(10)
+        .defaultDurationInTicks(19)
         .sound(AlienSoundEvents.ENTITY_XENOMORPH_ATTACK)
         .build();
 
@@ -61,7 +61,7 @@ public class Prowler extends Xenomorph implements GOAPUser<Prowler> {
         return Alien.createAlienAttributes()
             .add(Attributes.ARMOR, 8.0F)
             .add(Attributes.ARMOR_TOUGHNESS, 0f)
-            .add(Attributes.ATTACK_DAMAGE, PlayerStatConstants.BASE_HEALTH * 0.5F)
+            .add(Attributes.ATTACK_DAMAGE, PlayerStatConstants.BASE_HEALTH * 0.4F)
             .add(Attributes.FOLLOW_RANGE, 35F)
             .add(Attributes.KNOCKBACK_RESISTANCE, 0.5f)
             .add(Attributes.MAX_HEALTH, PlayerStatConstants.BASE_HEALTH * 3F)

@@ -54,6 +54,14 @@ public class EggPickupManager implements GameEventListener.Provider<EggPickupReq
             // Set the target ovomorph to null.
             setTargetOvomorph(null);
         }
+
+        // Release a claim the moment this worker takes on a host. A host hauler has no attack target (egg-duty
+        // disarm clears it), so the check above never fired for it: the worker kept the egg reserved while it
+        // walked the host home, and the egg - already marked acknowledged - had stopped broadcasting, so no other
+        // worker could ever hear it. That stranded every host-bound egg permanently.
+        if (targetOvomorph != null && isCarryingHost()) {
+            setTargetOvomorph(null);
+        }
     }
 
     private List<Ovomorph> getPassengerOvomorphs() {
@@ -80,12 +88,21 @@ public class EggPickupManager implements GameEventListener.Provider<EggPickupReq
         this.targetOvomorph = targetOvomorph;
     }
 
+    /** True while this worker is hauling a captured host - it is busy and must not reserve an egg. */
+    private boolean isCarryingHost() {
+        return xenomorph.getPassengers()
+            .stream()
+            .anyMatch(passenger -> passenger.getType().is(AlienEntityTypeTags.HOSTS));
+    }
+
     private void acknowledgePickupRequest(Ovomorph ovomorph) {
         if (
             // If this xenomorph already has a target ovomorph, then ignore this other requesting ovomorph.
             targetOvomorph != null
                 // If the xenomorph is already moving an ovomorph, don't acknowledge this other ovomorph's request.
                 || !getPassengerOvomorphs().isEmpty()
+                // A worker hauling a host is busy: claiming an egg here silences it for everyone else.
+                || isCarryingHost()
                 // If the xenomorph can't reach the ovomorph, don't try to pick the ovomorph up.
                 || (xenomorph.getNavigation().createPath(ovomorph, 0) == null)
         ) {

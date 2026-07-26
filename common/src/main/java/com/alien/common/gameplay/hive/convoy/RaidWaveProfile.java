@@ -15,7 +15,10 @@ import java.util.Optional;
 
 public record RaidWaveProfile(List<Wave> waves) {
 
-    public static final int MIN_WAVE_SIZE = 5;
+    public static final int MIN_WAVE_SIZE = 3;
+
+    /** Revenge/recovery waves are small and immediate: six bodies, three times. */
+    public static final int REVENGE_WAVE_SIZE = 6;
 
     public static final long DEFAULT_BUFFER_TICKS = 20L * 10L;
 
@@ -33,7 +36,7 @@ public record RaidWaveProfile(List<Wave> waves) {
         return new RaidWaveProfile(
             List.of(
                 new Wave(
-                    5,
+                    3,
                     DEFAULT_BUFFER_TICKS,
                     List.of(),
                     List.of(
@@ -42,7 +45,7 @@ public record RaidWaveProfile(List<Wave> waves) {
                     )
                 ),
                 new Wave(
-                    8,
+                    5,
                     DEFAULT_BUFFER_TICKS,
                     List.of(
                         new Guarantee(
@@ -59,6 +62,18 @@ public record RaidWaveProfile(List<Wave> waves) {
                     )
                 ),
                 new Wave(
+                    8,
+                    DEFAULT_BUFFER_TICKS,
+                    List.of(),
+                    List.of(
+                        PoolEntry.tagPool(AlienEntityTypeTags.WARRIORS, 3, Integer.MAX_VALUE),
+                        PoolEntry.tagPool(AlienEntityTypeTags.PROWLERS, 3, Integer.MAX_VALUE),
+                        PoolEntry.tagPool(AlienEntityTypeTags.CHRYSALISES, 2, 2),
+                        PoolEntry.tagPool(AlienEntityTypeTags.RAZOR_CLAWS, 2, 2),
+                        PoolEntry.tagPool(AlienEntityTypeTags.BURSTERS, 2, 3)
+                    )
+                ),
+                new Wave(
                     13,
                     DEFAULT_BUFFER_TICKS,
                     List.of(),
@@ -67,25 +82,13 @@ public record RaidWaveProfile(List<Wave> waves) {
                         PoolEntry.tagPool(AlienEntityTypeTags.PROWLERS, 3, Integer.MAX_VALUE),
                         PoolEntry.tagPool(AlienEntityTypeTags.CHRYSALISES, 2, 3),
                         PoolEntry.tagPool(AlienEntityTypeTags.RAZOR_CLAWS, 2, 3),
-                        PoolEntry.tagPool(AlienEntityTypeTags.BURSTERS, 2, 4)
+                        PoolEntry.tagPool(AlienEntityTypeTags.BURSTERS, 2, 3),
+                        PoolEntry.tagPool(AlienEntityTypeTags.RAVAGERS, 1, 2),
+                        PoolEntry.tagPool(AlienEntityTypeTags.CARRIERS, 1, 2)
                     )
                 ),
                 new Wave(
                     21,
-                    DEFAULT_BUFFER_TICKS,
-                    List.of(),
-                    List.of(
-                        PoolEntry.tagPool(AlienEntityTypeTags.WARRIORS, 3, Integer.MAX_VALUE),
-                        PoolEntry.tagPool(AlienEntityTypeTags.PROWLERS, 3, Integer.MAX_VALUE),
-                        PoolEntry.tagPool(AlienEntityTypeTags.CHRYSALISES, 2, 4),
-                        PoolEntry.tagPool(AlienEntityTypeTags.RAZOR_CLAWS, 2, 4),
-                        PoolEntry.tagPool(AlienEntityTypeTags.BURSTERS, 2, 5),
-                        PoolEntry.tagPool(AlienEntityTypeTags.RAVAGERS, 1, 3),
-                        PoolEntry.tagPool(AlienEntityTypeTags.CARRIERS, 1, 3)
-                    )
-                ),
-                new Wave(
-                    34,
                     DEFAULT_BUFFER_TICKS,
                     List.of(
                         new Guarantee(
@@ -96,10 +99,10 @@ public record RaidWaveProfile(List<Wave> waves) {
                     List.of(
                         PoolEntry.tagPool(AlienEntityTypeTags.WARRIORS, 3, Integer.MAX_VALUE),
                         PoolEntry.tagPool(AlienEntityTypeTags.PROWLERS, 3, Integer.MAX_VALUE),
-                        PoolEntry.tagPool(AlienEntityTypeTags.CHRYSALISES, 2, 6),
-                        PoolEntry.tagPool(AlienEntityTypeTags.RAZOR_CLAWS, 2, 6),
-                        PoolEntry.tagPool(AlienEntityTypeTags.BURSTERS, 2, 8),
-                        PoolEntry.tagPool(AlienEntityTypeTags.RAVAGERS, 1, 4),
+                        PoolEntry.tagPool(AlienEntityTypeTags.CHRYSALISES, 2, 4),
+                        PoolEntry.tagPool(AlienEntityTypeTags.RAZOR_CLAWS, 2, 4),
+                        PoolEntry.tagPool(AlienEntityTypeTags.BURSTERS, 2, 5),
+                        PoolEntry.tagPool(AlienEntityTypeTags.RAVAGERS, 1, 2),
                         PoolEntry.tagPool(AlienEntityTypeTags.CARRIERS, 1, 4)
                     )
                 )
@@ -109,6 +112,55 @@ public record RaidWaveProfile(List<Wave> waves) {
 
     public Wave wave(int index) {
         return waves.get(Math.clamp(index, 0, waves.size() - 1));
+    }
+
+    /**
+     * A 3-wave code fallback for rescue raids (queen captured). Same shorter shape as {@link #revengeFallback} — a
+     * focused strike to free the queen — so rescue works without a datapack profile present.
+     */
+    public static RaidWaveProfile rescueFallback() {
+        return revengeFallback();
+    }
+
+    /**
+     * A 3-wave code fallback for revenge raids (queen killed) — a shorter, sharper strike than the full 5-wave raid.
+     * Mirrors {@link #fallback}'s shape so revenge works without a datapack profile present, matching how the normal
+     * raid profile provides a built-in default.
+     */
+    /**
+     * Revenge and recovery: the hive comes for you with its STANDING ARMY, not its raid tier.
+     * <p>
+     * Three waves, six bodies each. No scourge castes and no harbinger - those belong to a planned raid, which the hive
+     * must build up to. Revenge is what it can field RIGHT NOW, with what it has: warriors, prowlers, spitters, and the
+     * queen's guard (praetorians and crushers) turned outward for once. A hive that has just lost its queen is not
+     * staging a campaign; it is lashing out.
+     * <p>
+     * Tag pools, so this one profile serves every strain - a nether hive sends nether warriors.
+     */
+    public static RaidWaveProfile revengeFallback() {
+        return new RaidWaveProfile(
+            List.of(
+                revengeWave(),
+                revengeWave(),
+                revengeWave()
+            )
+        );
+    }
+
+    /** One revenge wave: 6 bodies drawn from the standing army, elites rarer than the rank and file. */
+    private static Wave revengeWave() {
+        return new Wave(
+            REVENGE_WAVE_SIZE,
+            DEFAULT_BUFFER_TICKS,
+            List.of(),
+            List.of(
+                PoolEntry.tagPool(AlienEntityTypeTags.WARRIORS, 4, REVENGE_WAVE_SIZE),
+                PoolEntry.tagPool(AlienEntityTypeTags.PROWLERS, 4, REVENGE_WAVE_SIZE),
+                PoolEntry.tagPool(AlienEntityTypeTags.SPITTERS, 3, REVENGE_WAVE_SIZE),
+                PoolEntry.tagPool(AlienEntityTypeTags.PRAETORIANS, 1, 2),
+                PoolEntry.tagPool(AlienEntityTypeTags.CRUSHERS, 1, 2)
+            )
+        );
     }
 
     public int totalSize() {
@@ -129,9 +181,9 @@ public record RaidWaveProfile(List<Wave> waves) {
     }
 
     private static DataResult<RaidWaveProfile> validate(RaidWaveProfile profile) {
-        if (profile.waves().size() != Convoy.Raid.WAVE_COUNT) {
+        if (profile.waves().isEmpty() || profile.waves().size() > Convoy.Raid.WAVE_COUNT) {
             return DataResult.error(
-                () -> "Raid wave profile must define exactly " + Convoy.Raid.WAVE_COUNT + " waves"
+                () -> "Raid wave profile must define between 1 and " + Convoy.Raid.WAVE_COUNT + " waves"
             );
         }
         for (var i = 0; i < profile.waves().size(); i++) {

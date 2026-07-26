@@ -44,6 +44,29 @@ public class AlienDataSyncKeys {
             .build(0F)
     );
 
+    /**
+     * Withered mark: wither-immune already (effect tag), black smoke aura, attacks inflict wither. NBT-persisted and
+     * deliberately NOT in {@code GrowthManager.TRANSITION_NBT_KEY_BLACKLIST}, so it rides every growth transition - a
+     * withered burster becomes a withered adult becomes, potentially, a withered queen.
+     */
+    /**
+     * Born of an irradiated host: this alien grows into a BOILER instead of the drone/runner it would otherwise become.
+     * Persistent and deliberately NOT transition-blacklisted, so the mark rides chestburster -> adolescent -> adult and
+     * is still readable at the one transition that matters. Not networked - no client visual.
+     */
+    public static final BLibHolder<DataSyncKey<Boolean>> ALIEN_IS_BOILER_DESTINED = create(
+        "alien_is_boiler_destined",
+        builder -> builder.persistent("avpBoilerDestined", Codec.BOOL)
+            .build(false)
+    );
+
+    public static final BLibHolder<DataSyncKey<Boolean>> ALIEN_IS_WITHERED = create(
+        "alien_is_withered",
+        builder -> builder.networkSynchronized(StreamCodecs.BOOLEAN)
+            .persistent("avpWithered", Codec.BOOL)
+            .build(false)
+    );
+
     public static final BLibHolder<DataSyncKey<Boolean>> ALIEN_IS_POISONED = create(
         "alien_is_poisoned",
         builder -> builder.networkSynchronized(StreamCodecs.BOOLEAN)
@@ -121,6 +144,18 @@ public class AlienDataSyncKeys {
             .build(0)
     );
 
+    /**
+     * The SERVER'S OWN TRUTH about a parasite's attachment: the entity id of the host it is riding, or -1 when
+     * detached. Entity ids are per-session, so this is deliberately NOT persistent - it is a live wire for clients,
+     * whose passenger lists can go stale (a refused or lost dismount leaves a ghost hugger glued on). The client
+     * self-heals from this value in {@code Parasite.tick}.
+     */
+    public static final BLibHolder<DataSyncKey<Integer>> PARASITE_ATTACHED_HOST_ID = create(
+        "parasite_attached_host_id",
+        builder -> builder.networkSynchronized(StreamCodecs.INT)
+            .build(-1)
+    );
+
     public static final BLibHolder<DataSyncKey<Integer>> QUEEN_BIND_CHAIN_COUNT = create(
         "queen_bind_chain_count",
         builder -> builder.networkSynchronized(StreamCodecs.INT)
@@ -131,6 +166,13 @@ public class AlienDataSyncKeys {
         "queen_has_inhibitor",
         builder -> builder.networkSynchronized(StreamCodecs.BOOLEAN)
             .persistent("hasInhibitor", Codec.BOOL)
+            .build(false)
+    );
+
+    public static final BLibHolder<DataSyncKey<Boolean>> QUEEN_IS_INCAPACITATED = create(
+        "queen_is_incapacitated",
+        builder -> builder.networkSynchronized(StreamCodecs.BOOLEAN)
+            .persistent("isIncapacitated", Codec.BOOL)
             .build(false)
     );
 
@@ -206,6 +248,42 @@ public class AlienDataSyncKeys {
         "xenomorph_is_hibernating",
         builder -> builder.networkSynchronized(StreamCodecs.BOOLEAN)
             .build(false)
+    );
+
+    public static final BLibHolder<DataSyncKey<Boolean>> XENOMORPH_IS_DIGGING = create(
+        "xenomorph_is_digging",
+        builder -> builder.networkSynchronized(StreamCodecs.BOOLEAN)
+            .build(false)
+    );
+
+    /**
+     * Founding-core stand-dig (construction economy step 6): true while the queen is carving her own chamber. Synced,
+     * NOT persisted - the carve site re-derives it on the first loaded tick after a reload. The client QueenAnimator
+     * drives the digStandStart / standDigging / digStandStop triptych off its edges, because animation dispatch only
+     * works client-side.
+     */
+    public static final BLibHolder<DataSyncKey<Boolean>> QUEEN_IS_STAND_DIGGING = create(
+        "queen_is_stand_digging",
+        builder -> builder.networkSynchronized(StreamCodecs.BOOLEAN)
+            .build(false)
+    );
+
+    /**
+     * Carve-crew dig gait (construction economy step 5): 0 = not on a carve crew, 1 = digger (walk dig at 70%), 2 =
+     * placer (walk dig at 50%). Synced, NOT persisted - crews are transient and re-sourced after a reload. The client
+     * DroneAnimator folds it into the locomotion selection, because animation dispatch only works client-side.
+     */
+    public static final BLibHolder<DataSyncKey<Integer>> DRONE_CARVE_DIG_MODE = create(
+        "drone_carve_dig_mode",
+        builder -> builder.networkSynchronized(StreamCodecs.INT)
+            .build(0)
+    );
+
+    /** Runner counterpart of {@link #DRONE_CARVE_DIG_MODE} - runners crew the same digs, placements and repairs. */
+    public static final BLibHolder<DataSyncKey<Integer>> RUNNER_CARVE_DIG_MODE = create(
+        "runner_carve_dig_mode",
+        builder -> builder.networkSynchronized(StreamCodecs.INT)
+            .build(0)
     );
 
     public static final BLibHolder<DataSyncKey<Boolean>> XENOMORPH_IS_CRAWLING = create(

@@ -2,8 +2,10 @@ package com.alien.fabric.data.recipe.impl.chitin;
 
 import com.alien.common.registry.init.block.AberrantAlienChitinBlocks;
 import com.alien.common.registry.init.block.AlienChitinBlocks;
+import com.alien.common.registry.init.block.IrradiatedAlienChitinBlocks;
 import com.alien.common.registry.init.block.NetherAlienChitinBlocks;
 import com.alien.common.registry.init.item.AlienItems;
+import com.alien.fabric.compatibility.avp_human.AVPHumanFabric;
 import com.blib.fabric.data.recipe.builder.RecipeBuilder;
 import com.blib.fabric.data.recipe.util.RecipeUtil;
 
@@ -66,6 +68,25 @@ public class ChitinRecipeProvider {
         AberrantAlienChitinBlocks.POLISHED_ABERRANT_CHITIN_WALL
     );
 
+    private static final ChitinSet IRRADIATED_SET = new ChitinSet(
+        AlienItems.IRRADIATED_CHITIN,
+        AlienItems.PLATED_IRRADIATED_CHITIN,
+        IrradiatedAlienChitinBlocks.IRRADIATED_CHITIN_BLOCK,
+        IrradiatedAlienChitinBlocks.IRRADIATED_CHITIN_BLOCK_SLAB,
+        IrradiatedAlienChitinBlocks.IRRADIATED_CHITIN_BLOCK_STAIRS,
+        IrradiatedAlienChitinBlocks.IRRADIATED_CHITIN_BLOCK_WALL,
+        IrradiatedAlienChitinBlocks.IRRADIATED_CHITIN_BRICKS,
+        IrradiatedAlienChitinBlocks.IRRADIATED_CHITIN_BRICK_SLAB,
+        IrradiatedAlienChitinBlocks.IRRADIATED_CHITIN_BRICK_STAIRS,
+        IrradiatedAlienChitinBlocks.IRRADIATED_CHITIN_BRICK_WALL,
+        IrradiatedAlienChitinBlocks.CHISELED_IRRADIATED_CHITIN_BRICKS,
+        IrradiatedAlienChitinBlocks.CHISELED_IRRADIATED_CHITIN_BRICKS_EMBRYO,
+        IrradiatedAlienChitinBlocks.POLISHED_IRRADIATED_CHITIN,
+        IrradiatedAlienChitinBlocks.POLISHED_IRRADIATED_CHITIN_SLAB,
+        IrradiatedAlienChitinBlocks.POLISHED_IRRADIATED_CHITIN_STAIRS,
+        IrradiatedAlienChitinBlocks.POLISHED_IRRADIATED_CHITIN_WALL
+    );
+
     public static void provide(RecipeBuilder builder) {
         createChitinRecipes(builder);
     }
@@ -74,6 +95,7 @@ public class ChitinRecipeProvider {
         createChitinRecipesFromSet(builder, BASE_SET);
         createChitinRecipesFromSet(builder, NETHER_SET);
         createChitinRecipesFromSet(builder, ABERRANT_SET);
+        createChitinRecipesFromSet(builder.withCondition(AVPHumanFabric.IS_LOADED), IRRADIATED_SET);
     }
 
     private static void createChitinRecipesFromSet(RecipeBuilder builder, ChitinSet set) {

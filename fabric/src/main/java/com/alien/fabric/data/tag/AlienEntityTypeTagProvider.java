@@ -619,6 +619,10 @@ public class AlienEntityTypeTagProvider extends FabricTagProvider.EntityTypeTagP
             .add(
                 EntityType.CAMEL,
                 EntityType.COW,
+                // The Nether's only breeding fleshy megafauna - nether cattle. Makes crimson forests real hunting
+                // grounds and gives nether hives a sustainable food chain (design decision July 25). Zoglins stay
+                // off the menu: undead.
+                EntityType.HOGLIN,
                 EntityType.DONKEY,
                 EntityType.FOX,
                 EntityType.GOAT,

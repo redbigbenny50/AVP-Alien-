@@ -14,10 +14,13 @@ import com.alien.common.gameplay.hive.id.LineageIds;
 import com.alien.common.gameplay.hive.location.HiveLocation;
 import com.alien.common.gameplay.hive.location.HiveLocationRegistry;
 import com.alien.common.registry.init.AlienFactionDataTypes;
+import com.blib.api.common.faction.v1.FactionMember;
 import net.minecraft.core.BlockPos;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.level.ChunkPos;
 import org.jetbrains.annotations.Nullable;
+
+import java.util.ArrayList;
 
 /**
  * Production-path founding for the new hive system. Two entry points:
@@ -44,6 +47,12 @@ public final class HiveLocationFoundingService {
      * {@link HiveLocation} at {@code position}. Returns the new location id.
      */
     public static HiveLocationId foundNewLineage(Queen queen, BlockPos position) {
+        // Default: a founding queen raises her physical chamber. The inhibited-claim path passes false - a captive
+        // queen still gets a lineage + claim (for her chained eggsack and the autonomy gate) but NO built hive.
+        return foundNewLineage(queen, position, true);
+    }
+
+    public static HiveLocationId foundNewLineage(Queen queen, BlockPos position, boolean buildStructure) {
         var level = queen.level();
         var dimension = level.dimension();
         var variant = queen.getVariant();
@@ -72,7 +81,14 @@ public final class HiveLocationFoundingService {
         lineageData.setDimension(dimension);
         lineageData.setFounderId(queen.getUUID());
 
-        var location = mintLocation(queen, lineageId, position, level.getGameTime(), lineageData);
+        var location = mintLocation(queen, lineageId, position, level.getGameTime(), lineageData, buildStructure);
+
+        // A founder heads exactly ONE lineage. A forager queen who emigrates from her birth hive to found her
+        // own lineage keeps her OLD lineage membership unless we shed it here - and then lineageFor() resolves
+        // her and her freshly-spawned workers to different lineages by faction-set order, so her own hive reads
+        // her as a rival-lineage queen and attacks her (and her eggsack). Shed every prior lineage before the
+        // join below makes her a member of the new one. Skip the lineage just minted (nothing to shed there yet).
+        shedPriorLineages(queen, lineageId);
 
         // Adds the queen to both the lineage faction (idempotent) and the new location faction.
         LocationMembership.join(location, queen);
@@ -101,13 +117,23 @@ public final class HiveLocationFoundingService {
             throw new IllegalStateException("Lineage " + lineageFactionId + " missing or wrong type at founding time");
         }
 
-        var location = mintLocation(queen, lineageFactionId, position, level.getGameTime(), lineageData);
+        var location = mintLocation(queen, lineageFactionId, position, level.getGameTime(), lineageData, true);
+
+        // Shed any OTHER lineage she still belongs to, keeping only the one she is founding into. For a normal
+        // daughter founding in her OWN lineage this is a no-op (she is only in that lineage). For an ADOPTION -
+        // a queen who left lineage L's spread zone and settled inside M's - this sheds L so she is a clean
+        // single-lineage member of M, exactly like the founder-shed on the new-lineage path. Without it she'd
+        // hold both L and M and read as her own hive's enemy (the double-membership infighting bug).
+        shedPriorLineages(queen, lineageFactionId);
 
         // Adds the queen to both the lineage faction (idempotent) and the new location faction.
         LocationMembership.join(location, queen);
 
-        if (lineageData.locationsById().size() >= 2 && lineageData.empressId() == null) {
-            // Phase 10 will pick this up and run the empress emergence ritual.
+        if (lineageData.locationsById().size() >= 4 && lineageData.empressId() == null) {
+            // Arm the empress-emergence hint at the SAME threshold EmpressEmergenceTask actually fires at (4+
+            // locations, per the updated leadership design). This flag also pauses QueenlessMaturationTask for the
+            // lineage; arming it at the old 2+ suppressed queenless maturation two hives before an empress could
+            // possibly emerge.
             lineageData.setPendingEmpressEmergence(true);
         }
 
@@ -123,12 +149,45 @@ public final class HiveLocationFoundingService {
         return location.id();
     }
 
+    /**
+     * Removes {@code queen} from every lineage faction she currently belongs to EXCEPT {@code keepLineageId}, along
+     * with the matching location factions (preserving the location-subset-lineage invariant). Unlike inhibition's
+     * sever, this does NOT null founder links or open rescue campaigns on the departed hive: an emigrating forager was
+     * a member, not that hive's founder, so it loses a worker, not its queen.
+     */
+    private static void shedPriorLineages(Queen queen, ResourceLocation keepLineageId) {
+        var member = FactionMember.entity(queen);
+        for (var factionId : new ArrayList<>(Alien.MOD.factions().getFactionIds(queen.getUUID()))) {
+            if (!LineageIds.isLineageId(factionId) || factionId.equals(keepLineageId)) {
+                continue;
+            }
+            var faction = Alien.MOD.factions().get(factionId);
+            if (faction == null || !(faction.data() instanceof LineageFactionData lineage)) {
+                continue;
+            }
+            for (var location : new ArrayList<>(lineage.locationsById().values())) {
+                var locationFaction = Alien.MOD.factions().get(location.id().value());
+                if (locationFaction != null) {
+                    locationFaction.membership().removeMember(member);
+                }
+            }
+            faction.membership().removeMember(member);
+            Alien.LOGGER.info(
+                "Hive: founder {} shed prior lineage {} on founding new lineage {}",
+                queen.getUUID(),
+                factionId,
+                keepLineageId
+            );
+        }
+    }
+
     private static HiveLocation mintLocation(
         Queen queen,
         ResourceLocation lineageFactionId,
         BlockPos position,
         long currentGameTime,
-        LineageFactionData lineageData
+        LineageFactionData lineageData,
+        boolean buildStructure
     ) {
         var locationId = HiveLocationIds.create();
         var centerChunk = new ChunkPos(position);
@@ -155,7 +214,7 @@ public final class HiveLocationFoundingService {
         // registry byChunk index, BLib territory map) stay synchronized. Direct claimedChunks().add(...)
         // would miss the BLib territory addClaim and leave the core chunks unclaimed in the UI.
         if (queen.level() instanceof net.minecraft.server.level.ServerLevel serverLevel) {
-            claimInitialCore(serverLevel, location, centerChunk, currentGameTime);
+            claimInitialCore(serverLevel, location, centerChunk, currentGameTime, buildStructure);
         } else {
             addInitialCoreOffline(location, centerChunk, currentGameTime);
         }
@@ -167,7 +226,8 @@ public final class HiveLocationFoundingService {
         net.minecraft.server.level.ServerLevel level,
         HiveLocation location,
         ChunkPos centerChunk,
-        long currentGameTime
+        long currentGameTime,
+        boolean buildStructure
     ) {
         var radius = HiveLocationRegistry.INSTANCE.config().initialHiveLocationClaimRadiusChunks();
         for (var dx = -radius; dx <= radius; dx++) {
@@ -183,6 +243,16 @@ public final class HiveLocationFoundingService {
                     currentGameTime
                 );
             }
+        }
+
+        // Structure system: stamp queen-chamber roles onto the claimed core and register royal exits as frontier
+        // sockets for the planner. Skipped for logical-only claims (an inhibited captive queen never builds a hive).
+        if (buildStructure) {
+            com.alien.common.gameplay.hive.structure.HiveStructureFounding.establishQueenChamber(
+                level.getServer(),
+                location,
+                centerChunk
+            );
         }
     }
 

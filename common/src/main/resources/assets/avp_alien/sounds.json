@@ -54,6 +54,77 @@
     ],
     "subtitle": "subtitles.entity.chestburster.burst"
   },
+  "entity.empress.arm_attack": {
+    "sounds": [
+      "avp_alien:entity/queen/attack/arm_attack"
+    ],
+    "subtitle": "subtitles.entity.empress.arm_attack"
+  },
+  "entity.empress.back_hand_attack": {
+    "sounds": [
+      "avp_alien:entity/queen/attack/back_hand_attack"
+    ],
+    "subtitle": "subtitles.entity.empress.back_hand_attack"
+  },
+  "entity.empress.death": {
+    "sounds": [
+      "avp_alien:entity/queen/death/death"
+    ],
+    "subtitle": "subtitles.entity.empress.death"
+  },
+  "entity.empress.hurt": {
+    "sounds": [
+      "avp_alien:entity/queen/hurt/hurt_0",
+      "avp_alien:entity/queen/hurt/hurt_1",
+      "avp_alien:entity/queen/hurt/hurt_2",
+      "avp_alien:entity/queen/hurt/hurt_3",
+      "avp_alien:entity/queen/hurt/hurt_4"
+    ],
+    "subtitle": "subtitles.entity.empress.hurt"
+  },
+  "entity.empress.idle": {
+    "sounds": [
+      "avp_alien:entity/queen/idle/idle1",
+      "avp_alien:entity/queen/idle/idle2"
+    ],
+    "subtitle": "subtitles.entity.empress.idle"
+  },
+  "entity.empress.ram_attack": {
+    "sounds": [
+      "avp_alien:entity/queen/attack/ram_attack"
+    ],
+    "subtitle": "subtitles.entity.empress.ram_attack"
+  },
+  "entity.empress.scream": {
+    "sounds": [
+      "avp_alien:entity/queen/attack/scream"
+    ],
+    "subtitle": "subtitles.entity.empress.scream"
+  },
+  "entity.empress.step_thump": {
+    "sounds": [
+      "avp_alien:entity/queen/movement/step_thump"
+    ],
+    "subtitle": "subtitles.entity.empress.step_thump"
+  },
+  "entity.empress.step_thump_rock": {
+    "sounds": [
+      "avp_alien:entity/queen/movement/step_thump_rock"
+    ],
+    "subtitle": "subtitles.entity.empress.step_thump_rock"
+  },
+  "entity.empress.tail_attack": {
+    "sounds": [
+      "avp_alien:entity/queen/attack/tail_attack"
+    ],
+    "subtitle": "subtitles.entity.empress.tail_attack"
+  },
+  "entity.facehugger.escape": {
+    "sounds": [
+      "avp_alien:entity/facehugger/escape/escape"
+    ],
+    "subtitle": "subtitles.entity.facehugger.escape"
+  },
   "entity.ovomorph.hatch": {
     "sounds": [
       "avp_alien:entity/ovomorph/hatch/hatch"
@@ -90,23 +161,17 @@
     ],
     "subtitle": "subtitles.entity.queen.back_hand_attack"
   },
-  "entity.queen.ram_attack": {
+  "entity.queen.chain_struggle_1": {
     "sounds": [
-      "avp_alien:entity/queen/attack/ram_attack"
+      "avp_alien:entity/queen/chain/queen_chain1"
     ],
-    "subtitle": "subtitles.entity.queen.ram_attack"
+    "subtitle": "subtitles.entity.queen.chain_struggle_1"
   },
-  "entity.queen.scream": {
+  "entity.queen.chain_struggle_2": {
     "sounds": [
-      "avp_alien:entity/queen/attack/scream"
+      "avp_alien:entity/queen/chain/queen_chain2"
     ],
-    "subtitle": "subtitles.entity.queen.scream"
-  },
-  "entity.queen.tail_attack": {
-    "sounds": [
-      "avp_alien:entity/queen/attack/tail_attack"
-    ],
-    "subtitle": "subtitles.entity.queen.tail_attack"
+    "subtitle": "subtitles.entity.queen.chain_struggle_2"
   },
   "entity.queen.death": {
     "sounds": [
@@ -131,6 +196,18 @@
     ],
     "subtitle": "subtitles.entity.queen.idle"
   },
+  "entity.queen.ram_attack": {
+    "sounds": [
+      "avp_alien:entity/queen/attack/ram_attack"
+    ],
+    "subtitle": "subtitles.entity.queen.ram_attack"
+  },
+  "entity.queen.scream": {
+    "sounds": [
+      "avp_alien:entity/queen/attack/scream"
+    ],
+    "subtitle": "subtitles.entity.queen.scream"
+  },
   "entity.queen.step_thump": {
     "sounds": [
       "avp_alien:entity/queen/movement/step_thump"
@@ -143,70 +220,11 @@
     ],
     "subtitle": "subtitles.entity.queen.step_thump_rock"
   },
-  "entity.empress.arm_attack": {
-    "sounds": [
-      "avp_alien:entity/queen/attack/arm_attack"
-    ],
-    "subtitle": "subtitles.entity.empress.arm_attack"
-  },
-  "entity.empress.back_hand_attack": {
-    "sounds": [
-      "avp_alien:entity/queen/attack/back_hand_attack"
-    ],
-    "subtitle": "subtitles.entity.empress.back_hand_attack"
-  },
-  "entity.empress.ram_attack": {
-    "sounds": [
-      "avp_alien:entity/queen/attack/ram_attack"
-    ],
-    "subtitle": "subtitles.entity.empress.ram_attack"
-  },
-  "entity.empress.scream": {
-    "sounds": [
-      "avp_alien:entity/queen/attack/scream"
-    ],
-    "subtitle": "subtitles.entity.empress.scream"
-  },
-  "entity.empress.tail_attack": {
+  "entity.queen.tail_attack": {
     "sounds": [
       "avp_alien:entity/queen/attack/tail_attack"
     ],
-    "subtitle": "subtitles.entity.empress.tail_attack"
-  },
-  "entity.empress.death": {
-    "sounds": [
-      "avp_alien:entity/queen/death/death"
-    ],
-    "subtitle": "subtitles.entity.empress.death"
-  },
-  "entity.empress.hurt": {
-    "sounds": [
-      "avp_alien:entity/queen/hurt/hurt_0",
-      "avp_alien:entity/queen/hurt/hurt_1",
-      "avp_alien:entity/queen/hurt/hurt_2",
-      "avp_alien:entity/queen/hurt/hurt_3",
-      "avp_alien:entity/queen/hurt/hurt_4"
-    ],
-    "subtitle": "subtitles.entity.empress.hurt"
-  },
-  "entity.empress.idle": {
-    "sounds": [
-      "avp_alien:entity/queen/idle/idle1",
-      "avp_alien:entity/queen/idle/idle2"
-    ],
-    "subtitle": "subtitles.entity.empress.idle"
-  },
-  "entity.empress.step_thump": {
-    "sounds": [
-      "avp_alien:entity/queen/movement/step_thump"
-    ],
-    "subtitle": "subtitles.entity.empress.step_thump"
-  },
-  "entity.empress.step_thump_rock": {
-    "sounds": [
-      "avp_alien:entity/queen/movement/step_thump_rock"
-    ],
-    "subtitle": "subtitles.entity.empress.step_thump_rock"
+    "subtitle": "subtitles.entity.queen.tail_attack"
   },
   "entity.xenomorph.attack": {
     "sounds": [
@@ -224,6 +242,18 @@
       "avp_alien:entity/xenomorph/death/death4"
     ],
     "subtitle": "subtitles.entity.xenomorph.death"
+  },
+  "entity.xenomorph.escape_host": {
+    "sounds": [
+      "avp_alien:entity/xenomorph/escape_host/escape_host"
+    ],
+    "subtitle": "subtitles.entity.xenomorph.escape_host"
+  },
+  "entity.xenomorph.grab_host": {
+    "sounds": [
+      "avp_alien:entity/xenomorph/grab_host/grab_host"
+    ],
+    "subtitle": "subtitles.entity.xenomorph.grab_host"
   },
   "entity.xenomorph.hiss": {
     "sounds": [
@@ -282,34 +312,49 @@
     ],
     "subtitle": "subtitles.jukebox_sounds.alien_music_1"
   },
-  "ui.terminal.open": {
-    "sounds": [
-      { "name": "minecraft:ui.toast.in", "type": "event" }
-    ],
-    "subtitle": "subtitles.ui.terminal.open"
-  },
-  "ui.terminal.close": {
-    "sounds": [
-      { "name": "minecraft:ui.toast.out", "type": "event" }
-    ],
-    "subtitle": "subtitles.ui.terminal.close"
-  },
-  "ui.terminal.mouseover": {
-    "sounds": [
-      { "name": "minecraft:ui.button.click", "type": "event" }
-    ],
-    "subtitle": "subtitles.ui.terminal.mouseover"
-  },
   "ui.terminal.click": {
     "sounds": [
-      { "name": "minecraft:ui.button.click", "type": "event" }
+      {
+        "name": "minecraft:ui.button.click",
+        "type": "event"
+      }
     ],
     "subtitle": "subtitles.ui.terminal.click"
   },
+  "ui.terminal.close": {
+    "sounds": [
+      {
+        "name": "minecraft:ui.toast.out",
+        "type": "event"
+      }
+    ],
+    "subtitle": "subtitles.ui.terminal.close"
+  },
   "ui.terminal.execute": {
     "sounds": [
-      { "name": "minecraft:ui.stonecutter.take_result", "type": "event" }
+      {
+        "name": "minecraft:ui.stonecutter.take_result",
+        "type": "event"
+      }
     ],
     "subtitle": "subtitles.ui.terminal.execute"
+  },
+  "ui.terminal.mouseover": {
+    "sounds": [
+      {
+        "name": "minecraft:ui.button.click",
+        "type": "event"
+      }
+    ],
+    "subtitle": "subtitles.ui.terminal.mouseover"
+  },
+  "ui.terminal.open": {
+    "sounds": [
+      {
+        "name": "minecraft:ui.toast.in",
+        "type": "event"
+      }
+    ],
+    "subtitle": "subtitles.ui.terminal.open"
   }
 }

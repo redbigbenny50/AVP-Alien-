@@ -39,7 +39,7 @@ public class AlienMoltingProfileProvider {
                 AlienEntityTypes.ROYAL_CHESTBURSTER.get(),
                 MoltingProfileConstants.CHESTBURSTER_START_SCALE,
                 MoltingProfileConstants.CHESTBURSTER_END_SCALE,
-                MoltingProfileConstants.CHESTBURSTER_PHASES
+                MoltingProfileConstants.ROYAL_CHESTBURSTER_PHASES
             )
         );
         biConsumer.accept(
@@ -48,7 +48,7 @@ public class AlienMoltingProfileProvider {
                 AlienEntityTypes.PREDALIEN_CHESTBURSTER.get(),
                 MoltingProfileConstants.CHESTBURSTER_START_SCALE,
                 MoltingProfileConstants.CHESTBURSTER_END_SCALE,
-                MoltingProfileConstants.CHESTBURSTER_PHASES
+                MoltingProfileConstants.PREDALIEN_CHESTBURSTER_PHASES
             )
         );
     }
@@ -69,7 +69,7 @@ public class AlienMoltingProfileProvider {
                 AlienEntityTypes.ROYAL_ADOLESCENT.get(),
                 MoltingProfileConstants.ADOLESCENT_START_SCALE,
                 MoltingProfileConstants.ADOLESCENT_END_SCALE,
-                MoltingProfileConstants.ADOLESCENT_PHASES
+                MoltingProfileConstants.ROYAL_ADOLESCENT_PHASES
             )
         );
         biConsumer.accept(
@@ -78,7 +78,7 @@ public class AlienMoltingProfileProvider {
                 AlienEntityTypes.PREDALIEN_ADOLESCENT.get(),
                 MoltingProfileConstants.ADOLESCENT_START_SCALE,
                 MoltingProfileConstants.ADOLESCENT_END_SCALE,
-                MoltingProfileConstants.ADOLESCENT_PHASES
+                MoltingProfileConstants.PREDALIEN_ADOLESCENT_PHASES
             )
         );
     }

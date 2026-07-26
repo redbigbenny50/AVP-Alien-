@@ -16,10 +16,10 @@ public class AlienNeoForge {
         Alien.initialize();
         // Capture-chain hold tether (server-side reel-in for player-held mobs).
         NeoForge.EVENT_BUS.addListener(
-                (ServerTickEvent.Post event) -> CaptureHoldManager.tick(event.getServer())
+            (ServerTickEvent.Post event) -> CaptureHoldManager.tick(event.getServer())
         );
         NeoForge.EVENT_BUS.addListener(
-                (ServerTickEvent.Post event) -> MobChainManager.tick(event.getServer())
+            (ServerTickEvent.Post event) -> MobChainManager.tick(event.getServer())
         );
 
         // Capture chain grabs a mob before its own right-click (e.g. villager trade) can consume the interaction.

@@ -111,6 +111,27 @@ public class MoltingManager implements NBTSerializable {
         }
     }
 
+    /**
+     * Immediately completes the current molt phase (the young alien "ate" something nourishing). Mirrors what
+     * {@link #tick()} does when a phase runs out of ticks. No-op once fully matured.
+     *
+     * @return true if a phase was actually advanced.
+     */
+    public boolean advancePhase() {
+        var data = getData();
+        if (data == null || data.isFullyMatured(phaseIndex)) {
+            return false;
+        }
+        phaseIndex++;
+        phaseElapsedTicks = 0;
+        if (data.isFullyMatured(phaseIndex)) {
+            targetScaleReachedTicks = 0;
+        }
+        applyScaleModifier(data);
+        entity.moltAlpha.set(0F);
+        return true;
+    }
+
     public boolean hasReachedTargetScale() {
         var data = getData();
 

@@ -1,5 +1,11 @@
 {
-  "biomass": 40,
+  "biomass": 10,
+  "input_entities": [
+    {
+      "count": 1,
+      "entity": "avp_alien:nether_ovomorph"
+    }
+  ],
   "output_entity": "avp_alien:nether_runner",
   "population_biomass_cost_scale": 0.05
 }

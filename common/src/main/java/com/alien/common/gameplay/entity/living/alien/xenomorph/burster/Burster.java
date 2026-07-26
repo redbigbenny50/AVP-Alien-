@@ -57,24 +57,24 @@ public class Burster extends Xenomorph implements EggCarrier, GOAPUser<Burster>,
 
     public static final AttackType BITE = AttackType.builder("burster_bite")
         .requiresHead()
-        .defaultDurationInTicks(8)
+        .defaultDurationInTicks(10)
         .sound(AlienSoundEvents.ENTITY_XENOMORPH_ATTACK)
         .build();
 
     public static final AttackType TAIL = AttackType.builder("burster_tail")
         .requiresTail()
-        .defaultDurationInTicks(12)
+        .defaultDurationInTicks(17)
         .sound(AlienSoundEvents.ENTITY_XENOMORPH_ATTACK)
         .build();
 
     public static AttributeSupplier.Builder createBursterAttributes() {
         return Alien.createAlienAttributes()
-            .add(Attributes.ARMOR, 4.0F)
+            .add(Attributes.ARMOR, 0.0F)
             .add(Attributes.ARMOR_TOUGHNESS, 0f)
-            .add(Attributes.ATTACK_DAMAGE, PlayerStatConstants.BASE_HEALTH * 0.25F)
+            .add(Attributes.ATTACK_DAMAGE, PlayerStatConstants.BASE_HEALTH * 0.3F)
             .add(Attributes.FOLLOW_RANGE, 35F)
             .add(Attributes.KNOCKBACK_RESISTANCE, 0.3f)
-            .add(Attributes.MAX_HEALTH, PlayerStatConstants.BASE_HEALTH * 2F)
+            .add(Attributes.MAX_HEALTH, PlayerStatConstants.BASE_HEALTH * 3F)
             .add(Attributes.MOVEMENT_SPEED, PlayerStatConstants.BASE_WALK_SPEED * 1.2F);
     }
 

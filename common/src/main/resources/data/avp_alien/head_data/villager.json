@@ -1,0 +1,15 @@
+{
+  "entity": "minecraft:villager",
+  "size": [
+    8.0,
+    10.0,
+    8.0
+  ],
+  "pivot": [
+    0.0,
+    24.0,
+    0.0
+  ],
+  "vertical_offset": -12.5,
+  "face_offset": 4
+}

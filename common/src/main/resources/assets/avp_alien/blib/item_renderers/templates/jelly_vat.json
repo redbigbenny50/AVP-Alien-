@@ -1,0 +1,53 @@
+{
+  "model": "avp_alien:geo/block/jelly_vat.geo.json",
+  "bone": "gJellyVat",
+  "transforms": {
+    "idle": {
+      "thirdperson_righthand": {
+        "translation": [0.0, 0.0, 0.0],
+        "rotation": [75.0, 45.0, 0.0],
+        "scale": [0.375, 0.375, 0.375]
+      },
+      "thirdperson_lefthand": {
+        "translation": [0.0, 0.0, 0.0],
+        "rotation": [75.0, 45.0, 0.0],
+        "scale": [0.375, 0.375, 0.375]
+      },
+      "firstperson_righthand": {
+        "translation": [0.0, 0.0, 0.0],
+        "rotation": [0.0, 45.0, 0.0],
+        "scale": [0.4, 0.4, 0.4]
+      },
+      "firstperson_lefthand": {
+        "translation": [0.0, 0.0, 0.0],
+        "rotation": [0.0, -135.0, 0.0],
+        "scale": [0.4, 0.4, 0.4]
+      },
+      "head": {
+        "translation": [0.0, 0.0, 0.0],
+        "rotation": [0.0, 0.0, 0.0],
+        "scale": [1.0, 1.0, 1.0]
+      },
+      "gui": {
+        "translation": [0.0, 0.0, 0.0],
+        "rotation": [30.0, 225.0, 0.0],
+        "scale": [0.5, 0.5, 0.5]
+      },
+      "ground": {
+        "translation": [0.0, 0.1, 0.0],
+        "rotation": [0.0, 0.0, 0.0],
+        "scale": [0.25, 0.25, 0.25]
+      },
+      "fixed": {
+        "translation": [0.0, 0.0, 0.0],
+        "rotation": [0.0, 0.0, 0.0],
+        "scale": [1.0, 1.0, 1.0]
+      },
+      "fixed_wall": {
+        "translation": [0.0, 0.0, 0.0],
+        "rotation": [0.0, 0.0, 0.0],
+        "scale": [1.0, 1.0, 1.0]
+      }
+    }
+  }
+}

@@ -274,20 +274,23 @@ public final class AlienTerritoryWarSystem implements TerritoryContestListener {
     }
 
     private static ResourceLocation lineageFor(UUID entityId) {
+        // Prefer the lineage the entity's LOCATION membership names. A membership set is unordered, so an entity
+        // that ended up in two lineages (a founder who didn't shed her old one, a worker mid-migration) would
+        // otherwise resolve by iteration order and could read as an enemy of its own hive. A location membership
+        // is unambiguous - it points at exactly one lineage - so it wins over a bare lineage-faction membership.
+        ResourceLocation lineageFallback = null;
         for (var factionId : Alien.MOD.factions().getFactionIds(entityId)) {
-            if (LineageIds.isLineageId(factionId)) {
-                return factionId;
-            }
-
             if (HiveLocationIds.isHiveLocationId(factionId)) {
                 var location = HiveLocationRegistry.INSTANCE.get(HiveLocationId.of(factionId));
                 if (location != null) {
                     return location.lineageFactionId();
                 }
+            } else if (lineageFallback == null && LineageIds.isLineageId(factionId)) {
+                lineageFallback = factionId; // remember, but keep looking for a location membership
             }
         }
 
-        return null;
+        return lineageFallback;
     }
 
     @Override

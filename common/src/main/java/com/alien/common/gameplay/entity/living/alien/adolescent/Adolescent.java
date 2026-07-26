@@ -80,6 +80,8 @@ public class Adolescent extends Alien {
     public void tick() {
         super.tick();
         growthManager.tick();
+        // Eat a spent egg / spent facehugger lying next to us to skip a molt phase (and clear the litter).
+        com.alien.common.gameplay.entity.living.alien.MoltFeeding.tickFeeding(this);
 
         if (!level().isClientSide) {
             getHostType().ifSome(hostType -> hasDorsalTubes.set(!hostType.is(AlienEntityTypeTags.RUNNER_HOSTS)));

@@ -12,6 +12,28 @@ public class QueenAnimationRefs {
 
     public static final String INCAPACITATED_ANIMATION_NAME = "incapacitated";
 
+    public static final String INCAPACITATED_DROP_ANIMATION_NAME = "incapacitated_drop";
+
+    public static final String INCAPACITATED_RISE_ANIMATION_NAME = "incapacitated_rise";
+
+    public static final String BOUND_STRUGGLE_ANIMATION_NAME = "bound_struggle";
+
+    public static final String CRAWL_ATTACK_ANIMATION_NAME = "crawl_attack";
+
+    // Vertical dig (descending to her location anchor Y): one-shot down, looping dig, one-shot up.
+    public static final String DIG_DOWN_ANIMATION_NAME = "digdown";
+
+    public static final String DIGGING_ANIMATION_NAME = "digging";
+
+    public static final String DIG_UP_ANIMATION_NAME = "digup";
+
+    // Standing/horizontal dig (also room carving): one-shot raise, looping dig, one-shot lower.
+    public static final String DIG_STAND_START_ANIMATION_NAME = "digstand_start";
+
+    public static final String STAND_DIGGING_ANIMATION_NAME = "stand_digging";
+
+    public static final String DIG_STAND_STOP_ANIMATION_NAME = "digstand_stop";
+
     public static final String LEFT_BACKHAND_ANIMATION_NAME = "fullbodyattack.leftbackhand";
 
     public static final String LEFT_SWIPE_DOWN_ANIMATION_NAME = "fullbodyattack.leftarmdownward";

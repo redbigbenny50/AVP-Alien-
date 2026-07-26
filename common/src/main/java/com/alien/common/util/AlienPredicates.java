@@ -2,6 +2,8 @@ package com.alien.common.util;
 
 import com.alien.common.data.AlienVariantTypes;
 import com.alien.common.gameplay.entity.living.alien.Alien;
+import com.alien.common.gameplay.entity.living.alien.ovipositor.Ovipositor;
+import com.alien.common.gameplay.entity.living.alien.parasite.HuggerImmunity;
 import com.alien.common.gameplay.entity.living.alien.royal_cocoon.RoyalCocoon;
 import com.alien.common.gameplay.entity.living.alien.xenomorph.queen.Queen;
 import com.alien.common.gameplay.hive.growth.BiomassIncome;
@@ -9,6 +11,8 @@ import com.alien.common.gameplay.hive.id.HiveLocationId;
 import com.alien.common.gameplay.hive.id.HiveLocationIds;
 import com.alien.common.gameplay.hive.location.HiveLocation;
 import com.alien.common.gameplay.hive.location.HiveLocationRegistry;
+import com.alien.common.gameplay.hive.party.HostCaptureTask;
+import com.alien.common.gameplay.hive.structure.HostParking;
 import com.alien.common.gameplay.hive.war.AlienTerritoryWarSystem;
 import com.alien.common.model.alien.Host;
 import com.alien.common.model.alien.variant.AlienVariant;
@@ -29,6 +33,9 @@ public class AlienPredicates {
 
     private static final float LOW_BIOMASS_TARGET_THRESHOLD = 0.25F;
 
+    /** How long an alien holds a retaliation grudge against something that hurt it (10s). */
+    private static final int RETALIATION_GRUDGE_TICKS = 200;
+
     public static boolean canTarget(@NotNull Alien alien, @NotNull LivingEntity potentialTarget) {
         return canContinueTargeting(alien, potentialTarget)
             && isTargetThreatAllowed(alien, potentialTarget);
@@ -43,6 +50,30 @@ public class AlienPredicates {
         if (alien instanceof Queen boundQueen && boundQueen.getBindManager().isFullyBound()) {
             return false;
         }
+        // KIN MERCY: a HELPLESS queen of the attacker's OWN STRAIN - chained OR incapacitated (downed) - is never
+        // a valid target, not even for a rival lineage at war with hers. Helpless royalty transcends the hive feud:
+        // her kind break chains (QueenRescueManager), never necks. Rival STRAINS retain execution rights - a
+        // helpless rival queen is a war prize. Consequence, accepted by design: a same-strain hive war cannot
+        // finish a DOWNED queen - she must be beaten while standing.
+        if (
+            potentialTarget instanceof Queen helplessQueen
+                && (helplessQueen.getBindManager().hasAnyChain() || helplessQueen.isIncapacitated())
+                && !areAliensDifferentStrains(alien, helplessQueen)
+        ) {
+            return false;
+        }
+        // A host on a drone's back is CARGO, not prey. The hive spent a whole party fetching it and is carrying it
+        // home to a chamber to be implanted - killing it on the way is pure self-sabotage. A tester watched a spitter
+        // shoot the wolf a drone was hauling, purely because a wolf reads as a low-tier threat.
+        //
+        // This gates CONTINUATION as well as acquisition (canAcquireTarget runs through here), so a xenomorph that was
+        // already hunting the wolf DROPS it the moment a drone picks it up. It also sits ABOVE the retaliation
+        // override in isTargetThreatAllowed, which is ANDed with this - so even a captive that lashes out on the way
+        // home does not get itself shot by the escort. The carrier itself stays a valid target: hitting IT is how a
+        // rescue works.
+        if (isCapturedHost(potentialTarget)) {
+            return false;
+        }
         // Target must still be valid...
         return isValidTarget(alien.getVariant(), potentialTarget)
             // AND is not an alien OR if it is an alien, is an enemy alien.
@@ -50,12 +81,83 @@ public class AlienPredicates {
             && (!(potentialTarget instanceof Alien targetedAlien) || areAliensEnemies(alien, targetedAlien))
             // AND, for a royal-change cocoon (a plain Mob with its strain encoded in its entity type), only a rival
             // strain may attack it -- a xenomorph never strikes its own strain's forming royal.
-            && (!(potentialTarget instanceof RoyalCocoon cocoon) || alien.getVariant() != cocoon.getVariant());
+            && (!(potentialTarget instanceof RoyalCocoon cocoon) || alien.getVariant() != cocoon.getVariant())
+            // AND, for a royal's eggsack - queen OR empress (a plain Mob riding her, so no ally shield applies) - only
+            // an
+            // ENEMY of that queen may attack it. Untagged, the eggsack fell through every threat tier to the
+            // "low-danger prey" fallback - harmless around a rich hive, but a FRESHLY FOUNDED hive is biomass-starved,
+            // so the second queen's own newly spawned workers entered prey mode and harvested her brand-new eggsack
+            // (reading as "the hive attacking her"). Ally rules sit above the retaliation override, so her own side
+            // can never attack it even after friendly fire; rival strains/lineages still can - hive war intact.
+            // [Flag for teammate review: aggression/threat targeting flow.]
+            && (!(potentialTarget instanceof Ovipositor eggsack) || isEnemyEggsack(alien, eggsack));
+    }
+
+    /**
+     * An eggsack's hive identity is the ROYAL it rides: attacking it is allowed exactly when attacking HER would be.
+     * The carrier is matched as any {@link Alien} (not just {@link Queen}) because the EMPRESS carries the same
+     * Ovipositor entity but extends Xenomorph, not Queen - a Queen-only match would have made her eggsack untouchable
+     * even for rival lineages. An orphaned eggsack (royal dead/gone) is never a target - it self-discards within a tick
+     * anyway.
+     */
+    private static boolean isEnemyEggsack(@NotNull Alien alien, @NotNull Ovipositor eggsack) {
+        return eggsack.getVehicle() instanceof Alien carrier && areAliensEnemies(alien, carrier);
+    }
+
+    /**
+     * True if this entity is currently being carried off by a xenomorph as a captured host.
+     * <p>
+     * Deliberately routed through {@code HostCaptureTask.carriedHost}, which only ever returns a NON-alien passenger,
+     * so this covers captives without also shielding an ovomorph riding an egg-hauler from a rival hive's attention.
+     */
+    private static boolean isCapturedHost(@NotNull LivingEntity potentialTarget) {
+        // On a drone's back, on its way home.
+        if (
+            potentialTarget.getVehicle() instanceof Alien captor
+                && HostCaptureTask.carriedHost(captor) == potentialTarget
+        ) {
+            return true;
+        }
+
+        // Or webbed to the wall of a host chamber, waiting for its egg. A captive is MEAT IN STORAGE, not an enemy on
+        // the field - and that holds however much the hive hates what it is. A marine the hive went to the trouble of
+        // dragging home got executed in its own chamber, purely because marines are a hated faction. Killing the thing
+        // you captured is the same self-sabotage as the spitter shooting the wolf a drone was carrying.
+        return HostParking.isParked(potentialTarget);
     }
 
     private static boolean isTargetThreatAllowed(@NotNull Alien alien, @NotNull LivingEntity potentialTarget) {
+        // RETALIATION OVERRIDE: whatever the threat tiers say, something that recently hurt this alien is a
+        // valid target - an iron golem beating on the queen dies, ignore-list or not. The validity/ally rules
+        // in canContinueTargeting still apply on top of this, so friendly fire from the alien's own side never
+        // escalates into a civil war; only the tier gating below is bypassed.
+        if (
+            potentialTarget == alien.getLastHurtByMob()
+                && alien.tickCount - alien.getLastHurtByMobTimestamp() < RETALIATION_GRUDGE_TICKS
+        ) {
+            return true;
+        }
+
         if (isAlienTarget(alien, potentialTarget)) {
             return true;
+        }
+
+        // VERMIN RULE: non-alien monsters INSIDE a hive's slab are always huntable - the hive keeps its own
+        // halls clean (and turns intruding vermin into biomass) regardless of the prey tiers below. Covers
+        // mobs that bypass natural-spawn suppression (event/horde mods, pre-construction cave survivors).
+        if (
+            potentialTarget instanceof net.minecraft.world.entity.monster.Monster
+                && !com.alien.Alien.MOD_ID.equals(
+                    net.minecraft.world.entity.EntityType.getKey(potentialTarget.getType()).getNamespace()
+                )
+        ) {
+            var verminLocation = HiveLocationRegistry.INSTANCE.getByChunk(
+                potentialTarget.level().dimension(),
+                potentialTarget.chunkPosition()
+            );
+            if (verminLocation != null && verminLocation.withinSlab(potentialTarget.blockPosition().getY())) {
+                return true;
+            }
         }
 
         if (isHated(alien, potentialTarget)) {
@@ -67,7 +169,7 @@ public class AlienPredicates {
         }
 
         if (potentialTarget.getType().is(AlienEntityTypeTags.XENOMORPH_THREAT_2_LOW_DANGER)) {
-            return isHiveLowOnBiomass(alien);
+            return isHiveLowOnBiomass(alien) || isActiveBiomassHuntingPartyMember(alien);
         }
 
         if (potentialTarget.getType().is(AlienEntityTypeTags.XENOMORPH_THREAT_1_PASSIVE)) {
@@ -76,18 +178,45 @@ public class AlienPredicates {
 
         // Match the old 1.21.1 aggro baseline: anything valid and not explicitly ignored/passive/high-danger is
         // treated as low danger, so modded hostile mobs still enter the biomass-gated prey pool without a data tag.
-        return isHiveLowOnBiomass(alien);
+        return isHiveLowOnBiomass(alien) || isActiveBiomassHuntingPartyMember(alien);
+    }
+
+    /**
+     * True when {@code alien} is a currently-materialized member of an active {@code HiveParty.BiomassHunting} party.
+     * Unlike the passive hive-wide biomass gate above, this party's whole purpose is proactive THREAT_2 hunting, so its
+     * members bypass {@link #isHiveLowOnBiomass} entirely rather than only engaging once the hive is already
+     * struggling.
+     */
+    private static boolean isActiveBiomassHuntingPartyMember(@NotNull Alien alien) {
+        var membership = alien.partyMembership();
+        if (membership == null) {
+            return false;
+        }
+        var location = HiveLocationRegistry.INSTANCE.get(membership.sourceLocationId());
+        if (location == null) {
+            return false;
+        }
+        for (var party : location.parties()) {
+            if (party.id().equals(membership.partyId())) {
+                return party instanceof com.alien.common.gameplay.hive.party.HiveParty.BiomassHunting;
+            }
+        }
+        return false;
     }
 
     private static boolean isHiveLowOnBiomass(@NotNull Alien alien) {
         var location = findHomeLocation(alien);
+        return location != null && isLocationLowOnBiomass(location);
+    }
 
-        if (location == null) {
-            return false;
-        }
-
+    /**
+     * True when {@code location}'s current biomass is at or below {@link #LOW_BIOMASS_TARGET_THRESHOLD} (25%) of its
+     * cap. Public so location-level callers that don't have a live {@link Alien} entity — e.g.
+     * {@code SurfacePartyLifecycleTask}'s opportunistic-claim gating — can use the exact same "low biomass" definition
+     * as the hive-wide threat-tier gate above, rather than maintaining a second, differently-shaped threshold.
+     */
+    public static boolean isLocationLowOnBiomass(@NotNull HiveLocation location) {
         var cap = BiomassIncome.biomassCap(location, HiveLocationRegistry.INSTANCE.config());
-
         return cap > 0 && location.biomass() <= Math.ceil(cap * LOW_BIOMASS_TARGET_THRESHOLD);
     }
 
@@ -202,7 +331,11 @@ public class AlienPredicates {
             isHost(hostTarget) &&
             !hasEmbryo(hostTarget) &&
             !isSelfOrOtherParasiteAttached(parasite, hostTarget)
-            && !hasFacehuggerResistantHelmet((LivingEntity) hostTarget);
+            && !hasFacehuggerResistantHelmet((LivingEntity) hostTarget)
+            // A host that has just torn a hugger off its face gets 30 seconds before the next one may try. This is the
+            // one choke point every route onto a face passes through - GOAP targeting, an ovomorph's hatch desire, and
+            // Parasite's attach-on-touch / attach-on-hit - so gating it here covers all of them at once.
+            && !HuggerImmunity.isImmune(hostTarget);
     }
 
     public static boolean isHost(Entity target) {

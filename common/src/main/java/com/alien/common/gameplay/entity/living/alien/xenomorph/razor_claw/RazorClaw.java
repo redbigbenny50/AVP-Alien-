@@ -29,25 +29,25 @@ public class RazorClaw extends Xenomorph implements GOAPUser<RazorClaw> {
 
     public static final AttackType CLAW = AttackType.builder("razor_claw_claw")
         .requiresAnyArm()
-        .defaultDurationInTicks(10)
+        .defaultDurationInTicks(20)
         .sound(AlienSoundEvents.ENTITY_XENOMORPH_ATTACK)
         .build();
 
     public static final AttackType BITE = AttackType.builder("razor_claw_bite")
         .requiresHead()
-        .defaultDurationInTicks(8)
+        .defaultDurationInTicks(10)
         .sound(AlienSoundEvents.ENTITY_XENOMORPH_ATTACK)
         .build();
 
     public static final AttackType TAIL = AttackType.builder("razor_claw_tail")
         .requiresTail()
-        .defaultDurationInTicks(12)
+        .defaultDurationInTicks(19)
         .sound(AlienSoundEvents.ENTITY_XENOMORPH_ATTACK)
         .build();
 
     public static final AttackType SWIM_ATTACK = AttackType.builder("razor_claw_swim_attack")
         .requiresTail()
-        .defaultDurationInTicks(10)
+        .defaultDurationInTicks(15)
         .sound(AlienSoundEvents.ENTITY_XENOMORPH_ATTACK)
         .build();
 
@@ -68,12 +68,12 @@ public class RazorClaw extends Xenomorph implements GOAPUser<RazorClaw> {
 
     public static AttributeSupplier.Builder createRazorClawAttributes() {
         return Alien.createAlienAttributes()
-            .add(Attributes.ARMOR, 12.0F)
+            .add(Attributes.ARMOR, 10.0F)
             .add(Attributes.ARMOR_TOUGHNESS, 12.0F)
-            .add(Attributes.ATTACK_DAMAGE, PlayerStatConstants.BASE_HEALTH * 0.75F)
+            .add(Attributes.ATTACK_DAMAGE, PlayerStatConstants.BASE_HEALTH * 0.6F)
             .add(Attributes.FOLLOW_RANGE, 35F)
             .add(Attributes.KNOCKBACK_RESISTANCE, 0.7f)
-            .add(Attributes.MAX_HEALTH, PlayerStatConstants.BASE_HEALTH * 5F)
+            .add(Attributes.MAX_HEALTH, PlayerStatConstants.BASE_HEALTH * 6F)
             .add(Attributes.MOVEMENT_SPEED, PlayerStatConstants.BASE_WALK_SPEED * 1.2F);
     }
 

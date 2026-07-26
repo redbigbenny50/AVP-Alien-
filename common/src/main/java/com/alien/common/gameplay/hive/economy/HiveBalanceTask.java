@@ -35,6 +35,33 @@ public final class HiveBalanceTask {
 
     private HiveBalanceTask() {}
 
+    /** Hard non-queen member ceiling - keeps hive fights reasonable. Raised while under empress influence. */
+    /**
+     * Castes with their OWN caps, which therefore do not count against the worker member cap: the standing army, the
+     * queen's guard, spitters, and the whole scourge tier.
+     */
+    @SuppressWarnings("unchecked")
+    private static final TagKey<EntityType<?>>[] MILITARY_CASTES = new TagKey[] {
+        AlienEntityTypeTags.WARRIORS,
+        AlienEntityTypeTags.PROWLERS,
+        AlienEntityTypeTags.PRAETORIANS,
+        AlienEntityTypeTags.CRUSHERS,
+        AlienEntityTypeTags.SPITTERS,
+        AlienEntityTypeTags.BURSTERS,
+        AlienEntityTypeTags.CHRYSALISES,
+        AlienEntityTypeTags.RAZOR_CLAWS,
+        AlienEntityTypeTags.RAVAGERS,
+        AlienEntityTypeTags.CARRIERS,
+        AlienEntityTypeTags.HARBINGERS
+    };
+
+    /** The room whose count caps the harbinger. A second one requires empress influence to build. */
+    private static final String RAID_CHAMBER_ROOM_TYPE = "chamber_raid";
+
+    private static final int MEMBER_CAP = 250;
+
+    private static final int EMPRESS_MEMBER_CAP = 400;
+
     public static void scanAll(MinecraftServer server) {
         var config = HiveLocationRegistry.INSTANCE.config();
         var populationPerChunk = config.populationPerChunk();
@@ -51,12 +78,12 @@ public final class HiveBalanceTask {
                 if (!location.isAlive() || location.isInhibited()) {
                     continue; // inhibited locations run no economy — no biomass spend, no jelly, no purchases.
                 }
-                evaluate(location, lineage, populationPerChunk);
+                evaluate(server, location, lineage, populationPerChunk);
             }
         }
     }
 
-    private static void evaluate(HiveLocation location, LineageFactionData lineage, int populationPerChunk) {
+    private static void evaluate(MinecraftServer server, HiveLocation location, LineageFactionData lineage, int populationPerChunk) {
         // Founding lockout: a queen-founded hive buys NO population units until its queen is reproductive. Otherwise
         // this
         // task spends biomass on drones/runners the instant the hive can afford them, draining the pool the queen needs
@@ -67,6 +94,34 @@ public final class HiveBalanceTask {
         }
         var pop = CastePopulation.popByCaste(location);
         var totalPop = pop.values().stream().mapToInt(Integer::intValue).sum();
+
+        // Hard ceiling on the WORKING adult population - the reserve-bred adults used for parties and hive
+        // defense: 250, raised to 400 under empress influence. Exempt: the queen, eggs (never tracked), and
+        // the queen's founding retinue (1 praetorian + 2 drones). Members from other sources currently count
+        // too (origin isn't tagged); if convoy bonuses visibly eat cap space, origin tagging is the fix.
+        var memberCap = com.alien.common.gameplay.hive.structure.HiveRouter.isEmpressInfluenced(location)
+            ? EMPRESS_MEMBER_CAP
+            : MEMBER_CAP;
+        var retinueAllowance = Math.min(1, pop.getOrDefault(AlienEntityTypeTags.PRAETORIANS, 0))
+            + Math.min(2, pop.getOrDefault(AlienEntityTypeTags.DRONES, 0));
+        // Carve-crew transients (design §8.5): reserve-materialized build workers don't count against the cap while
+        // assigned to the active carve site; they fold back into reserves at completion. Borrowed drones counted
+        // before they picked up a shovel and still do.
+        var carveCrewAllowance = location.activeCarveSite() != null
+            ? location.activeCarveSite().materializedWorkerCount()
+            : 0;
+
+        // The member cap counts WORKERS only. Soldiers, spitters and the scourge tier each have their own cap
+        // (max_entity_count_in_location on their purchase) and live OUTSIDE this one - otherwise raising an army
+        // would squeeze out the very drones and runners it is promoted from, and the hive would eat itself.
+        var workingAdults = totalPop
+            - pop.getOrDefault(AlienEntityTypeTags.QUEENS, 0)
+            - militaryPopulation(pop)
+            - retinueAllowance
+            - carveCrewAllowance;
+        if (workingAdults >= memberCap) {
+            return;
+        }
         var chunks = location.claimedChunks().size();
         var cap = populationPerChunk * chunks;
         if (cap <= 0 || totalPop > cap) {
@@ -76,15 +131,25 @@ public final class HiveBalanceTask {
             return;
         }
 
+        // Grow the workforce...
         if (totalPop < cap) {
-            tryFillPopulation(location, lineage, pop, chunks, totalPop);
-            return;
+            tryFillPopulation(server, location, lineage, pop, chunks, totalPop);
         }
 
-        tryBalanceComposition(location, lineage, pop, chunks, totalPop);
+        // ...and militarise ALONGSIDE it, rather than only after it.
+        //
+        // This call used to sit behind a `return`, so composition upgrades ran ONLY once the hive had already hit
+        // its full population cap. Parties drain the reserves constantly, so it never got there - and the hive
+        // therefore never promoted a single warrior or prowler in its entire life. It just replaced drones forever.
+        //
+        // Promotions are paid in ROYAL JELLY, not biomass, so they do not compete with worker production for the
+        // same currency; and each one's own purchase conditions (min_population, per-caste cap) decide when it is
+        // actually allowed. This simply stops the task returning before it ever asks.
+        tryBalanceComposition(server, location, lineage, pop, chunks, totalPop);
     }
 
     private static boolean tryFillPopulation(
+        MinecraftServer server,
         HiveLocation location,
         LineageFactionData lineage,
         Map<TagKey<EntityType<?>>, Integer> pop,
@@ -93,7 +158,16 @@ public final class HiveBalanceTask {
     ) {
         var ordered = populationFillOrder(pop, chunks);
         for (var caste : ordered) {
-            if (tryCommitCaste(location, lineage, caste, totalPop, PurchasePopulationMode.NET_GAIN)) {
+            // Basic egg-born production rolls a 1-in-4 chance to yield a SPITTER instead of the drone/runner it was
+            // making; if the spitter can't commit, the intended caste still gets its normal attempt.
+            var substituted = rollSpitterSubstitution(server, caste);
+            if (
+                substituted != caste
+                    && tryCommitCaste(server, location, lineage, substituted, totalPop, PurchasePopulationMode.NET_GAIN)
+            ) {
+                return true;
+            }
+            if (tryCommitCaste(server, location, lineage, caste, totalPop, PurchasePopulationMode.NET_GAIN)) {
                 return true;
             }
         }
@@ -109,7 +183,10 @@ public final class HiveBalanceTask {
         var runners = pop.getOrDefault(AlienEntityTypeTags.RUNNERS, 0);
         var runnerBaseline = 1 + chunks / 4;
 
-        if (runners < runnerBaseline) {
+        // Early growth INTERLEAVES 2:1 rather than letting the runner baseline monopolize the single purchase
+        // per cycle: with chunks/4 baselines (29-91 runners), a young hive was ALL runners for its whole early
+        // life and drones were never made. Runners lead only while they haven't pulled 2x ahead of drones.
+        if (runners < runnerBaseline && runners <= (drones + 1) * 2) {
             ordered.add(AlienEntityTypeTags.RUNNERS);
         }
 
@@ -133,7 +210,17 @@ public final class HiveBalanceTask {
         }
     }
 
+    /** Everything living outside the worker member cap: the standing army, spitters, and the scourge tier. */
+    private static int militaryPopulation(Map<TagKey<EntityType<?>>, Integer> pop) {
+        var total = 0;
+        for (var tag : MILITARY_CASTES) {
+            total += pop.getOrDefault(tag, 0);
+        }
+        return total;
+    }
+
     private static boolean tryBalanceComposition(
+        MinecraftServer server,
         HiveLocation location,
         LineageFactionData lineage,
         Map<TagKey<EntityType<?>>, Integer> pop,
@@ -154,20 +241,40 @@ public final class HiveBalanceTask {
         candidates.sort((left, right) -> Integer.compare(deficits.get(right), deficits.get(left)));
 
         for (var caste : candidates) {
-            if (tryCommitCaste(location, lineage, caste, totalPop, PurchasePopulationMode.NEUTRAL)) {
+            if (tryCommitCaste(server, location, lineage, caste, totalPop, PurchasePopulationMode.NEUTRAL)) {
                 return true;
             }
         }
         return false;
     }
 
+    /** Basic egg-born castes (drones, runners) have a 1-in-4 chance of producing a spitter instead. */
+    private static TagKey<EntityType<?>> rollSpitterSubstitution(MinecraftServer server, TagKey<EntityType<?>> caste) {
+        if (
+            (caste == AlienEntityTypeTags.DRONES || caste == AlienEntityTypeTags.RUNNERS)
+                && server.overworld().getRandom().nextInt(4) == 0
+        ) {
+            return AlienEntityTypeTags.SPITTERS;
+        }
+        return caste;
+    }
+
     private static boolean tryCommitCaste(
+        MinecraftServer server,
         HiveLocation location,
         LineageFactionData lineage,
         TagKey<EntityType<?>> caste,
         int totalPop,
         PurchasePopulationMode populationMode
     ) {
+        // Starvation priority (design §6, step 4): while the active carve site is starved (a resin payment actually
+        // bounced), caste purchases stand aside so incoming biomass finishes the frozen build first. Defense parties,
+        // egg-laying and resin spread are deliberately NOT gated - survival and reproduction outrank construction,
+        // and hunting parties are how a starving hive earns its way out.
+        if (location.isConstructionStarved()) {
+            return false;
+        }
+
         var outputType = CasteResolver.entityTypeForCaste(lineage.variant(), caste);
         if (outputType == null) {
             return false;
@@ -194,6 +301,10 @@ public final class HiveBalanceTask {
             return false;
         }
 
+        // Vats are the hive's savings: tap them only when the bank alone can't cover the jelly cost.
+        JellyVatDisplay.coverShortfall(server, location, purchase.royalJelly());
+        JellyVatDisplay.coverScourgeShortfall(server, location, purchase.scourgeJelly());
+
         var biomassCost = biomassCost(purchase, location);
         if (
             location.biomass() < biomassCost
@@ -207,6 +318,8 @@ public final class HiveBalanceTask {
         var inputTypes = new ArrayList<EntityType<?>>(purchase.inputEntities().size());
         for (var input : purchase.inputEntities()) {
             var type = input.entity();
+            // Stored nursery eggs back the ovomorph reserve: consume chamber stock when the reserve runs short.
+            EggStock.coverInputShortfall(server, location, type, input.count());
             if (location.localReserves().getCount(type) < input.count()) {
                 return false;
             }
@@ -258,6 +371,13 @@ public final class HiveBalanceTask {
     private static int netPopulationChange(HiveUnitPurchase purchase) {
         var inputs = 0;
         for (var input : purchase.inputEntities()) {
+            // Eggs are STOCK, not population (ovomorphs are not a tracked caste) - consuming one to make an
+            // adult is a net population GAIN. Without this, the egg cost turned every basic purchase neutral
+            // and the fill path (net-gain only) could never buy a drone/runner/spitter: population froze at
+            // the queen forever, with full biomass and a stocked egg bank.
+            if (input.entity().is(AlienEntityTypeTags.OVOMORPHS)) {
+                continue;
+            }
             inputs += input.count();
         }
         return 1 - inputs;
@@ -285,6 +405,14 @@ public final class HiveBalanceTask {
         desired.put(AlienEntityTypeTags.PRAETORIANS, warrior / 12);
         desired.put(AlienEntityTypeTags.CRUSHERS, runner / 12);
         desired.put(AlienEntityTypeTags.RAVAGERS, warrior / 8);
+        // The rest of the scourge tier (caps set in the economy spec: burster 40, razor claw 20, chrysalis 20,
+        // carrier 10). These were purchasable on paper - recipes, jelly costs, and caps all existed - but had no
+        // desired entry here, so the balance task never asked for them and the ravager was the only scourge unit
+        // hives ever produced. Their harbinger>=1 purchase condition still gates when they can actually commit.
+        desired.put(AlienEntityTypeTags.BURSTERS, runner / 4);
+        desired.put(AlienEntityTypeTags.RAZOR_CLAWS, runner / 8);
+        desired.put(AlienEntityTypeTags.CHRYSALISES, prowler / 3);
+        desired.put(AlienEntityTypeTags.CARRIERS, drone / 10);
         desired.put(AlienEntityTypeTags.HARBINGERS, totalPop >= 100 && harbinger == 0 ? 1 : 0);
 
         var deficits = new LinkedHashMap<TagKey<EntityType<?>>, Integer>();
@@ -319,6 +447,19 @@ public final class HiveBalanceTask {
                 case HiveUnitPurchaseCondition.MaxEntityCountInLocation max -> {
                     var current = CastePopulation.countEntity(location, max.entity());
                     if (current >= max.value()) {
+                        return false;
+                    }
+                }
+                case HiveUnitPurchaseCondition.MaxPerRaidChamber perChamber -> {
+                    // One harbinger per raid chamber. An ordinary hive builds one chamber and so fields one
+                    // harbinger; only an empress-influenced hive can build a second and keep raiding after you
+                    // kill the first.
+                    var chambers = com.alien.common.gameplay.hive.structure.HiveRouter.countRoomsOfType(
+                        location,
+                        RAID_CHAMBER_ROOM_TYPE
+                    );
+                    var current = CastePopulation.countEntity(location, perChamber.entity());
+                    if (current >= Math.max(1, chambers)) {
                         return false;
                     }
                 }

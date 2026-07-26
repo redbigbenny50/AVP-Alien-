@@ -7,18 +7,21 @@ import com.alien.common.network.handler.DestroyTrackerHandler;
 import com.alien.common.network.handler.HiveConfigUpdateHandler;
 import com.alien.common.network.handler.HiveInspectionRequestHandler;
 import com.alien.common.network.handler.HiveRenderToggleHandler;
+import com.alien.common.network.handler.HostStruggleMashHandler;
 import com.alien.common.network.handler.RenameTrackerHandler;
 import com.alien.common.network.handler.ShieldAbilityActivationHandler;
 import com.alien.common.network.handler.TrackedQueensRequestHandler;
 import com.alien.common.network.payload.C2SAckLostTrackersPayload;
 import com.alien.common.network.payload.C2SActivateShieldAbilityPayload;
 import com.alien.common.network.payload.C2SDestroyTrackerPayload;
+import com.alien.common.network.payload.C2SHostStruggleMashPayload;
 import com.alien.common.network.payload.C2SRenameTrackerPayload;
 import com.alien.common.network.payload.C2SRequestHiveInspectionPayload;
 import com.alien.common.network.payload.C2SRequestTrackedQueensPayload;
 import com.alien.common.network.payload.C2SToggleHiveRenderPayload;
 import com.alien.common.network.payload.C2SUpdateHiveConfigPayload;
 import com.alien.common.network.payload.S2CCaptureHoldPayload;
+import com.alien.common.network.payload.S2CHeadAttachmentDataPayload;
 import com.alien.common.network.payload.S2CHiveInspectionPayload;
 import com.alien.common.network.payload.S2CHiveRenderDataPayload;
 import com.alien.common.network.payload.S2CTrackedQueensPayload;
@@ -47,6 +50,9 @@ public final class AlienNetworking {
             new PacketDirection.C2S<>(C2SActivateShieldAbilityPayload.TYPE, C2SActivateShieldAbilityPayload.CODEC)
         );
         registry.registerPacketDirection(
+            new PacketDirection.C2S<>(C2SHostStruggleMashPayload.TYPE, C2SHostStruggleMashPayload.CODEC)
+        );
+        registry.registerPacketDirection(
             new PacketDirection.S2C<>(S2CHiveInspectionPayload.TYPE, S2CHiveInspectionPayload.CODEC)
         );
         registry.registerPacketDirection(
@@ -57,6 +63,9 @@ public final class AlienNetworking {
         );
         registry.registerPacketDirection(
             new PacketDirection.S2C<>(S2CCaptureHoldPayload.TYPE, S2CCaptureHoldPayload.CODEC)
+        );
+        registry.registerPacketDirection(
+            new PacketDirection.S2C<>(S2CHeadAttachmentDataPayload.TYPE, S2CHeadAttachmentDataPayload.CODEC)
         );
         registry.registerPacketDirection(
             new PacketDirection.C2S<>(C2SRequestTrackedQueensPayload.TYPE, C2SRequestTrackedQueensPayload.CODEC)
@@ -96,6 +105,13 @@ public final class AlienNetworking {
             )
         );
         registry.registerPacketHandler(
+            new NetworkHandler.FromClient<>(
+                C2SHostStruggleMashPayload.TYPE,
+                C2SHostStruggleMashPayload.CODEC,
+                HostStruggleMashHandler::handle
+            )
+        );
+        registry.registerPacketHandler(
             new NetworkHandler.FromServer<>(
                 S2CHiveInspectionPayload.TYPE,
                 S2CHiveInspectionPayload.CODEC,
@@ -121,6 +137,13 @@ public final class AlienNetworking {
                 S2CCaptureHoldPayload.TYPE,
                 S2CCaptureHoldPayload.CODEC,
                 AlienClientPacketListener::handleCaptureHold
+            )
+        );
+        registry.registerPacketHandler(
+            new NetworkHandler.FromServer<>(
+                S2CHeadAttachmentDataPayload.TYPE,
+                S2CHeadAttachmentDataPayload.CODEC,
+                AlienClientPacketListener::handleHeadAttachmentData
             )
         );
         registry.registerPacketHandler(

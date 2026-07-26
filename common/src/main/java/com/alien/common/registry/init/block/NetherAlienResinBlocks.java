@@ -112,6 +112,98 @@ public class NetherAlienResinBlocks {
         () -> new WallBlock(AlienBlockProperties.NETHER_RESIN.build())
     );
 
+    public static final BLibHolder<Block> RIBBED_NETHER_RESIN_SLAB = create(
+        "ribbed_nether_resin_slab",
+        () -> new SlabBlock(AlienBlockProperties.NETHER_RESIN.build())
+    );
+
+    public static final BLibHolder<Block> RIBBED_NETHER_RESIN_STAIRS = create(
+        "ribbed_nether_resin_stairs",
+        () -> new StairBlock(
+            RIBBED_NETHER_RESIN.get().defaultBlockState(),
+            AlienBlockProperties.NETHER_RESIN.build()
+        )
+    );
+
+    public static final BLibHolder<Block> NETHER_RESIN_BONE = create("nether_resin_bone", AlienBlockProperties.NETHER_RESIN);
+
+    public static final BLibHolder<Block> NETHER_RESIN_BONE_SLAB = create(
+        "nether_resin_bone_slab",
+        () -> new SlabBlock(AlienBlockProperties.NETHER_RESIN.build())
+    );
+
+    public static final BLibHolder<Block> NETHER_RESIN_BONE_STAIRS = create(
+        "nether_resin_bone_stairs",
+        () -> new StairBlock(
+            NETHER_RESIN_BONE.get().defaultBlockState(),
+            AlienBlockProperties.NETHER_RESIN.build()
+        )
+    );
+
+    public static final BLibHolder<Block> NETHER_RESIN_DOORWAY = create(
+        "nether_resin_doorway",
+        () -> new RotatedPillarBlock(AlienBlockProperties.NETHER_RESIN.build())
+    );
+
+    public static final BLibHolder<Block> NETHER_RESIN_ETCHED = create(
+        "nether_resin_etched",
+        () -> new RotatedPillarBlock(AlienBlockProperties.NETHER_RESIN.build())
+    );
+
+    public static final BLibHolder<Block> NETHER_RESIN_ETCHED_SLAB = create(
+        "nether_resin_etched_slab",
+        () -> new SlabBlock(AlienBlockProperties.NETHER_RESIN.build())
+    );
+
+    public static final BLibHolder<Block> NETHER_RESIN_ETCHED_STAIRS = create(
+        "nether_resin_etched_stairs",
+        () -> new StairBlock(
+            NETHER_RESIN_ETCHED.get().defaultBlockState(),
+            AlienBlockProperties.NETHER_RESIN.build()
+        )
+    );
+
+    public static final BLibHolder<Block> NETHER_RESIN_SPINE = create(
+        "nether_resin_spine",
+        () -> new RotatedPillarBlock(AlienBlockProperties.NETHER_RESIN.build())
+    );
+
+    public static final BLibHolder<Block> NETHER_RESIN_STRETCHED = create(
+        "nether_resin_stretched",
+        () -> new RotatedPillarBlock(AlienBlockProperties.NETHER_RESIN.build())
+    );
+
+    public static final BLibHolder<Block> NETHER_RESIN_STRETCHED_SLAB = create(
+        "nether_resin_stretched_slab",
+        () -> new SlabBlock(AlienBlockProperties.NETHER_RESIN.build())
+    );
+
+    public static final BLibHolder<Block> NETHER_RESIN_STRETCHED_STAIRS = create(
+        "nether_resin_stretched_stairs",
+        () -> new StairBlock(
+            NETHER_RESIN_STRETCHED.get().defaultBlockState(),
+            AlienBlockProperties.NETHER_RESIN.build()
+        )
+    );
+
+    public static final BLibHolder<Block> NETHER_RESIN_TENDRIL = create(
+        "nether_resin_tendril",
+        () -> new RotatedPillarBlock(AlienBlockProperties.NETHER_RESIN.build())
+    );
+
+    public static final BLibHolder<Block> NETHER_RESIN_TENDRIL_SLAB = create(
+        "nether_resin_tendril_slab",
+        () -> new SlabBlock(AlienBlockProperties.NETHER_RESIN.build())
+    );
+
+    public static final BLibHolder<Block> NETHER_RESIN_TENDRIL_STAIRS = create(
+        "nether_resin_tendril_stairs",
+        () -> new StairBlock(
+            NETHER_RESIN_TENDRIL.get().defaultBlockState(),
+            AlienBlockProperties.NETHER_RESIN.build()
+        )
+    );
+
     private static BLibHolder<Block> create(String path, BlockPropertyBuilder blockPropertyBuilder) {
         return create(path, () -> new Block(blockPropertyBuilder.build()));
     }

@@ -7,6 +7,9 @@ import com.blib.api.client.animation.v1.command.policy.AzDispatchMode;
 
 public class DroneAnimationDispatcher {
 
+    /** The dig loop plays at 70% speed, matching the queen's dig loops - slowed in-game, not in the model. */
+    private static final float DIG_ANIMATION_SPEED = 0.7F;
+
     private static final AzCommand<Drone> CLAW_ATTACK = AzCommand.<Drone>replay()
         .play(AzAlienAnimationUtil.BODY, DroneAnimationRefs.FULL_ATTACK_CLAW_ANIMATION_NAME, AzPlayBehaviors.PLAY_ONCE)
         .build();
@@ -45,6 +48,10 @@ public class DroneAnimationDispatcher {
 
     private static final AzCommand<Drone> WALK = AzCommand.<Drone>idempotent()
         .play(AzAlienAnimationUtil.BODY, DroneAnimationRefs.WALK_ANIMATION_NAME, AzPlayBehaviors.LOOP)
+        .build();
+
+    private static final AzCommand<Drone> WALK_CARRY = AzCommand.<Drone>idempotent()
+        .play(AzAlienAnimationUtil.BODY, DroneAnimationRefs.WALK_CARRY_ANIMATION_NAME, AzPlayBehaviors.LOOP)
         .build();
 
     private final Drone drone;
@@ -89,6 +96,33 @@ public class DroneAnimationDispatcher {
 
     public void walk() {
         WALK.dispatchForEntity(drone);
+    }
+
+    /** Laden gait: an egg on the back, or a host held to the chest. */
+    public void walkCarry() {
+        WALK_CARRY.dispatchForEntity(drone);
+    }
+
+    /**
+     * Digging gait, at 70% speed. Nothing calls this yet - see {@link DroneAnimationRefs#WALK_DIG_ANIMATION_NAME}. It
+     * is here so the carve economy can simply call it.
+     */
+    public void walkDig() {
+        walkDig(DIG_ANIMATION_SPEED);
+    }
+
+    /**
+     * Digging gait at an explicit speed: the carve economy's placers dig at 50% (slower than the diggers' 70%), per the
+     * construction design §5.
+     */
+    public void walkDig(float speed) {
+        AzAlienAnimationUtil.singleWithSpeed(
+            AzAlienAnimationUtil.BODY,
+            DroneAnimationRefs.WALK_DIG_ANIMATION_NAME,
+            AzPlayBehaviors.LOOP,
+            AzDispatchMode.PLAY_IF_NOT_PLAYING,
+            speed
+        ).dispatchForEntity(drone);
     }
 
     public void biteAttack() {

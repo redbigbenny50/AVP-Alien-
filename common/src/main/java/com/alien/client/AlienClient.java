@@ -15,6 +15,7 @@ import com.alien.client.render.armor.PlatedIrradiatedChitinArmorRenderer;
 import com.alien.client.render.armor.PlatedNetherChitinArmorRenderer;
 import com.alien.client.render.block.AnchorBlockEntityRenderer;
 import com.alien.client.render.block.CrusherHeadBlockEntityRenderer;
+import com.alien.client.render.block.JellyVatBlockEntityRenderer;
 import com.alien.client.render.block.QueenHeadBlockEntityRenderer;
 import com.alien.client.render.block.XenomorphHeadBlockEntityRenderer;
 import com.alien.client.render.entity.AcidRenderer;
@@ -43,10 +44,6 @@ import com.alien.client.render.entity.RoyalCocoonRenderer;
 import com.alien.client.render.entity.RunnerRenderer;
 import com.alien.client.render.entity.SpitterRenderer;
 import com.alien.client.render.entity.WarriorRenderer;
-import com.alien.client.render.entity.head.AlienEntityHeadData;
-import com.alien.client.render.entity.head.EntityHeadDataCache;
-import com.alien.client.render.entity.parasite.attachment.AlienParasiteHeadAttachmentOffsetData;
-import com.alien.client.render.entity.parasite.attachment.ParasiteHeadAttachmentOffsetDataCache;
 import com.alien.client.render.entity.parasite.facehugger.FacehuggerRenderer;
 import com.alien.common.registry.init.AlienBlockEntityTypes;
 import com.alien.common.registry.init.AlienEntityTypes;
@@ -63,7 +60,6 @@ import com.alien.compatibility.blib_engine.BLibEngine;
 import com.blib.api.client.mod.v1.BLibClientMod;
 import com.blib.api.common.registry.v1.BLibHolder;
 import net.minecraft.client.renderer.RenderType;
-import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.item.Item;
 
 import java.util.List;
@@ -87,11 +83,6 @@ public class AlienClient {
         // Engine workspace: add hive-specific inspector sections under the generic faction inspector so picking an AVP
         // faction in the FactionBrowser reveals biomass/jelly/caste/territory/leadership/vigilance data.
         BLibEngine.registerInspectorSections();
-
-        MOD.events().onClientSetup().register(() -> {
-            registerEntityHeadData();
-            registerParasiteHeadAttachmentOffsetData();
-        });
     }
 
     private static void registerArmorRenderers() {
@@ -192,40 +183,6 @@ public class AlienClient {
 
         MOD.registries().registerBlockRenderLayer(AlienBlocks.ROYAL_JELLY_BLOCK, RenderType.translucent());
         MOD.registries().registerBlockRenderLayer(AlienBlocks.SCOURGE_JELLY_BLOCK, RenderType.translucent());
-    }
-
-    private static void registerEntityHeadData() {
-        EntityHeadDataCache.put(EntityType.CAMEL, AlienEntityHeadData.CAMEL);
-        EntityHeadDataCache.put(EntityType.COW, AlienEntityHeadData.COW);
-        EntityHeadDataCache.put(EntityType.DONKEY, AlienEntityHeadData.HORSE);
-        EntityHeadDataCache.put(EntityType.DOLPHIN, AlienEntityHeadData.DOLPHIN);
-        EntityHeadDataCache.put(EntityType.EVOKER, AlienEntityHeadData.VILLAGER);
-        EntityHeadDataCache.put(EntityType.FOX, AlienEntityHeadData.FOX);
-        EntityHeadDataCache.put(EntityType.GOAT, AlienEntityHeadData.GOAT);
-        EntityHeadDataCache.put(EntityType.HOGLIN, AlienEntityHeadData.HOGLIN);
-        EntityHeadDataCache.put(EntityType.HORSE, AlienEntityHeadData.HORSE);
-        EntityHeadDataCache.put(EntityType.ILLUSIONER, AlienEntityHeadData.VILLAGER);
-        EntityHeadDataCache.put(EntityType.LLAMA, AlienEntityHeadData.LLAMA);
-        EntityHeadDataCache.put(EntityType.MOOSHROOM, AlienEntityHeadData.COW);
-        EntityHeadDataCache.put(EntityType.MULE, AlienEntityHeadData.HORSE);
-        EntityHeadDataCache.put(EntityType.PANDA, AlienEntityHeadData.PANDA);
-        EntityHeadDataCache.put(EntityType.PIG, AlienEntityHeadData.PIG);
-        EntityHeadDataCache.put(EntityType.PIGLIN, AlienEntityHeadData.PIGLIN);
-        EntityHeadDataCache.put(EntityType.PIGLIN_BRUTE, AlienEntityHeadData.PIGLIN);
-        EntityHeadDataCache.put(EntityType.PILLAGER, AlienEntityHeadData.VILLAGER);
-        EntityHeadDataCache.put(EntityType.PLAYER, AlienEntityHeadData.PLAYER);
-        EntityHeadDataCache.put(EntityType.POLAR_BEAR, AlienEntityHeadData.POLAR_BEAR);
-        EntityHeadDataCache.put(EntityType.RAVAGER, AlienEntityHeadData.RAVAGER);
-        EntityHeadDataCache.put(EntityType.SHEEP, AlienEntityHeadData.SHEEP);
-        EntityHeadDataCache.put(EntityType.SNIFFER, AlienEntityHeadData.SNIFFER);
-        EntityHeadDataCache.put(EntityType.TRADER_LLAMA, AlienEntityHeadData.LLAMA);
-        EntityHeadDataCache.put(EntityType.VILLAGER, AlienEntityHeadData.VILLAGER);
-        EntityHeadDataCache.put(EntityType.VINDICATOR, AlienEntityHeadData.VILLAGER);
-        EntityHeadDataCache.put(EntityType.WITCH, AlienEntityHeadData.VILLAGER);
-        EntityHeadDataCache.put(EntityType.WANDERING_TRADER, AlienEntityHeadData.VILLAGER);
-        EntityHeadDataCache.put(EntityType.WOLF, AlienEntityHeadData.WOLF);
-        EntityHeadDataCache.put(EntityType.ZOGLIN, AlienEntityHeadData.HOGLIN);
-        EntityHeadDataCache.put(EntityType.ZOMBIE_VILLAGER, AlienEntityHeadData.VILLAGER);
     }
 
     private static void registerEntityRenderers() {
@@ -345,46 +302,13 @@ public class AlienClient {
         MOD.registries().registerEntityRenderer(AlienEntityTypes.WARRIOR, WarriorRenderer::new);
     }
 
-    private static void registerParasiteHeadAttachmentOffsetData() {
-        ParasiteHeadAttachmentOffsetDataCache.put(EntityType.CAMEL, AlienParasiteHeadAttachmentOffsetData.CAMEL);
-        ParasiteHeadAttachmentOffsetDataCache.put(EntityType.COW, AlienParasiteHeadAttachmentOffsetData.COW);
-        ParasiteHeadAttachmentOffsetDataCache.put(EntityType.DONKEY, AlienParasiteHeadAttachmentOffsetData.DONKEY);
-        ParasiteHeadAttachmentOffsetDataCache.put(EntityType.DOLPHIN, AlienParasiteHeadAttachmentOffsetData.DOLPHIN);
-        ParasiteHeadAttachmentOffsetDataCache.put(EntityType.EVOKER, AlienParasiteHeadAttachmentOffsetData.VILLAGER);
-        ParasiteHeadAttachmentOffsetDataCache.put(EntityType.FOX, AlienParasiteHeadAttachmentOffsetData.FOX);
-        ParasiteHeadAttachmentOffsetDataCache.put(EntityType.GOAT, AlienParasiteHeadAttachmentOffsetData.GOAT);
-        ParasiteHeadAttachmentOffsetDataCache.put(EntityType.HOGLIN, AlienParasiteHeadAttachmentOffsetData.HOGLIN);
-        ParasiteHeadAttachmentOffsetDataCache.put(EntityType.HORSE, AlienParasiteHeadAttachmentOffsetData.HORSE);
-        ParasiteHeadAttachmentOffsetDataCache.put(EntityType.ILLUSIONER, AlienParasiteHeadAttachmentOffsetData.VILLAGER);
-        ParasiteHeadAttachmentOffsetDataCache.put(EntityType.LLAMA, AlienParasiteHeadAttachmentOffsetData.LLAMA);
-        ParasiteHeadAttachmentOffsetDataCache.put(EntityType.MOOSHROOM, AlienParasiteHeadAttachmentOffsetData.COW);
-        ParasiteHeadAttachmentOffsetDataCache.put(EntityType.MULE, AlienParasiteHeadAttachmentOffsetData.MULE);
-        ParasiteHeadAttachmentOffsetDataCache.put(EntityType.PANDA, AlienParasiteHeadAttachmentOffsetData.PANDA);
-        ParasiteHeadAttachmentOffsetDataCache.put(EntityType.PIG, AlienParasiteHeadAttachmentOffsetData.PIG);
-        ParasiteHeadAttachmentOffsetDataCache.put(EntityType.PIGLIN, AlienParasiteHeadAttachmentOffsetData.VILLAGER);
-        ParasiteHeadAttachmentOffsetDataCache.put(EntityType.PIGLIN_BRUTE, AlienParasiteHeadAttachmentOffsetData.VILLAGER);
-        ParasiteHeadAttachmentOffsetDataCache.put(EntityType.PILLAGER, AlienParasiteHeadAttachmentOffsetData.VILLAGER);
-        ParasiteHeadAttachmentOffsetDataCache.put(EntityType.PLAYER, AlienParasiteHeadAttachmentOffsetData.PLAYER);
-        ParasiteHeadAttachmentOffsetDataCache.put(EntityType.POLAR_BEAR, AlienParasiteHeadAttachmentOffsetData.POLAR_BEAR);
-        ParasiteHeadAttachmentOffsetDataCache.put(EntityType.RAVAGER, AlienParasiteHeadAttachmentOffsetData.RAVAGER);
-        ParasiteHeadAttachmentOffsetDataCache.put(EntityType.SHEEP, AlienParasiteHeadAttachmentOffsetData.SHEEP);
-        ParasiteHeadAttachmentOffsetDataCache.put(EntityType.SNIFFER, AlienParasiteHeadAttachmentOffsetData.SNIFFER);
-        ParasiteHeadAttachmentOffsetDataCache.put(EntityType.TRADER_LLAMA, AlienParasiteHeadAttachmentOffsetData.LLAMA);
-        ParasiteHeadAttachmentOffsetDataCache.put(EntityType.VILLAGER, AlienParasiteHeadAttachmentOffsetData.VILLAGER);
-        ParasiteHeadAttachmentOffsetDataCache.put(EntityType.VINDICATOR, AlienParasiteHeadAttachmentOffsetData.VILLAGER);
-        ParasiteHeadAttachmentOffsetDataCache.put(EntityType.WANDERING_TRADER, AlienParasiteHeadAttachmentOffsetData.VILLAGER);
-        ParasiteHeadAttachmentOffsetDataCache.put(EntityType.WITCH, AlienParasiteHeadAttachmentOffsetData.WITCH);
-        ParasiteHeadAttachmentOffsetDataCache.put(EntityType.WOLF, AlienParasiteHeadAttachmentOffsetData.WOLF);
-        ParasiteHeadAttachmentOffsetDataCache.put(EntityType.ZOGLIN, AlienParasiteHeadAttachmentOffsetData.HOGLIN);
-        ParasiteHeadAttachmentOffsetDataCache.put(EntityType.ZOMBIE_VILLAGER, AlienParasiteHeadAttachmentOffsetData.VILLAGER);
-    }
-
     private static void registerItemRenderers() {
         AlienXenomorphHeadItems.ALL.forEach(entry -> {
             registerAsset(entry.head(), entry.itemPath());
             registerAsset(entry.headShield(), entry.shieldItemPath());
         });
         registerAsset(AlienItems.ANCHOR, "anchor");
+        registerAsset(AlienItems.JELLY_VAT, "jelly_vat");
         registerAsset(AlienItems.INHIBITOR, "inhibitor");
         registerAsset(AlienItems.TRACKER, "tracker");
     }
@@ -413,6 +337,11 @@ public class AlienClient {
             .registerBlockEntityRenderer(
                 AlienBlockEntityTypes.ANCHOR,
                 ctx -> new AnchorBlockEntityRenderer()
+            );
+        MOD.registries()
+            .registerBlockEntityRenderer(
+                AlienBlockEntityTypes.JELLY_VAT,
+                ctx -> new JellyVatBlockEntityRenderer()
             );
     }
 

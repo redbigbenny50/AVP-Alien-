@@ -33,23 +33,23 @@ import org.jetbrains.annotations.Nullable;
 
 import java.util.function.BiConsumer;
 
-public class Drone extends Xenomorph implements EggCarrier, GOAPUser<Drone>, VentBuilder {
+public class Drone extends Xenomorph implements com.alien.common.gameplay.hive.structure.carve.CarveWorker, EggCarrier, GOAPUser<Drone>, VentBuilder {
 
     public static final AttackType CLAW = AttackType.builder("drone_claw")
         .requiresAnyArm()
-        .defaultDurationInTicks(10)
+        .defaultDurationInTicks(20)
         .sound(AlienSoundEvents.ENTITY_XENOMORPH_ATTACK)
         .build();
 
     public static final AttackType BITE = AttackType.builder("drone_bite")
         .requiresHead()
-        .defaultDurationInTicks(8)
+        .defaultDurationInTicks(10)
         .sound(AlienSoundEvents.ENTITY_XENOMORPH_ATTACK)
         .build();
 
     public static final AttackType TAIL = AttackType.builder("drone_tail")
         .requiresTail()
-        .defaultDurationInTicks(12)
+        .defaultDurationInTicks(19)
         .sound(AlienSoundEvents.ENTITY_XENOMORPH_ATTACK)
         .build();
 
@@ -65,6 +65,12 @@ public class Drone extends Xenomorph implements EggCarrier, GOAPUser<Drone>, Ven
     }
 
     private final DroneAnimationDispatcher animationDispatcher;
+
+    /**
+     * Synced, transient: this drone's carve-crew gait (construction economy step 5). 0 = none, 1 = digger (70% walk
+     * dig), 2 = placer (50%). Set by CarveWorkers server-side; the client DroneAnimator folds it into locomotion.
+     */
+    public final com.blib.api.common.data_sync.v1.DataAccessor<Integer> carveDigMode;
 
     private final EggPickupManager eggPickupManager;
 
@@ -85,6 +91,10 @@ public class Drone extends Xenomorph implements EggCarrier, GOAPUser<Drone>, Ven
                 .build()
         );
         this.animationDispatcher = new DroneAnimationDispatcher(this);
+        this.carveDigMode = new com.blib.api.common.data_sync.v1.DataAccessor<>(
+            this,
+            com.alien.common.registry.init.AlienDataSyncKeys.DRONE_CARVE_DIG_MODE.get()
+        );
         this.eggPickupManager = new EggPickupManager(this);
         this.ventData = new VentData();
     }
@@ -105,16 +115,57 @@ public class Drone extends Xenomorph implements EggCarrier, GOAPUser<Drone>, Ven
         eggPickupManager.tick();
     }
 
+    /**
+     * A drone carries eggs AND captured hosts.
+     * <p>
+     * HOSTS is not optional. {@code Alien.tick()} evicts every passenger that fails this check, and
+     * {@code HostCaptureTask.capture} mounts the host with {@code startRiding(captor, true)} - force bypasses
+     * canAddPassenger at mount time, but NOT the eviction sweep one tick later. Leaving HOSTS out means the drone grabs
+     * its captive and throws it off again every single tick: the host is dismounted to the top of the drone's bounding
+     * box, falls, is re-grabbed, and never survives long enough as a passenger to receive LivingEntity#rideTick - which
+     * is what resets fallDistance. The captive accumulates fall damage until it lands and dies. The planner also sees
+     * IS_CARRYING_HOST flicker false every tick and never commits to the delivery, and a captured PLAYER is thrown
+     * clear before the struggle bar can survive a tick.
+     */
     @Override
     protected boolean canEntityRideAlien(@NotNull Entity passenger) {
         return super.canEntityRideAlien(passenger)
-            || passenger.getType().is(AlienEntityTypeTags.OVOMORPHS);
+            || passenger.getType().is(AlienEntityTypeTags.OVOMORPHS)
+            || passenger.getType().is(AlienEntityTypeTags.HOSTS);
     }
+
+    /** How far up the drone's body its "chest" sits, as a fraction of its height. */
+    private static final double CHEST_HEIGHT_FRACTION = 0.55;
+
+    /** Clearance in front of the drone's own body, before the captive's width is added on top. */
+    private static final double CARRY_CLEARANCE = 0.35;
 
     @Override
     protected void positionRider(@NotNull Entity passenger, @NotNull MoveFunction callback) {
+        // An egg rides on the BACK (negative Z is behind).
         if (passenger.getType().is(AlienEntityTypeTags.OVOMORPHS)) {
             var relativePos = EntityUtil.getRelativePosition(this, 0, 0.8, -1);
+            callback.accept(passenger, relativePos.x, relativePos.y, relativePos.z);
+            return;
+        }
+
+        // A captured host is CLUTCHED IN FRONT OF THE CHEST, not balanced on the drone's head - which is where the
+        // default passenger attachment (the top of the hitbox) was putting it.
+        //
+        // Both offsets are derived from the two bodies rather than hardcoded, because a captive can be anything from a
+        // wolf to a villager to a marine. A passenger's position is its FEET, so to centre a body of any height on the
+        // drone's chest we drop the feet by half that body's height; and we push it forward far enough to clear its own
+        // width, so a cow does not end up embedded in the drone's ribs.
+        if (passenger.getType().is(AlienEntityTypeTags.HOSTS)) {
+            var chestHeight = getBbHeight() * CHEST_HEIGHT_FRACTION;
+            var feetOffset = chestHeight - passenger.getBbHeight() * 0.5;
+            // Held to the drone's FRONT/underside, clutched forward - not draped over its back. Every other carried
+            // passenger in the mod (drone/runner/burster eggs) sits at NEGATIVE Z on the body; the host at a positive
+            // offset rode the tail end and showed up behind the drone in testing, so the clutch offset is negative to
+            // match the convention the rest of the code carries by.
+            var forward = -(CARRY_CLEARANCE + passenger.getBbWidth() * 0.5);
+
+            var relativePos = EntityUtil.getRelativePosition(this, 0, feetOffset, forward);
             callback.accept(passenger, relativePos.x, relativePos.y, relativePos.z);
             return;
         }
@@ -148,6 +199,11 @@ public class Drone extends Xenomorph implements EggCarrier, GOAPUser<Drone>, Ven
     public void addAdditionalSaveData(@NotNull CompoundTag compoundTag) {
         super.addAdditionalSaveData(compoundTag);
         ventData.save(compoundTag);
+    }
+
+    @Override
+    public com.blib.api.common.data_sync.v1.DataAccessor<Integer> carveDigMode() {
+        return carveDigMode;
     }
 
     public DroneAnimationDispatcher getAnimationDispatcher() {

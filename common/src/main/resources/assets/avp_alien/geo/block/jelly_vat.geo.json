@@ -1,0 +1,120 @@
+{
+  "format_version": "1.21.20",
+  "minecraft:geometry": [
+    {
+      "description": {
+        "identifier": "geometry.Alien Egg",
+        "texture_width": 64,
+        "texture_height": 64,
+        "visible_bounds_width": 3,
+        "visible_bounds_height": 2.5,
+        "visible_bounds_offset": [0, 0.75, 0]
+      },
+      "bones": [
+        {
+          "name": "gJellyVat",
+          "pivot": [0.00243, 2.63993, 0.01722],
+          "rotation": [0, 45, 0]
+        },
+        {
+          "name": "gWalls",
+          "parent": "gJellyVat",
+          "pivot": [0.01341, 5.9, -0.00021],
+          "cubes": [
+            {"origin": [-3.48607, -0.4, -3.50375], "size": [7, 12, 7], "inflate": -0.4, "uv": [33, 42]},
+            {"origin": [-3.98711, 0.7, -3.99668], "size": [8, 11, 8], "inflate": -0.5, "uv": [31, 20]}
+          ]
+        },
+        {
+          "name": "gVeinBottom",
+          "parent": "gJellyVat",
+          "pivot": [-0.019, 0.7198, 0.04856],
+          "cubes": [
+            {"origin": [-3.56001, 9.31832, -7.581], "size": [7, 0, 3], "pivot": [0.0107, 6.4, -0.01159], "rotation": [83.5, 0, 0], "uv": [-3, 10]},
+            {"origin": [-3.5178, 9.25234, -7.60599], "size": [7, 0, 3], "pivot": [0.0107, 6.4, -0.01159], "rotation": [0, 90, -81.5], "uv": [-3, 10], "mirror": true},
+            {"origin": [-3.51859, 8.82918, -7.97207], "size": [7, 0, 3], "pivot": [0.0107, 6.4, -0.01159], "rotation": [-103.5, 0, -180], "uv": [-3, 10]},
+            {"origin": [-3.56081, 9.37573, -7.58754], "size": [7, 0, 3], "pivot": [0.0107, 6.4, -0.01159], "rotation": [0, -90, 83.5], "uv": [-3, 10], "mirror": true}
+          ]
+        },
+        {
+          "name": "gJellyStages",
+          "parent": "gJellyVat",
+          "pivot": [0.01289, 2.5, 0.00332],
+          "rotation": [0, 45, 0]
+        },
+        {
+          "name": "gStage1",
+          "parent": "gJellyStages",
+          "pivot": [0.01289, 2.75, 0.00332],
+          "cubes": [
+            {"origin": [-2.98711, 2.5, -2.99668], "size": [6, 1, 6], "pivot": [0.01289, 2.5, 0.00332], "rotation": [0, 45, 0], "uv": [1, 24]}
+          ]
+        },
+        {
+          "name": "gStage2",
+          "parent": "gJellyStages",
+          "pivot": [0.01289, 2.5, 0.00332],
+          "cubes": [
+            {"origin": [-2.98711, 2.5, -2.99668], "size": [6, 2, 6], "pivot": [0.01289, 2.5, 0.00332], "rotation": [0, 45, 0], "uv": [1, 24]}
+          ]
+        },
+        {
+          "name": "gStage3",
+          "parent": "gJellyStages",
+          "pivot": [0.01289, 3.25, 0.00332],
+          "cubes": [
+            {"origin": [-2.98711, 2.5, -2.99668], "size": [6, 3, 6], "pivot": [0.01289, 2.5, 0.00332], "rotation": [0, 45, 0], "uv": [1, 24]}
+          ]
+        },
+        {
+          "name": "gStage4",
+          "parent": "gJellyStages",
+          "pivot": [0.01289, 3.5, 0.00332],
+          "cubes": [
+            {"origin": [-2.98711, 2.5, -2.99668], "size": [6, 4, 6], "pivot": [0.01289, 2.5, 0.00332], "rotation": [0, 45, 0], "uv": [1, 24]}
+          ]
+        },
+        {
+          "name": "gStage5",
+          "parent": "gJellyStages",
+          "pivot": [0.01289, 3.75, 0.00332],
+          "cubes": [
+            {"origin": [-2.98711, 2.5, -2.99668], "size": [6, 5, 6], "pivot": [0.01289, 2.5, 0.00332], "rotation": [0, 45, 0], "uv": [1, 24]}
+          ]
+        },
+        {
+          "name": "gStage6",
+          "parent": "gJellyStages",
+          "pivot": [0.01289, 4, 0.00332],
+          "cubes": [
+            {"origin": [-2.98711, 2.5, -2.99668], "size": [6, 6, 6], "pivot": [0.01289, 2.5, 0.00332], "rotation": [0, 45, 0], "uv": [1, 24]}
+          ]
+        },
+        {
+          "name": "gStage7",
+          "parent": "gJellyStages",
+          "pivot": [0.01289, 4.25, 0.00332],
+          "cubes": [
+            {"origin": [-2.98711, 2.5, -2.99668], "size": [6, 7, 6], "pivot": [0.01289, 2.5, 0.00332], "rotation": [0, 45, 0], "uv": [1, 24]}
+          ]
+        },
+        {
+          "name": "gStage8",
+          "parent": "gJellyStages",
+          "pivot": [0.01289, 4.5, 0.00332],
+          "cubes": [
+            {"origin": [-2.98711, 2.5, -2.99668], "size": [6, 8, 6], "pivot": [0.01289, 2.5, 0.00332], "rotation": [0, 45, 0], "uv": [1, 24]}
+          ]
+        },
+        {
+          "name": "gStage9",
+          "parent": "gJellyStages",
+          "pivot": [0.01289, 7, 0.00332],
+          "cubes": [
+            {"origin": [-2.98711, 2.5, -2.99668], "size": [6, 9, 6], "pivot": [0.01289, 2.5, 0.00332], "rotation": [0, 45, 0], "uv": [1, 24]}
+          ]
+        }
+      ]
+    }
+  ]
+}

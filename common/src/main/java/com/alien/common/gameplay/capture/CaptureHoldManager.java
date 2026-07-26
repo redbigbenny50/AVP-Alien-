@@ -5,8 +5,11 @@ import com.alien.common.network.payload.S2CCaptureHoldPayload;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.sounds.SoundEvents;
+import net.minecraft.sounds.SoundSource;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.Mob;
+import net.minecraft.world.entity.MoverType;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.phys.Vec3;
 import org.jetbrains.annotations.Nullable;
@@ -39,6 +42,12 @@ public final class CaptureHoldManager {
     /** Per-tick pull acceleration cap, in blocks/tick added to the mob's velocity. */
     private static final double MAX_PULL = 0.35;
 
+    /** Follow distance for a limp body - it should stay at heel, not trail six blocks behind like a led animal. */
+    private static final double LIMP_FOLLOW_DISTANCE = 2.5;
+
+    /** Blocks per tick a dragged body is hauled. Roughly walking pace, so it reads as effort rather than a yank. */
+    private static final double LIMP_DRAG_SPEED = 0.18;
+
     /** Players within this distance of a held mob receive its grab/release packets. */
     private static final double SYNC_RANGE_SQR = 128.0 * 128.0;
 
@@ -59,12 +68,21 @@ public final class CaptureHoldManager {
     /** Register {@code mob} as held by {@code player}, replacing any prior holder. */
     public static void hold(Mob mob, Player player) {
         HELD.put(mob.getUUID(), player.getUUID());
+        // Chain clank when the mob is grabbed to be walked around (the anchor path plays its own in
+        // AnchorBlockEntity.bind; this covers the hand-held hold, which never touches an anchor).
+        if (!mob.level().isClientSide) {
+            mob.level().playSound(null, mob.blockPosition(), SoundEvents.CHAIN_PLACE, SoundSource.NEUTRAL, 1.0F, 1.0F);
+        }
         broadcast(mob, player.getId());
     }
 
     /** Release {@code mob} from whoever holds it. No-op if it was not held. */
     public static void release(Mob mob) {
         if (HELD.remove(mob.getUUID()) != null) {
+            // Chain rattles loose as the hold is dropped.
+            if (!mob.level().isClientSide) {
+                mob.level().playSound(null, mob.blockPosition(), SoundEvents.CHAIN_BREAK, SoundSource.NEUTRAL, 1.0F, 1.0F);
+            }
             broadcast(mob, RELEASE);
         }
     }
@@ -141,6 +159,29 @@ public final class CaptureHoldManager {
             if (resync) {
                 broadcast(mob, holder.getId());
             }
+            // A body with no AI of its own is DRAGGED, not led.
+            //
+            // The velocity tether below assumes the mob helps: it nudges delta movement and lets the mob's own
+            // movement carry it. An entity that is out cold has no effective AI, so vanilla damps its velocity
+            // every tick before travel even runs, and ground friction takes most of what is left - an
+            // incapacitated queen simply sat there no matter how hard she was pulled, and a fishing rod could not
+            // shift her either. Hauling the position directly sidesteps all of that. It still goes through
+            // move(), so walls, ledges and collisions behave normally - she is dragged along the floor, not
+            // teleported through it.
+            if (!mob.isEffectiveAi()) {
+                if (dist > LIMP_FOLLOW_DISTANCE) {
+                    Vec3 toHolder = holder.position().subtract(mob.position());
+                    double len = toHolder.length();
+                    if (len > 1.0e-4) {
+                        double step = Math.min(LIMP_DRAG_SPEED, dist - LIMP_FOLLOW_DISTANCE);
+                        Vec3 haul = toHolder.scale(step / len);
+                        mob.move(MoverType.SELF, new Vec3(haul.x, 0.0, haul.z));
+                        mob.hasImpulse = true;
+                    }
+                }
+                continue;
+            }
+
             if (dist > FOLLOW_DISTANCE) {
                 Vec3 pull = holder.position().subtract(mob.position());
                 double len = pull.length();

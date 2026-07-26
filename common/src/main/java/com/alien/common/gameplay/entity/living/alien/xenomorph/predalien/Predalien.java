@@ -24,7 +24,7 @@ public class Predalien extends Xenomorph implements GOAPUser<Predalien> {
 
     public static final AttackType CLAW = AttackType.builder("predalien_claw")
         .requiresAnyArm()
-        .defaultDurationInTicks(10)
+        .defaultDurationInTicks(20)
         .sound(AlienSoundEvents.ENTITY_XENOMORPH_ATTACK)
         .build();
 
@@ -36,7 +36,7 @@ public class Predalien extends Xenomorph implements GOAPUser<Predalien> {
 
     public static final AttackType TAIL = AttackType.builder("predalien_tail")
         .requiresTail()
-        .defaultDurationInTicks(12)
+        .defaultDurationInTicks(19)
         .sound(AlienSoundEvents.ENTITY_XENOMORPH_ATTACK)
         .build();
 
@@ -60,7 +60,7 @@ public class Predalien extends Xenomorph implements GOAPUser<Predalien> {
 
     public static AttributeSupplier.Builder createPredalienAttributes() {
         return Alien.createAlienAttributes()
-            .add(Attributes.ARMOR, 12.0F)
+            .add(Attributes.ARMOR, 16.0F)
             .add(Attributes.ARMOR_TOUGHNESS, 12.0F)
             .add(Attributes.ATTACK_DAMAGE, PlayerStatConstants.BASE_HEALTH * 0.75F)
             .add(Attributes.FOLLOW_RANGE, 35F)

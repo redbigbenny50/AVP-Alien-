@@ -181,7 +181,8 @@ public final class HiveLoadedSpawner {
         return entity;
     }
 
-    private static @Nullable Entity trySpawnIdentityReserve(
+    /** Public: the vent-defense dispatcher materializes defenders through this exact path. */
+    public static @Nullable Entity trySpawnIdentityReserve(
         ServerLevel level,
         HiveLocation location,
         EntityType<?> type,

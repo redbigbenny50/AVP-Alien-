@@ -46,23 +46,25 @@ public class TrackerItem extends Item {
 
     @Override
     public @NotNull InteractionResult interactLivingEntity(
-            @NotNull ItemStack stack,
-            @NotNull Player player,
-            @NotNull LivingEntity target,
-            @NotNull InteractionHand hand
+        @NotNull ItemStack stack,
+        @NotNull Player player,
+        @NotNull LivingEntity target,
+        @NotNull InteractionHand hand
     ) {
         if (target instanceof Queen queen && !queen.isTracked()) {
             if (!player.level().isClientSide) {
                 queen.setTracked(true);
                 queen.setPersistenceRequired();
                 TrackedQueenRegistry.getOrCreate(queen.level())
-                        .ifSome(registry -> registry.track(
-                                queen.getUUID(),
-                                queen.blockPosition(),
-                                queen.level().dimension(),
-                                queenLabel(stack, queen),
-                                queen.level().getGameTime()
-                        ));
+                    .ifSome(
+                        registry -> registry.track(
+                            queen.getUUID(),
+                            queen.blockPosition(),
+                            queen.level().dimension(),
+                            queenLabel(stack, queen),
+                            queen.level().getGameTime()
+                        )
+                    );
                 if (!player.getAbilities().instabuild) {
                     stack.shrink(1);
                 }

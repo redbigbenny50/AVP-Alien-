@@ -5,13 +5,16 @@
   "refmap": "${mod_id}.refmap.json",
   "compatibilityLevel": "JAVA_21",
   "mixins": [
+    "MixinBlockBehaviour_ResinConversion",
     "MixinItem_ChorusEmbryo",
     "MixinItem_GigeresqueSurgeryKit",
     "MixinLivingEntity_BloodLoss",
     "MixinLivingEntity_HiveBiomass",
     "MixinLivingEntity_Host",
     "MixinMob_IncapacitateHost",
+    "MixinNaturalSpawner_HiveSlabSpawnDeny",
     "MixinPersistentEntitySectionManager_ConvoyUnload",
+    "MixinPlayer_HostCapture",
     "MixinProjectileUtil_AllowHittingVehicle",
     "MixinVillagerHostilesSensor_RunAwayFromAVPMonsters",
     "MixinGameRulesAccessor",
@@ -19,8 +22,10 @@
   ],
   "client": [
     "client.MixinLocalPlayer_NoBlockingMovementPenalty",
+    "client.MixinMinecraft_HostStruggle",
     "client.MixinMinecraft_ShieldAbility",
-    "client.MixinEntityRenderer_CaptureChainLeash"
+    "client.MixinEntityRenderer_CaptureChainLeash",
+    "client.MixinKeyboardInput_HuggerLock"
   ],
   "server": [],
   "injectors": {

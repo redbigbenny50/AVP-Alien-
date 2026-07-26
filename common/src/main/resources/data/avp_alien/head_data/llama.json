@@ -1,0 +1,15 @@
+{
+  "entity": "minecraft:llama",
+  "size": [
+    4.0,
+    4.0,
+    9.0
+  ],
+  "pivot": [
+    0.0,
+    17.0,
+    -11.0
+  ],
+  "vertical_offset": 1.6,
+  "face_offset": 19
+}

@@ -29,6 +29,13 @@ import java.util.ArrayList;
  */
 public final class LocationDormancyTask {
 
+    /** Rule 2 kills only after the zero-population state has PERSISTED this many consecutive ticks (30s). */
+    private static final int ZERO_POP_KILL_TICKS = 600;
+
+    /** Consecutive ticks each location has been observed at zero reliable population. Transient. */
+    private static final java.util.Map<HiveLocation, Integer> ZERO_POP_TICKS =
+        java.util.Collections.synchronizedMap(new java.util.WeakHashMap<>());
+
     private LocationDormancyTask() {}
 
     public static void scanAll(MinecraftServer server) {
@@ -66,6 +73,16 @@ public final class LocationDormancyTask {
         }
     }
 
+    /** Whether the location's reserves still bank any of its lineage's eggs - banked eggs are future adults. */
+    private static boolean hasBankedEggs(HiveLocation location) {
+        var variant = location.lineageVariantOrNull();
+        if (variant == null) {
+            return false;
+        }
+        var eggType = com.alien.common.gameplay.entity.living.alien.ovomorph.Ovomorph.getType(variant, false);
+        return eggType != null && location.localReserves().getCount(eggType) > 0;
+    }
+
     /** Returns true if the location was killed this tick. */
     private static boolean evaluateLocation(
         ServerLevel level,
@@ -84,12 +101,23 @@ public final class LocationDormancyTask {
         // hive has no reserve buffer, and its founding queen can momentarily read as zero reliable population during
         // the chunk-unload / return-to-reserves transition (or on player logout). Reaping it in that window would
         // delete a legitimate new hive. The same grace window already protects newborn locations from shrink/evacuate.
-        if (
-            CastePopulation.totalReliableXenomorphPopulation(location) == 0
-                && location.ageInTicks() >= HiveLocationRegistry.INSTANCE.config().locationBootstrapGraceTicks()
-        ) {
-            LocationDeathHandler.killNaturalDecay(level, location, lineage);
-            return true;
+        // HARDENED: the zero state must PERSIST for ZERO_POP_KILL_TICKS before the kill. Member registration
+        // lags world load by ticks (a seated queen read as zero pop 2s after login and her hive was executed
+        // under her), and logout/unload transitions produce the same momentary zero the bootstrap comment
+        // already warns about. Additionally, a hive whose reserves still bank OVOMORPHS is not dead - the
+        // purchase economy rebuilds adults from banked eggs, so eggs count as life.
+        boolean zeroNow = CastePopulation.totalReliableXenomorphPopulation(location) == 0
+            && !hasBankedEggs(location)
+            && location.ageInTicks() >= HiveLocationRegistry.INSTANCE.config().locationBootstrapGraceTicks();
+        if (zeroNow) {
+            int observed = ZERO_POP_TICKS.merge(location, 1, Integer::sum);
+            if (observed >= ZERO_POP_KILL_TICKS) {
+                ZERO_POP_TICKS.remove(location);
+                LocationDeathHandler.killNaturalDecay(level, location, lineage);
+                return true;
+            }
+        } else {
+            ZERO_POP_TICKS.remove(location);
         }
 
         // Rule 3: no-contact safety net.

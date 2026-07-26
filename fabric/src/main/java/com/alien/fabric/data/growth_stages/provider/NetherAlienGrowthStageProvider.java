@@ -61,7 +61,7 @@ public class NetherAlienGrowthStageProvider {
             new GrowthStage(
                 AlienEntityTypes.NETHER_PREDALIEN_CHESTBURSTER.get(),
                 AlienEntityTypes.NETHER_PREDALIEN_ADOLESCENT.get(),
-                GrowthConstants.CHESTBURSTER_GROWTH_TIME_IN_TICKS
+                GrowthConstants.PREDALIEN_CHESTBURSTER_GROWTH_TIME_IN_TICKS
             )
         );
         biConsumer.accept(
@@ -69,7 +69,7 @@ public class NetherAlienGrowthStageProvider {
             new GrowthStage(
                 AlienEntityTypes.NETHER_PREDALIEN_ADOLESCENT.get(),
                 AlienEntityTypes.NETHER_PREDALIEN.get(),
-                GrowthConstants.ADOLESCENT_GROWTH_TIME_IN_TICKS
+                GrowthConstants.PREDALIEN_ADOLESCENT_GROWTH_TIME_IN_TICKS
             )
         );
     }
@@ -110,10 +110,10 @@ public class NetherAlienGrowthStageProvider {
             new GrowthRequirement.MobEffectRequirement(AlienMobEffects.getMetamorphosisHolder(), 0)
         );
 
-        biConsumer.accept(
-            "nether_ovomorph_to_royal_nether_ovomorph",
-            new GrowthStage(AlienEntityTypes.NETHER_OVOMORPH.get(), AlienEntityTypes.ROYAL_NETHER_OVOMORPH.get(), metamorphosis)
-        );
+        // Eggs are NO LONGER promoted by the Metamorphosis potion (splash or otherwise). Royalty is conferred by
+        // feeding RAW ROYAL JELLY directly to an ovomorph - see Ovomorph.mobInteract. Deleting the stage rather
+        // than un-gating it is deliberate: a requirement-less growth stage is treated as immediately matching, so
+        // an un-gated stage would turn every egg royal on its own.
         biConsumer.accept(
             "nether_drone_to_nether_warrior",
             new GrowthStage(AlienEntityTypes.NETHER_DRONE.get(), AlienEntityTypes.NETHER_WARRIOR.get(), metamorphosis)

@@ -31,20 +31,10 @@ public class WaitForSpitCooldownAction {
         spitter.getLookControl().setLookAt(target);
         spitter.getNavigation().stop();
 
-        var lastSpitTick = spitter.getSpitterData().getLastSpitTick();
         var currentTick = spitter.tickCount;
         var cooldownReady = spitter.getSpitterData().isCooldownReady(currentTick);
 
-        // FIXME: Temporary debug logging — remove after fixing spit cooldown issue.
-        System.out.println(
-            "[WaitForSpit] tickCount=" + currentTick
-                + " lastSpitTick=" + lastSpitTick
-                + " diff=" + (currentTick - lastSpitTick)
-                + " cooldownReady=" + cooldownReady
-        );
-
         if (cooldownReady) {
-            System.out.println("[WaitForSpit] Cooldown ready, aborting to replan.");
             return Action.Signal.ABORT;
         }
 

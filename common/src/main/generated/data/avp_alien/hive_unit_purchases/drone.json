@@ -1,5 +1,11 @@
 {
-  "biomass": 50,
+  "biomass": 10,
+  "input_entities": [
+    {
+      "count": 1,
+      "entity": "avp_alien:ovomorph"
+    }
+  ],
   "output_entity": "avp_alien:drone",
   "population_biomass_cost_scale": 0.05
 }

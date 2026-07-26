@@ -33,7 +33,7 @@ import org.jetbrains.annotations.Nullable;
 
 import java.util.function.BiConsumer;
 
-public class Runner extends Xenomorph implements EggCarrier, GOAPUser<Runner>, VentBuilder {
+public class Runner extends Xenomorph implements EggCarrier, GOAPUser<Runner>, VentBuilder, com.alien.common.gameplay.hive.structure.carve.CarveWorker {
 
     public static final AttackType CLAW = AttackType.builder("runner_claw")
         .requiresAnyArm()
@@ -43,13 +43,13 @@ public class Runner extends Xenomorph implements EggCarrier, GOAPUser<Runner>, V
 
     public static final AttackType BITE = AttackType.builder("runner_bite")
         .requiresHead()
-        .defaultDurationInTicks(8)
+        .defaultDurationInTicks(10)
         .sound(AlienSoundEvents.ENTITY_XENOMORPH_ATTACK)
         .build();
 
     public static final AttackType TAIL_QUAD = AttackType.builder("runner_tail_quad")
         .requiresTail()
-        .defaultDurationInTicks(10)
+        .defaultDurationInTicks(17)
         .sound(AlienSoundEvents.ENTITY_XENOMORPH_ATTACK)
         .build();
 
@@ -63,6 +63,9 @@ public class Runner extends Xenomorph implements EggCarrier, GOAPUser<Runner>, V
             .add(Attributes.MAX_HEALTH, PlayerStatConstants.BASE_HEALTH * 2F)
             .add(Attributes.MOVEMENT_SPEED, PlayerStatConstants.BASE_WALK_SPEED * 1.1F);
     }
+
+    /** Synced crew gait, same contract as the drone's: 0 idle, 1 digging, 2 placing. */
+    public final com.blib.api.common.data_sync.v1.DataAccessor<Integer> carveDigMode;
 
     private final RunnerAnimationDispatcher animationDispatcher;
 
@@ -85,6 +88,10 @@ public class Runner extends Xenomorph implements EggCarrier, GOAPUser<Runner>, V
                 .build()
         );
         this.animationDispatcher = new RunnerAnimationDispatcher(this);
+        this.carveDigMode = new com.blib.api.common.data_sync.v1.DataAccessor<>(
+            this,
+            com.alien.common.registry.init.AlienDataSyncKeys.RUNNER_CARVE_DIG_MODE.get()
+        );
         this.eggPickupManager = new EggPickupManager(this);
         this.ventData = new VentData();
     }
@@ -148,6 +155,11 @@ public class Runner extends Xenomorph implements EggCarrier, GOAPUser<Runner>, V
     public void addAdditionalSaveData(@NotNull CompoundTag compoundTag) {
         super.addAdditionalSaveData(compoundTag);
         ventData.save(compoundTag);
+    }
+
+    @Override
+    public com.blib.api.common.data_sync.v1.DataAccessor<Integer> carveDigMode() {
+        return carveDigMode;
     }
 
     public RunnerAnimationDispatcher getAnimationDispatcher() {

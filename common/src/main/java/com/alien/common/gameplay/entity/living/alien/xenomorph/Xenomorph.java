@@ -145,6 +145,9 @@ public abstract class Xenomorph extends Alien implements ResinProducer, EntitySe
     /** Queen-only in use: true while she is hibernating (front-end Stage 3); drives the client hibernate pose. */
     public final DataAccessor<Boolean> isHibernating;
 
+    /** Queen-only in use: true while she is clip-digging to her anchor; drives the client dig animation. */
+    public final DataAccessor<Boolean> isDiggingSynced;
+
     public final DataAccessor<Integer> cocoonAnimationId;
 
     protected final CrawlingManager crawlingManager;
@@ -200,6 +203,7 @@ public abstract class Xenomorph extends Alien implements ResinProducer, EntitySe
         this.cocoonState = new DataAccessor<>(this, AlienDataSyncKeys.XENOMORPH_COCOON_STATE.get());
         this.cocoonSourceForm = new DataAccessor<>(this, AlienDataSyncKeys.XENOMORPH_COCOON_SOURCE_FORM.get());
         this.isHibernating = new DataAccessor<>(this, AlienDataSyncKeys.XENOMORPH_IS_HIBERNATING.get());
+        this.isDiggingSynced = new DataAccessor<>(this, AlienDataSyncKeys.XENOMORPH_IS_DIGGING.get());
         this.cocoonAnimationId = new DataAccessor<>(this, AlienDataSyncKeys.XENOMORPH_COCOON_ANIMATION_ID.get());
 
         this.crawlingManager = new CrawlingManager(this, isCrawling, config.canCrawl());
@@ -231,7 +235,11 @@ public abstract class Xenomorph extends Alien implements ResinProducer, EntitySe
     private PathNavigator createPathNavigator(Level level, XenomorphPathConfig pathConfig) {
         var followRange = (float) getAttributeValue(Attributes.FOLLOW_RANGE);
 
-        return createPathNavigator(level, pathConfig, SearchConfig.fromFollowRange(followRange));
+        return createPathNavigator(
+            level,
+            pathConfig,
+            SearchConfig.fromFollowRange(followRange).withElevationWeight(0.5f)
+        );
     }
 
     private PathNavigator createPathNavigator(Level level, XenomorphPathConfig pathConfig, SearchConfig searchConfig) {
@@ -323,7 +331,7 @@ public abstract class Xenomorph extends Alien implements ResinProducer, EntitySe
             searchConfig.maxSearchNodes(),
             searchConfig.heuristicWeight(),
             HIVE_INTRUDER_MAX_PATH_LENGTH,
-            searchConfig.elevationWeight()
+            0.5f
         );
     }
 
@@ -1199,6 +1207,10 @@ public abstract class Xenomorph extends Alien implements ResinProducer, EntitySe
             if (
                 entity instanceof Xenomorph xenomorph
                     && xenomorph != this
+                    // Only rally OWN-STRAIN xenomorphs: strains are always hostile to one another, so a rival
+                    // strain never answers this one's distress - if anything it is glad someone else is doing
+                    // the hurting.
+                    && java.util.Objects.equals(xenomorph.getVariant(), getVariant())
                     && xenomorph.getTarget() == null
                     && AlienPredicates.canAcquireTarget(xenomorph, attacker)
             ) {

@@ -28,4 +28,14 @@ public interface EggLayer {
     boolean hasOvipositor();
 
     Vec3 getEggLayingPosition();
+
+    /**
+     * Whether this layer is a pacified CAPTIVE breeder (an inhibited queen on her chained eggsack). Default false; only
+     * {@code Queen} overrides it. A captive breeder has no hauling drones, so her lay spot must be treated as a single
+     * occupied slot - she waits for the egg to be moved instead of stacking, and banks only a tiny reserve. (Safe as an
+     * interface method: isInhibited is NOT a remapped vanilla entity method, unlike isAlive/level/etc.)
+     */
+    default boolean isInhibited() {
+        return false;
+    }
 }

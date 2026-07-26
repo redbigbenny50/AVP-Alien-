@@ -1,0 +1,6 @@
+{
+  "parent": "avp_alien:block/irradiated_resin_vein",
+  "textures": {
+    "irradiated_resin_vein": "avp_alien:block/irradiated_resin_vein_2"
+  }
+}

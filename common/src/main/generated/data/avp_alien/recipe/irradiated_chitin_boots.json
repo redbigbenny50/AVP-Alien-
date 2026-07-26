@@ -1,0 +1,20 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "equipment",
+  "key": {
+    "C": {
+      "item": "avp_alien:irradiated_chitin"
+    },
+    "L": {
+      "tag": "c:ingots/lead"
+    }
+  },
+  "pattern": [
+    "CLC",
+    "C C"
+  ],
+  "result": {
+    "count": 1,
+    "id": "avp_alien:irradiated_chitin_boots"
+  }
+}

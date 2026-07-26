@@ -94,6 +94,11 @@ public class AlienItems {
         () -> new BlockItem(AlienBlocks.ANCHOR.get(), new Item.Properties())
     );
 
+    public static final BLibHolder<Item> JELLY_VAT = create(
+        "jelly_vat",
+        () -> new BlockItem(AlienBlocks.JELLY_VAT.get(), new Item.Properties())
+    );
+
     public static final BLibHolder<Item> CAPTURE_CHAIN = create(
         "capture_chain",
         () -> new CaptureChainItem(new Item.Properties())

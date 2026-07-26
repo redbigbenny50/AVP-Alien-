@@ -10,6 +10,8 @@ import net.minecraft.network.protocol.Packet;
 import net.minecraft.network.protocol.game.ClientGamePacketListener;
 import net.minecraft.network.protocol.game.ClientboundBlockEntityDataPacket;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.sounds.SoundEvents;
+import net.minecraft.sounds.SoundSource;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.level.block.Block;
@@ -99,6 +101,13 @@ public class AnchorBlockEntity extends BlockEntity {
         if (mob instanceof Queen queen) {
             queen.getBindManager().attach(getBlockPos());
         }
+        // Clank of the capture chain locking on. Played at the anchor (server-side so it carries to nearby
+        // clients); bind() is the single choke point every chain attach flows through, so this fires once per
+        // chain regardless of whether it's a queen shackle or a generic body attach.
+        if (level != null && !level.isClientSide) {
+            var p = getBlockPos();
+            level.playSound(null, p, SoundEvents.CHAIN_PLACE, SoundSource.BLOCKS, 1.0F, 1.0F);
+        }
         setChanged();
         syncToClients();
     }
@@ -112,6 +121,10 @@ public class AnchorBlockEntity extends BlockEntity {
         ) {
             queen.getBindManager().detach(getBlockPos());
         }
+        // Chain comes off the anchor. Guarded on boundMobId so a no-op release stays silent.
+        if (boundMobId != null && level != null && !level.isClientSide) {
+            level.playSound(null, getBlockPos(), SoundEvents.CHAIN_BREAK, SoundSource.BLOCKS, 1.0F, 1.0F);
+        }
         this.boundMobId = null;
         this.boundMobNetId = -1;
         setChanged();
@@ -120,7 +133,30 @@ public class AnchorBlockEntity extends BlockEntity {
 
     // ---- tick ----------------------------------------------------------------------------------------------------
 
+    /**
+     * Whether this anchor has announced itself to {@link AnchorIndex} yet. Registration happens on the first server
+     * tick rather than in a load hook: vanilla {@code BlockEntity} has no {@code onLoad} (that is a NeoForge addition,
+     * unavailable in common multiloader code), and ticking is the first point at which the level is reliably present.
+     */
+    private boolean indexed = false;
+
+    /** Covers unload and destruction alike - either way this anchor stops being a target for hive defenders. */
+    @Override
+    public void setRemoved() {
+        if (level != null) {
+            AnchorIndex.remove(level, getBlockPos());
+        }
+        indexed = false;
+        super.setRemoved();
+    }
+
     public void serverTick() {
+        // Announce to the index once. Defenders search that index rather than scanning the world for anchor
+        // blocks, which would be far too costly from a GOAP sensor.
+        if (!indexed && level != null) {
+            AnchorIndex.add(level, getBlockPos());
+            indexed = true;
+        }
         if (boundMobId == null || !(level instanceof ServerLevel server)) {
             return;
         }

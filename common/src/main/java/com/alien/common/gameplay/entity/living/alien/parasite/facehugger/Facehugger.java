@@ -83,6 +83,9 @@ public class Facehugger extends Parasite implements EntitySenseCacheUser, GOAPUs
     public void tick() {
         super.tick();
 
+        // Spent hugger (embryo implanted): despawn after a Minecraft day if nothing eats it.
+        com.alien.common.gameplay.entity.living.alien.MoltFeeding.tickRemainsLifetime(this);
+
         if (!level().isClientSide()) {
             data.tick();
 

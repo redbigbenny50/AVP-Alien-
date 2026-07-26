@@ -1,4 +1,15 @@
 {
+  "conditions": [
+    {
+      "type": "min_population",
+      "value": 50
+    },
+    {
+      "type": "max_entity_count_in_location",
+      "entity": "avp_alien:prowler",
+      "value": 70
+    }
+  ],
   "input_entities": [
     {
       "count": 1,

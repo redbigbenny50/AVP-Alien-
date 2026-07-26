@@ -19,6 +19,8 @@ import com.blib.api.common.entity.v1.vibration.VibrationSystemManager;
 import com.blib.api.common.goap.v1.GOAPUser;
 import com.just.ai.goap.graph.Graph;
 import com.just.core.functional.option.Option;
+import net.minecraft.core.BlockPos;
+import net.minecraft.nbt.CompoundTag;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
@@ -27,6 +29,7 @@ import net.minecraft.world.InteractionResult;
 import net.minecraft.world.damagesource.DamageSource;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.entity.LightningBolt;
 import net.minecraft.world.entity.Shearable;
 import net.minecraft.world.entity.ai.attributes.AttributeSupplier;
 import net.minecraft.world.entity.ai.attributes.Attributes;
@@ -73,9 +76,30 @@ public class Ovomorph extends Alien implements GOAPUser<Ovomorph>, Shearable {
 
     private final HatchManager hatchManager;
 
+    /** How long a reserved-but-uncollected egg waits before it re-broadcasts for a carrier (30s). */
+    private static final int PICKUP_CLAIM_TIMEOUT_TICKS = 20 * 30;
+
     public boolean pickupRequestAcknowledged;
 
+    /**
+     * Ticks this egg has sat reserved without anyone actually collecting it. An acknowledged egg goes SILENT (it stops
+     * broadcasting pickup requests), so if the worker that claimed it dies, unloads, or wanders off, the egg would wait
+     * forever and never be delivered. After {@link #PICKUP_CLAIM_TIMEOUT_TICKS} the claim lapses and it starts calling
+     * for a carrier again.
+     */
+    private int pickupClaimTicks;
+
     public boolean wantsPickup;
+
+    /**
+     * Host-delivery stamp: the host-chamber egg-drop cell this egg is designated for, or null when it is not
+     * host-bound. The stamp IS the delivery - it lives on the egg (not the hauler), survives reloads and changing
+     * hands, and is the ONLY thing the inbound-egg gate counts. Fresh clutch eggs and ordinary nursery hauls are
+     * unstamped, so they can never hide a host delivery or block one another. Set by the ferry on release (or by a
+     * carrier claiming a drop opportunistically); cleared on rooting or when the delivery is abandoned.
+     */
+    @Nullable
+    private BlockPos hostDropTarget;
 
     public Ovomorph(EntityType<? extends Ovomorph> entityType, Level level) {
         super(entityType, level);
@@ -112,11 +136,24 @@ public class Ovomorph extends Alien implements GOAPUser<Ovomorph>, Shearable {
         growthManager.tick();
         hatchManager.tick();
         vibrationSystemManager.tick();
+        // Spent shell (already hatched): despawn after a Minecraft day if nothing eats it.
+        com.alien.common.gameplay.entity.living.alien.MoltFeeding.tickRemainsLifetime(this);
 
         if (!level().isClientSide) {
             tryRaidFrenzyHatch();
 
             this.wantsPickup = canBePickedUp();
+
+            // Lapse a stale reservation: a claim that never turns into an actual pickup must not mute this egg
+            // forever (the claimer may have died, unloaded, or been pulled onto other work).
+            if (pickupRequestAcknowledged && wantsPickup && !isPassenger()) {
+                if (++pickupClaimTicks > PICKUP_CLAIM_TIMEOUT_TICKS) {
+                    this.pickupRequestAcknowledged = false;
+                    this.pickupClaimTicks = 0;
+                }
+            } else {
+                this.pickupClaimTicks = 0;
+            }
 
             if (!pickupRequestAcknowledged && wantsPickup && tickCount % 20 == 0) {
                 var alienVariantType = AlienVariantTypes.getFor(this);
@@ -141,6 +178,123 @@ public class Ovomorph extends Alien implements GOAPUser<Ovomorph>, Shearable {
             return;
         }
         tryHatch();
+    }
+
+    public @Nullable BlockPos getHostDropTarget() {
+        return hostDropTarget;
+    }
+
+    public void setHostDropTarget(@Nullable BlockPos hostDropTarget) {
+        this.hostDropTarget = hostDropTarget == null ? null : hostDropTarget.immutable();
+    }
+
+    /**
+     * True while this egg is the designated in-flight delivery for {@code dropCell}: stamped for that exact cell, still
+     * deliverable (unhatched), and not yet rooted - either loose awaiting pickup or riding a hauler. This is the
+     * identity test the inbound-egg gate runs; proximity alone never counts.
+     */
+    public boolean isHostBoundInTransit(BlockPos dropCell) {
+        return dropCell.equals(hostDropTarget)
+            && isAlive()
+            && getHatchState().contains(HatchState.SLEEPING)
+            && (!isRooted.get() || isPassenger());
+    }
+
+    private static final String NBT_HOST_DROP_TARGET = "HostDropTarget";
+
+    @Override
+    public void addAdditionalSaveData(@NotNull CompoundTag compoundTag) {
+        super.addAdditionalSaveData(compoundTag);
+        if (hostDropTarget != null) {
+            compoundTag.putLong(NBT_HOST_DROP_TARGET, hostDropTarget.asLong());
+        }
+    }
+
+    @Override
+    public void readAdditionalSaveData(@NotNull CompoundTag compoundTag) {
+        super.readAdditionalSaveData(compoundTag);
+        this.hostDropTarget = compoundTag.contains(NBT_HOST_DROP_TARGET)
+            ? BlockPos.of(compoundTag.getLong(NBT_HOST_DROP_TARGET))
+            : null;
+    }
+
+    /**
+     * Natural aberrant genesis, mirroring the villager-to-witch precedent: lightning striking a normal or nether egg
+     * mutates it into an aberrant egg (royal eggs mutate into royal aberrant eggs). This is the only way to create
+     * aberrants in avp_alien without the AVPHuman genetic system. Eggs only - adults are never converted. Aberrant and
+     * irradiated eggs take the strike like any other mob.
+     * <p>
+     * The replacement keeps the egg's physical state (hatch state, spawn count, rooted, name, persistence) but
+     * deliberately drops hive-logistics state (pickup claims, host-delivery stamp) and lineage membership - the old
+     * lineage would treat the mutated egg as a rival anyway, and the variant-faction auto-join on entity load slots the
+     * new egg into the aberrant variant faction on its own. When the nether-aberrant strain exists, the nether egg
+     * mapping here is the one line to retarget.
+     */
+    @Override
+    public void thunderHit(@NotNull ServerLevel serverLevel, @NotNull LightningBolt lightningBolt) {
+        var target = aberrantConversionTarget();
+
+        if (target == null) {
+            super.thunderHit(serverLevel, lightningBolt);
+            return;
+        }
+
+        if (replaceWith(serverLevel, target) == null) {
+            super.thunderHit(serverLevel, lightningBolt);
+        }
+    }
+
+    /**
+     * Swaps this egg for one of another type in place, carrying the state an egg should keep across a mutation:
+     * hatch progress, spawn count, rooting, custom name, persistence. Deliberately DROPS hive-logistics state
+     * (pickup claims, host-delivery stamps) and lineage membership - the variant faction re-homes the new egg on
+     * load, and a mutated egg's old lineage would treat it as a rival anyway. Shared by every egg conversion
+     * (lightning aberrant genesis, royal jelly promotion) so the paths cannot drift apart. Returns the new egg, or
+     * null when the type could not be created.
+     */
+    private @Nullable Ovomorph replaceWith(ServerLevel serverLevel, EntityType<? extends Ovomorph> target) {
+        var converted = target.create(serverLevel);
+
+        if (converted == null) {
+            return null;
+        }
+
+        converted.copyPosition(this);
+        converted.hatchStateId.set(this.hatchStateId.get());
+        converted.maxSpawnCount.set(this.maxSpawnCount.get());
+        converted.isRooted.set(this.isRooted.get());
+
+        if (hasCustomName()) {
+            converted.setCustomName(getCustomName());
+            converted.setCustomNameVisible(isCustomNameVisible());
+        }
+
+        if (isPersistenceRequired()) {
+            converted.setPersistenceRequired();
+        }
+
+        serverLevel.addFreshEntity(converted);
+        discard();
+
+        return converted;
+    }
+
+    /**
+     * The aberrant egg type a lightning strike turns this egg into, or {@code null} when this egg's strain does not
+     * convert (aberrant and irradiated lines).
+     */
+    private @Nullable EntityType<Ovomorph> aberrantConversionTarget() {
+        var type = getType();
+
+        if (type == AlienEntityTypes.OVOMORPH.get() || type == AlienEntityTypes.NETHER_OVOMORPH.get()) {
+            return AlienEntityTypes.ABERRANT_OVOMORPH.get();
+        }
+
+        if (type == AlienEntityTypes.ROYAL_OVOMORPH.get() || type == AlienEntityTypes.ROYAL_NETHER_OVOMORPH.get()) {
+            return AlienEntityTypes.ROYAL_ABERRANT_OVOMORPH.get();
+        }
+
+        return null;
     }
 
     public boolean canBeHeld() {
@@ -182,6 +336,20 @@ public class Ovomorph extends Alien implements GOAPUser<Ovomorph>, Shearable {
             itemStack.hurtAndBreak(1, player, getSlotForHand(interactionHand));
 
             return InteractionResult.SUCCESS;
+        } else if (!isRoyal() && itemStack.is(com.alien.common.registry.init.item.AlienItems.RAW_ROYAL_JELLY.get())) {
+            // ROYAL JELLY PROMOTION: feeding raw royal jelly to an ordinary egg makes it a ROYAL egg. This replaces
+            // the old Metamorphosis-potion path (removed from the growth stages) - royalty is now something you
+            // deliberately invest in, one egg and one jelly at a time, instead of a side effect of splashing a
+            // potion across a clutch. Irradiated eggs have no royal form, so getType returns null and the jelly is
+            // left in hand.
+            var royalType = getType(getVariant(), true);
+
+            if (royalType != null && level() instanceof ServerLevel serverLevel) {
+                if (replaceWith(serverLevel, royalType) != null) {
+                    itemStack.consume(1, player);
+                    return InteractionResult.SUCCESS;
+                }
+            }
         } else if (!isRooted.get() && itemStack.is(resinBallItem)) {
             level().playSound(null, this, AlienSoundEvents.ENTITY_OVOMORPH_ROOT.get(), SoundSource.PLAYERS, 1.0F, 1.0F);
             isRooted.set(true);

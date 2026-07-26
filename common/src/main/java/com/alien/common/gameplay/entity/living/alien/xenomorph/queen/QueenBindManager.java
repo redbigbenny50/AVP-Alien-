@@ -71,6 +71,20 @@ public class QueenBindManager {
     // ---- attach / detach ----
 
     /** Register a chain from {@code anchorPos}. The first chain locks the bind chunk to the queen's current chunk. */
+    /**
+     * Chance that securing THIS chain jolts a downed queen awake. Escalating - the final securing chain is by far the
+     * riskiest, so the closer you are to owning her, the more likely you are to lose her.
+     */
+    private static double wakeChanceForChain(int chainNumber) {
+        return switch (chainNumber) {
+            case 1 -> 0.05;
+            case 2 -> 0.10;
+            case 3 -> 0.20;
+            case 4 -> 0.40;
+            default -> 0.0; // chains 5-8 are belt-and-braces on an already-secured queen
+        };
+    }
+
     public void attach(BlockPos anchorPos) {
         if (anchors.size() >= MAX_CHAINS || anchors.contains(anchorPos)) {
             return;
@@ -79,6 +93,15 @@ public class QueenBindManager {
             bindChunk = new ChunkPos(queen.blockPosition());
         }
         anchors.add(anchorPos.immutable());
+
+        // Chaining a DOWNED queen is the capture race: every chain you fit is another roll that she comes round
+        // in your hands. Waking here does not undo the chains already on her - she simply wakes up wearing them.
+        if (queen.isIncapacitated()) {
+            var chance = wakeChanceForChain(anchors.size());
+            if (chance > 0.0 && queen.getRandom().nextDouble() < chance) {
+                queen.getIncapacitationManager().healRescue();
+            }
+        }
     }
 
     /** Drop the chain from {@code anchorPos}. Clearing the last chain releases the bind chunk. */
@@ -212,6 +235,35 @@ public class QueenBindManager {
         }
         if (tag.contains(TAG_BIND_CHUNK)) {
             bindChunk = new ChunkPos(tag.getLong(TAG_BIND_CHUNK));
+        }
+    }
+
+    /**
+     * Reconcile persisted chains against the world once, after load. An anchor broken while the queen was UNLOADED
+     * never ran its release() -> detach() (that resolves the queen via getEntity, which returns null for an unloaded
+     * entity), so she can reload still bound to an anchor block that no longer exists - and stay permanently clamped by
+     * a phantom chain. Drop any anchor whose block is no longer a live AnchorBlockEntity bound to HER. Mirror of the
+     * anchor-side self-heal in AnchorBlockEntity.serverTick.
+     */
+    public void onLoaded() {
+        if (queen.level().isClientSide() || anchors.isEmpty()) {
+            return;
+        }
+        var survivors = new java.util.ArrayList<BlockPos>(anchors.size());
+        for (var anchorPos : anchors) {
+            if (
+                queen.level().getBlockEntity(anchorPos) instanceof AnchorBlockEntity anchor
+                    && queen.getUUID().equals(anchor.getBoundMobId())
+            ) {
+                survivors.add(anchorPos);
+            }
+        }
+        if (survivors.size() != anchors.size()) {
+            anchors.clear();
+            anchors.addAll(survivors);
+            if (anchors.isEmpty()) {
+                bindChunk = null;
+            }
         }
     }
 

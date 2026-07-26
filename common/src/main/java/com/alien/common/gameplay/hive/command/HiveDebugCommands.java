@@ -72,6 +72,7 @@ public final class HiveDebugCommands {
             .then(Commands.literal("list_tracked").executes(HiveDebugCommands::listTracked))
             .then(Commands.literal("dump_indexes").executes(HiveDebugCommands::dumpIndexes))
             .then(Commands.literal("inhibit_here").executes(HiveDebugCommands::inhibitHere))
+            .then(Commands.literal("web_host").executes(HiveDebugCommands::webHost))
             .then(
                 Commands.literal("inspect_location")
                     .then(
@@ -202,6 +203,11 @@ public final class HiveDebugCommands {
                     .requires(CommandSourceStack::isPlayer)
                     .executes(HiveDebugCommands::toggleRender)
             )
+            .then(
+                Commands.literal("router")
+                    .requires(CommandSourceStack::isPlayer)
+                    .executes(HiveDebugCommands::toggleRouter)
+            )
             .then(Commands.literal("force_emergence_scan").executes(HiveDebugCommands::forceEmergenceScan))
             .then(Commands.literal("inspect_settlement").executes(HiveDebugCommands::inspectSettlement))
             .then(
@@ -218,6 +224,32 @@ public final class HiveDebugCommands {
                     .then(
                         Commands.argument(LOCATION_ID_ARG, ResourceLocationArgument.id())
                             .executes(HiveDebugCommands::forceMigration)
+                    )
+            )
+            .then(
+                Commands.literal("inspect_hunters")
+                    .requires(CommandSourceStack::isPlayer)
+                    .executes(HiveDebugCommands::inspectHunters)
+            )
+            .then(
+                Commands.literal("clear_parties")
+                    .requires(CommandSourceStack::isPlayer)
+                    .executes(HiveDebugCommands::clearParties)
+            )
+            .then(
+                Commands.literal("force_party")
+                    .requires(CommandSourceStack::isPlayer)
+                    .then(
+                        Commands.literal("host_hunt")
+                            .executes(ctx -> forceParty(ctx, "host_hunt"))
+                    )
+                    .then(
+                        Commands.literal("biomass_hunting")
+                            .executes(ctx -> forceParty(ctx, "biomass_hunting"))
+                    )
+                    .then(
+                        Commands.literal("surface_spawn")
+                            .executes(ctx -> forceParty(ctx, "surface_spawn"))
                     )
             )
             .then(
@@ -263,7 +295,9 @@ public final class HiveDebugCommands {
                     .then(
                         Commands.argument(LOCATION_ID_ARG, ResourceLocationArgument.id())
                             .then(
-                                Commands.argument(COUNT_ARG, IntegerArgumentType.integer(1))
+                                // Negative amounts allowed on purpose: draining biomass is how testers trigger
+                                // construction starvation on demand. The executor clamps the balance at zero.
+                                Commands.argument(COUNT_ARG, IntegerArgumentType.integer())
                                     .executes(HiveDebugCommands::addBiomass)
                             )
                     )
@@ -284,6 +318,288 @@ public final class HiveDebugCommands {
      * current chunk. An inhibited location runs no autonomy (claims/biomass/spawning/contests) — used to verify the
      * gate before the real queen-driven claim lifecycle (Slice B2) wires it.
      */
+    /**
+     * Force-dispatch a party from the hive whose claim the player is standing in, reporting exactly which gate blocked
+     * it when nothing spawns (the dispatchers are otherwise silent about refusals).
+     */
+    /**
+     * Drop every active party for the hive you are standing in, so a new one can be dispatched immediately. Parties
+     * hold a slot for their whole duration (5 min), which makes iterating on party behaviour painful: force_party just
+     * answers "there is already one".
+     */
+    /**
+     * Dump what every nearby xenomorph thinks it is doing about host hunting: is it a party member, does the party
+     * still exist, does it see a quarry, and is an attack target blocking the capture goal.
+     */
+    private static int inspectHunters(com.mojang.brigadier.context.CommandContext<CommandSourceStack> ctx) {
+        var source = ctx.getSource();
+        var player = source.getPlayer();
+        if (player == null) {
+            source.sendFailure(Component.literal("Must be run by a player."));
+            return 0;
+        }
+        var box = player.getBoundingBox().inflate(48.0);
+        var aliens = player.level()
+            .getEntitiesOfClass(
+                com.alien.common.gameplay.entity.living.alien.xenomorph.Xenomorph.class,
+                box
+            );
+        if (aliens.isEmpty()) {
+            source.sendSuccess(() -> Component.literal("No xenomorphs within 48 blocks."), false);
+            return 1;
+        }
+        for (var alien : aliens) {
+            var membership = alien.partyMembership();
+            var onHunt = com.alien.common.gameplay.entity.living.alien.xenomorph.ai.host.HostHuntDuty
+                .isOnHostHunt(alien);
+            var quarry = com.alien.common.gameplay.entity.living.alien.xenomorph.ai.host.HostSensors
+                .findCaptureTarget(alien);
+            var target = alien.getTarget();
+            var carrying = com.alien.common.gameplay.hive.party.HostCaptureTask.isCarryingHost(alien);
+            var line = alien.getType().getDescription().getString()
+                + " @" + alien.blockPosition().toShortString()
+                + " | party=" + (membership == null ? "NONE" : "yes")
+                + " onHunt=" + onHunt
+                + " quarry=" + (quarry == null ? "none" : quarry.getType().getDescription().getString())
+                + " attackTarget=" + (target == null ? "none" : target.getType().getDescription().getString())
+                + " carrying=" + carrying;
+            source.sendSuccess(() -> Component.literal(line), false);
+        }
+        return 1;
+    }
+
+    private static int clearParties(com.mojang.brigadier.context.CommandContext<CommandSourceStack> ctx) {
+        var source = ctx.getSource();
+        var player = source.getPlayer();
+        if (player == null) {
+            source.sendFailure(Component.literal("Must be run by a player."));
+            return 0;
+        }
+        var chunk = new ChunkPos(player.blockPosition());
+        var dimension = player.level().dimension();
+        HiveLocation target = null;
+        for (var location : HiveLocationRegistry.INSTANCE.all()) {
+            if (
+                location.isAlive()
+                    && location.dimension().equals(dimension)
+                    && location.claimedChunks().contains(chunk)
+            ) {
+                target = location;
+                break;
+            }
+        }
+        if (target == null) {
+            source.sendFailure(Component.literal("Stand inside a hive claim."));
+            return 0;
+        }
+        var cleared = target.parties().size();
+        // Strip membership from any loaded member first, or they linger as orphans whose party no longer exists.
+        var memberBox = player.getBoundingBox().inflate(256.0);
+        for (
+            var alien : player.level()
+                .getEntitiesOfClass(
+                    com.alien.common.gameplay.entity.living.alien.Alien.class,
+                    memberBox
+                )
+        ) {
+            if (alien.partyMembership() != null) {
+                alien.clearPartyMembership();
+            }
+        }
+        target.parties().clear();
+        source.sendSuccess(
+            () -> Component.literal("Cleared " + cleared + " active part(y/ies). You can dispatch again now."),
+            true
+        );
+        return 1;
+    }
+
+    private static int forceParty(
+        com.mojang.brigadier.context.CommandContext<CommandSourceStack> ctx,
+        String partyType
+    ) {
+        var source = ctx.getSource();
+        var player = source.getPlayer();
+        if (player == null) {
+            source.sendFailure(Component.literal("Must be run by a player."));
+            return 0;
+        }
+        if (!(player.level() instanceof net.minecraft.server.level.ServerLevel level)) {
+            source.sendFailure(Component.literal("Server level only."));
+            return 0;
+        }
+        var chunk = new ChunkPos(player.blockPosition());
+        var dimension = player.level().dimension();
+        HiveLocation target = null;
+        for (var location : HiveLocationRegistry.INSTANCE.all()) {
+            if (
+                location.isAlive()
+                    && location.dimension().equals(dimension)
+                    && location.claimedChunks().contains(chunk)
+            ) {
+                target = location;
+                break;
+            }
+        }
+        if (target == null) {
+            source.sendFailure(Component.literal("Stand inside a hive claim to dispatch one of its parties."));
+            return 0;
+        }
+
+        var config = HiveLocationRegistry.INSTANCE.config();
+        var server = source.getServer();
+
+        // Report the common gates up-front - a silent no-op is the usual confusion when testing parties.
+        // Host hunts need a SURFACE vent; biomass and attack will also take a FRONTIER one.
+        var vents = "host_hunt".equals(partyType)
+            ? com.alien.common.gameplay.hive.party.PartyVentUtil.findSurfaceVents(level, target)
+            : com.alien.common.gameplay.hive.party.PartyVentUtil.findPartyVents(level, target);
+        if (!"surface_spawn".equals(partyType) && vents.isEmpty()) {
+            source.sendFailure(
+                Component.literal(
+                    "This hive has no near-surface vent, so it cannot dispatch that party. Surface-spawn parties "
+                        + "seed those vents - run force_party surface_spawn first."
+                )
+            );
+            return 0;
+        }
+        if (
+            "host_hunt".equals(partyType)
+                && com.alien.common.gameplay.hive.structure.HostChamberSlots.firstFreeSpot(level, target) == null
+        ) {
+            source.sendFailure(
+                Component.literal(
+                    "No free host-chamber spot: the hive will not hunt hosts it has nowhere to put."
+                )
+            );
+            return 0;
+        }
+
+        // Name the EXACT gate - "already active or reserves empty" was useless when testing.
+        for (var party : target.parties()) {
+            boolean sameType = switch (partyType) {
+                case "host_hunt" -> party instanceof com.alien.common.gameplay.hive.party.HiveParty.HostHunt;
+                case "biomass_hunting" ->
+                    party instanceof com.alien.common.gameplay.hive.party.HiveParty.BiomassHunting;
+                case "surface_spawn" ->
+                    party instanceof com.alien.common.gameplay.hive.party.HiveParty.SurfaceSpawn;
+                default -> false;
+            };
+            if (sameType) {
+                source.sendFailure(
+                    Component.literal(
+                        "A " + partyType + " party is ALREADY active (one at a time). Run "
+                            + "/avp_alien debug hive clear_parties to drop it, then dispatch again."
+                    )
+                );
+                return 0;
+            }
+        }
+
+        // Host hunts are DRONES only - no drones in the reserve pool means nothing to send.
+        if ("host_hunt".equals(partyType)) {
+            var hasDrones = false;
+            for (var type : target.localReserves().getAvailableEntityTypes()) {
+                if (type.is(com.alien.common.registry.tag.AlienEntityTypeTags.DRONES)) {
+                    hasDrones = true;
+                    break;
+                }
+            }
+            if (!hasDrones) {
+                source.sendFailure(
+                    Component.literal(
+                        "No DRONES in the reserve pool - host hunts are drones only. Let the hive grow some, or use "
+                            + "/avp_alien debug hive add_reserve."
+                    )
+                );
+                return 0;
+            }
+        }
+
+        var before = target.parties().size();
+        switch (partyType) {
+            // An arrow case takes ONE statement - each of these needs a block, since a forced dispatch must first
+            // clear the 3-day cooldown or it is silently eaten by the timer and looks like a bug.
+            case "host_hunt" -> {
+                target.setLastHostHuntPartyTick(0L);
+                com.alien.common.gameplay.hive.party.HostHuntPartyDispatch.tryRun(server, target, config);
+            }
+            case "biomass_hunting" -> {
+                target.setLastBiomassPartyTick(0L);
+                com.alien.common.gameplay.hive.party.BiomassHuntingPartyDispatch.tryRun(server, target, config);
+            }
+            case "surface_spawn" -> {
+                target.setLastSurfacePartyTick(0L);
+                com.alien.common.gameplay.hive.party.SurfacePartyDispatch.tryRun(server, target, config);
+            }
+            default -> {
+                source.sendFailure(Component.literal("Unknown party type: " + partyType));
+                return 0;
+            }
+        }
+
+        if (target.parties().size() > before) {
+            var dispatched = target; // effectively-final copy for the lambda
+            source.sendSuccess(
+                () -> Component.literal("Dispatched a " + partyType + " party for " + dispatched.id() + "."),
+                true
+            );
+            return 1;
+        }
+        source.sendFailure(
+            Component.literal(
+                "Dispatch refused. Most likely: a party of that type is already active, or the reserves are empty "
+                    + "(check /avp_alien debug hive inspect_location)."
+            )
+        );
+        return 0;
+    }
+
+    private static int webHost(com.mojang.brigadier.context.CommandContext<CommandSourceStack> ctx) {
+        var source = ctx.getSource();
+        var player = source.getPlayer();
+        if (player == null) {
+            source.sendFailure(Component.literal("Must be run by a player."));
+            return 0;
+        }
+        if (!(player.level() instanceof net.minecraft.server.level.ServerLevel level)) {
+            source.sendFailure(Component.literal("Server level only."));
+            return 0;
+        }
+        var chunk = new ChunkPos(player.blockPosition());
+        var dimension = player.level().dimension();
+        HiveLocation target = null;
+        for (var location : HiveLocationRegistry.INSTANCE.all()) {
+            if (
+                location.isAlive()
+                    && location.dimension().equals(dimension)
+                    && location.claimedChunks().contains(chunk)
+            ) {
+                target = location;
+                break;
+            }
+        }
+        if (target == null) {
+            source.sendFailure(Component.literal("No hive location claims this chunk."));
+            return 0;
+        }
+        var spot = com.alien.common.gameplay.hive.structure.HostChamberSlots.firstFreeSpot(level, target);
+        if (spot == null) {
+            source.sendFailure(Component.literal("No free host-chamber web spot (is a host chamber built and loaded near you?)."));
+            return 0;
+        }
+        var villager = net.minecraft.world.entity.EntityType.VILLAGER.create(level);
+        if (villager == null) {
+            source.sendFailure(Component.literal("Failed to create test villager."));
+            return 0;
+        }
+        com.alien.common.gameplay.hive.structure.HostParking.embed(level, villager, spot.pos(), spot.facing());
+        level.addFreshEntity(villager);
+        final var placed = spot;
+        source.sendSuccess(() -> Component.literal("Webbed a test villager at " + placed.pos() + " facing " + placed.facing() + "."), true);
+        return 1;
+    }
+
     private static int inhibitHere(com.mojang.brigadier.context.CommandContext<CommandSourceStack> ctx) {
         var source = ctx.getSource();
         var player = source.getPlayer();
@@ -1005,7 +1321,12 @@ public final class HiveDebugCommands {
                 false
             );
         for (var pos : vents) {
-            ctx.getSource().sendSuccess(() -> Component.literal("  " + pos.toShortString()), false);
+            var kind = location.ventManager().kindOf(pos);
+            ctx.getSource()
+                .sendSuccess(
+                    () -> Component.literal("  " + pos.toShortString() + "  [" + (kind == null ? "?" : kind) + "]"),
+                    false
+                );
         }
         return vents.size();
     }
@@ -1022,7 +1343,7 @@ public final class HiveDebugCommands {
             ctx.getSource().sendFailure(Component.literal("No hive location with id " + locationId));
             return 0;
         }
-        location.setBiomass(location.biomass() + amount);
+        location.setBiomass(Math.max(0, location.biomass() + amount));
         ctx.getSource()
             .sendSuccess(
                 () -> Component.literal("Biomass for " + locationId + " is now " + location.biomass() + "."),
@@ -1484,6 +1805,20 @@ public final class HiveDebugCommands {
      * Toggles {@link com.alien.common.gameplay.hive.spawning.HiveLoadedSpawner#DEBUG_SPAWN_REJECTS}. While on, every
      * spawn attempt rejected for being outside a hive's slab is logged to the server console. Phase 1 debug aid.
      */
+    private static int toggleRouter(com.mojang.brigadier.context.CommandContext<CommandSourceStack> ctx) {
+        com.alien.common.gameplay.hive.structure.HiveRouter.ENABLED =
+            !com.alien.common.gameplay.hive.structure.HiveRouter.ENABLED;
+        boolean now = com.alien.common.gameplay.hive.structure.HiveRouter.ENABLED;
+        ctx.getSource()
+            .sendSuccess(
+                () -> Component.literal(
+                    "Blueprint router is now " + (now ? "ON (goal-based)" : "OFF (greedy planner)") + "."
+                ),
+                false
+            );
+        return now ? 1 : 0;
+    }
+
     private static int toggleRender(com.mojang.brigadier.context.CommandContext<CommandSourceStack> ctx) {
         var player = Objects.requireNonNull(ctx.getSource().getPlayer());
         var now = !com.alien.common.network.handler.HiveRenderToggleHandler.isEnabled(player.getUUID());
@@ -1797,7 +2132,7 @@ public final class HiveDebugCommands {
                     ok
                         ? "Raid dispatched against " + player.getGameProfile().getName()
                             + " from largest eligible source — see /list_convoys"
-                        : "Raid declined (no eligible source — needs empress + a location with " +
+                        : "Raid declined (no eligible source — needs a HARBINGER in a location with " +
                             HiveLocationRegistry.INSTANCE.config().raidMinLocationSizeChunks() + "+ chunks, " +
                             "and reserves that satisfy the " + waveProfile.totalSize() + "-member " +
                             lineage.variant().name() + " raid wave profile)"

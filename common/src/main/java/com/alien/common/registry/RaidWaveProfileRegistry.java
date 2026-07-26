@@ -15,6 +15,10 @@ public final class RaidWaveProfileRegistry {
 
     public static final ResourceLocation DEFAULT_ID = AlienResources.location("default");
 
+    public static final ResourceLocation REVENGE_ID = AlienResources.location("revenge");
+
+    public static final ResourceLocation RESCUE_ID = AlienResources.location("rescue");
+
     private static final Map<ResourceLocation, RaidWaveProfile> PROFILES = new LinkedHashMap<>();
 
     private RaidWaveProfileRegistry() {}
@@ -41,6 +45,31 @@ public final class RaidWaveProfileRegistry {
             return profile;
         }
         return active();
+    }
+
+    /**
+     * The revenge raid profile (queen killed): a datapack-registered {@code revenge} profile if present, else the
+     * built-in 3-wave {@link RaidWaveProfile#revengeFallback}. Distinct from {@link #forVariant} so revenge stays a
+     * shorter, sharper strike regardless of the variant's normal 5-wave profile.
+     */
+    public static RaidWaveProfile revenge() {
+        var profile = PROFILES.get(REVENGE_ID);
+        if (profile != null) {
+            return profile;
+        }
+        return RaidWaveProfile.revengeFallback();
+    }
+
+    /**
+     * The rescue raid profile (queen captured/lost): a datapack-registered {@code rescue} profile if present, else the
+     * built-in {@link RaidWaveProfile#rescueFallback}.
+     */
+    public static RaidWaveProfile rescue() {
+        var profile = PROFILES.get(RESCUE_ID);
+        if (profile != null) {
+            return profile;
+        }
+        return RaidWaveProfile.rescueFallback();
     }
 
     public static ResourceLocation profileIdFor(AlienVariant variant) {

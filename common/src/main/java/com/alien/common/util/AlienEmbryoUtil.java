@@ -29,6 +29,14 @@ import java.util.concurrent.TimeUnit;
 
 public class AlienEmbryoUtil {
 
+    /**
+     * Gestation length: when {@code embryoGrowthTimeInTicks} passes this, the chest-bursting phase begins. Public so
+     * the Metamorphosis effect can slam the clock here (burst now) and the Growth Suppression effect can rewind
+     * relative to it (five days out).
+     */
+    // TODO: Use data pack values here.
+    public static final int BURST_TIME_IN_TICKS = (int) (TimeUnit.MINUTES.toSeconds(5) * 20);
+
     public static void runAlienEmbryoRoutines(LivingEntity hostEntity) {
         var host = (Host) hostEntity;
         var level = hostEntity.level();
@@ -43,9 +51,25 @@ public class AlienEmbryoUtil {
         }
 
         if (host.getEmbryoType().isSome()) {
+            markIrradiatedEmbryo(hostEntity, host);
             tickAlienEmbryoGrowth(hostEntity);
         } else {
             host.removeEmbryo();
+        }
+    }
+
+    /**
+     * A host carrying an embryo who takes AVPHuman radiation marks that embryo for life: it will emerge destined for
+     * BOILER, and it will emerge even if the rads kill its host first. The mark is one-way - curing the host later does
+     * not un-mutate what is already growing. Soft dependency: no avp_human, no marking.
+     */
+    private static void markIrradiatedEmbryo(LivingEntity hostEntity, Host host) {
+        if (host.isEmbryoIrradiated()) {
+            return;
+        }
+        var radiation = Alien.radiationEffect();
+        if (radiation.isPresent() && hostEntity.hasEffect(radiation.get())) {
+            host.setEmbryoIrradiated(true);
         }
     }
 
@@ -59,8 +83,7 @@ public class AlienEmbryoUtil {
 
         host.incrementEmbryoGrowthTimeInTicks();
 
-        // TODO: Use data pack values here.
-        var burstTimeInTicks = TimeUnit.MINUTES.toSeconds(5) * 20;
+        var burstTimeInTicks = BURST_TIME_IN_TICKS;
         if (host.getEmbryoGrowthTimeInTicks() <= burstTimeInTicks) {
 
             if (hostEntity instanceof Player player) {
@@ -161,6 +184,24 @@ public class AlienEmbryoUtil {
 
         if (embryo instanceof Mob mob) {
             mob.setPersistenceRequired();
+        }
+
+        if (embryo instanceof Alien hostBornAlien) {
+            // Born of a host, not simulated out of a reserve bank. The flag is NBT-persisted and rides every growth
+            // transition, so the eventual ADULT still knows - which is what feeds the brood bank (hosts are real
+            // gains the hive earned, banked separately, uncapped, and drawn on before the main reserves).
+            hostBornAlien.setHostBorn(true);
+        }
+
+        if (embryo instanceof Alien witheredCandidate && host.isEmbryoWithered()) {
+            // The death sentence marked this embryo: it emerges withered - the player played god and made a demon.
+            witheredCandidate.setWithered(true);
+        }
+
+        if (embryo instanceof Alien irradiatedCandidate && host.isEmbryoIrradiated()) {
+            // Cooked in an irradiated womb: this one grows into a BOILER instead of the drone or runner its host
+            // would otherwise have produced. The mark rides every growth step to the adolescent -> adult transition.
+            irradiatedCandidate.setBoilerDestined(true);
         }
 
         if (embryo instanceof Alien alien) {

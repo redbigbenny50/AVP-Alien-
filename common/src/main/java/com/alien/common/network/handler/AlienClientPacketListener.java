@@ -3,12 +3,15 @@ package com.alien.common.network.handler;
 import com.alien.client.gui.ClientTrackerAlerts;
 import com.alien.client.gui.TrackingPdaScreen;
 import com.alien.client.render.CaptureHoldClientState;
+import com.alien.client.render.entity.head.HeadAttachmentClientCache;
 import com.alien.client.render.hive.ClientHiveRenderCache;
 import com.alien.common.gameplay.level.saveddata.TrackedQueenRow;
 import com.alien.common.network.payload.S2CCaptureHoldPayload;
+import com.alien.common.network.payload.S2CHeadAttachmentDataPayload;
 import com.alien.common.network.payload.S2CHiveInspectionPayload;
 import com.alien.common.network.payload.S2CHiveRenderDataPayload;
 import com.alien.common.network.payload.S2CTrackedQueensPayload;
+import com.alien.common.registry.HeadAttachmentRegistry;
 import com.alien.compatibility.blib_engine.client.inspector.ClientHiveInspectionCache;
 import net.minecraft.client.Minecraft;
 import net.minecraft.world.entity.player.Player;
@@ -34,6 +37,11 @@ public final class AlienClientPacketListener {
         } else {
             CaptureHoldClientState.put(payload.mobId(), payload.holderId());
         }
+    }
+
+    /** Server-pushed head-attachment profiles (join or datapack reload): rebake the client render cache. */
+    public static void handleHeadAttachmentData(S2CHeadAttachmentDataPayload payload, Player player) {
+        HeadAttachmentClientCache.replaceAll(HeadAttachmentRegistry.decodeAll(payload.data()));
     }
 
     /** Server-pushed hive render data for the debug wireframe overlay. */

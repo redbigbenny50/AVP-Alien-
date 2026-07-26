@@ -22,8 +22,6 @@ import java.util.Set;
 
 final class ConvoyMaterialization {
 
-    private static final int RAID_LAST_WAVE_INDEX = Convoy.Raid.WAVE_COUNT - 1;
-
     private static final int SPAWN_SEARCH_RADIUS_BLOCKS = 8;
 
     private static final int RAID_SPAWN_SEARCH_RADIUS_BLOCKS = 14;
@@ -54,7 +52,7 @@ final class ConvoyMaterialization {
             return 0;
         }
 
-        var waveIndex = Math.min(raid.nextWaveIndex(), RAID_LAST_WAVE_INDEX);
+        var waveIndex = Math.min(raid.nextWaveIndex(), raid.waveCount() - 1);
         var waveConfig = waveProfile.wave(waveIndex);
         if (!raid.canSpawnWave(currentTick, waveConfig.bufferTicks())) {
             if (raid.waveBreakStartedTick() < 0L && raid.materializedMembers().isEmpty()) {
@@ -76,7 +74,7 @@ final class ConvoyMaterialization {
     }
 
     private static List<EntityType<?>> selectRaidWave(ServerLevel level, Convoy.Raid raid, RaidWaveProfile waveProfile) {
-        var waveIndex = Math.min(raid.nextWaveIndex(), RAID_LAST_WAVE_INDEX);
+        var waveIndex = Math.min(raid.nextWaveIndex(), raid.waveCount() - 1);
         var waveConfig = waveProfile.wave(waveIndex);
         var desiredCount = Math.min(waveConfig.size(), raid.composition().getCount());
         var selected = new ArrayList<EntityType<?>>(desiredCount);

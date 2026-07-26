@@ -34,7 +34,13 @@ public class CarrierAnimator extends AzEntityAnimator<Carrier> {
 
     private boolean hasPrevEntityPosition;
 
-    private final CocoonAnimationStateTracker<Carrier> cocoonAnimationStateTracker = new CocoonAnimationStateTracker<>();
+    /**
+     * This caste authors an EMERGE-oriented molt clip ({@code molt.emerge}) rather than the {@code molt.enter} most
+     * castes ship, so it stays on the emerge-first path: the clip plays forwards to emerge and backwards to cocoon in.
+     * Left on the default it would ask for a {@code molt.enter} that does not exist.
+     */
+    private final CocoonAnimationStateTracker<Carrier> cocoonAnimationStateTracker =
+        new CocoonAnimationStateTracker<>(xenomorph -> "molting", xenomorph -> "molt.emerge");
 
     public CarrierAnimator() {
         super(AzAnimatorConfig.defaultConfig());

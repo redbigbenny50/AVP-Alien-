@@ -89,20 +89,31 @@ public class Queen extends Xenomorph implements GOAPUser<Queen>, EggLayer {
         .canCrawl(false)
         .build();
 
+    /**
+     * Must match {@code QueenLifecyclePhaseManager}'s phase tag — its absence in a save marks a pre-lifecycle queen.
+     */
+    private static final String LIFECYCLE_PHASE_TAG = "lifecyclePhase";
+
+    private static final String LEGACY_DORMANT_TAG = "legacyDormant";
+
+    private static final String LEGACY_DORMANT_COMPAT_TAG = "LegacyDormant";
+
     public static AttributeSupplier.Builder createQueenAttributes() {
         return Alien.createAlienAttributes()
             .add(Attributes.ARMOR, 16.0F)
             .add(Attributes.ARMOR_TOUGHNESS, 16.0F)
-            .add(Attributes.ATTACK_DAMAGE, PlayerStatConstants.BASE_HEALTH * 2.5F)
+            .add(Attributes.ATTACK_DAMAGE, PlayerStatConstants.BASE_HEALTH * 1F)
             .add(Attributes.FOLLOW_RANGE, 35F)
             .add(Attributes.KNOCKBACK_RESISTANCE, 1f)
-            .add(Attributes.MAX_HEALTH, PlayerStatConstants.BASE_HEALTH * 10F)
-            .add(Attributes.MOVEMENT_SPEED, PlayerStatConstants.BASE_WALK_SPEED * 0.9F);
+            .add(Attributes.MAX_HEALTH, PlayerStatConstants.BASE_HEALTH * 12.5F)
+            .add(Attributes.MOVEMENT_SPEED, PlayerStatConstants.BASE_WALK_SPEED * 1.1F);
     }
 
     private final QueenAnimationDispatcher animationDispatcher;
 
     private final OvipositorManager ovipositorManager;
+
+    private final QueenIncapacitationManager incapacitationManager;
 
     private final QueenData queenData;
 
@@ -116,15 +127,7 @@ public class Queen extends Xenomorph implements GOAPUser<Queen>, EggLayer {
 
     private final QueenBindManager bindManager;
 
-    private static final String LEGACY_DORMANT_TAG = "legacyDormant";
-
-    private static final String LEGACY_DORMANT_COMPAT_TAG = "LegacyDormant";
-
-    private static final String LIFECYCLE_PHASE_TAG = "lifecyclePhase";
-
-    private boolean legacyDormant;
-
-    private boolean loadedWithoutLifecycleState;
+    private final QueenRescueManager rescueManager;
 
     /**
      * Synced + persisted: whether the inhibitor device is attached. Drives the {@code gInhibitor} bone reveal and (in
@@ -134,23 +137,50 @@ public class Queen extends Xenomorph implements GOAPUser<Queen>, EggLayer {
 
     public final DataAccessor<Boolean> tracked;
 
+    /** Synced + persisted: the involuntary, defeat-induced downed state. Drives the incapacitated animations. */
+    public final DataAccessor<Boolean> incapacitated;
+
+    /**
+     * Synced, transient: true while she is carving her founding chamber (construction economy step 6). Set by the carve
+     * tick server-side; the client QueenAnimator drives the stand-dig animation triptych off its edges.
+     */
+    public final DataAccessor<Boolean> standDiggingSynced;
+
     /**
      * Transient: true while clip-digging to her location anchor (Stage 2b). Not saved — a reload never stays noclip.
      */
     private boolean digging;
 
+    /**
+     * Facing captured the moment she becomes a pacified captive breeder; held so she doesn't turn under the eggsack.
+     */
+    private Float containedYRotLock = null;
+
+    /**
+     * Legacy-recovery state. A queen saved before the lifecycle system existed loads without a {@code lifecyclePhase}
+     * tag; {@link #wasLoadedWithoutLifecycleState()} reports that so {@code LegacyHiveRecovery} can treat her as a
+     * legacy queen. She is parked {@link #isLegacyDormant() legacy-dormant} until recovery wakes her via
+     * {@link #wakeFromLegacyDormantRecovery()}, which hands her back to the normal lifecycle (LOCATION phase).
+     */
+    private boolean legacyDormant;
+
+    /** Transient: set at load time when the save carried no lifecycle-phase state (a pre-lifecycle-system queen). */
+    private boolean loadedWithoutLifecycleState;
+
     public Queen(EntityType<? extends Queen> entityType, Level level) {
         super(entityType, level, CONFIG);
         this.animationDispatcher = new QueenAnimationDispatcher(this);
         this.ovipositorManager = new OvipositorManager(this);
+        this.incapacitationManager = new QueenIncapacitationManager(this);
         this.queenData = new QueenData();
         this.lifecyclePhaseManager = new QueenLifecyclePhaseManager(this);
         this.bindChainCount = new DataAccessor<>(this, AlienDataSyncKeys.QUEEN_BIND_CHAIN_COUNT.get());
         this.bindManager = new QueenBindManager(this);
+        this.rescueManager = new QueenRescueManager(this);
         this.hasInhibitor = new DataAccessor<>(this, AlienDataSyncKeys.QUEEN_HAS_INHIBITOR.get());
         this.tracked = new DataAccessor<>(this, AlienDataSyncKeys.QUEEN_IS_TRACKED.get());
-        this.legacyDormant = false;
-        this.loadedWithoutLifecycleState = false;
+        this.incapacitated = new DataAccessor<>(this, AlienDataSyncKeys.QUEEN_IS_INCAPACITATED.get());
+        this.standDiggingSynced = new DataAccessor<>(this, AlienDataSyncKeys.QUEEN_IS_STAND_DIGGING.get());
     }
 
     @Override
@@ -174,6 +204,25 @@ public class Queen extends Xenomorph implements GOAPUser<Queen>, EggLayer {
         queenData.tick();
         lifecyclePhaseManager.tick();
         bindManager.tick();
+        rescueManager.tick();
+        incapacitationManager.tick();
+
+        // A pacified captive breeder holds still AND holds her FACING: idle look control would keep turning her body
+        // in place, twisting her against the eggsack that is anchored to her rotation. Capture her facing once when
+        // she enters the state and pin body + head to it every tick; release it when she is no longer contained.
+        if (isInhibited() && isRidingOvipositor()) {
+            if (containedYRotLock == null) {
+                // Capture the settled facing (yBodyRot is what the eggsack copied at creation) so body and
+                // eggsack hold the exact same angle.
+                containedYRotLock = yBodyRot;
+            }
+            setYRot(containedYRotLock);
+            yBodyRot = containedYRotLock;
+            yHeadRot = containedYRotLock;
+        } else if (containedYRotLock != null) {
+            containedYRotLock = null;
+        }
+
         if (isInhibited() && tickCount % 20 == 0 && level() instanceof ServerLevel serverLevel) {
             QueenInhibitionService.tickFollow(serverLevel, this);
         }
@@ -334,13 +383,75 @@ public class Queen extends Xenomorph implements GOAPUser<Queen>, EggLayer {
         return lifecyclePhaseManager;
     }
 
+    /**
+     * True if this queen was loaded from a save that predates the lifecycle system (no lifecycle-phase tag was
+     * present). Used by {@code LegacyHiveRecovery} to identify queens that need migrating into the current lifecycle.
+     */
+    public boolean wasLoadedWithoutLifecycleState() {
+        return loadedWithoutLifecycleState;
+    }
+
+    /** True while this queen is parked as a legacy-dormant queen awaiting recovery. */
+    public boolean isLegacyDormant() {
+        return legacyDormant;
+    }
+
+    /**
+     * Marks (or clears) this queen's legacy-dormant state. Persisted so she stays parked across reloads until woken.
+     */
+    public void setLegacyDormant(boolean dormant) {
+        this.legacyDormant = dormant;
+    }
+
+    /**
+     * Wakes a legacy-dormant queen and hands her back to the normal lifecycle: clears the dormant flag and the
+     * loaded-without-state marker, then restarts her LOCATION phase so she resumes founding/holding a hive under the
+     * current system. Safe to call on an already-awake queen (the flags simply clear and the phase restarts).
+     */
+    public void wakeFromLegacyDormantRecovery() {
+        this.legacyDormant = false;
+        this.loadedWithoutLifecycleState = false;
+        lifecyclePhaseManager.restartLocationPhase();
+    }
+
     public QueenBindManager getBindManager() {
         return bindManager;
+    }
+
+    /**
+     * Whether she is riding her ovipositor (the chained eggsack). Safe to call on the CLIENT: the ovipositor is a
+     * passenger of the queen, and passengers are vanilla-synced - unlike the server-only OvipositorManager.
+     */
+    public boolean isRidingOvipositor() {
+        return getPassengers()
+            .stream()
+            .anyMatch(passenger -> Objects.equals(passenger.getType(), AlienEntityTypes.OVIPOSITOR.get()));
+    }
+
+    /**
+     * A CAPTIVE breeder is pacified and stays put: an inhibited queen riding her chained eggsack must not shuffle
+     * around under idle AI, or her body drifts and rotates against the static eggsack that is anchored to her, leaving
+     * her off-centre and contorted. Freeze her movement in that state only. A FOUNDING/reproductive queen (rides an
+     * eggsack but is NOT inhibited) is untouched and can still shuffle to lay.
+     */
+    @Override
+    public void travel(@NotNull Vec3 vec3) {
+        if (isInhibited() && isRidingOvipositor()) {
+            // Freeze horizontal drift only - keep vertical velocity so gravity still settles her onto the ground
+            // if she was caught mid-air or on uneven terrain (a hard Vec3.ZERO would leave her hanging).
+            var v = getDeltaMovement();
+            setDeltaMovement(0.0, v.y, 0.0);
+            super.travel(Vec3.ZERO);
+            return;
+        }
+        super.travel(vec3);
     }
 
     /** Whether the inhibitor device is attached (synced + persisted). */
     @Override
     public void die(@NotNull DamageSource damageSource) {
+        // She is leaving the world - never leave her incapacitation bar stuck on a player's screen.
+        incapacitationManager.onRemoved();
         super.die(damageSource);
 
         if (level() instanceof ServerLevel serverLevel) {
@@ -350,11 +461,6 @@ public class Queen extends Xenomorph implements GOAPUser<Queen>, EggLayer {
 
     @Override
     public @NotNull InteractionResult mobInteract(@NotNull Player player, @NotNull InteractionHand hand) {
-        if (legacyDormant && !level().isClientSide) {
-            wakeFromLegacyDormantRecovery();
-            return InteractionResult.SUCCESS;
-        }
-
         var stack = player.getItemInHand(hand);
 
         // Pry the inhibitor off: sneak + right-click an inhibited queen with a sword or axe. Re-enables her autonomy,
@@ -398,24 +504,6 @@ public class Queen extends Xenomorph implements GOAPUser<Queen>, EggLayer {
         tracked.set(value);
     }
 
-    public boolean isLegacyDormant() {
-        return legacyDormant;
-    }
-
-    public boolean wasLoadedWithoutLifecycleState() {
-        return loadedWithoutLifecycleState;
-    }
-
-    public void setLegacyDormant(boolean dormant) {
-        this.legacyDormant = dormant;
-    }
-
-    public void wakeFromLegacyDormantRecovery() {
-        this.legacyDormant = false;
-        this.loadedWithoutLifecycleState = false;
-        lifecyclePhaseManager.restartLocationPhase();
-    }
-
     /**
      * Whether she is in the involuntary, defeat-induced incapacitated state (Part 2). Not yet implemented — the
      * incapacitation state machine (incap HP bar, kill/heal/self-recovery/capture exits) is a deferred feature, so this
@@ -423,7 +511,16 @@ public class Queen extends Xenomorph implements GOAPUser<Queen>, EggLayer {
      * below picks it up automatically.
      */
     public boolean isIncapacitated() {
-        return false; // TODO(Part 2 incapacitation): return the real downed-state flag once it exists.
+        return incapacitated.get();
+    }
+
+    /** Server-authoritative. Set by {@link QueenIncapacitationManager}; syncs and persists automatically. */
+    public void setIncapacitated(boolean value) {
+        incapacitated.set(value);
+    }
+
+    public QueenIncapacitationManager getIncapacitationManager() {
+        return incapacitationManager;
     }
 
     /**
@@ -463,6 +560,7 @@ public class Queen extends Xenomorph implements GOAPUser<Queen>, EggLayer {
         this.digging = digging;
         this.noPhysics = digging;
         setNoGravity(digging);
+        isDiggingSynced.set(digging);
     }
 
     @Override
@@ -475,6 +573,23 @@ public class Queen extends Xenomorph implements GOAPUser<Queen>, EggLayer {
 
     @Override
     public boolean hurt(DamageSource damageSource, float amount) {
+        // While DOWN, damage eats the incapacitation bar instead of her health - that bar IS the finisher. She
+        // only truly dies when it is drained to zero.
+        if (!level().isClientSide && isIncapacitated()) {
+            if (incapacitationManager.onDamageWhileDown(amount)) {
+                setIncapacitated(false);
+                setNoAi(false);
+                return super.hurt(damageSource, Float.MAX_VALUE); // finished off for real
+            }
+            return true; // absorbed by the bar
+        }
+
+        // A blow that WOULD kill her puts her down instead - unless her strain cannot be incapacitated, or she
+        // has been worn down too many times inside the window, in which case it is a real death.
+        if (!level().isClientSide && amount >= getHealth() && incapacitationManager.onLethalDamage()) {
+            return true;
+        }
+
         var wasHurt = super.hurt(damageSource, amount);
         if (wasHurt) {
             if (!level().isClientSide) {
@@ -514,25 +629,35 @@ public class Queen extends Xenomorph implements GOAPUser<Queen>, EggLayer {
     @Override
     public void readAdditionalSaveData(@NotNull CompoundTag compoundTag) {
         super.readAdditionalSaveData(compoundTag);
+        // A pre-lifecycle-system save carries neither the lifecycle-phase tag nor the legacy-dormant marker. Detect
+        // that
+        // BEFORE loading the managers so LegacyHiveRecovery can migrate her.
+        this.loadedWithoutLifecycleState =
+            !compoundTag.contains(LIFECYCLE_PHASE_TAG)
+                && !compoundTag.contains(LEGACY_DORMANT_TAG)
+                && !compoundTag.contains(LEGACY_DORMANT_COMPAT_TAG);
+        this.legacyDormant = compoundTag.getBoolean(LEGACY_DORMANT_TAG)
+            || compoundTag.getBoolean(LEGACY_DORMANT_COMPAT_TAG);
         ovipositorManager.load(compoundTag);
         queenData.load(compoundTag);
-        loadedWithoutLifecycleState = !compoundTag.contains(LIFECYCLE_PHASE_TAG)
-            && !compoundTag.contains(LEGACY_DORMANT_TAG)
-            && !compoundTag.contains(LEGACY_DORMANT_COMPAT_TAG);
         lifecyclePhaseManager.load(compoundTag);
         bindManager.load(compoundTag);
-        legacyDormant = compoundTag.getBoolean(LEGACY_DORMANT_TAG)
-            || compoundTag.getBoolean(LEGACY_DORMANT_COMPAT_TAG);
+        rescueManager.load(compoundTag);
+        bindManager.onLoaded(); // drop any chain whose anchor was broken while she was unloaded (phantom bind)
+        incapacitationManager.load(compoundTag);
+        incapacitationManager.onLoaded(); // a downed queen must not come back with her AI switched on
     }
 
     @Override
     public void addAdditionalSaveData(@NotNull CompoundTag compoundTag) {
         super.addAdditionalSaveData(compoundTag);
+        compoundTag.putBoolean(LEGACY_DORMANT_TAG, legacyDormant);
         ovipositorManager.save(compoundTag);
         queenData.save(compoundTag);
         lifecyclePhaseManager.save(compoundTag);
         bindManager.save(compoundTag);
-        compoundTag.putBoolean(LEGACY_DORMANT_TAG, legacyDormant);
+        rescueManager.save(compoundTag);
+        incapacitationManager.save(compoundTag);
     }
 
     public static EntityType<? extends Alien> getType(AlienVariant alienVariant) {

@@ -1,0 +1,7 @@
+{
+  "parent": "minecraft:block/cube_column",
+  "textures": {
+    "end": "avp_alien:block/irradiated_resin_spine_top",
+    "side": "avp_alien:block/irradiated_resin_spine"
+  }
+}

@@ -10,6 +10,7 @@ import com.alien.common.gameplay.hive.lifecycle.QueenSettlementDetector;
 import com.alien.common.gameplay.hive.location.HiveLocationRegistry;
 import com.alien.common.gameplay.level.saveddata.QueenSpawnChunkData;
 import com.alien.common.network.AlienNetworking;
+import com.alien.common.network.HeadAttachmentSync;
 import com.alien.common.property.AlienPropertyAccess;
 import com.alien.common.registry.GrowthStageRegistry;
 import com.alien.common.registry.InfectionRegistry;
@@ -32,6 +33,7 @@ import com.alien.common.registry.init.block.AberrantAlienResinBlocks;
 import com.alien.common.registry.init.block.AlienBlocks;
 import com.alien.common.registry.init.block.AlienChitinBlocks;
 import com.alien.common.registry.init.block.AlienResinBlocks;
+import com.alien.common.registry.init.block.IrradiatedAlienChitinBlocks;
 import com.alien.common.registry.init.block.IrradiatedAlienResinBlocks;
 import com.alien.common.registry.init.block.NetherAlienChitinBlocks;
 import com.alien.common.registry.init.block.NetherAlienResinBlocks;
@@ -44,6 +46,7 @@ import com.alien.common.registry.init.item.block.AberrantAlienResinBlockItems;
 import com.alien.common.registry.init.item.block.AlienBlockItems;
 import com.alien.common.registry.init.item.block.AlienChitinBlockItems;
 import com.alien.common.registry.init.item.block.AlienResinBlockItems;
+import com.alien.common.registry.init.item.block.IrradiatedAlienChitinBlockItems;
 import com.alien.common.registry.init.item.block.IrradiatedAlienResinBlockItems;
 import com.alien.common.registry.init.item.block.NetherAlienChitinBlockItems;
 import com.alien.common.registry.init.item.block.NetherAlienResinBlockItems;
@@ -80,8 +83,10 @@ public class Alien {
         NetherAlienResinBlocks.initialize();
         AberrantAlienChitinBlocks.initialize();
         AberrantAlienResinBlocks.initialize();
+        IrradiatedAlienChitinBlocks.initialize();
         IrradiatedAlienResinBlocks.initialize();
         AlienItems.initialize();
+
         AlienEntityTypes.initialize();
         AlienSoundEvents.initialize();
 
@@ -93,6 +98,7 @@ public class Alien {
         NetherAlienResinBlockItems.initialize();
         AberrantAlienChitinBlockItems.initialize();
         AberrantAlienResinBlockItems.initialize();
+        IrradiatedAlienChitinBlockItems.initialize();
         IrradiatedAlienResinBlockItems.initialize();
         // Depends on sound events.
         AlienArmorMaterials.initialize();
@@ -128,6 +134,9 @@ public class Alien {
         // Networking: hive inspection payloads (request/reply) for the engine workspace inspector.
         AlienNetworking.initialize();
 
+        // Facehugger head-attachment data: join/reload sync of the datapack-driven head profiles to clients.
+        HeadAttachmentSync.initialize();
+
         // Data Migration
         AlienDataMigrations.initialize();
 
@@ -142,6 +151,7 @@ public class Alien {
 
         MOD.events().onFactionsLoaded().register(Alien::rebuildHiveRegistryFromFactions);
         MOD.events().onServerStopped().register(server -> HiveLocationRegistry.INSTANCE.clear());
+        MOD.events().onServerStopped().register(server -> com.alien.common.gameplay.hive.structure.HivePieceRegistry.INSTANCE.clear());
 
         // Hive: defensive cleanup when any lineage faction is removed.
         MOD.events()
@@ -219,6 +229,10 @@ public class Alien {
 
         QueenSpawnChunkData.getOrCreate(level)
             .ifSome(QueenSpawnChunkData::tick);
+
+        if (level instanceof net.minecraft.server.level.ServerLevel serverLevel) {
+            com.alien.common.gameplay.entity.living.alien.xenomorph.queen.QueenNaturalSpawnTask.tick(serverLevel);
+        }
     }
 
     private static void onTagsUpdated(RegistryAccess registryAccess, boolean flag) {

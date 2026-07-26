@@ -5,6 +5,7 @@ import com.alien.client.animation.entity.cocoon.CocoonAnimationStateTracker;
 import com.alien.common.gameplay.entity.living.alien.xenomorph.AttackType;
 import com.alien.common.gameplay.entity.living.alien.xenomorph.drone.Drone;
 import com.alien.common.gameplay.entity.living.alien.xenomorph.drone.DroneAnimationRefs;
+import com.alien.common.registry.tag.AlienEntityTypeTags;
 import com.alien.common.util.AzAlienAnimationUtil;
 import com.alien.common.util.AzAlienHeadAnimationUtil;
 import com.blib.api.client.animation.v1.animator.AzAnimatorConfig;
@@ -84,14 +85,33 @@ public class DroneAnimator extends AzEntityAnimator<Drone> {
 
         var isMoving = drone.isMovingHorizontally.get() && drone.onGround();
         var isCrawling = drone.getCrawlingManager().isCrawling();
+        // Carve-crew gait (construction economy step 5): a rostered digger (1) or placer (2) plays walk dig -
+        // diggers at the default 70%, placers at 50% so the two read differently side by side.
+        //
+        // While rostered this is the ONLY passive animation the drone plays. It deliberately outranks swim, crawl,
+        // carry, run and idle: the carve gait is a long cycle (2.5s at 0.7 speed = 3.57s; placers 5s) and every
+        // switch to another animation restarts the track into its 5-tick transition. Carve work is start-stop by
+        // nature - step, dig, turn, step - and isMovingQuickly is a raw per-tick position-delta test with no
+        // hysteresis, so it chatters many times a second. Letting any of those states interleave meant the gait
+        // never advanced past its opening frames and the legs sat frozen in the t=0 stride pose.
+        //
+        // Real interruptions still win: lunge, attacks and the cocoon state all return above this point, and the
+        // roster clears carveDigMode the moment the drone leaves the crew.
+        var carveDigMode = drone.carveDigMode.get();
         Runnable animFunction;
 
-        if (drone.isUnderWater()) {
+        if (carveDigMode > 0) {
+            animFunction = carveDigMode == 2 ? () -> dispatcher.walkDig(0.5F) : dispatcher::walkDig;
+        } else if (drone.isUnderWater()) {
             // TODO: idle swim
             animFunction = dispatcher::swim;
         } else if (isMoving) {
             if (isCrawling) {
                 animFunction = () -> dispatcher.crawl(AzAlienAnimationUtil.crawlAnimationSpeed(drone));
+            } else if (isCarrying(drone)) {
+                // Laden. Takes precedence over run: there is no "run carry" animation, and a drone hauling an egg or a
+                // thrashing villager should not be sprinting anyway.
+                animFunction = dispatcher::walkCarry;
             } else if (drone.isMovingQuickly.get()) {
                 animFunction = dispatcher::run;
             } else {
@@ -103,6 +123,21 @@ public class DroneAnimator extends AzEntityAnimator<Drone> {
         }
 
         animFunction.run();
+    }
+
+    /**
+     * Is this drone hauling something? An egg on its back, or a host clutched to its chest.
+     * <p>
+     * Passengers are synced to the client already, so this needs no new network state - the animator can simply look.
+     */
+    private static boolean isCarrying(Drone drone) {
+        for (var passenger : drone.getPassengers()) {
+            var type = passenger.getType();
+            if (type.is(AlienEntityTypeTags.HOSTS) || type.is(AlienEntityTypeTags.OVOMORPHS)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private float calculateAttackSpeed(Drone drone, AttackType attackType) {

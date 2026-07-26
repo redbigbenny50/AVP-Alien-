@@ -67,6 +67,15 @@ public final class QueenInhibitionService {
             for (var location : new ArrayList<>(lineage.locationsById().values())) {
                 if (queen.getUUID().equals(location.founderId())) {
                     location.setFounderId(null); // null founder == queenless; the growth/economy tasks expect this
+                    // Record a PENDING rescue campaign on her original hive before the link is fully lost. It stays
+                    // pending (dispatches nothing) until RescueCampaignTask sees her contained AND carried outside this
+                    // claim — capture-in-place stays frenzy, not rescue. Captor is stamped later from her damage
+                    // source.
+                    if (location.rescueCampaign() == null) {
+                        location.setRescueCampaign(
+                            new com.alien.common.gameplay.hive.party.RescueCampaign(queen.getUUID())
+                        );
+                    }
                 }
                 var locationFaction = Alien.MOD.factions().get(location.id().value());
                 if (locationFaction != null) {
@@ -86,7 +95,7 @@ public final class QueenInhibitionService {
     /** Mints her personal single-chunk severed inhibited claim at the chunk she currently stands in. */
     private static void mintPersonalClaim(ServerLevel level, Queen queen) {
         var herChunk = new ChunkPos(queen.blockPosition());
-        var locationId = HiveLocationFoundingService.foundNewLineage(queen, queen.blockPosition());
+        var locationId = HiveLocationFoundingService.foundNewLineage(queen, queen.blockPosition(), false);
         var location = HiveLocationRegistry.INSTANCE.get(locationId);
         if (location == null) {
             Alien.LOGGER.warn(

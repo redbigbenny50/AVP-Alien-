@@ -42,6 +42,10 @@ public final class LineageInvariantTask {
         // 1. Variant invariants — evict variant-mismatched members.
         scanVariantInvariants();
 
+        // 1b. Rescue campaigns — promote/dispatch/resolve recovery for captured queens BEFORE maturation, so a
+        // resolved-or-exhausted campaign no longer blocks the firewall crowning this same scan.
+        com.alien.common.gameplay.hive.party.RescueCampaignTask.scanAll(server);
+
         // 2. Queenless lineage maturation — lets queenless lineages advance their leader through the queen-track
         // growth stages over time.
         QueenlessMaturationTask.scanAll(server);
@@ -69,8 +73,8 @@ public final class LineageInvariantTask {
     }
 
     private static void scanLineage(
-            com.blib.api.common.faction.v1.FactionMembership membership,
-            LineageFactionData lineage
+        com.blib.api.common.faction.v1.FactionMembership membership,
+        LineageFactionData lineage
     ) {
         var lineageVariant = lineage.variant();
         var mismatchedUuids = new HashSet<UUID>();
@@ -89,9 +93,9 @@ public final class LineageInvariantTask {
         if (removedReserveEntries > 0) {
             lineage.markDirty();
             Alien.LOGGER.info(
-                    "Hive: LineageInvariantTask removed {} variant-mismatched reserve entries from lineage variant={}",
-                    removedReserveEntries,
-                    lineageVariant
+                "Hive: LineageInvariantTask removed {} variant-mismatched reserve entries from lineage variant={}",
+                removedReserveEntries,
+                lineageVariant
             );
         }
 
@@ -103,9 +107,9 @@ public final class LineageInvariantTask {
     }
 
     private static void evictAll(
-            com.blib.api.common.faction.v1.FactionMembership membership,
-            Set<UUID> uuids,
-            LineageFactionData lineage
+        com.blib.api.common.faction.v1.FactionMembership membership,
+        Set<UUID> uuids,
+        LineageFactionData lineage
     ) {
         // Snapshot to avoid concurrent-modification when removeMember fires onMemberRemoved which mutates
         // location loadedMembersByType.
@@ -115,9 +119,9 @@ public final class LineageInvariantTask {
         }
 
         Alien.LOGGER.info(
-                "Hive: LineageInvariantTask evicted {} variant-mismatched member(s) from lineage variant={}",
-                snapshot.size(),
-                lineage.variant()
+            "Hive: LineageInvariantTask evicted {} variant-mismatched member(s) from lineage variant={}",
+            snapshot.size(),
+            lineage.variant()
         );
     }
 }

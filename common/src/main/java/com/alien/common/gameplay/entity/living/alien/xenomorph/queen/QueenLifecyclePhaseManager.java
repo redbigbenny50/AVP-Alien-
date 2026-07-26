@@ -1,8 +1,9 @@
 package com.alien.common.gameplay.entity.living.alien.xenomorph.queen;
 
 import com.alien.Alien;
+import com.alien.common.gameplay.hive.lifecycle.SpreadZoneCheck;
+import com.alien.common.gameplay.hive.location.HiveLocation;
 import com.alien.common.gameplay.hive.location.HiveLocationRegistry;
-import com.alien.common.gameplay.hive.location.HiveLocationSpacing;
 import com.alien.common.registry.tag.AlienBlockTags;
 import com.blib.api.common.nbt.v1.model.NBTSerializable;
 import net.minecraft.core.BlockPos;
@@ -111,6 +112,20 @@ public class QueenLifecyclePhaseManager implements NBTSerializable {
 
     private static final String HIBERNATION_TICKS_REMAINING_TAG = "lifecycleHibernationTicksRemaining";
 
+    private static final String WILD_SPAWNED_TAG = "lifecycleWildSpawned";
+
+    /** How often a hibernating WILD queen checks whether a nearby lineage should adopt her. */
+    private static final int WILD_ADOPTION_CHECK_INTERVAL_TICKS = 200;
+
+    /** A hive within this many chunks of a sleeping wild queen wakes and adopts her (matches the spawn margin). */
+    private static final int WILD_ADOPTION_RANGE_CHUNKS = 32;
+
+    /** Adoption only proceeds while the lineage is under its member-hive cap (mirrors maxLocationsPerLineage = 8). */
+    private static final int WILD_ADOPTION_LINEAGE_CAP = 8;
+
+    /** Players within this range hear the awakening broadcast when a wild queen's sleep runs out. */
+    private static final double WILD_AWAKENING_BROADCAST_RANGE = 256.0;
+
     private final Queen queen;
 
     private QueenLifecyclePhase phase;
@@ -123,6 +138,9 @@ public class QueenLifecyclePhaseManager implements NBTSerializable {
      * Sub-state within HIBERNATION (Stage 3b). Transient — a reload simply restarts her ASLEEP, which is acceptable.
      */
     private HibernationActivity hibernationActivity = HibernationActivity.ASLEEP;
+
+    /** True for naturally spawned (wild) queens: enables the adoption check and the awakening broadcast. */
+    private boolean wildSpawned;
 
     /** Ticks she has been threat-free while DEFENDING; at {@link #HIBERNATION_CALM_TICKS} she heads back. Transient. */
     private int disturbanceCalmTicks;
@@ -249,6 +267,98 @@ public class QueenLifecyclePhaseManager implements NBTSerializable {
      * re-hibernates before trying to found again. If she is genuinely boxed in (no far-enough chunk within the search
      * radius) the re-pick returns her current chunk and she simply retries on the next cycle.
      */
+    /**
+     * Entry point for naturally spawned WILD queens: she takes root where she spawned and sleeps. The hibernation clock
+     * only runs while her chunk is entity-ticking, so undisturbed wilderness queens sleep indefinitely - it is
+     * sustained player activity in the area that accumulates the {@link #HIBERNATION_DURATION_TICKS} that finally wakes
+     * her. A solid hit rouses her to defend as usual; a nearby lineage may adopt her (see {@code tryWildAdoption}).
+     */
+    /**
+     * RESCUE AFTERMATH, path B (rescuers belong to a lineage): the freed queen joins their lineage as a DAUGHTER QUEEN
+     * through the same adoption recipe wild hibernating queens use - faction resolved, lineage cap enforced, membership
+     * joined, straight to FOUNDING_HANDOFF so she founds her own location UNDER that lineage. Returns false (and
+     * changes nothing) when the lineage is at its location cap - the caller then releases the rescuers home and the
+     * queen strikes out on her own.
+     */
+    public boolean tryAdoptIntoLineage(com.alien.common.gameplay.hive.location.HiveLocation location) {
+        if (!isEnabled()) {
+            return false;
+        }
+        var faction = Alien.MOD.factions().get(location.lineageFactionId());
+        if (
+            faction == null
+                || !(faction.data() instanceof com.alien.common.gameplay.hive.faction.LineageFactionData lineage)
+                || lineage.locationsById().size() >= WILD_ADOPTION_LINEAGE_CAP
+        ) {
+            return false;
+        }
+        com.alien.common.gameplay.hive.faction.LocationMembership.join(location, queen);
+        queen.isHibernating.set(false);
+        phase = QueenLifecyclePhase.FOUNDING_HANDOFF;
+        Alien.LOGGER.info(
+            "Queen lifecycle: freed queen {} adopted by lineage {} as a daughter queen — rescue debt honored",
+            queen.getUUID(),
+            location.lineageFactionId()
+        );
+        return true;
+    }
+
+    /**
+     * RESCUE AFTERMATH, paths A/B-overflow (no lineage to join): the freed queen strikes out for a den of her own
+     * through the SAME locating machinery every queen uses - {@code enterLocation()} commits a weighted-Y anchor and
+     * she digs to it, founding a fresh lineage at the end. No-op if she already holds a location or the machine is
+     * disabled.
+     */
+    public void beginFreedRelocation() {
+        if (!isEnabled() || phase == QueenLifecyclePhase.LOCATION || phase == QueenLifecyclePhase.FOUNDING_HANDOFF) {
+            return;
+        }
+        queen.isHibernating.set(false);
+        enterLocation();
+    }
+
+    public void beginWildHibernation() {
+        if (!isEnabled()) {
+            return;
+        }
+        this.wildSpawned = true;
+        this.anchor = queen.blockPosition();
+        this.hibernationTicksRemaining = HIBERNATION_DURATION_TICKS;
+        this.hibernationActivity = HibernationActivity.ASLEEP;
+        this.phase = QueenLifecyclePhase.HIBERNATION;
+        queen.isHibernating.set(true);
+
+        // A sleeping queen taking root nearby is not announced outright - but instincts notice. The italic whisper
+        // in her strain's color is the quiet tier: no scream, just dread. Waking her earns the scream.
+        broadcastToNearbyPlayers(
+            net.minecraft.network.chat.Component
+                .literal("Your instincts warn you danger is near...")
+                .withStyle(com.alien.common.data.AlienVariantTypes.getFor(queen).chatColor(), net.minecraft.ChatFormatting.ITALIC)
+        );
+    }
+
+    /**
+     * Entry point for THE FIRST wild queen of a world: no slumber, no waiting - she founds right away where she
+     * spawned, with her own genesis line as the world's hive-genesis announcement. Later wild queens use
+     * {@link #beginWildHibernation()} and are discovered, not announced.
+     */
+    public void beginWildImmediateFounding() {
+        if (!isEnabled()) {
+            return;
+        }
+        this.wildSpawned = true;
+        this.anchor = queen.blockPosition();
+        this.hibernationActivity = HibernationActivity.ASLEEP;
+        this.phase = QueenLifecyclePhase.FOUNDING_HANDOFF;
+        queen.isHibernating.set(false);
+        broadcastToNearbyPlayers(
+            net.minecraft.network.chat.Component
+                .literal("Something ancient screams towards the heavens...")
+                .withStyle(com.alien.common.data.AlienVariantTypes.getFor(queen).chatColor()),
+            true
+        );
+    }
+
     public void restartLocationPhase() {
         if (!isEnabled()) {
             return;
@@ -261,6 +371,30 @@ public class QueenLifecyclePhaseManager implements NBTSerializable {
     private void enterLocation() {
         var chunk = pickAnchorChunk();
         var targetY = pickTargetY();
+        // She digs down or settles level - never rises. If she is already at or below the rolled depth
+        // (spawned below her whole band on a deep/flat world, or in a cave), there is nowhere to dig down
+        // to, so anchor at her current Y and she settles in place instead of floating up to the band.
+        targetY = Math.min(targetY, queen.blockPosition().getY());
+        // GROUND SAFETY: the weighted band lands squarely in the deepslate lava-lake range. If the chunk is
+        // loaded, walk the anchor column UP from the rolled Y (she only ever digs down, so up is always
+        // reachable) until the anchor cell, its headroom, and its floor are all lava-free. Unloaded chunks are
+        // handled at arrival instead (the pocket carve seals hazards with resin).
+        if (
+            queen.level() instanceof ServerLevel foundingLevel
+                && foundingLevel.isLoaded(chunk.getWorldPosition())
+        ) {
+            var probe = chunk.getMiddleBlockPosition(targetY);
+            int maxY = queen.blockPosition().getY();
+            while (
+                probe.getY() < maxY
+                    && (foundingLevel.getBlockState(probe).liquid()
+                        || foundingLevel.getBlockState(probe.above()).liquid()
+                        || foundingLevel.getBlockState(probe.below()).liquid())
+            ) {
+                probe = probe.above();
+            }
+            targetY = probe.getY();
+        }
         this.anchor = chunk.getMiddleBlockPosition(targetY);
         this.phase = QueenLifecyclePhase.LOCATION;
 
@@ -330,6 +464,10 @@ public class QueenLifecyclePhaseManager implements NBTSerializable {
     private void tickHibernationAsleep() {
         queen.isHibernating.set(true);
 
+        if (wildSpawned && queen.tickCount % WILD_ADOPTION_CHECK_INTERVAL_TICKS == 0 && tryWildAdoption()) {
+            return;
+        }
+
         if (hibernationTicksRemaining > 0) {
             hibernationTicksRemaining--;
             return;
@@ -341,7 +479,108 @@ public class QueenLifecyclePhaseManager implements NBTSerializable {
             queen.getUUID(),
             anchor
         );
+
+        if (wildSpawned) {
+            broadcastWildAwakening();
+        }
+
         phase = QueenLifecyclePhase.FOUNDING_HANDOFF;
+    }
+
+    /**
+     * A sleeping wild queen inside a same-strain lineage's 32-chunk reach wakes and is adopted: she joins that
+     * lineage's membership (variant-gated by {@code LocationMembership.join}) and hands off to founding, so her hive
+     * becomes another member of the adopting lineage instead of starting a fresh one. Lineages at their member-hive cap
+     * leave her sleeping.
+     */
+    private boolean tryWildAdoption() {
+        if (!(queen.level() instanceof ServerLevel serverLevel)) {
+            return false;
+        }
+
+        var queenChunk = queen.chunkPosition();
+
+        for (var location : HiveLocationRegistry.INSTANCE.all()) {
+            if (!location.dimension().equals(serverLevel.dimension())) {
+                continue;
+            }
+            if (!java.util.Objects.equals(location.lineageVariantOrNull(), queen.getVariant())) {
+                continue;
+            }
+
+            var withinRange = false;
+            for (var chunk : location.claimedChunks()) {
+                if (
+                    Math.max(Math.abs(chunk.x - queenChunk.x), Math.abs(chunk.z - queenChunk.z)) <= WILD_ADOPTION_RANGE_CHUNKS
+                ) {
+                    withinRange = true;
+                    break;
+                }
+            }
+            if (!withinRange) {
+                continue;
+            }
+
+            var faction = Alien.MOD.factions().get(location.lineageFactionId());
+            if (
+                faction == null
+                    || !(faction.data() instanceof com.alien.common.gameplay.hive.faction.LineageFactionData lineage)
+                    || lineage.locationsById().size() >= WILD_ADOPTION_LINEAGE_CAP
+            ) {
+                continue;
+            }
+
+            com.alien.common.gameplay.hive.faction.LocationMembership.join(location, queen);
+            queen.isHibernating.set(false);
+            phase = QueenLifecyclePhase.FOUNDING_HANDOFF;
+            Alien.LOGGER.info(
+                "Queen lifecycle: wild queen {} adopted by lineage {} — waking to found",
+                queen.getUUID(),
+                location.lineageFactionId()
+            );
+            return true;
+        }
+
+        return false;
+    }
+
+    /** "You have awakened a slumbering nightmare" — sent to every player whose activity accumulated her sleep clock. */
+    private void broadcastWildAwakening() {
+        broadcastToNearbyPlayers(
+            net.minecraft.network.chat.Component
+                .literal("You have awakened a slumbering nightmare")
+                .withStyle(com.alien.common.data.AlienVariantTypes.getFor(queen).chatColor()),
+            true
+        );
+    }
+
+    /** Sends a wild-queen message to every player within {@link #WILD_AWAKENING_BROADCAST_RANGE} blocks of her. */
+    private void broadcastToNearbyPlayers(net.minecraft.network.chat.Component message) {
+        broadcastToNearbyPlayers(message, false);
+    }
+
+    /**
+     * As {@link #broadcastToNearbyPlayers(net.minecraft.network.chat.Component)}, optionally led by the queen's scream
+     * for the loud tiers (genesis and awakening). Sound and text share one audience so no player ever hears a scream
+     * without its line or reads a line without its scream. The hibernating whisper stays silent by design.
+     */
+    private void broadcastToNearbyPlayers(net.minecraft.network.chat.Component message, boolean withQueenScream) {
+        if (!(queen.level() instanceof ServerLevel serverLevel)) {
+            return;
+        }
+        for (var player : serverLevel.players()) {
+            if (player.distanceToSqr(queen) <= WILD_AWAKENING_BROADCAST_RANGE * WILD_AWAKENING_BROADCAST_RANGE) {
+                if (withQueenScream) {
+                    player.playNotifySound(
+                        com.alien.common.registry.init.AlienSoundEvents.ENTITY_QUEEN_SCREAM.get(),
+                        net.minecraft.sounds.SoundSource.MASTER,
+                        1,
+                        1
+                    );
+                }
+                player.sendSystemMessage(message);
+            }
+        }
     }
 
     /**
@@ -530,11 +769,28 @@ public class QueenLifecyclePhaseManager implements NBTSerializable {
             return;
         }
 
+        var resin = com.alien.common.data.AlienVariantTypes.getFor(queen.getVariant())
+            .resin()
+            .get()
+            .defaultBlockState();
         for (var dx = -ARRIVAL_POCKET_RADIUS; dx <= ARRIVAL_POCKET_RADIUS; dx++) {
             for (var dz = -ARRIVAL_POCKET_RADIUS; dz <= ARRIVAL_POCKET_RADIUS; dz++) {
+                // FLOOR SEAL: whatever is under each pocket cell, if it is liquid (a lava/water lake edge she
+                // dug into) it becomes her resin - the hive seals hazards rather than hibernating on them.
+                var floorPos = anchor.offset(dx, -1, dz);
+                if (serverLevel.getBlockState(floorPos).liquid()) {
+                    serverLevel.setBlock(floorPos, resin, 3);
+                }
                 for (var dy = 0; dy < ARRIVAL_POCKET_HEIGHT; dy++) {
                     var pos = anchor.offset(dx, dy, dz);
                     var state = serverLevel.getBlockState(pos);
+                    // Liquid in the pocket volume (lake edge) is sealed to resin at the RIM and cleared inside:
+                    // the outermost ring becomes a resin dam so the lake can't re-flood the pocket.
+                    if (state.liquid()) {
+                        boolean rim = Math.abs(dx) == ARRIVAL_POCKET_RADIUS || Math.abs(dz) == ARRIVAL_POCKET_RADIUS;
+                        serverLevel.setBlock(pos, rim ? resin : Blocks.AIR.defaultBlockState(), 3);
+                        continue;
+                    }
                     // Nothing to clear for air; never carve undiggable blocks (immune/unbreakable/block-entities).
                     if (state.isAir() || !isDiggable(serverLevel, pos)) {
                         continue;
@@ -557,10 +813,26 @@ public class QueenLifecyclePhaseManager implements NBTSerializable {
         var minimum = HiveLocationRegistry.INSTANCE.config().minimumHiveLocationDistanceChunks();
         var current = queen.chunkPosition();
 
-        if (HiveLocationSpacing.isFarEnoughFromExistingLocations(dimension, current, minimum)) {
+        // If she can already found where she stands, she does - no need to relocate at all.
+        if (SpreadZoneCheck.wouldAllow(queen, current)) {
             return current;
         }
 
+        // She can't found here (too close to a hive). Rather than crawl outward from HERSELF (which lands her at
+        // a distance that depends on where she happens to stand - up to the neighbour's whole spread zone), aim
+        // directly for the nearest hive's minimum-spacing RING: the closest legal chunk to her that sits exactly
+        // `minimum` chunks from that hive's centre. A daughter queen thus settles right at the 16-chunk gap, on
+        // the side facing her, and never digs further than she must.
+        var nearest = nearestLocation(dimension, current);
+        if (nearest != null) {
+            var ringPick = nearestFoundableOnSpacingRing(nearest, current, minimum);
+            if (ringPick != null) {
+                return ringPick;
+            }
+        }
+
+        // Fallback: no hive found to space away from (or its whole spacing ring was blocked). Crawl outward from
+        // her for the nearest foundable chunk - the old behaviour, kept only as a last resort.
         var random = queen.getRandom();
         for (var radius = 1; radius <= MAX_ANCHOR_SEARCH_RADIUS_CHUNKS; radius++) {
             var ring = farEnoughChunksInRing(current, radius, dimension, minimum);
@@ -572,7 +844,63 @@ public class QueenLifecyclePhaseManager implements NBTSerializable {
         return current;
     }
 
-    private static List<ChunkPos> farEnoughChunksInRing(
+    /** Nearest hive-location centre (Chebyshev, same-dimension) to {@code from}, or null if there are none. */
+    private HiveLocation nearestLocation(ResourceKey<Level> dimension, ChunkPos from) {
+        HiveLocation best = null;
+        var bestDistance = Integer.MAX_VALUE;
+        for (var location : HiveLocationRegistry.INSTANCE.all()) {
+            if (!location.dimension().equals(dimension)) {
+                continue;
+            }
+            var locChunk = new ChunkPos(location.centerPos());
+            var distance = Math.max(Math.abs(locChunk.x - from.x), Math.abs(locChunk.z - from.z));
+            if (distance < bestDistance) {
+                bestDistance = distance;
+                best = location;
+            }
+        }
+        return best;
+    }
+
+    /**
+     * The foundable chunk on {@code hive}'s minimum-spacing ring (Chebyshev square of radius {@code minimum} around its
+     * centre) that is closest to {@code toward} - i.e. the least she has to move to reach a legal 16-chunk gap. Walks
+     * the ring outward one step at a time so if the ideal ring is partly blocked (another hive's spread zone clips it)
+     * she takes the next-closest legal chunk rather than overshooting. Returns null only if no chunk from the ring out
+     * to the search cap is foundable.
+     */
+    private ChunkPos nearestFoundableOnSpacingRing(HiveLocation hive, ChunkPos toward, int minimum) {
+        var centre = new ChunkPos(hive.centerPos());
+        ChunkPos best = null;
+        var bestToward = Integer.MAX_VALUE;
+        for (var radius = minimum; radius <= MAX_ANCHOR_SEARCH_RADIUS_CHUNKS; radius++) {
+            for (var dx = -radius; dx <= radius; dx++) {
+                for (var dz = -radius; dz <= radius; dz++) {
+                    if (Math.max(Math.abs(dx), Math.abs(dz)) != radius) {
+                        continue; // ring border only
+                    }
+                    var candidate = new ChunkPos(centre.x + dx, centre.z + dz);
+                    if (!SpreadZoneCheck.wouldAllow(queen, candidate)) {
+                        continue;
+                    }
+                    var distToward = Math.max(
+                        Math.abs(candidate.x - toward.x),
+                        Math.abs(candidate.z - toward.z)
+                    );
+                    if (distToward < bestToward) {
+                        bestToward = distToward;
+                        best = candidate;
+                    }
+                }
+            }
+            if (best != null) {
+                return best; // closest ring with ANY foundable chunk wins; take the nearest chunk on it
+            }
+        }
+        return null;
+    }
+
+    private List<ChunkPos> farEnoughChunksInRing(
         ChunkPos center,
         int radius,
         ResourceKey<Level> dimension,
@@ -585,7 +913,7 @@ public class QueenLifecyclePhaseManager implements NBTSerializable {
                     continue; // border of the ring only
                 }
                 var candidate = new ChunkPos(center.x + dx, center.z + dz);
-                if (HiveLocationSpacing.isFarEnoughFromExistingLocations(dimension, candidate, minimum)) {
+                if (SpreadZoneCheck.wouldAllow(queen, candidate)) {
                     out.add(candidate);
                 }
             }
@@ -596,12 +924,22 @@ public class QueenLifecyclePhaseManager implements NBTSerializable {
     private int pickTargetY() {
         var random = queen.getRandom();
         var roll = random.nextInt(COMMON_WEIGHT + RARE_WEIGHT + VERY_RARE_WEIGHT);
+        int rolled;
         if (roll < COMMON_WEIGHT) {
-            return randomBetween(random, COMMON_Y_MIN, COMMON_Y_MAX);
+            rolled = randomBetween(random, COMMON_Y_MIN, COMMON_Y_MAX);
         } else if (roll < COMMON_WEIGHT + RARE_WEIGHT) {
-            return randomBetween(random, RARE_Y_MIN, RARE_Y_MAX);
+            rolled = randomBetween(random, RARE_Y_MIN, RARE_Y_MAX);
+        } else {
+            rolled = randomBetween(random, VERY_RARE_Y_MIN, VERY_RARE_Y_MAX);
         }
-        return randomBetween(random, VERY_RARE_Y_MIN, VERY_RARE_Y_MAX);
+        // The bands above are hand-tuned OVERWORLD depths; other dimensions have fundamentally different vertical
+        // shape (the Nether's floor is Y 0 - the deep bands would aim below its bedrock). Remap the rolled Y into
+        // this dimension's own depth band, preserving the weighted shape; identity in the overworld.
+        if (queen.level() instanceof ServerLevel bandLevel) {
+            var profile = com.alien.common.gameplay.hive.dimension.DimensionHiveProfiles.get(bandLevel);
+            rolled = com.alien.common.gameplay.hive.dimension.DimensionHiveProfiles.remapFromOverworldBand(rolled, profile);
+        }
+        return rolled;
     }
 
     private static int randomBetween(RandomSource random, int minInclusive, int maxInclusive) {
@@ -646,6 +984,8 @@ public class QueenLifecyclePhaseManager implements NBTSerializable {
         if (compoundTag.contains(HIBERNATION_TICKS_REMAINING_TAG)) {
             this.hibernationTicksRemaining = compoundTag.getInt(HIBERNATION_TICKS_REMAINING_TAG);
         }
+
+        this.wildSpawned = compoundTag.getBoolean(WILD_SPAWNED_TAG);
     }
 
     @Override
@@ -653,6 +993,7 @@ public class QueenLifecyclePhaseManager implements NBTSerializable {
         compoundTag.putString(PHASE_TAG, phase.name());
         compoundTag.putInt(DEVELOPING_TICKS_REMAINING_TAG, developingTicksRemaining);
         compoundTag.putInt(HIBERNATION_TICKS_REMAINING_TAG, hibernationTicksRemaining);
+        compoundTag.putBoolean(WILD_SPAWNED_TAG, wildSpawned);
         if (anchor != null) {
             compoundTag.putLong(ANCHOR_TAG, anchor.asLong());
         }

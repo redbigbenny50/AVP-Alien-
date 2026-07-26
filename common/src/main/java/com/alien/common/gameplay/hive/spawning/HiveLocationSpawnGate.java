@@ -6,6 +6,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.LevelAccessor;
+import net.minecraft.world.level.levelgen.Heightmap;
 import org.jetbrains.annotations.Nullable;
 
 /**
@@ -27,6 +28,9 @@ public final class HiveLocationSpawnGate {
     /**
      * Full spawn-rule check. Returns the location that would accept this spawn, or null if no location applies.
      */
+    /** How far BELOW the terrain surface a hive spawn must be. Keeps the brood underground, not on the lawn. */
+    private static final int SURFACE_CLEARANCE = 2;
+
     public static @Nullable HiveLocation findSpawnableLocation(
         LevelAccessor level,
         EntityType<?> entityType,
@@ -41,6 +45,19 @@ public final class HiveLocationSpawnGate {
         // with egg-laying, resin spread, and despawn-into-reserves routing, which must still work throughout the
         // claimed column). The vertical restriction belongs here, on the spawn-specific entry point only.
         if (!location.withinSlab(pos.getY())) {
+            return null;
+        }
+        // ...and never at or above the terrain surface.
+        //
+        // SLAB_HEIGHT is a FIXED 16 blocks above the hive floor, so a shallow hive (floor only a few blocks down,
+        // as on a custom world with a low surface) has the top of its band poking out ABOVE GROUND - and the hive
+        // was spawning its workers standing on the grass in daylight. A hive spawns its brood INSIDE itself;
+        // anything on the surface should have WALKED there or been DISPATCHED there as a party.
+        //
+        // Tested against the terrain height, not just canSeeSky: under a tree canopy or an overhang the sky is
+        // blocked while the spot is still very much outdoors.
+        var surfaceY = level.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, pos.getX(), pos.getZ());
+        if (pos.getY() >= surfaceY - SURFACE_CLEARANCE) {
             return null;
         }
 

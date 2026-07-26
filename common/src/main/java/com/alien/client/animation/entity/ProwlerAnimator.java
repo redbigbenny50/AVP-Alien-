@@ -30,26 +30,10 @@ public class ProwlerAnimator extends AzEntityAnimator<Prowler> {
 
     @Override
     public void registerTracks(AzAnimationTrackContainer<Prowler> animationTrackContainer) {
+        // Single track. The prowler was rebuilt from per-body-part clips onto whole-body ones, so the seven-track
+        // limb rig it used to need is gone - everything plays on BODY, exactly like the runner.
         animationTrackContainer.add(
             AzAnimationTrack.builder(this, AzAlienAnimationUtil.BODY)
-                .setTransitionLength(5)
-                .build(),
-            AzAnimationTrack.builder(this, AzAlienAnimationUtil.HEAD)
-                .setTransitionLength(5)
-                .build(),
-            AzAnimationTrack.builder(this, AzAlienAnimationUtil.LEFT_ARM)
-                .setTransitionLength(5)
-                .build(),
-            AzAnimationTrack.builder(this, AzAlienAnimationUtil.LEFT_LEG)
-                .setTransitionLength(5)
-                .build(),
-            AzAnimationTrack.builder(this, AzAlienAnimationUtil.RIGHT_ARM)
-                .setTransitionLength(5)
-                .build(),
-            AzAnimationTrack.builder(this, AzAlienAnimationUtil.RIGHT_LEG)
-                .setTransitionLength(5)
-                .build(),
-            AzAnimationTrack.builder(this, AzAlienAnimationUtil.TAIL)
                 .setTransitionLength(5)
                 .build()
         );
@@ -128,11 +112,11 @@ public class ProwlerAnimator extends AzEntityAnimator<Prowler> {
         String animationName;
 
         if (attackType == Prowler.BITE) {
-            animationName = ProwlerAnimationRefs.BITEATTACK_HEAD_ANIMATION_NAME;
+            animationName = ProwlerAnimationRefs.FULL_ATTACK_BITE_ANIMATION_NAME;
         } else if (attackType == Prowler.CLAW) {
-            animationName = ProwlerAnimationRefs.CLAWATTACKQUAD_RIGHTARM_ANIMATION_NAME;
+            animationName = ProwlerAnimationRefs.FULL_ATTACK_ARM_ANIMATION_NAME;
         } else if (attackType == Prowler.TAIL_QUAD) {
-            animationName = ProwlerAnimationRefs.TAILATTACKQUAD_TAIL_ANIMATION_NAME;
+            animationName = ProwlerAnimationRefs.FULL_ATTACK_TAIL_ANIMATION_NAME;
         } else {
             animationName = null;
         }

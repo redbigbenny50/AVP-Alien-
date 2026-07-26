@@ -24,7 +24,7 @@ public class NetherAlienMoltingProfileProvider {
                 AlienEntityTypes.ROYAL_NETHER_CHESTBURSTER.get(),
                 MoltingProfileConstants.CHESTBURSTER_START_SCALE,
                 MoltingProfileConstants.CHESTBURSTER_END_SCALE,
-                MoltingProfileConstants.CHESTBURSTER_PHASES
+                MoltingProfileConstants.ROYAL_CHESTBURSTER_PHASES
             )
         );
         biConsumer.accept(
@@ -33,7 +33,7 @@ public class NetherAlienMoltingProfileProvider {
                 AlienEntityTypes.NETHER_PREDALIEN_CHESTBURSTER.get(),
                 MoltingProfileConstants.CHESTBURSTER_START_SCALE,
                 MoltingProfileConstants.CHESTBURSTER_END_SCALE,
-                MoltingProfileConstants.CHESTBURSTER_PHASES
+                MoltingProfileConstants.PREDALIEN_CHESTBURSTER_PHASES
             )
         );
 
@@ -52,7 +52,7 @@ public class NetherAlienMoltingProfileProvider {
                 AlienEntityTypes.ROYAL_NETHER_ADOLESCENT.get(),
                 MoltingProfileConstants.ADOLESCENT_START_SCALE,
                 MoltingProfileConstants.ADOLESCENT_END_SCALE,
-                MoltingProfileConstants.ADOLESCENT_PHASES
+                MoltingProfileConstants.ROYAL_ADOLESCENT_PHASES
             )
         );
         biConsumer.accept(
@@ -61,7 +61,7 @@ public class NetherAlienMoltingProfileProvider {
                 AlienEntityTypes.NETHER_PREDALIEN_ADOLESCENT.get(),
                 MoltingProfileConstants.ADOLESCENT_START_SCALE,
                 MoltingProfileConstants.ADOLESCENT_END_SCALE,
-                MoltingProfileConstants.ADOLESCENT_PHASES
+                MoltingProfileConstants.PREDALIEN_ADOLESCENT_PHASES
             )
         );
 

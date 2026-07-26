@@ -19,8 +19,7 @@ public class FoodAndDrinksCreativeModeTabInitializer {
         acceptPotion(output, AlienPotions.LONG_BLOOD_LOSS);
         acceptPotion(output, AlienPotions.STRONG_BLOOD_LOSS);
         acceptPotion(output, AlienPotions.METAMORPHOSIS);
-        acceptPotion(output, AlienPotions.LONG_METAMORPHOSIS);
-        acceptPotion(output, AlienPotions.STRONG_METAMORPHOSIS);
+        acceptPotion(output, AlienPotions.GROWTH_SUPPRESSION);
         acceptPotion(output, AlienPotions.SCOURGE);
         acceptPotion(output, AlienPotions.LONG_SCOURGE);
         acceptPotion(output, AlienPotions.STRONG_SCOURGE);
@@ -29,8 +28,7 @@ public class FoodAndDrinksCreativeModeTabInitializer {
         acceptSplashPotion(output, AlienPotions.LONG_BLOOD_LOSS);
         acceptSplashPotion(output, AlienPotions.STRONG_BLOOD_LOSS);
         acceptSplashPotion(output, AlienPotions.METAMORPHOSIS);
-        acceptSplashPotion(output, AlienPotions.LONG_METAMORPHOSIS);
-        acceptSplashPotion(output, AlienPotions.STRONG_METAMORPHOSIS);
+        acceptSplashPotion(output, AlienPotions.GROWTH_SUPPRESSION);
         acceptSplashPotion(output, AlienPotions.SCOURGE);
         acceptSplashPotion(output, AlienPotions.LONG_SCOURGE);
         acceptSplashPotion(output, AlienPotions.STRONG_SCOURGE);
@@ -39,8 +37,7 @@ public class FoodAndDrinksCreativeModeTabInitializer {
         acceptLingeringPotion(output, AlienPotions.LONG_BLOOD_LOSS);
         acceptLingeringPotion(output, AlienPotions.STRONG_BLOOD_LOSS);
         acceptLingeringPotion(output, AlienPotions.METAMORPHOSIS);
-        acceptLingeringPotion(output, AlienPotions.LONG_METAMORPHOSIS);
-        acceptLingeringPotion(output, AlienPotions.STRONG_METAMORPHOSIS);
+        acceptLingeringPotion(output, AlienPotions.GROWTH_SUPPRESSION);
         acceptLingeringPotion(output, AlienPotions.SCOURGE);
         acceptLingeringPotion(output, AlienPotions.LONG_SCOURGE);
         acceptLingeringPotion(output, AlienPotions.STRONG_SCOURGE);

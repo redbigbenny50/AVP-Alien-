@@ -454,6 +454,25 @@ public sealed interface Convoy {
 
         private BlockPos lastKnownTargetPos;
 
+        /**
+         * How many waves this raid fires. Defaults to {@link #WAVE_COUNT} (5) for ordinary raids; a revenge raid sets
+         * it to 3 via {@link #setWaveCount}. Kept as a mutable field (rather than threaded through the constructor
+         * chain) to minimize churn across the many {@code Raid} constructor overloads.
+         */
+        private int waveCount = WAVE_COUNT;
+
+        /**
+         * True if this is a revenge raid (queen killed) rather than an ordinary kill-threshold raid. Drives the revenge
+         * wave profile lookup and 3-wave count. Set via {@link #markRevenge} at dispatch.
+         */
+        private boolean revenge = false;
+
+        /**
+         * True if this is a rescue raid (queen captured/lost) — tracks the player holding her; success = she's freed,
+         * not the target's death. Uses the rescue wave profile. Set via {@link #markRescue} at dispatch.
+         */
+        private boolean rescue = false;
+
         public Raid(
             ConvoyId id,
             ResourceLocation lineageFactionId,
@@ -855,6 +874,30 @@ public sealed interface Convoy {
             return nextWaveIndex;
         }
 
+        public int waveCount() {
+            return waveCount;
+        }
+
+        public void setWaveCount(int waveCount) {
+            this.waveCount = Math.max(1, waveCount);
+        }
+
+        public boolean isRevenge() {
+            return revenge;
+        }
+
+        public void markRevenge() {
+            this.revenge = true;
+        }
+
+        public boolean isRescue() {
+            return rescue;
+        }
+
+        public void markRescue() {
+            this.rescue = true;
+        }
+
         public void advanceWave() {
             nextWaveIndex++;
         }
@@ -941,7 +984,7 @@ public sealed interface Convoy {
         }
 
         public void beginWave(int waveIndex, int spawnedCount) {
-            this.activeWaveIndex = Math.clamp(waveIndex, 0, WAVE_COUNT - 1);
+            this.activeWaveIndex = Math.clamp(waveIndex, 0, waveCount - 1);
             this.activeWaveInitialCount = Math.max(1, spawnedCount);
             this.nextWaveIndex = Math.max(nextWaveIndex, this.activeWaveIndex + 1);
             this.waveBreakStartedTick = -1L;
@@ -984,9 +1027,9 @@ public sealed interface Convoy {
 
         public int displayWaveIndex() {
             if (activeWaveIndex >= 0 && (!materializedMembers().isEmpty() || composition().getCount() <= 0)) {
-                return Math.clamp(activeWaveIndex, 0, WAVE_COUNT - 1);
+                return Math.clamp(activeWaveIndex, 0, waveCount - 1);
             }
-            return Math.clamp(nextWaveIndex, 0, WAVE_COUNT - 1);
+            return Math.clamp(nextWaveIndex, 0, waveCount - 1);
         }
 
         public boolean returningHome() {
@@ -1031,7 +1074,7 @@ public sealed interface Convoy {
 
         public void rewindActiveWave() {
             if (activeWaveIndex >= 0) {
-                this.nextWaveIndex = Math.clamp(activeWaveIndex, 0, WAVE_COUNT - 1);
+                this.nextWaveIndex = Math.clamp(activeWaveIndex, 0, waveCount - 1);
             }
             this.activeWaveIndex = -1;
             this.activeWaveInitialCount = 0;

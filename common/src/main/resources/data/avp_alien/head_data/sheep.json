@@ -1,0 +1,15 @@
+{
+  "entity": "minecraft:sheep",
+  "size": [
+    6.0,
+    6.0,
+    8.0
+  ],
+  "pivot": [
+    0.0,
+    18.0,
+    -8.0
+  ],
+  "vertical_offset": -7.5,
+  "face_offset": 12.6667
+}

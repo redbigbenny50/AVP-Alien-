@@ -24,6 +24,7 @@ public sealed interface HiveUnitPurchaseCondition {
             case MinPopulation.TYPE -> MinPopulation.MAP_CODEC;
             case MinEntityCountInLocation.TYPE -> MinEntityCountInLocation.MAP_CODEC;
             case MaxEntityCountInLocation.TYPE -> MaxEntityCountInLocation.MAP_CODEC;
+            case MaxPerRaidChamber.TYPE -> MaxPerRaidChamber.MAP_CODEC;
             default -> throw new IllegalArgumentException("Unknown HiveUnitPurchaseCondition type: " + typeId);
         };
     }
@@ -79,6 +80,30 @@ public sealed interface HiveUnitPurchaseCondition {
                 BuiltInRegistries.ENTITY_TYPE.byNameCodec().fieldOf("entity").forGetter(MaxEntityCountInLocation::entity),
                 Codec.INT.fieldOf("value").forGetter(MaxEntityCountInLocation::value)
             ).apply(instance, MaxEntityCountInLocation::new)
+        );
+
+        @Override
+        public String typeId() {
+            return TYPE;
+        }
+    }
+
+    /**
+     * Count of {@code entity} must be strictly less than the hive's RAID CHAMBER count - one harbinger per chamber.
+     * <p>
+     * An ordinary hive only ever builds one raid chamber, so it gets exactly one harbinger: kill it and the hive is
+     * disabled until it grows another. A hive under EMPRESS influence may build a second, and so fields a second
+     * harbinger - which is what makes empress-backed hives able to keep raiding after you have decapitated one. That is
+     * the whole point: empress backing does not just share resources, it buys raid RESILIENCE.
+     */
+    record MaxPerRaidChamber(EntityType<?> entity) implements HiveUnitPurchaseCondition {
+
+        public static final String TYPE = "max_per_raid_chamber";
+
+        public static final MapCodec<MaxPerRaidChamber> MAP_CODEC = RecordCodecBuilder.mapCodec(
+            instance -> instance.group(
+                BuiltInRegistries.ENTITY_TYPE.byNameCodec().fieldOf("entity").forGetter(MaxPerRaidChamber::entity)
+            ).apply(instance, MaxPerRaidChamber::new)
         );
 
         @Override
