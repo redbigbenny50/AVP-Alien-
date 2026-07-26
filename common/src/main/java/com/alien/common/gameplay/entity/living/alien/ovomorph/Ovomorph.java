@@ -245,12 +245,12 @@ public class Ovomorph extends Alien implements GOAPUser<Ovomorph>, Shearable {
     }
 
     /**
-     * Swaps this egg for one of another type in place, carrying the state an egg should keep across a mutation: hatch
-     * progress, spawn count, rooting, custom name, persistence. Deliberately DROPS hive-logistics state (pickup claims,
-     * host-delivery stamps) and lineage membership - the variant faction re-homes the new egg on load, and a mutated
-     * egg's old lineage would treat it as a rival anyway. Shared by every egg conversion (lightning aberrant genesis,
-     * royal jelly promotion) so the paths cannot drift apart. Returns the new egg, or null when the type could not be
-     * created.
+     * Swaps this egg for one of another type in place, carrying the state an egg should keep across a mutation:
+     * hatch progress, spawn count, rooting, custom name, persistence. Deliberately DROPS hive-logistics state
+     * (pickup claims, host-delivery stamps) and lineage membership - the variant faction re-homes the new egg on
+     * load, and a mutated egg's old lineage would treat it as a rival anyway. Shared by every egg conversion
+     * (lightning aberrant genesis, royal jelly promotion) so the paths cannot drift apart. Returns the new egg, or
+     * null when the type could not be created.
      */
     private @Nullable Ovomorph replaceWith(ServerLevel serverLevel, EntityType<? extends Ovomorph> target) {
         var converted = target.create(serverLevel);
