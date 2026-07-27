@@ -237,6 +237,13 @@ public class AlienItems {
 
     public static final BLibHolder<Item> RAW_SCOURGE_JELLY = create("raw_scourge_jelly", RawScourgeJellyItem::new);
 
+    /**
+     * Registered plain for now. The other two raws were bare {@code create(name)} until they were given eating
+     * behaviour, and this one becomes {@code RawIrradiatedJellyItem::new} the moment its buffs are decided - a one-line
+     * change, which is why it is not worth inventing placeholder effects to fill the gap.
+     */
+    public static final BLibHolder<Item> RAW_IRRADIATED_JELLY = create("raw_irradiated_jelly");
+
     public static final BLibHolder<Item> RESIN_BALL = create("resin_ball");
 
     public static final BLibHolder<Item> ROYALTY_POTTERY_SHERD = create("royalty_pottery_sherd");

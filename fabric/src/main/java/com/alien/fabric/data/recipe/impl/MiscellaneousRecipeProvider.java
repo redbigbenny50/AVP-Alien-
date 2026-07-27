@@ -47,6 +47,19 @@ public class MiscellaneousRecipeProvider {
             .requires(1, AlienBlocks.SCOURGE_JELLY_BLOCK)
             .into(9, AlienItems.RAW_SCOURGE_JELLY);
 
+        builder.shaped()
+            .withCategory(RecipeCategory.MISC)
+            .define('I', AlienItems.RAW_IRRADIATED_JELLY)
+            .pattern("III")
+            .pattern("III")
+            .pattern("III")
+            .into(1, AlienBlocks.IRRADIATED_JELLY_BLOCK);
+
+        builder.shapeless()
+            .withCategory(RecipeCategory.MISC)
+            .requires(1, AlienBlocks.IRRADIATED_JELLY_BLOCK)
+            .into(9, AlienItems.RAW_IRRADIATED_JELLY);
+
         builder.shapeless()
             .withCategory(RecipeCategory.MISC)
             .requires(1, Items.POISONOUS_POTATO)

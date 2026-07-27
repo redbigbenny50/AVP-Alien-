@@ -88,6 +88,7 @@ public class JellyVatBlock extends BaseEntityBlock {
                 && level.getBlockEntity(pos) instanceof JellyVatBlockEntity vat
         ) {
             vat.setHiveVisible(true);
+            vat.adoptHiveStrain();
         }
     }
 

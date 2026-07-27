@@ -50,7 +50,7 @@ public class AlienPredicates {
         if (alien instanceof Queen boundQueen && boundQueen.getBindManager().isFullyBound()) {
             return false;
         }
-        if (isHelplessKinQueen(alien, potentialTarget)) {
+        if (isHelplessKinQueen(alien, potentialTarget) || isHelplessQueenStrikingKin(alien, potentialTarget)) {
             return false;
         }
         // A host on a drone's back is CARGO, not prey. The hive spent a whole party fetching it and is carrying it
@@ -258,6 +258,26 @@ public class AlienPredicates {
      * {@code retargetIfPossible} copies whatever the crier was already fighting straight onto a freshly summoned
      * defender. One definition, enforced at both doors.
      */
+    /**
+     * KIN MERCY, the other way round: a HELPLESS queen does not strike her own strain, whatever their lineage.
+     * <p>
+     * {@code QueenRescueManager.isEligibleRescuer} recruits on STRAIN ALONE - lineage is not consulted, because kin
+     * cross hive lines to free captive royalty. Her own hostility test does not: {@link #areAliensEnemies} counts a
+     * rival lineage as an enemy. So a rescuer from another lineage was simultaneously entitled to break her chains and
+     * a legitimate target for her while doing it, and she would maul whichever of her rescuers happened to be at war
+     * with her - intermittently, since the ones sharing her lineage were never valid targets anyway.
+     * <p>
+     * Mercy has to run both ways or it is not mercy. If her kind will cross the feud to free her, she does not get to
+     * open them up for it while they work. This lapses the moment she is free, and rival STRAINS are untouched by it -
+     * they were never coming to help.
+     */
+    public static boolean isHelplessQueenStrikingKin(@NotNull Alien alien, @NotNull LivingEntity potentialTarget) {
+        return alien instanceof Queen helplessQueen
+            && (helplessQueen.getBindManager().hasAnyChain() || helplessQueen.isIncapacitated())
+            && potentialTarget instanceof Alien kin
+            && !areAliensDifferentStrains(helplessQueen, kin);
+    }
+
     public static boolean isHelplessKinQueen(@NotNull Alien alien, @NotNull LivingEntity potentialTarget) {
         return potentialTarget instanceof Queen helplessQueen
             && (helplessQueen.getBindManager().hasAnyChain() || helplessQueen.isIncapacitated())

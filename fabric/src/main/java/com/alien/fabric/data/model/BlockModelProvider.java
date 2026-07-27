@@ -271,6 +271,7 @@ public class BlockModelProvider extends FabricModelProvider {
 
         generators.createNonTemplateModelBlock(AlienBlocks.ROYAL_JELLY_BLOCK.get());
         generators.createNonTemplateModelBlock(AlienBlocks.SCOURGE_JELLY_BLOCK.get());
+        generators.createNonTemplateModelBlock(AlienBlocks.IRRADIATED_JELLY_BLOCK.get());
 
         generators.family(AberrantAlienResinBlocks.ABERRANT_RESIN_BRICKS.get())
             .slab(AberrantAlienResinBlocks.ABERRANT_RESIN_BRICK_SLAB.get())

@@ -204,7 +204,11 @@ public abstract class Alien extends Monster implements DataUser {
         // convoy dispatch, hive territory aggro and CryForHelpListener.retargetIfPossible all hand a target straight
         // to a mob, and that last one copies whatever the crier was already fighting onto a newly summoned defender.
         // A chained queen reaching a defender that way would be clawed by her own kin with nothing to stop it.
-        if (livingEntity != null && AlienPredicates.isHelplessKinQueen(this, livingEntity)) {
+        if (
+            livingEntity != null
+                && (AlienPredicates.isHelplessKinQueen(this, livingEntity)
+                    || AlienPredicates.isHelplessQueenStrikingKin(this, livingEntity))
+        ) {
             return;
         }
 

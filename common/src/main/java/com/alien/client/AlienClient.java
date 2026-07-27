@@ -183,6 +183,7 @@ public class AlienClient {
 
         MOD.registries().registerBlockRenderLayer(AlienBlocks.ROYAL_JELLY_BLOCK, RenderType.translucent());
         MOD.registries().registerBlockRenderLayer(AlienBlocks.SCOURGE_JELLY_BLOCK, RenderType.translucent());
+        MOD.registries().registerBlockRenderLayer(AlienBlocks.IRRADIATED_JELLY_BLOCK, RenderType.translucent());
     }
 
     private static void registerEntityRenderers() {

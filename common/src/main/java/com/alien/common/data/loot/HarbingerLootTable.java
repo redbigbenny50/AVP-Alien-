@@ -1,7 +1,6 @@
 package com.alien.common.data.loot;
 
 import com.alien.common.model.alien.variant.AlienVariantType;
-import com.alien.common.registry.init.item.AlienItems;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.world.level.storage.loot.LootPool;
 import net.minecraft.world.level.storage.loot.LootTable;
@@ -19,7 +18,7 @@ public class HarbingerLootTable {
                 LootPool.lootPool()
                     .setRolls(ConstantValue.exactly(1))
                     .add(
-                        LootItem.lootTableItem(AlienItems.RAW_SCOURGE_JELLY.get())
+                        LootItem.lootTableItem(JellyLoot.scourgeJelly(alienVariantType))
                             .apply(SetItemCountFunction.setCount(UniformGenerator.between(0, 1)))
                             .apply(EnchantedCountIncreaseFunction.lootingMultiplier(provider, UniformGenerator.between(0, 1)))
                     )

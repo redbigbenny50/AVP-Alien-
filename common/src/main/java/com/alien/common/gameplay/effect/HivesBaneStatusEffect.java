@@ -36,6 +36,16 @@ public class HivesBaneStatusEffect extends MobEffect {
     /** Rank III across the board: vanilla amplifier 2. */
     public static final int RANK = 2;
 
+    /**
+     * The opening burst is rank I, NOT rank III like the poison and slowness beside it.
+     * <p>
+     * Rank III harming is {@code 6 << 2} = 24 damage, more than a player's entire health bar, so drinking this was a
+     * guaranteed death rather than a bad decision. Rank I is 6 - exactly a vanilla Potion of Harming, which is what it
+     * was always described as. Survivable at full health, lethal if you were already hurt, and still a real opening
+     * blow when the bottle is thrown at something.
+     */
+    private static final int OPENING_BURST_RANK = 0;
+
     /** Vanilla poison's cadence, {@code 25 >> amplifier}, evaluated at rank III. */
     private static final int POISON_INTERVAL_TICKS = 25 >> RANK;
 
@@ -58,8 +68,9 @@ public class HivesBaneStatusEffect extends MobEffect {
             return;
         }
 
-        // HARM is instantaneous - it lands and is gone, so it costs no second icon on the HUD.
-        livingEntity.addEffect(new MobEffectInstance(MobEffects.HARM, 1, RANK));
+        // Vanilla HARM, so this is a Potion of Harming in every respect - including that it HEALS the undead, which
+        // reads right for a venom brewed to ruin living tissue. It is instantaneous, so it costs no second HUD icon.
+        livingEntity.addEffect(new MobEffectInstance(MobEffects.HARM, 1, OPENING_BURST_RANK));
     }
 
     @Override

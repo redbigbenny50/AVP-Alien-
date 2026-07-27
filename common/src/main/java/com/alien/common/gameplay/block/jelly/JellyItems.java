@@ -17,16 +17,20 @@ public final class JellyItems {
 
     /** The raw-jelly item for a type (one item = one vat level). */
     public static Item rawItem(JellyType type) {
-        return type == JellyType.SCOURGE
-            ? AlienItems.RAW_SCOURGE_JELLY.get()
-            : AlienItems.RAW_ROYAL_JELLY.get();
+        return switch (type) {
+            case ROYAL -> AlienItems.RAW_ROYAL_JELLY.get();
+            case SCOURGE -> AlienItems.RAW_SCOURGE_JELLY.get();
+            case IRRADIATED -> AlienItems.RAW_IRRADIATED_JELLY.get();
+        };
     }
 
     /** The full jelly block for a type (one block = a full vat, 9 levels). */
     public static Block fullBlock(JellyType type) {
-        return type == JellyType.SCOURGE
-            ? AlienBlocks.SCOURGE_JELLY_BLOCK.get()
-            : AlienBlocks.ROYAL_JELLY_BLOCK.get();
+        return switch (type) {
+            case ROYAL -> AlienBlocks.ROYAL_JELLY_BLOCK.get();
+            case SCOURGE -> AlienBlocks.SCOURGE_JELLY_BLOCK.get();
+            case IRRADIATED -> AlienBlocks.IRRADIATED_JELLY_BLOCK.get();
+        };
     }
 
     /** The jelly type a raw-jelly item represents, or null if the item isn't raw jelly. */
@@ -37,6 +41,9 @@ public final class JellyItems {
         }
         if (stack.is(AlienItems.RAW_SCOURGE_JELLY.get())) {
             return JellyType.SCOURGE;
+        }
+        if (stack.is(AlienItems.RAW_IRRADIATED_JELLY.get())) {
+            return JellyType.IRRADIATED;
         }
         return null;
     }
@@ -49,6 +56,9 @@ public final class JellyItems {
         }
         if (stack.is(AlienBlocks.SCOURGE_JELLY_BLOCK.get().asItem())) {
             return JellyType.SCOURGE;
+        }
+        if (stack.is(AlienBlocks.IRRADIATED_JELLY_BLOCK.get().asItem())) {
+            return JellyType.IRRADIATED;
         }
         return null;
     }

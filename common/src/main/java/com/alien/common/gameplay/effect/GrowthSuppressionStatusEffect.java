@@ -51,6 +51,26 @@ public class GrowthSuppressionStatusEffect extends MobEffect {
 
     private static final int MAX_TOXICITY = 4;
 
+    /**
+     * What the host feels, one line per toxicity rung. The sickness itself is invisible - every rung wears the same
+     * effect icon, and rung IV's wither-grade damage has no distinct tell - so this is the only way a player can read
+     * how far the jelly has got. The last line doubles as the warning that the next dose flips the coin.
+     */
+    private static final String[] SICKNESS_MESSAGES = {
+        "You feel movement in your chest",
+        "The movement in your chest shifts, and will not settle",
+        "Something thrashes behind your ribs",
+        "Your chest is burning. The sickness has nowhere left to climb - one more dose and it decides for you"
+    };
+
+    /** Escalating with the words, so the ladder is legible at a glance without reading. */
+    private static final ChatFormatting[] SICKNESS_COLOURS = {
+        ChatFormatting.YELLOW,
+        ChatFormatting.GOLD,
+        ChatFormatting.RED,
+        ChatFormatting.DARK_RED
+    };
+
     /** Jelly Sickness durations per tier (I-IV): brief by design - the danger is the ratchet, not the tick damage. */
     private static final int[] SICKNESS_DURATION_TICKS = { 200, 240, 300, 400 };
 
@@ -177,6 +197,17 @@ public class GrowthSuppressionStatusEffect extends MobEffect {
                     toxicity - 1
                 )
             );
+
+            // A tell on every rung, not just the last. A player who only hears from their body once, at the very
+            // edge, has no way to know the ladder was being climbed at all - and the roll is a gamble, so the rungs
+            // do not arrive on a predictable schedule.
+            if (hostEntity instanceof Player warnedPlayer) {
+                var rung = Math.min(toxicity, SICKNESS_MESSAGES.length) - 1;
+                warnedPlayer.displayClientMessage(
+                    Component.literal(SICKNESS_MESSAGES[rung]).withStyle(SICKNESS_COLOURS[rung]),
+                    false
+                );
+            }
         }
     }
 }

@@ -2,6 +2,8 @@ package com.alien.common.gameplay.block.entity.jelly;
 
 import com.alien.common.gameplay.block.jelly.JellyType;
 import com.alien.common.gameplay.block.jelly.JellyVatBlock;
+import com.alien.common.gameplay.hive.location.HiveLocationRegistry;
+import com.alien.common.model.alien.variant.AlienVariant;
 import com.alien.common.registry.init.AlienBlockEntityTypes;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.HolderLookup;
@@ -9,8 +11,10 @@ import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.protocol.Packet;
 import net.minecraft.network.protocol.game.ClientGamePacketListener;
 import net.minecraft.network.protocol.game.ClientboundBlockEntityDataPacket;
+import net.minecraft.server.level.ServerLevel;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
+import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
@@ -36,6 +40,8 @@ public class JellyVatBlockEntity extends BlockEntity {
 
     private static final String TAG_HIVE_VISIBLE = "HiveVisible";
 
+    private static final String TAG_STRAIN = "Strain";
+
     private int fillLevel;
 
     /**
@@ -49,6 +55,15 @@ public class JellyVatBlockEntity extends BlockEntity {
      * Whether the hive may see this vat as jelly storage. Set for player-placed vats; consumed by the (future) economy.
      */
     private boolean hiveVisible;
+
+    /**
+     * Which strain of hive this vat belongs to. Purely cosmetic - it selects the vat's shell texture, since every
+     * strain grows its own - and it is SYNCED, unlike the two flags above, because only the client needs it.
+     * <p>
+     * Adopted from the owning hive the moment the vat first holds jelly, which is also when a structure-placed vat
+     * commits its type. A vat outside any hive (a player's, sitting in a basement) stays NORMAL.
+     */
+    private AlienVariant strain = AlienVariant.NORMAL;
 
     public JellyVatBlockEntity(BlockPos pos, BlockState state) {
         super(AlienBlockEntityTypes.JELLY_VAT.get(), pos, state);
@@ -125,10 +140,36 @@ public class JellyVatBlockEntity extends BlockEntity {
             return;
         }
         this.typeCommitted = true;
+        adoptHiveStrain();
         if (level != null && getJellyType() != type) {
             level.setBlock(getBlockPos(), getBlockState().setValue(JellyVatBlock.JELLY_TYPE, type), Block.UPDATE_CLIENTS);
         }
         setChanged();
+    }
+
+    public AlienVariant getStrain() {
+        return strain;
+    }
+
+    /**
+     * Takes the strain of whichever hive owns this chunk, if any. Server side only; pushes a block update so the client
+     * renderer picks up the new shell.
+     */
+    public void adoptHiveStrain() {
+        if (!(level instanceof ServerLevel serverLevel)) {
+            return;
+        }
+
+        var location = HiveLocationRegistry.INSTANCE.getByChunk(serverLevel.dimension(), new ChunkPos(getBlockPos()));
+        var variant = location == null ? AlienVariant.NORMAL : location.lineageVariantOrNull();
+        var resolved = variant == null ? AlienVariant.NORMAL : variant;
+        if (resolved == strain) {
+            return;
+        }
+
+        this.strain = resolved;
+        setChanged();
+        serverLevel.sendBlockUpdated(getBlockPos(), getBlockState(), getBlockState(), Block.UPDATE_CLIENTS);
     }
 
     /** True if this vat can accept the given jelly type: either uncommitted, or committed to that same type. */
@@ -149,6 +190,7 @@ public class JellyVatBlockEntity extends BlockEntity {
         this.fillLevel = Math.max(0, Math.min(MAX_FILL, tag.getInt(TAG_FILL_LEVEL)));
         this.typeCommitted = tag.getBoolean(TAG_COMMITTED);
         this.hiveVisible = tag.getBoolean(TAG_HIVE_VISIBLE);
+        this.strain = AlienVariant.getById(tag.getInt(TAG_STRAIN)).unwrapOr(AlienVariant.NORMAL);
     }
 
     @Override
@@ -157,12 +199,15 @@ public class JellyVatBlockEntity extends BlockEntity {
         tag.putInt(TAG_FILL_LEVEL, fillLevel);
         tag.putBoolean(TAG_COMMITTED, typeCommitted);
         tag.putBoolean(TAG_HIVE_VISIBLE, hiveVisible);
+        tag.putInt(TAG_STRAIN, strain.getId());
     }
 
     @Override
     public @NotNull CompoundTag getUpdateTag(@NotNull HolderLookup.Provider registries) {
         var tag = new CompoundTag();
         tag.putInt(TAG_FILL_LEVEL, fillLevel);
+        // The shell texture is chosen client side, so the strain has to ride along with the fill level.
+        tag.putInt(TAG_STRAIN, strain.getId());
         return tag;
     }
 

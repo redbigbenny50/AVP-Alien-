@@ -25,6 +25,11 @@ public class AlienBlockItems {
         () -> new BlockItem(AlienBlocks.SCOURGE_JELLY_BLOCK.get(), new Item.Properties().stacksTo(64))
     );
 
+    public static final BLibHolder<BlockItem> IRRADIATED_JELLY_BLOCK = createWithSupplier(
+        "irradiated_jelly_block",
+        () -> new BlockItem(AlienBlocks.IRRADIATED_JELLY_BLOCK.get(), new Item.Properties().stacksTo(64))
+    );
+
     private static BLibHolder<BlockItem> createWithSupplier(String id, Supplier<BlockItem> blockItemSupplier) {
         return REGISTRY.createHolder(id, blockItemSupplier);
     }

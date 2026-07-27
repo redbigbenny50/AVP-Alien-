@@ -10,25 +10,23 @@ import net.minecraft.world.level.storage.loot.functions.SetItemCountFunction;
 import net.minecraft.world.level.storage.loot.providers.number.ConstantValue;
 import net.minecraft.world.level.storage.loot.providers.number.UniformGenerator;
 
-public class QueenLootTable {
+/**
+ * A burster drops what a ravager drops: chitin and plated chitin, and NO jelly. Both are raid castes, and the scourge
+ * tier is spent rather than harvested - the jelly went INTO making them.
+ * <p>
+ * Bursters previously had NO loot table registered at all, in any strain. They detonate on death, so leaving nothing
+ * behind was at least arguable; they now leave what is left of the shell.
+ */
+public class BursterLootTable {
 
-    public static LootTable.Builder createLootTableBuilder(HolderLookup.Provider provider, AlienVariantType alienVariantType) {
+    public static LootTable.Builder create(HolderLookup.Provider provider, AlienVariantType alienVariantType) {
         return LootTable.lootTable()
             .withPool(
                 LootPool.lootPool()
                     .setRolls(ConstantValue.exactly(1))
                     .add(
-                        LootItem.lootTableItem(JellyLoot.royalJelly(alienVariantType))
-                            .apply(SetItemCountFunction.setCount(UniformGenerator.between(2, 3)))
-                            .apply(EnchantedCountIncreaseFunction.lootingMultiplier(provider, UniformGenerator.between(0, 1)))
-                    )
-            )
-            .withPool(
-                LootPool.lootPool()
-                    .setRolls(ConstantValue.exactly(1))
-                    .add(
                         LootItem.lootTableItem(alienVariantType.chitin().get())
-                            .apply(SetItemCountFunction.setCount(UniformGenerator.between(2, 3)))
+                            .apply(SetItemCountFunction.setCount(UniformGenerator.between(1, 2)))
                             .apply(EnchantedCountIncreaseFunction.lootingMultiplier(provider, UniformGenerator.between(0, 1)))
                     )
             )
@@ -43,7 +41,7 @@ public class QueenLootTable {
             );
     }
 
-    private QueenLootTable() {
+    private BursterLootTable() {
         throw new UnsupportedOperationException();
     }
 }
