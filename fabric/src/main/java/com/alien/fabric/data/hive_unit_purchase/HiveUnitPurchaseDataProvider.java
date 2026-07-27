@@ -40,8 +40,17 @@ public class HiveUnitPurchaseDataProvider implements DataProvider {
 
     private static final int SPITTER_BIOMASS = 15;
 
+    /** Same price as a spitter: a predalien is egg-born the same way, not a promotion. */
+    private static final int PREDALIEN_BIOMASS = 15;
+
     // ---- Pool caps. All of these sit OUTSIDE the hive member cap.
     private static final int SPITTER_CAP = 60;
+
+    /**
+     * Predaliens are only ever produced while avp_predator is loaded - HiveBalanceTask holds that gate, since the
+     * purchase file itself is static data that ships either way.
+     */
+    private static final int PREDALIEN_CAP = 20;
 
     private static final int WARRIOR_CAP = 50;
 
@@ -84,7 +93,8 @@ public class HiveUnitPurchaseDataProvider implements DataProvider {
                 AlienEntityTypes.CHRYSALIS.get(),
                 AlienEntityTypes.HARBINGER.get(),
                 AlienEntityTypes.OVOMORPH.get(),
-                AlienEntityTypes.SPITTER.get()
+                AlienEntityTypes.SPITTER.get(),
+                AlienEntityTypes.PREDALIEN.get()
             )
         );
         addVariantPurchases(
@@ -102,7 +112,8 @@ public class HiveUnitPurchaseDataProvider implements DataProvider {
                 AlienEntityTypes.ABERRANT_CHRYSALIS.get(),
                 AlienEntityTypes.ABERRANT_HARBINGER.get(),
                 AlienEntityTypes.ABERRANT_OVOMORPH.get(),
-                AlienEntityTypes.ABERRANT_SPITTER.get()
+                AlienEntityTypes.ABERRANT_SPITTER.get(),
+                AlienEntityTypes.ABERRANT_PREDALIEN.get()
             )
         );
         addVariantPurchases(
@@ -120,7 +131,8 @@ public class HiveUnitPurchaseDataProvider implements DataProvider {
                 AlienEntityTypes.NETHER_CHRYSALIS.get(),
                 AlienEntityTypes.NETHER_HARBINGER.get(),
                 AlienEntityTypes.NETHER_OVOMORPH.get(),
-                AlienEntityTypes.NETHER_SPITTER.get()
+                AlienEntityTypes.NETHER_SPITTER.get(),
+                AlienEntityTypes.NETHER_PREDALIEN.get()
             )
         );
     }
@@ -172,6 +184,21 @@ public class HiveUnitPurchaseDataProvider implements DataProvider {
                 0,
                 List.of(input(entities.ovomorph())),
                 List.of(max(entities.spitter(), SPITTER_CAP))
+            )
+        );
+
+        // Predaliens are treated as another egg-born caste rather than the canonical predator-host birth, so a hive
+        // can field them without a predator ever wandering past. HiveBalanceTask only ever asks for one while
+        // avp_predator is loaded, so on a predator-free install this purchase simply never fires.
+        add(
+            new HiveUnitPurchase(
+                entities.predalien(),
+                PREDALIEN_BIOMASS,
+                POPULATION_BIOMASS_COST_SCALE,
+                0,
+                0,
+                List.of(input(entities.ovomorph())),
+                List.of(max(entities.predalien(), PREDALIEN_CAP))
             )
         );
 
@@ -333,6 +360,7 @@ public class HiveUnitPurchaseDataProvider implements DataProvider {
         EntityType<?> chrysalis,
         EntityType<?> harbinger,
         EntityType<?> ovomorph,
-        EntityType<?> spitter
+        EntityType<?> spitter,
+        EntityType<?> predalien
     ) {}
 }

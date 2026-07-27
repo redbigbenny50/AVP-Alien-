@@ -21,8 +21,6 @@ public class FoodAndDrinksCreativeModeTabInitializer {
         acceptPotion(output, AlienPotions.METAMORPHOSIS);
         acceptPotion(output, AlienPotions.GROWTH_SUPPRESSION);
         acceptPotion(output, AlienPotions.SCOURGE);
-        acceptPotion(output, AlienPotions.LONG_SCOURGE);
-        acceptPotion(output, AlienPotions.STRONG_SCOURGE);
 
         acceptSplashPotion(output, AlienPotions.BLOOD_LOSS);
         acceptSplashPotion(output, AlienPotions.LONG_BLOOD_LOSS);
@@ -30,8 +28,6 @@ public class FoodAndDrinksCreativeModeTabInitializer {
         acceptSplashPotion(output, AlienPotions.METAMORPHOSIS);
         acceptSplashPotion(output, AlienPotions.GROWTH_SUPPRESSION);
         acceptSplashPotion(output, AlienPotions.SCOURGE);
-        acceptSplashPotion(output, AlienPotions.LONG_SCOURGE);
-        acceptSplashPotion(output, AlienPotions.STRONG_SCOURGE);
 
         acceptLingeringPotion(output, AlienPotions.BLOOD_LOSS);
         acceptLingeringPotion(output, AlienPotions.LONG_BLOOD_LOSS);
@@ -39,8 +35,6 @@ public class FoodAndDrinksCreativeModeTabInitializer {
         acceptLingeringPotion(output, AlienPotions.METAMORPHOSIS);
         acceptLingeringPotion(output, AlienPotions.GROWTH_SUPPRESSION);
         acceptLingeringPotion(output, AlienPotions.SCOURGE);
-        acceptLingeringPotion(output, AlienPotions.LONG_SCOURGE);
-        acceptLingeringPotion(output, AlienPotions.STRONG_SCOURGE);
     };
 
     private static void acceptPotion(CreativeModeTab.Output output, BLibHolder<Potion> potionHolder) {

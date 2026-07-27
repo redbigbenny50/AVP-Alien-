@@ -63,6 +63,9 @@ public final class VentDefenseTask {
     private static final List<net.minecraft.tags.TagKey<EntityType<?>>> DRAW_ORDER = List.of(
         AlienEntityTypeTags.PRAETORIANS,
         AlienEntityTypeTags.CRUSHERS,
+        // Predaliens draw ahead of the line troops but are deliberately NOT in ELITE_CASTES: their own purchase cap
+        // of 20 already limits them, and the elite cap of 2 exists to ration the queen's guard specifically.
+        AlienEntityTypeTags.PREDALIENS,
         AlienEntityTypeTags.WARRIORS,
         AlienEntityTypeTags.PROWLERS,
         AlienEntityTypeTags.SPITTERS,

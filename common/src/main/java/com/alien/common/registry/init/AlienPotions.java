@@ -76,21 +76,10 @@ public class AlienPotions {
         )
     );
 
-    public static final BLibHolder<Potion> LONG_SCOURGE = REGISTRY.createHolder(
-        "long_scourge",
-        () -> new Potion(
-            "scourge",
-            new MobEffectInstance(AlienMobEffects.getScourgeHolder(), THREE_MINUTES_IN_TICKS)
-        )
-    );
-
-    public static final BLibHolder<Potion> STRONG_SCOURGE = REGISTRY.createHolder(
-        "strong_scourge",
-        () -> new Potion(
-            "scourge",
-            new MobEffectInstance(AlienMobEffects.getScourgeHolder(), THIRTY_SECONDS_IN_TICKS, 1)
-        )
-    );
+    // Scourge is deliberately untiered, for the same reason Metamorphosis is: ScourgeStatusEffect carries no tick
+    // logic and reads no amplifier - it is a pure marker that a growth stage checks for, so ONE application is all
+    // that is ever needed to send an alien to its raid form. Longer and stronger bottles changed nothing and only
+    // widened the brewing tree. Existing long/strong bottles in old worlds become "uncraftable potion" items.
 
     private static void registerBrewingRecipes() {
         var brewingRegistry = Alien.MOD.registries().createBrewingRegistry();
@@ -135,20 +124,6 @@ public class AlienPotions {
             Potions.AWKWARD,
             AlienItems.RAW_SCOURGE_JELLY,
             SCOURGE
-        );
-
-        // Scourge + Redstone -> Long Scourge
-        brewingRegistry.registerMix(
-            SCOURGE,
-            () -> Items.REDSTONE,
-            LONG_SCOURGE
-        );
-
-        // Scourge + Glowstone -> Strong Scourge
-        brewingRegistry.registerMix(
-            SCOURGE,
-            () -> Items.GLOWSTONE_DUST,
-            STRONG_SCOURGE
         );
 
         // Awkward + Nether Chitin -> Fire Resistance

@@ -152,6 +152,7 @@ public final class AttackPartyDispatch {
                     || type.is(AlienEntityTypeTags.PROWLERS)
                     || type.is(AlienEntityTypeTags.CRUSHERS)
                     || type.is(AlienEntityTypeTags.PRAETORIANS)
+                    || type.is(AlienEntityTypeTags.PREDALIENS)
             ) {
                 candidateTypes.add(type);
             }

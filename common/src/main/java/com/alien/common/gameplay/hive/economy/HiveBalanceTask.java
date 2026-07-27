@@ -8,6 +8,7 @@ import com.alien.common.gameplay.hive.location.HiveLocation;
 import com.alien.common.gameplay.hive.location.HiveLocationRegistry;
 import com.alien.common.registry.HiveUnitPurchaseRegistry;
 import com.alien.common.registry.tag.AlienEntityTypeTags;
+import com.alien.compatibility.avp_predator.AVPPredator;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.tags.TagKey;
 import net.minecraft.world.entity.EntityType;
@@ -47,6 +48,7 @@ public final class HiveBalanceTask {
         AlienEntityTypeTags.PRAETORIANS,
         AlienEntityTypeTags.CRUSHERS,
         AlienEntityTypeTags.SPITTERS,
+        AlienEntityTypeTags.PREDALIENS,
         AlienEntityTypeTags.BURSTERS,
         AlienEntityTypeTags.CHRYSALISES,
         AlienEntityTypeTags.RAZOR_CLAWS,
@@ -158,9 +160,10 @@ public final class HiveBalanceTask {
     ) {
         var ordered = populationFillOrder(pop, chunks);
         for (var caste : ordered) {
-            // Basic egg-born production rolls a 1-in-4 chance to yield a SPITTER instead of the drone/runner it was
-            // making; if the spitter can't commit, the intended caste still gets its normal attempt.
-            var substituted = rollSpitterSubstitution(server, caste);
+            // Basic egg-born production rolls 1-in-6 for a SPITTER and 1-in-6 for a PREDALIEN instead of the
+            // drone/runner it was making; if the substitute can't commit, the intended caste still gets its normal
+            // attempt.
+            var substituted = rollCasteSubstitution(server, caste);
             if (
                 substituted != caste
                     && tryCommitCaste(server, location, lineage, substituted, totalPop, PurchasePopulationMode.NET_GAIN)
@@ -248,15 +251,27 @@ public final class HiveBalanceTask {
         return false;
     }
 
-    /** Basic egg-born castes (drones, runners) have a 1-in-4 chance of producing a spitter instead. */
-    private static TagKey<EntityType<?>> rollSpitterSubstitution(MinecraftServer server, TagKey<EntityType<?>> caste) {
-        if (
-            (caste == AlienEntityTypeTags.DRONES || caste == AlienEntityTypeTags.RUNNERS)
-                && server.overworld().getRandom().nextInt(4) == 0
-        ) {
-            return AlienEntityTypeTags.SPITTERS;
+    /**
+     * Basic egg-born production (drones, runners) can come out as something else instead. ONE d6 decides, so the two
+     * substitutions are exactly 1-in-6 each and cannot compound: 0 is a spitter, 1 is a predalien, 2-5 leave the
+     * intended caste alone.
+     * <p>
+     * Spitters were 1-in-4 and were the ONLY caste produced by substitution - they have no entry in
+     * {@code computeDeficits}, so this roll is their entire supply, which is why they outnumbered everything else in
+     * play. Predaliens are deliberately egg-born here rather than born from a predator host, and the roll is the only
+     * place that decision is gated: with avp_predator absent the 1 lands on the intended caste, no predalien is ever
+     * requested, and their purchase files simply sit unused.
+     */
+    private static TagKey<EntityType<?>> rollCasteSubstitution(MinecraftServer server, TagKey<EntityType<?>> caste) {
+        if (caste != AlienEntityTypeTags.DRONES && caste != AlienEntityTypeTags.RUNNERS) {
+            return caste;
         }
-        return caste;
+
+        return switch (server.overworld().getRandom().nextInt(6)) {
+            case 0 -> AlienEntityTypeTags.SPITTERS;
+            case 1 -> AVPPredator.MOD.isLoaded() ? AlienEntityTypeTags.PREDALIENS : caste;
+            default -> caste;
+        };
     }
 
     private static boolean tryCommitCaste(

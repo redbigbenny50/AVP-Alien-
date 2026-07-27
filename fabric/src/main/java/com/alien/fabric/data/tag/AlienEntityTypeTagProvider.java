@@ -134,10 +134,14 @@ public class AlienEntityTypeTagProvider extends FabricTagProvider.EntityTypeTagP
             .addTag(AlienEntityTypeTags.ROYAL_ALIENS);
     }
 
+    // Who answers a xenomorph's cry for help. BURSTERS were dropped July 26/27: they are SCOURGE, and a cry is
+    // a defence call, not a scourge sortie - answering it spent scourge stock on ordinary skirmishes and was the
+    // only scourge caste in the roster (razor claws, chrysalises, carriers and ravagers were never in it).
+    // PRAETORIANS were added the same day so a developed hive answers with something heavier than a young one.
     private void addAnswersXenomorphCriesForHelp() {
         getOrCreateTagBuilder(AlienEntityTypeTags.ANSWERS_XENOMORPH_CRIES_FOR_HELP)
-            .addTag(AlienEntityTypeTags.BURSTERS)
             .addTag(AlienEntityTypeTags.DRONES)
+            .addTag(AlienEntityTypeTags.PRAETORIANS)
             .addTag(AlienEntityTypeTags.PROWLERS)
             .addTag(AlienEntityTypeTags.RUNNERS)
             .addTag(AlienEntityTypeTags.SPITTERS)

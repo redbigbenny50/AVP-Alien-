@@ -16,6 +16,9 @@
     "MixinPersistentEntitySectionManager_ConvoyUnload",
     "MixinPlayer_HostCapture",
     "MixinProjectileUtil_AllowHittingVehicle",
+    "MixinServerLevel_GatedEntitySpawnDeny",
+    "MixinSpawnEggItem_GatedEntityDeny",
+    "MixinSummonCommand_GatedEntityDeny",
     "MixinVillagerHostilesSensor_RunAwayFromAVPMonsters",
     "MixinGameRulesAccessor",
     "MixinGameRulesBooleanValueAccessor"

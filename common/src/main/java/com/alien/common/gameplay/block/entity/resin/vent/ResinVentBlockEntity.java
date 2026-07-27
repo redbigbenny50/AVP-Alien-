@@ -55,11 +55,12 @@ public class ResinVentBlockEntity extends BlockEntity implements GameEventListen
 
         var positionSource = new BlockPositionSource(blockPos);
 
-        // 10s per vent (was 3s): the cry-for-help event fires on EVERY hit a hive member takes, and every vent
-        // within earshot answers independently — at 3 seconds, vent-dense rooms (hubs run 40+ vents) filled with
-        // defenders the moment a player opened fire. Vent density stays the difficulty dial; this just caps how
-        // fast each individual vent can pump.
-        this.alienSpawnCooldown = Cooldown.withCooldownTime("spawnAlienCooldown", Duration.ofSeconds(10));
+        // 5s per vent. History: 3s originally, raised to 10s because the cry-for-help event fires on EVERY hit a
+        // hive member takes and every vent within earshot answers independently, so vent-dense rooms (hubs run 40+
+        // vents) filled with defenders the moment a player opened fire. 10s overcorrected — playtesters reported
+        // too few aliens coming to the aid — so this sits at the midpoint. Vent density stays the difficulty dial;
+        // this only caps how fast each individual vent can pump.
+        this.alienSpawnCooldown = Cooldown.withCooldownTime("spawnAlienCooldown", Duration.ofSeconds(5));
         this.cryForHelpListener = new CryForHelpListener(positionSource);
     }
 
