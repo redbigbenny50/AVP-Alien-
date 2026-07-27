@@ -6,7 +6,6 @@ import com.blib.api.common.registry.v1.BLibHolder;
 import com.blib.api.common.registry.v1.BLibRegistry;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.world.effect.MobEffectInstance;
-import net.minecraft.world.item.Items;
 import net.minecraft.world.item.alchemy.Potion;
 import net.minecraft.world.item.alchemy.Potions;
 
@@ -14,35 +13,11 @@ public class AlienPotions {
 
     private static final BLibRegistry<Potion> REGISTRY = Alien.MOD.registries().create(BuiltInRegistries.POTION);
 
-    private static final int THIRTY_SECONDS_IN_TICKS = 20 * 30;
-
     private static final int ONE_MINUTE_IN_TICKS = 20 * 60;
 
-    private static final int THREE_MINUTES_IN_TICKS = 20 * 60 * 3;
-
-    public static final BLibHolder<Potion> BLOOD_LOSS = REGISTRY.createHolder(
-        "blood_loss",
-        () -> new Potion(
-            "blood_loss",
-            new MobEffectInstance(AlienMobEffects.getBloodLossHolder(), ONE_MINUTE_IN_TICKS)
-        )
-    );
-
-    public static final BLibHolder<Potion> LONG_BLOOD_LOSS = REGISTRY.createHolder(
-        "long_blood_loss",
-        () -> new Potion(
-            "blood_loss",
-            new MobEffectInstance(AlienMobEffects.getBloodLossHolder(), THREE_MINUTES_IN_TICKS)
-        )
-    );
-
-    public static final BLibHolder<Potion> STRONG_BLOOD_LOSS = REGISTRY.createHolder(
-        "strong_blood_loss",
-        () -> new Potion(
-            "blood_loss",
-            new MobEffectInstance(AlienMobEffects.getBloodLossHolder(), THIRTY_SECONDS_IN_TICKS, 1)
-        )
-    );
+    // Blood Loss is NOT brewable and deliberately has no potion: it is a wound, inflicted by a razor claw's claws
+    // and by nothing else. Awkward + Chitin, and its redstone/glowstone tiers, are gone. The effect, its mixin and
+    // RazorClaw.doHurtTarget are untouched. Existing bottles in old worlds become "uncraftable potion" items.
 
     public static final BLibHolder<Potion> METAMORPHOSIS = REGISTRY.createHolder(
         "metamorphosis",
@@ -83,27 +58,6 @@ public class AlienPotions {
 
     private static void registerBrewingRecipes() {
         var brewingRegistry = Alien.MOD.registries().createBrewingRegistry();
-
-        // Awkward + Chitin -> Blood Loss
-        brewingRegistry.registerMix(
-            Potions.AWKWARD,
-            AlienItems.CHITIN,
-            BLOOD_LOSS
-        );
-
-        // Blood Loss + Redstone -> Long Blood Loss
-        brewingRegistry.registerMix(
-            BLOOD_LOSS,
-            () -> Items.REDSTONE,
-            LONG_BLOOD_LOSS
-        );
-
-        // Blood Loss + Glowstone -> Strong Blood Loss
-        brewingRegistry.registerMix(
-            BLOOD_LOSS,
-            () -> Items.GLOWSTONE_DUST,
-            STRONG_BLOOD_LOSS
-        );
 
         // Awkward + Raw Royal Jelly -> Metamorphosis
         brewingRegistry.registerMix(

@@ -152,6 +152,20 @@ public class EnUsAdvancementProvider {
             "Eviction",
             "Remove an alien from your chest by eating chorus fruit"
         );
+
+        addAdvancement(
+            builder,
+            AlienAdvancements.EAT_RAW_ROYAL_JELLY,
+            "Peanut Butter... Jelly... Time?",
+            "Eat raw royal jelly. Do not make a habit of it"
+        );
+
+        addAdvancement(
+            builder,
+            AlienAdvancements.EAT_RAW_SCOURGE_JELLY,
+            "I Like When the Red Water Comes Out",
+            "Eat raw scourge jelly"
+        );
     }
 
     private static void addAdvancement(

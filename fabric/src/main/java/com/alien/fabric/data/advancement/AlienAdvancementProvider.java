@@ -207,6 +207,8 @@ public class AlienAdvancementProvider {
 
     private static void addLifecycleAdvancements(AdvancementHolder root, Consumer<AdvancementHolder> consumer) {
         addRemoveEmbryoWithChorusFruitAdvancement(root, consumer);
+        addEatRawRoyalJellyAdvancement(root, consumer);
+        addEatRawScourgeJellyAdvancement(root, consumer);
     }
 
     private static void addCombatAdvancements(
@@ -645,6 +647,57 @@ public class AlienAdvancementProvider {
                 false
             )
             .save(consumer, AlienAdvancements.REMOVE_EMBRYO_WITH_CHORUS_FRUIT.resourceLocation().toString());
+    }
+
+    /**
+     * Granted from {@code RawRoyalJellyItem.finishUsingItem}, so the criterion is IMPOSSIBLE and the code does the
+     * awarding - the same shape the chorus fruit advancement above uses.
+     */
+    private static AdvancementHolder addEatRawRoyalJellyAdvancement(
+        AdvancementHolder parent,
+        Consumer<AdvancementHolder> consumer
+    ) {
+        return Advancement.Builder.advancement()
+            .addCriterion(
+                "eat_raw_royal_jelly",
+                CriteriaTriggers.IMPOSSIBLE.createCriterion(new ImpossibleTrigger.TriggerInstance())
+            )
+            .parent(parent)
+            .display(
+                AlienItems.RAW_ROYAL_JELLY.get(),
+                AlienAdvancements.EAT_RAW_ROYAL_JELLY.titleComponent(),
+                AlienAdvancements.EAT_RAW_ROYAL_JELLY.descriptionComponent(),
+                null,
+                AdvancementType.TASK,
+                true,
+                true,
+                false
+            )
+            .save(consumer, AlienAdvancements.EAT_RAW_ROYAL_JELLY.resourceLocation().toString());
+    }
+
+    /** Granted from {@code RawScourgeJellyItem.finishUsingItem}; see the royal jelly advancement above. */
+    private static AdvancementHolder addEatRawScourgeJellyAdvancement(
+        AdvancementHolder parent,
+        Consumer<AdvancementHolder> consumer
+    ) {
+        return Advancement.Builder.advancement()
+            .addCriterion(
+                "eat_raw_scourge_jelly",
+                CriteriaTriggers.IMPOSSIBLE.createCriterion(new ImpossibleTrigger.TriggerInstance())
+            )
+            .parent(parent)
+            .display(
+                AlienItems.RAW_SCOURGE_JELLY.get(),
+                AlienAdvancements.EAT_RAW_SCOURGE_JELLY.titleComponent(),
+                AlienAdvancements.EAT_RAW_SCOURGE_JELLY.descriptionComponent(),
+                null,
+                AdvancementType.TASK,
+                true,
+                true,
+                false
+            )
+            .save(consumer, AlienAdvancements.EAT_RAW_SCOURGE_JELLY.resourceLocation().toString());
     }
 
     private static Advancement.Builder addMobsToKill(

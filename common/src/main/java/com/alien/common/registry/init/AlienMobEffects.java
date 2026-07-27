@@ -8,6 +8,7 @@ import com.alien.common.gameplay.effect.JellySicknessStatusEffect;
 import com.alien.common.gameplay.effect.MarkedForDeathStatusEffect;
 import com.alien.common.gameplay.effect.MetamorphosisStatusEffect;
 import com.alien.common.gameplay.effect.ScourgeStatusEffect;
+import com.alien.common.gameplay.effect.SecurementStatusEffect;
 import com.blib.api.common.registry.v1.BLibHolder;
 import com.blib.api.common.registry.v1.BLibRegistry;
 import net.minecraft.core.Holder;
@@ -35,6 +36,8 @@ public class AlienMobEffects {
 
     private static final BLibHolder<MobEffect> SCOURGE = create("scourge", ScourgeStatusEffect::new);
 
+    private static final BLibHolder<MobEffect> SECUREMENT = create("securement", SecurementStatusEffect::new);
+
     private static final BLibHolder<MobEffect> MARKED_FOR_DEATH = create(
         "marked_for_death",
         MarkedForDeathStatusEffect::new
@@ -58,6 +61,10 @@ public class AlienMobEffects {
 
     public static Holder<MobEffect> getMetamorphosisHolder() {
         return METAMORPHOSIS.getBackingHolder();
+    }
+
+    public static Holder<MobEffect> getSecurementHolder() {
+        return SECUREMENT.getBackingHolder();
     }
 
     public static Holder<MobEffect> getScourgeHolder() {
