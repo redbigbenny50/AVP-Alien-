@@ -382,7 +382,22 @@ public abstract class Alien extends Monster implements DataUser {
 
         super.tick();
 
-        if (level().isClientSide && isWithered() && random.nextInt(4) == 0) {
+        // The withered mark, made visible. This was ParticleTypes.SMOKE at a quarter of ticks - vanilla's smoke is
+        // GREY, and on something as small and quick as a chestburster, in a dark hive already full of acid, it read as
+        // nothing at all. SQUID_INK is the only genuinely BLACK particle vanilla has; it is given a slight upward
+        // drift so it behaves like smoke coming off the thing rather than ink sinking through it, and a grey wisp
+        // still rises with it so the effect keeps some volume.
+        if (level().isClientSide && isWithered() && random.nextInt(2) == 0) {
+            level()
+                .addParticle(
+                    net.minecraft.core.particles.ParticleTypes.SQUID_INK,
+                    getRandomX(0.6),
+                    getRandomY(),
+                    getRandomZ(0.6),
+                    0,
+                    0.03,
+                    0
+                );
             level()
                 .addParticle(
                     net.minecraft.core.particles.ParticleTypes.SMOKE,

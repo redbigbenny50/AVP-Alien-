@@ -56,6 +56,23 @@ public class AlienPotions {
     // that is ever needed to send an alien to its raid form. Longer and stronger bottles changed nothing and only
     // widened the brewing tree. Existing long/strong bottles in old worlds become "uncraftable potion" items.
 
+    /**
+     * A brewing mix's OUTPUT must be the vanilla registry's own holder, never the {@code BLibHolder} wrapper.
+     * <p>
+     * {@code registerMix} takes a {@code Holder<Potion>} and a BLibHolder satisfies that signature, so passing the
+     * wrapper compiles and works fine in isolation - it lands in vanilla's brewing table and brews correctly. It only
+     * breaks when something NETWORKS the brewing data: {@code Registry.asHolderIdMap()} indexes the registry's own
+     * {@code Holder.Reference} objects by identity, so a wrapper resolves to id -1 and the packet dies with
+     * "Unregistered holder in ResourceKey[minecraft:root / minecraft:potion]".
+     * <p>
+     * Immersive Engineering is what surfaces it: it builds machine recipes for every brewable potion and those go out
+     * in {@code clientbound/minecraft:update_recipes}. In a pack containing both mods the encode fails and the player
+     * is disconnected on join. Nothing here is IE's fault - any mod that reads the brewing table and syncs it would do
+     * the same.
+     * <p>
+     * {@code FoodAndDrinksCreativeModeTabInitializer} already unwraps for exactly this reason when it builds its potion
+     * stacks. Same rule, second place.
+     */
     private static void registerBrewingRecipes() {
         var brewingRegistry = Alien.MOD.registries().createBrewingRegistry();
 
@@ -63,21 +80,21 @@ public class AlienPotions {
         brewingRegistry.registerMix(
             Potions.AWKWARD,
             AlienItems.RAW_ROYAL_JELLY,
-            METAMORPHOSIS
+            METAMORPHOSIS.getBackingHolder()
         );
 
         // Awkward + Poison Jelly -> Growth Suppression
         brewingRegistry.registerMix(
             Potions.AWKWARD,
             AlienItems.POISON_JELLY,
-            GROWTH_SUPPRESSION
+            GROWTH_SUPPRESSION.getBackingHolder()
         );
 
         // Awkward + Raw Scourge Jelly -> Scourge
         brewingRegistry.registerMix(
             Potions.AWKWARD,
             AlienItems.RAW_SCOURGE_JELLY,
-            SCOURGE
+            SCOURGE.getBackingHolder()
         );
 
         // Awkward + Nether Chitin -> Fire Resistance
