@@ -11,6 +11,7 @@ import net.minecraft.world.effect.MobEffectCategory;
 import net.minecraft.world.effect.MobEffectInstance;
 import net.minecraft.world.effect.MobEffects;
 import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.AgeableMob;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.player.Player;
 import org.jetbrains.annotations.NotNull;
@@ -58,6 +59,29 @@ public class GrowthSuppressionStatusEffect extends MobEffect {
 
     private static final int WITHERING_AMPLIFIER = 1;
 
+    /** Matches the potions, which all settled at a minute. */
+    private static final int HIVES_BANE_DURATION_TICKS = 20 * 60;
+
+    /**
+     * The age an arrested baby is pinned at. Growth is suppression's whole job, and on a creature with no embryo the
+     * only growth to hold back is its own.
+     * <p>
+     * Natural babies start at {@code AgeableMob.BABY_START_AGE} (-24000) and climb one per tick, so this is roughly a
+     * year and a half of loaded ticking away from adulthood. Feeding cannot rescue it either: wheat is
+     * {@code ageUp(10, true)}, worth 200 ticks, so it would take millions of them. Forever, in every sense that
+     * matters at the table.
+     */
+    private static final int ARRESTED_BABY_AGE = -1_000_000_000;
+
+    /**
+     * Anything below this was arrested by us rather than born recently - nothing natural, and nothing reachable by
+     * feeding, ever sits this far back.
+     * <p>
+     * Public because {@code MetamorphosisStatusEffect} is the cure and has to recognise an arrested baby by the same
+     * measure that created one. One definition, two effects.
+     */
+    public static final int ARRESTED_BABY_THRESHOLD = -100_000;
+
     public GrowthSuppressionStatusEffect() {
         super(MobEffectCategory.HARMFUL, JELLY_PARTICLE_COLOR);
     }
@@ -69,11 +93,11 @@ public class GrowthSuppressionStatusEffect extends MobEffect {
 
     @Override
     public void applyInstantenousEffect(
-        @Nullable Entity source,
-        @Nullable Entity indirectSource,
-        @NotNull LivingEntity target,
-        int amplifier,
-        double health
+            @Nullable Entity source,
+            @Nullable Entity indirectSource,
+            @NotNull LivingEntity target,
+            int amplifier,
+            double health
     ) {
         if (target.level().isClientSide) {
             return;
@@ -86,7 +110,23 @@ public class GrowthSuppressionStatusEffect extends MobEffect {
 
         if (target instanceof Host host && host.getEmbryoType().isSome()) {
             handleHostDose(target, host);
+            return;
         }
+
+        // A baby has growth of its own to suppress, so the jelly does its actual job rather than turning venomous:
+        // the first dose arrests it where it stands. A second has nothing left to hold back and goes the way of any
+        // other wasted dose.
+        if (target instanceof AgeableMob ageable && ageable.isBaby()) {
+            if (ageable.getAge() > ARRESTED_BABY_THRESHOLD) {
+                ageable.setAge(ARRESTED_BABY_AGE);
+                return;
+            }
+        }
+
+        // Nothing here to hold back. In a body that was never going to become a xenomorph the jelly is just venom -
+        // see HivesBaneStatusEffect. Catches unimplanted players, adults, and already-arrested babies alike, which is
+        // what makes the splash version a weapon rather than a hive tool.
+        target.addEffect(new MobEffectInstance(AlienMobEffects.getHivesBaneHolder(), HIVES_BANE_DURATION_TICKS, 0));
     }
 
     private static void handleHostDose(LivingEntity hostEntity, Host host) {
@@ -94,9 +134,9 @@ public class GrowthSuppressionStatusEffect extends MobEffect {
         if (host.isSuppressionSpent()) {
             if (hostEntity instanceof Player player) {
                 player.displayClientMessage(
-                    Component.literal("You feel movement in your chest, the potions no longer effective")
-                        .withStyle(ChatFormatting.RED),
-                    false
+                        Component.literal("You feel movement in your chest, the potions no longer effective")
+                                .withStyle(ChatFormatting.RED),
+                        false
                 );
             }
             return;
@@ -115,7 +155,7 @@ public class GrowthSuppressionStatusEffect extends MobEffect {
             }
 
             hostEntity.addEffect(
-                new MobEffectInstance(MobEffects.WITHER, WITHERING_DURATION_TICKS, WITHERING_AMPLIFIER)
+                    new MobEffectInstance(MobEffects.WITHER, WITHERING_DURATION_TICKS, WITHERING_AMPLIFIER)
             );
             return;
         }
@@ -131,11 +171,11 @@ public class GrowthSuppressionStatusEffect extends MobEffect {
             var toxicity = Math.min(host.getJellyToxicity() + 1, MAX_TOXICITY);
             host.setJellyToxicity(toxicity);
             hostEntity.addEffect(
-                new MobEffectInstance(
-                    AlienMobEffects.getJellySicknessHolder(),
-                    SICKNESS_DURATION_TICKS[toxicity - 1],
-                    toxicity - 1
-                )
+                    new MobEffectInstance(
+                            AlienMobEffects.getJellySicknessHolder(),
+                            SICKNESS_DURATION_TICKS[toxicity - 1],
+                            toxicity - 1
+                    )
             );
         }
     }

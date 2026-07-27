@@ -9,6 +9,7 @@
     "MixinItem_ChorusEmbryo",
     "MixinItem_GigeresqueSurgeryKit",
     "MixinLivingEntity_BloodLoss",
+    "MixinLivingEntity_ChitinousAura",
     "MixinLivingEntity_HiveBiomass",
     "MixinLivingEntity_Host",
     "MixinMob_IncapacitateHost",
@@ -27,6 +28,7 @@
     "client.MixinLocalPlayer_NoBlockingMovementPenalty",
     "client.MixinMinecraft_HostStruggle",
     "client.MixinMinecraft_ShieldAbility",
+    "client.MixinEntity_XenoVision",
     "client.MixinEntityRenderer_CaptureChainLeash",
     "client.MixinKeyboardInput_HuggerLock"
   ],
