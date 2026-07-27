@@ -27,13 +27,13 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 public abstract class MixinLivingEntity_ChitinousAura {
 
     @Inject(
-            method = "hurt",
-            at = @At("RETURN")
+        method = "hurt",
+        at = @At("RETURN")
     )
     private void avp_alien$retaliateWithChitinousAura(
-            DamageSource damageSource,
-            float damageAmount,
-            CallbackInfoReturnable<Boolean> callbackInfo
+        DamageSource damageSource,
+        float damageAmount,
+        CallbackInfoReturnable<Boolean> callbackInfo
     ) {
         if (!Boolean.TRUE.equals(callbackInfo.getReturnValue())) {
             return;
@@ -59,21 +59,21 @@ public abstract class MixinLivingEntity_ChitinousAura {
         }
 
         attacker.hurt(
-                self.damageSources().thorns(self),
-                1.0F + random.nextInt(ChitinousAuraStatusEffect.RETALIATION_DAMAGE_BOUND)
+            self.damageSources().thorns(self),
+            1.0F + random.nextInt(ChitinousAuraStatusEffect.RETALIATION_DAMAGE_BOUND)
         );
 
         if (self.level() instanceof ServerLevel serverLevel) {
             serverLevel.sendParticles(
-                    ParticleTypes.DAMAGE_INDICATOR,
-                    attacker.getX(),
-                    attacker.getY(0.5),
-                    attacker.getZ(),
-                    6,
-                    0.25,
-                    0.25,
-                    0.25,
-                    0.0
+                ParticleTypes.DAMAGE_INDICATOR,
+                attacker.getX(),
+                attacker.getY(0.5),
+                attacker.getZ(),
+                6,
+                0.25,
+                0.25,
+                0.25,
+                0.0
             );
         }
     }

@@ -10,8 +10,8 @@ import net.minecraft.world.effect.MobEffect;
 import net.minecraft.world.effect.MobEffectCategory;
 import net.minecraft.world.effect.MobEffectInstance;
 import net.minecraft.world.effect.MobEffects;
-import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.AgeableMob;
+import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.player.Player;
 import org.jetbrains.annotations.NotNull;
@@ -68,8 +68,8 @@ public class GrowthSuppressionStatusEffect extends MobEffect {
      * <p>
      * Natural babies start at {@code AgeableMob.BABY_START_AGE} (-24000) and climb one per tick, so this is roughly a
      * year and a half of loaded ticking away from adulthood. Feeding cannot rescue it either: wheat is
-     * {@code ageUp(10, true)}, worth 200 ticks, so it would take millions of them. Forever, in every sense that
-     * matters at the table.
+     * {@code ageUp(10, true)}, worth 200 ticks, so it would take millions of them. Forever, in every sense that matters
+     * at the table.
      */
     private static final int ARRESTED_BABY_AGE = -1_000_000_000;
 
@@ -93,11 +93,11 @@ public class GrowthSuppressionStatusEffect extends MobEffect {
 
     @Override
     public void applyInstantenousEffect(
-            @Nullable Entity source,
-            @Nullable Entity indirectSource,
-            @NotNull LivingEntity target,
-            int amplifier,
-            double health
+        @Nullable Entity source,
+        @Nullable Entity indirectSource,
+        @NotNull LivingEntity target,
+        int amplifier,
+        double health
     ) {
         if (target.level().isClientSide) {
             return;
@@ -134,9 +134,9 @@ public class GrowthSuppressionStatusEffect extends MobEffect {
         if (host.isSuppressionSpent()) {
             if (hostEntity instanceof Player player) {
                 player.displayClientMessage(
-                        Component.literal("You feel movement in your chest, the potions no longer effective")
-                                .withStyle(ChatFormatting.RED),
-                        false
+                    Component.literal("You feel movement in your chest, the potions no longer effective")
+                        .withStyle(ChatFormatting.RED),
+                    false
                 );
             }
             return;
@@ -155,7 +155,7 @@ public class GrowthSuppressionStatusEffect extends MobEffect {
             }
 
             hostEntity.addEffect(
-                    new MobEffectInstance(MobEffects.WITHER, WITHERING_DURATION_TICKS, WITHERING_AMPLIFIER)
+                new MobEffectInstance(MobEffects.WITHER, WITHERING_DURATION_TICKS, WITHERING_AMPLIFIER)
             );
             return;
         }
@@ -171,11 +171,11 @@ public class GrowthSuppressionStatusEffect extends MobEffect {
             var toxicity = Math.min(host.getJellyToxicity() + 1, MAX_TOXICITY);
             host.setJellyToxicity(toxicity);
             hostEntity.addEffect(
-                    new MobEffectInstance(
-                            AlienMobEffects.getJellySicknessHolder(),
-                            SICKNESS_DURATION_TICKS[toxicity - 1],
-                            toxicity - 1
-                    )
+                new MobEffectInstance(
+                    AlienMobEffects.getJellySicknessHolder(),
+                    SICKNESS_DURATION_TICKS[toxicity - 1],
+                    toxicity - 1
+                )
             );
         }
     }

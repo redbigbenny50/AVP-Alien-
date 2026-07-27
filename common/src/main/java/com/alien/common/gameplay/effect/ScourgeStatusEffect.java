@@ -11,11 +11,9 @@ import org.jetbrains.annotations.NotNull;
 /**
  * Turns an alien toward the scourge tier. Beyond its long-standing role as a growth-stage requirement, a SECOND dose
  * now steers a molt that is already underway.
- *
- * <h2>Redosing mid-molt</h2>
- * A caste can have two scourge futures - a drone becomes a carrier by default, or a razor claw. The first dose starts
- * the molt toward the default. Dose it again while it is still in the molt-ENTER phase and the cocoon is pointed at the
- * alternate instead, so {@code drone -> potion -> molting -> carrier} and
+ * <h2>Redosing mid-molt</h2> A caste can have two scourge futures - a drone becomes a carrier by default, or a razor
+ * claw. The first dose starts the molt toward the default. Dose it again while it is still in the molt-ENTER phase and
+ * the cocoon is pointed at the alternate instead, so {@code drone -> potion -> molting -> carrier} and
  * {@code drone -> potion -> molting -> potion -> razor claw} are the same ladder walked differently.
  * <p>
  * This replaced an amplifier gate. Razor claw used to require Scourge II, which meant the tier existed purely to split
@@ -25,11 +23,10 @@ import org.jetbrains.annotations.NotNull;
  * The window closes when the molt-enter phase ends, because that is where the xenomorph is actually replaced by its new
  * caste - see {@code CocoonManager.canRedirectTarget}. A dose after that lands on an alien that has already become
  * something, and does nothing.
- *
- * <h2>On anything that is not an alien</h2>
- * There is no scourge form for a body that was never going to have one, so the change stops at the skin: the victim
- * grows a {@link ChitinousAuraStatusEffect} instead - Thorns V for {@value #CHITINOUS_AURA_DURATION_TICKS} ticks. It
- * lands on players and ordinary mobs alike, so a splash potion arms everything it touches.
+ * <h2>On anything that is not an alien</h2> There is no scourge form for a body that was never going to have one, so
+ * the change stops at the skin: the victim grows a {@link ChitinousAuraStatusEffect} instead - Thorns V for
+ * {@value #CHITINOUS_AURA_DURATION_TICKS} ticks. It lands on players and ordinary mobs alike, so a splash potion arms
+ * everything it touches.
  */
 public class ScourgeStatusEffect extends MobEffect {
 
@@ -54,7 +51,7 @@ public class ScourgeStatusEffect extends MobEffect {
         }
 
         livingEntity.addEffect(
-                new MobEffectInstance(AlienMobEffects.getChitinousAuraHolder(), CHITINOUS_AURA_DURATION_TICKS, 0)
+            new MobEffectInstance(AlienMobEffects.getChitinousAuraHolder(), CHITINOUS_AURA_DURATION_TICKS, 0)
         );
     }
 }

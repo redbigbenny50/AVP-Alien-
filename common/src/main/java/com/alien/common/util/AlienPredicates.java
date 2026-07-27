@@ -50,16 +50,7 @@ public class AlienPredicates {
         if (alien instanceof Queen boundQueen && boundQueen.getBindManager().isFullyBound()) {
             return false;
         }
-        // KIN MERCY: a HELPLESS queen of the attacker's OWN STRAIN - chained OR incapacitated (downed) - is never
-        // a valid target, not even for a rival lineage at war with hers. Helpless royalty transcends the hive feud:
-        // her kind break chains (QueenRescueManager), never necks. Rival STRAINS retain execution rights - a
-        // helpless rival queen is a war prize. Consequence, accepted by design: a same-strain hive war cannot
-        // finish a DOWNED queen - she must be beaten while standing.
-        if (
-            potentialTarget instanceof Queen helplessQueen
-                && (helplessQueen.getBindManager().hasAnyChain() || helplessQueen.isIncapacitated())
-                && !areAliensDifferentStrains(alien, helplessQueen)
-        ) {
+        if (isHelplessKinQueen(alien, potentialTarget)) {
             return false;
         }
         // A host on a drone's back is CARGO, not prey. The hive spent a whole party fetching it and is carrying it
@@ -251,6 +242,26 @@ public class AlienPredicates {
         // same empress authority.
         return areAliensDifferentStrains(first, second)
             || AlienTerritoryWarSystem.areAlienLineagesEnemies(first, second);
+    }
+
+    /**
+     * KIN MERCY: a HELPLESS queen of the attacker's OWN STRAIN - chained OR incapacitated (downed) - is never a valid
+     * target, not even for a rival lineage at war with hers. Helpless royalty transcends the hive feud: her kind break
+     * chains ({@code QueenRescueManager}), never necks. Rival STRAINS retain execution rights - a helpless rival queen
+     * is a war prize. Consequence, accepted by design: a same-strain hive war cannot finish a DOWNED queen; she must be
+     * beaten while standing.
+     * <p>
+     * Public and named because it is enforced in TWO places that cannot see each other. The targeting pipeline asks it
+     * through {@link #canContinueTargeting}, which every sensor path funnels into - but {@code Alien.setTarget} trusts
+     * its caller completely, so anything holding an entity reference can force a target past the sensors entirely.
+     * Convoy dispatch, hive aggro and the cry-for-help listener all do exactly that, and the listener's
+     * {@code retargetIfPossible} copies whatever the crier was already fighting straight onto a freshly summoned
+     * defender. One definition, enforced at both doors.
+     */
+    public static boolean isHelplessKinQueen(@NotNull Alien alien, @NotNull LivingEntity potentialTarget) {
+        return potentialTarget instanceof Queen helplessQueen
+            && (helplessQueen.getBindManager().hasAnyChain() || helplessQueen.isIncapacitated())
+            && !areAliensDifferentStrains(alien, helplessQueen);
     }
 
     private static boolean areAliensDifferentStrains(Alien first, Alien second) {

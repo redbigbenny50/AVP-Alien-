@@ -10,8 +10,8 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 /**
- * Xeno vision: while the LOCAL player is under Metamorphosis, every living thing within
- * {@value #XENO_VISION_RADIUS} blocks is outlined through walls, exactly as a spectral arrow outlines its victim.
+ * Xeno vision: while the LOCAL player is under Metamorphosis, every living thing within {@value #XENO_VISION_RADIUS}
+ * blocks is outlined through walls, exactly as a spectral arrow outlines its victim.
  * <p>
  * <b>Client only, and that is the whole point.</b> {@code Minecraft.shouldEntityAppearGlowing} is the single question
  * the renderer asks before drawing an outline, and it answers it by calling {@code Entity.isCurrentlyGlowing}. Saying
@@ -24,8 +24,8 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
  * expire when something walked out of range. None of that exists now - range is simply re-tested every frame.
  * <p>
  * Invisibility is no defence, and that is inherited rather than built: when an entity is invisible AND glowing,
- * {@code LivingEntityRenderer} selects {@code RenderType.outline}, so it renders as an outline and nothing else.
- * Hiding from a creature that has no eyes was never going to work.
+ * {@code LivingEntityRenderer} selects {@code RenderType.outline}, so it renders as an outline and nothing else. Hiding
+ * from a creature that has no eyes was never going to work.
  */
 @Mixin(Entity.class)
 public abstract class MixinEntity_XenoVision {

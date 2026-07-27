@@ -82,7 +82,7 @@ public final class CarveWorkers {
         ServerLevel level,
         HiveLocation location,
         CarveSite site,
-        @Nullable BlockPos digFront,
+        java.util.List<BlockPos> digFronts,
         @Nullable BlockPos fillFront
     ) {
         long now = level.getGameTime();
@@ -126,6 +126,9 @@ public final class CarveWorkers {
                 continue;
             }
 
+            // Index within the dig roster BEFORE incrementing, so each digger keeps a stable slot across passes -
+            // site.workers is insertion-ordered, so drone N always steers to front N and they stop shuffling.
+            var digIndex = activeDiggers;
             if (entry.getValue() == Role.DIGGER) {
                 activeDiggers++;
             } else {
@@ -133,7 +136,9 @@ public final class CarveWorkers {
             }
 
             if (maintenance) {
-                var front = entry.getValue() == Role.DIGGER ? digFront : fillFront;
+                var front = entry.getValue() == Role.DIGGER
+                    ? (digFronts.isEmpty() ? null : digFronts.get(digIndex % digFronts.size()))
+                    : fillFront;
                 if (front != null && drone.getNavigation().isDone()) {
                     drone.getNavigation().moveTo(front.getX() + 0.5, front.getY(), front.getZ() + 0.5, STEER_SPEED);
                 }
@@ -147,9 +152,12 @@ public final class CarveWorkers {
         }
 
         if (maintenance) {
-            // The founding core's digger is the QUEEN (design §7b) - drones are only ever its placers, so digger
-            // sourcing is skipped entirely for it.
-            var neededDiggers = site.isFoundingCore() ? 0 : MAX_DIGGERS - countRole(site, Role.DIGGER);
+            // The founding core used to source NO diggers - the queen was its only one (design 7b), and the drones
+            // standing beside her were placers with nothing to place until she had opened ground. It read as the
+            // queen doing all the work while her retinue watched. She is still the digger of record and still runs
+            // her own stand-dig sequence; the crew now digs ALONGSIDE her, on its own fronts, and the core's cadence
+            // divides by the whole crew (CarveSiteWork.coreDigIntervalTicks).
+            var neededDiggers = MAX_DIGGERS - countRole(site, Role.DIGGER);
             var neededPlacers = MAX_PLACERS - countRole(site, Role.PLACER);
             if (neededDiggers > 0 || neededPlacers > 0) {
                 var borrowed = borrowLoadedWorkers(level, location, site, neededDiggers, neededPlacers);

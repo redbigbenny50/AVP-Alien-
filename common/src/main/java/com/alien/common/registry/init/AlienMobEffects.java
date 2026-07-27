@@ -30,8 +30,8 @@ public class AlienMobEffects {
     private static final BLibHolder<MobEffect> FRENZY = create("frenzy", FrenzyStatusEffect::new);
 
     private static final BLibHolder<MobEffect> GROWTH_SUPPRESSION = create(
-            "growth_suppression",
-            GrowthSuppressionStatusEffect::new
+        "growth_suppression",
+        GrowthSuppressionStatusEffect::new
     );
 
     private static final BLibHolder<MobEffect> HIVES_BANE = create("hives_bane", HivesBaneStatusEffect::new);
@@ -45,8 +45,8 @@ public class AlienMobEffects {
     private static final BLibHolder<MobEffect> SECUREMENT = create("securement", SecurementStatusEffect::new);
 
     private static final BLibHolder<MobEffect> MARKED_FOR_DEATH = create(
-            "marked_for_death",
-            MarkedForDeathStatusEffect::new
+        "marked_for_death",
+        MarkedForDeathStatusEffect::new
     );
 
     public static Holder<MobEffect> getChitinousAuraHolder() {

@@ -22,6 +22,7 @@ import com.alien.common.registry.tag.AlienDamageTypesTags;
 import com.alien.common.registry.tag.AlienEntityTypeTags;
 import com.alien.common.registry.tag.AlienMobEffectTags;
 import com.alien.common.util.AcidBleedUtil;
+import com.alien.common.util.AlienPredicates;
 import com.alien.common.util.AlienTransitionUtil;
 import com.alien.compatibility.avp_human.AVPHuman;
 import com.alien.compatibility.avp_human.GeneManagerProxy;
@@ -198,6 +199,15 @@ public abstract class Alien extends Monster implements DataUser {
 
     @Override
     public void setTarget(@Nullable LivingEntity livingEntity) {
+        // KIN MERCY, enforced at the door rather than only in the sensors. The targeting pipeline already refuses a
+        // helpless same-strain queen, but every sensor check in the world is worthless against a direct setTarget:
+        // convoy dispatch, hive territory aggro and CryForHelpListener.retargetIfPossible all hand a target straight
+        // to a mob, and that last one copies whatever the crier was already fighting onto a newly summoned defender.
+        // A chained queen reaching a defender that way would be clawed by her own kin with nothing to stop it.
+        if (livingEntity != null && AlienPredicates.isHelplessKinQueen(this, livingEntity)) {
+            return;
+        }
+
         super.setTarget(livingEntity);
         // Hive: the per-location boss bar auto-adds in-range players via HiveLocationBossBar.updateTrackingPlayers
         // every 20 ticks; no manual track-on-target hook needed.

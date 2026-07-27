@@ -45,10 +45,10 @@ public class HivesBaneStatusEffect extends MobEffect {
     public HivesBaneStatusEffect() {
         super(MobEffectCategory.HARMFUL, VENOM_GREEN_COLOR);
         addAttributeModifier(
-                Attributes.MOVEMENT_SPEED,
-                AlienResources.location("hives_bane_slowness"),
-                SLOWNESS_III,
-                AttributeModifier.Operation.ADD_MULTIPLIED_TOTAL
+            Attributes.MOVEMENT_SPEED,
+            AlienResources.location("hives_bane_slowness"),
+            SLOWNESS_III,
+            AttributeModifier.Operation.ADD_MULTIPLIED_TOTAL
         );
     }
 
