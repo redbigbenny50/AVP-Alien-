@@ -1,12 +1,15 @@
 package com.alien.common.gameplay.item;
 
+import com.alien.common.data.AlienAdvancements;
 import com.alien.common.registry.init.AlienMobEffects;
+import com.blib.api.common.advancement.v1.BLibAdvancement;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.effect.MobEffectInstance;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.player.Player;
 
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
@@ -116,6 +119,35 @@ public final class JellyConsumption {
     }
 
     /** Convenience for the item classes: the eater as a server player, or null. */
+    /**
+     * Every jelly that can be eaten. The set advancement checks against this, so a fifth jelly is added here and
+     * nowhere else.
+     */
+    private static final List<BLibAdvancement> EVERY_JELLY_ADVANCEMENT = List.of(
+        AlienAdvancements.EAT_RAW_ROYAL_JELLY,
+        AlienAdvancements.EAT_RAW_SCOURGE_JELLY,
+        AlienAdvancements.EAT_RAW_IRRADIATED_JELLY,
+        AlienAdvancements.EAT_POISON_JELLY
+    );
+
+    /**
+     * Grants a jelly's own advancement, then the set advancement if that was the last one missing.
+     * <p>
+     * CHECKED rather than counted: {@code isGranted} asks the player's real advancement progress, so it survives
+     * restarts, still works if one was handed out by command, and needs no separate tally to keep in sync.
+     */
+    public static void grantJellyAdvancement(ServerPlayer serverPlayer, BLibAdvancement advancement) {
+        advancement.grant(serverPlayer);
+
+        for (var jellyAdvancement : EVERY_JELLY_ADVANCEMENT) {
+            if (!jellyAdvancement.isGranted(serverPlayer)) {
+                return;
+            }
+        }
+
+        AlienAdvancements.EAT_EVERY_JELLY.grant(serverPlayer);
+    }
+
     public static ServerPlayer serverPlayerOrNull(LivingEntity eater) {
         return eater instanceof ServerPlayer serverPlayer ? serverPlayer : null;
     }

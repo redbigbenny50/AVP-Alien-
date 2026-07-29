@@ -448,6 +448,11 @@ public class AlienBlockTagProvider extends FabricTagProvider.BlockTagProvider {
         getOrCreateTagBuilder(AlienBlockTags.IRRADIATED_RESIN)
             .add(
                 IrradiatedAlienResinBlocks.IRRADIATED_RESIN.get(),
+                // The plain slab and stairs were MISSING here while every other strain lists theirs. The blocks were
+                // registered all along, so nothing errored - they simply were not "resin" to any tag-driven rule:
+                // acid immunity, the natural-spawn deny nets, and the irradiated exposure sweep all ask this tag.
+                IrradiatedAlienResinBlocks.IRRADIATED_RESIN_SLAB.get(),
+                IrradiatedAlienResinBlocks.IRRADIATED_RESIN_STAIRS.get(),
                 IrradiatedAlienResinBlocks.IRRADIATED_RESIN_NODE.get(),
                 IrradiatedAlienResinBlocks.IRRADIATED_RESIN_VEIN.get(),
                 IrradiatedAlienResinBlocks.IRRADIATED_RESIN_WEB.get(),

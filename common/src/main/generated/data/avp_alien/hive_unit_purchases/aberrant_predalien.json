@@ -4,7 +4,7 @@
     {
       "type": "max_entity_count_in_location",
       "entity": "avp_alien:aberrant_predalien",
-      "value": 20
+      "value": 10
     }
   ],
   "input_entities": [

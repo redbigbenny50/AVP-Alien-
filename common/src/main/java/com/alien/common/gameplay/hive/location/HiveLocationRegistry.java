@@ -490,6 +490,18 @@ public final class HiveLocationRegistry {
         com.alien.common.gameplay.hive.lifecycle.LocationDormancyTask.scanAll(server);
         com.alien.common.gameplay.hive.lifecycle.LineageDeathHandler.scanAndKill(server);
 
+        // An empress collecting on a hive lost to a nuke. Cheap when nothing is pending, which is almost always.
+        com.alien.common.gameplay.hive.lifecycle.NukeRetribution.tick(server);
+
+        // Irradiated ground, walls and cargo leaking into whoever is near them. Throttled to once a second inside.
+        com.alien.common.gameplay.radiation.IrradiatedExposureTask.tick(server);
+
+        // A converted hive turning its own walls irradiated, a budget of blocks at a time.
+        com.alien.common.gameplay.hive.lifecycle.IrradiatedConversionSweep.tick(server);
+
+        // A newborn irradiated hive coming for everyone who made it, two days on.
+        com.alien.common.gameplay.hive.lifecycle.IrradiatedBirthRaid.tick(server);
+
         // § 13 economy: jelly production then balance buys. Per-tick, no throttling.
         com.alien.common.gameplay.hive.economy.JellyProduction.scanAndProduce(server);
         com.alien.common.gameplay.hive.economy.HiveBalanceTask.scanAll(server);

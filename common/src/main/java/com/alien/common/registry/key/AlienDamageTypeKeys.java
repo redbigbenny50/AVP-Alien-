@@ -13,6 +13,12 @@ public class AlienDamageTypeKeys {
 
     public static final ResourceKey<DamageType> CHESTBURSTING = create("chestbursting");
 
+    /**
+     * Only ever dealt by our FALLBACK radiation sickness, which is inert whenever AVP: Human is installed. Their
+     * radiation is a separate type in their own namespace, so the two can never collide.
+     */
+    public static final ResourceKey<DamageType> RADIATION_SICKNESS = create("radiation_sickness");
+
     public static final ResourceKey<DamageType> RAVAGER_CLAW = create("ravager_claw");
 
     public static final ResourceKey<DamageType> RAVAGER_SPECIAL = create("ravager_special");

@@ -9,7 +9,6 @@ import com.alien.common.gameplay.hive.faction.LineageFactionData;
 import com.alien.common.gameplay.hive.faction.LocationMembership;
 import com.alien.common.gameplay.hive.faction.VariantFactionRegistry;
 import com.alien.common.gameplay.hive.growth.HiveLocationClaims;
-import com.alien.common.gameplay.hive.id.HiveLocationId;
 import com.alien.common.gameplay.hive.id.HiveLocationIds;
 import com.alien.common.gameplay.hive.id.LineageIds;
 import com.alien.common.gameplay.hive.location.HiveLocation;
@@ -161,24 +160,25 @@ public final class LegacyHiveRecovery {
             });
     }
 
+    /**
+     * Whether a queen came out of a pre-lifecycle save and should be handed to the legacy recovery path.
+     * <p>
+     * <b>An ovipositor with no live hive behind it used to be enough on its own, and that was wrong.</b> A queen this
+     * world created can be in exactly that state for entirely healthy reasons - most importantly WHILE SHE IS FOUNDING,
+     * when her location exists but she has not joined its faction yet, and again if her hive later dies and leaves her
+     * orphaned. Once {@code killAllLegacyQueens} has been armed by an admin sweep (it persists in NBT so unloaded
+     * legacy queens are caught as they load), matching that test means she is DISCARDED - a founding queen would simply
+     * vanish mid-dig and never come back. Without the flag armed she was instead frozen dormant, which stops the carve
+     * just as dead.
+     * <p>
+     * So identification now needs the one signal only a genuinely old save can produce: arriving with NO lifecycle
+     * state at all. A queen already recorded as legacy stays recorded, so she is still recognised on later loads once
+     * that state has been written for her.
+     */
     private static boolean shouldTreatAsLegacyQueen(LegacyHiveRecoveryData data, Queen queen) {
         return data.isAwakenedLegacyQueen(queen.getUUID())
             || data.isLegacyQueen(queen.getUUID())
-            || queen.wasLoadedWithoutLifecycleState()
-            || queen.hasOvipositor() && !hasLiveLocationMembership(queen);
-    }
-
-    private static boolean hasLiveLocationMembership(Queen queen) {
-        for (var factionId : Alien.MOD.factions().getFactionIds(queen.getUUID())) {
-            if (!HiveLocationIds.isHiveLocationId(factionId)) {
-                continue;
-            }
-            var location = HiveLocationRegistry.INSTANCE.get(HiveLocationId.of(factionId));
-            if (location != null && location.isAlive()) {
-                return true;
-            }
-        }
-        return false;
+            || queen.wasLoadedWithoutLifecycleState();
     }
 
     private static void rememberQueenLocationIfMissing(LegacyHiveRecoveryData data, Queen queen, boolean createIfMissing) {

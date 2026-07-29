@@ -38,6 +38,17 @@ public class AlienSoundEvents {
 
     public static final BLibHolder<SoundEvent> ENTITY_OVOMORPH_SHEAR = create("entity.ovomorph.shear");
 
+    /**
+     * The harbinger's roar. Numbered because MORE ARE COMING - [stated] the previous pass shipped none at all, and this
+     * is the first harbinger sound in the mod.
+     * <p>
+     * Registered as its OWN event rather than folded into a shared `entity.harbinger.roar` list, deliberately: a
+     * sounds.json entry with several files picks one at RANDOM, and the irradiated hive's birth raid is specified to
+     * use THIS roar. When roar1 and roar2 arrive they can either get their own events or share a random set alongside
+     * this one - but this event must keep resolving to roar3 alone.
+     */
+    public static final BLibHolder<SoundEvent> ENTITY_HARBINGER_ROAR_3 = create("entity.harbinger.roar3");
+
     public static final BLibHolder<SoundEvent> ENTITY_QUEEN_ARM_ATTACK = create("entity.queen.arm_attack");
 
     public static final BLibHolder<SoundEvent> ENTITY_QUEEN_BACK_HAND_ATTACK = create("entity.queen.back_hand_attack");

@@ -46,7 +46,15 @@ public class AlienMobEffectTagProvider extends FabricTagProvider<MobEffect> {
                 AlienMobEffects.getScourgeHolder().value(),
                 // Unbounded poison, and blood loss shaves max health with no end to restore it.
                 AlienMobEffects.getHivesBaneHolder().value(),
-                AlienMobEffects.getBloodLossHolder().value()
+                AlienMobEffects.getBloodLossHolder().value(),
+                // Would make the newborn PERMANENTLY radiation-immune off a dose its parent drank - and an aberrant
+                // burster inheriting it would be immune for life, which is the one thing that strain must never be.
+                // Their weakness to radiation is why they cannot convert; a potion the host swallowed cannot be
+                // allowed to hand it back.
+                AlienMobEffects.getRadiationResistanceHolder().value(),
+                // The withered-burster stall again, in a new coat: an endless-duration sickness on a newborn is a
+                // permanent damage loop it can never finish.
+                AlienMobEffects.getRadiationSicknessHolder().value()
             );
     }
 }

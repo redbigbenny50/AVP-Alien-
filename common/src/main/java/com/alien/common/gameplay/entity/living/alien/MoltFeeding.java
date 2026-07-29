@@ -101,14 +101,37 @@ public final class MoltFeeding {
             && !facehugger.isPassenger();
     }
 
+    /**
+     * The nearest spent remain it can actually reach.
+     * <p>
+     * The box is inflated in every direction, so on its own it reaches straight THROUGH walls - a burster was eating
+     * the egg in the next chamber without moving. {@code hasLineOfSight} clips an eye-to-eye ray against block
+     * colliders, so a resin wall between them now blocks the meal exactly as it should.
+     * <p>
+     * NEAREST rather than first-found, too: the box iterates in no meaningful order, so with several remains around it
+     * would snap at an arbitrary one while ignoring the corpse at its feet.
+     */
     private static Entity findSpentRemain(Alien alien) {
         var box = alien.getBoundingBox().inflate(FEED_RADIUS);
+        Entity closest = null;
+        var closestDistance = Double.MAX_VALUE;
+
         for (var candidate : alien.level().getEntities(alien, box)) {
-            if (isSpentEgg(candidate) || isSpentHugger(candidate)) {
-                return candidate;
+            if (!isSpentEgg(candidate) && !isSpentHugger(candidate)) {
+                continue;
+            }
+            if (!alien.hasLineOfSight(candidate)) {
+                continue;
+            }
+
+            var distance = alien.distanceToSqr(candidate);
+            if (distance < closestDistance) {
+                closestDistance = distance;
+                closest = candidate;
             }
         }
-        return null;
+
+        return closest;
     }
 
     private static void consume(Alien alien, Entity meal) {

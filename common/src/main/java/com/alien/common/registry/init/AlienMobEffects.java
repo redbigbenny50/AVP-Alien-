@@ -4,11 +4,14 @@ import com.alien.Alien;
 import com.alien.common.gameplay.effect.BloodLossStatusEffect;
 import com.alien.common.gameplay.effect.ChitinousAuraStatusEffect;
 import com.alien.common.gameplay.effect.FrenzyStatusEffect;
+import com.alien.common.gameplay.effect.GlowingTalonsStatusEffect;
 import com.alien.common.gameplay.effect.GrowthSuppressionStatusEffect;
 import com.alien.common.gameplay.effect.HivesBaneStatusEffect;
 import com.alien.common.gameplay.effect.JellySicknessStatusEffect;
 import com.alien.common.gameplay.effect.MarkedForDeathStatusEffect;
 import com.alien.common.gameplay.effect.MetamorphosisStatusEffect;
+import com.alien.common.gameplay.effect.RadiationResistanceStatusEffect;
+import com.alien.common.gameplay.effect.RadiationSicknessStatusEffect;
 import com.alien.common.gameplay.effect.ScourgeStatusEffect;
 import com.alien.common.gameplay.effect.SecurementStatusEffect;
 import com.blib.api.common.registry.v1.BLibHolder;
@@ -26,6 +29,15 @@ public class AlienMobEffects {
     private static final BLibHolder<MobEffect> BLOOD_LOSS = create("blood_loss", BloodLossStatusEffect::new);
 
     private static final BLibHolder<MobEffect> CHITINOUS_AURA = create("chitinous_aura", ChitinousAuraStatusEffect::new);
+
+    private static final BLibHolder<MobEffect> RADIATION_SICKNESS =
+        create("radiation_sickness", RadiationSicknessStatusEffect::new);
+
+    private static final BLibHolder<MobEffect> RADIATION_RESISTANCE =
+        create("radiation_resistance", RadiationResistanceStatusEffect::new);
+
+    private static final BLibHolder<MobEffect> GLOWING_TALONS =
+        create("glowing_talons", GlowingTalonsStatusEffect::new);
 
     private static final BLibHolder<MobEffect> FRENZY = create("frenzy", FrenzyStatusEffect::new);
 
@@ -48,6 +60,18 @@ public class AlienMobEffects {
         "marked_for_death",
         MarkedForDeathStatusEffect::new
     );
+
+    public static Holder<MobEffect> getRadiationResistanceHolder() {
+        return RADIATION_RESISTANCE.getBackingHolder();
+    }
+
+    public static Holder<MobEffect> getGlowingTalonsHolder() {
+        return GLOWING_TALONS.getBackingHolder();
+    }
+
+    public static Holder<MobEffect> getRadiationSicknessHolder() {
+        return RADIATION_SICKNESS.getBackingHolder();
+    }
 
     public static Holder<MobEffect> getChitinousAuraHolder() {
         return CHITINOUS_AURA.getBackingHolder();

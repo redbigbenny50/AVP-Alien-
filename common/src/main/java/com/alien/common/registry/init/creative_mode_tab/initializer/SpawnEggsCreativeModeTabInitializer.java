@@ -83,6 +83,7 @@ public class SpawnEggsCreativeModeTabInitializer {
 
         CreativeModeTabUtil.accept(output, AlienSpawnEggItems.NETHER_BOILER_SPAWN_EGG);
         CreativeModeTabUtil.accept(output, AlienSpawnEggItems.NETHER_SPITTER_SPAWN_EGG);
+        CreativeModeTabUtil.accept(output, AlienSpawnEggItems.IRRADIATED_SPITTER_SPAWN_EGG);
 
         CreativeModeTabUtil.accept(output, AlienSpawnEggItems.NETHER_CHRYSALIS_SPAWN_EGG);
         CreativeModeTabUtil.accept(output, AlienSpawnEggItems.NETHER_RAZOR_CLAW_SPAWN_EGG);
@@ -128,6 +129,8 @@ public class SpawnEggsCreativeModeTabInitializer {
     }
 
     private static void addIrradiatedXenomorphSpawnEggs(CreativeModeTab.Output output) {
+        CreativeModeTabUtil.accept(output, AlienSpawnEggItems.IRRADIATED_OVOMORPH_SPAWN_EGG);
+        CreativeModeTabUtil.accept(output, AlienSpawnEggItems.IRRADIATED_FACEHUGGER_SPAWN_EGG);
         CreativeModeTabUtil.accept(output, AlienSpawnEggItems.IRRADIATED_DRONE_SPAWN_EGG);
         CreativeModeTabUtil.accept(output, AlienSpawnEggItems.IRRADIATED_WARRIOR_SPAWN_EGG);
         CreativeModeTabUtil.accept(output, AlienSpawnEggItems.IRRADIATED_PRAETORIAN_SPAWN_EGG);

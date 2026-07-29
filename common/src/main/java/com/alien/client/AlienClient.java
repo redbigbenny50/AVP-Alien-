@@ -252,6 +252,8 @@ public class AlienClient {
         MOD.registries().registerEntityRenderer(AlienEntityTypes.NETHER_CHRYSALIS, ChrysalisRenderer::new);
         MOD.registries().registerEntityRenderer(AlienEntityTypes.NETHER_CRUSHER, CrusherRenderer::new);
         MOD.registries().registerEntityRenderer(AlienEntityTypes.NETHER_DRONE, DroneRenderer::new);
+        MOD.registries().registerEntityRenderer(AlienEntityTypes.IRRADIATED_FACEHUGGER, FacehuggerRenderer::new);
+        MOD.registries().registerEntityRenderer(AlienEntityTypes.IRRADIATED_OVOMORPH, OvomorphRenderer::new);
         MOD.registries().registerEntityRenderer(AlienEntityTypes.NETHER_FACEHUGGER, FacehuggerRenderer::new);
         MOD.registries().registerEntityRenderer(AlienEntityTypes.NETHER_HARBINGER, HarbingerRenderer::new);
         MOD.registries().registerEntityRenderer(AlienEntityTypes.NETHER_OVOMORPH, OvomorphRenderer::new);
@@ -271,6 +273,7 @@ public class AlienClient {
         MOD.registries().registerEntityRenderer(AlienEntityTypes.NETHER_BURSTER, BursterRenderer::new);
         MOD.registries().registerEntityRenderer(AlienEntityTypes.NETHER_RUNNER, RunnerRenderer::new);
         MOD.registries().registerEntityRenderer(AlienEntityTypes.NETHER_SPITTER, SpitterRenderer::new);
+        MOD.registries().registerEntityRenderer(AlienEntityTypes.IRRADIATED_SPITTER, SpitterRenderer::new);
         MOD.registries().registerEntityRenderer(AlienEntityTypes.NETHER_WARRIOR, WarriorRenderer::new);
         MOD.registries().registerEntityRenderer(AlienEntityTypes.OVIPOSITOR, OvipositorRenderer::new);
         MOD.registries().registerEntityRenderer(AlienEntityTypes.ROYAL_COCOON, RoyalCocoonRenderer::new);

@@ -1,0 +1,26 @@
+{
+  "parent": "avp_alien:aliens/root",
+  "criteria": {
+    "eat_poison_jelly": {
+      "trigger": "minecraft:impossible"
+    }
+  },
+  "display": {
+    "description": {
+      "translate": "advancements.aliens.eat_poison_jelly.description"
+    },
+    "icon": {
+      "count": 1,
+      "id": "avp_alien:poison_jelly"
+    },
+    "title": {
+      "translate": "advancements.aliens.eat_poison_jelly.title"
+    }
+  },
+  "requirements": [
+    [
+      "eat_poison_jelly"
+    ]
+  ],
+  "sends_telemetry_event": true
+}

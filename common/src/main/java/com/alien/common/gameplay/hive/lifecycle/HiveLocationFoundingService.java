@@ -2,6 +2,7 @@ package com.alien.common.gameplay.hive.lifecycle;
 
 import com.alien.Alien;
 import com.alien.common.gameplay.entity.living.alien.xenomorph.queen.Queen;
+import com.alien.common.gameplay.hive.economy.IrradiatedHiveRules;
 import com.alien.common.gameplay.hive.faction.FactionAesthetics;
 import com.alien.common.gameplay.hive.faction.FactionNaming;
 import com.alien.common.gameplay.hive.faction.HiveLocationFactionProvisioner;
@@ -46,13 +47,28 @@ public final class HiveLocationFoundingService {
      * Mints a new {@link LineageFactionData} (parented to the queen's variant faction) and her first
      * {@link HiveLocation} at {@code position}. Returns the new location id.
      */
-    public static HiveLocationId foundNewLineage(Queen queen, BlockPos position) {
+    public static @org.jetbrains.annotations.Nullable HiveLocationId foundNewLineage(Queen queen, BlockPos position) {
         // Default: a founding queen raises her physical chamber. The inhibited-claim path passes false - a captive
         // queen still gets a lineage + claim (for her chained eggsack and the autonomy gate) but NO built hive.
         return foundNewLineage(queen, position, true);
     }
 
-    public static HiveLocationId foundNewLineage(Queen queen, BlockPos position, boolean buildStructure) {
+    public static @org.jetbrains.annotations.Nullable HiveLocationId foundNewLineage(
+        Queen queen,
+        BlockPos position,
+        boolean buildStructure
+    ) {
+        // AN IRRADIATED QUEEN NEVER FOUNDS. [stated] "she doesnt try to build a hive like how normal queens do, she
+        // just exists... shes just a roaming weapon of radioactive teeth and claws." Her strain's territory belongs to
+        // the LOCATION, not to her, so a homeless irradiated queen has nothing to found WITH and nothing to found FOR.
+        //
+        // [stated] she may still JOIN an existing irradiated hive if she finds one - that is ordinary membership, not
+        // founding, and goes nowhere near this method.
+        if (IrradiatedHiveRules.isIrradiated(queen)) {
+            Alien.LOGGER.info("Founding refused for irradiated queen {} - the strain does not found", queen.getUUID());
+            return null;
+        }
+
         var level = queen.level();
         var dimension = level.dimension();
         var variant = queen.getVariant();

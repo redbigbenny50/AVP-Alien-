@@ -118,6 +118,12 @@ public abstract class Xenomorph extends Alien implements ResinProducer, EntitySe
 
     private static final double MAX_HEALTH_REDUCTION_PER_LOST_LIMB = 0.1D;
 
+    /** How often to look for cobwebs. They are not urgent, and the scan is the expensive part. */
+    private static final int COBWEB_SWEEP_INTERVAL_TICKS = 10;
+
+    /** Limb count the max-health modifier currently reflects, so the attribute is only touched when it changes. */
+    private int lastAppliedDetachedLimbs = -1;
+
     private static final PathBlockBreakingConfig PATH_BLOCK_BREAKING_CONFIG = new PathBlockBreakingConfig(
         true,
         2,
@@ -485,6 +491,7 @@ public abstract class Xenomorph extends Alien implements ResinProducer, EntitySe
             escapeHumanRazorWire();
             breakFrenziedRaidObstructions();
             breakRaidContainmentTargets();
+            shoulderThroughObstructions();
         }
 
         crawlingManager.tick();
@@ -537,9 +544,17 @@ public abstract class Xenomorph extends Alien implements ResinProducer, EntitySe
             return;
         }
 
-        attributeInstance.removeModifier(LOST_LIMB_MAX_HEALTH_MODIFIER);
-
         var detachedLimbs = countDetachedLimbs();
+
+        // Nothing lost and nothing applied: leave the attribute map alone entirely. Previously this removed the
+        // modifier unconditionally EVERY TICK on EVERY xenomorph before checking whether it was needed - an attribute
+        // mutation and a recalculation each time, for the overwhelmingly common case of an alien with all its limbs.
+        if (detachedLimbs == lastAppliedDetachedLimbs) {
+            return;
+        }
+
+        lastAppliedDetachedLimbs = detachedLimbs;
+        attributeInstance.removeModifier(LOST_LIMB_MAX_HEALTH_MODIFIER);
 
         if (detachedLimbs <= 0) {
             return;
@@ -581,6 +596,17 @@ public abstract class Xenomorph extends Alien implements ResinProducer, EntitySe
     }
 
     private void breakIntersectingCobwebs() {
+        // THROTTLED. This walked the whole hitbox volume every tick on every xenomorph - roughly 24,000 block reads
+        // a second across 100 drones, 90,000 if they are queens - almost always to discover there is no cobweb.
+        //
+        // Only the interval, not a "am I webbed" precondition: vanilla exposes no such check (it keeps the stuck-speed
+        // multiplier private and clears it every tick), and inventing one would mean tracking state that already
+        // exists somewhere less reliable. A cobweb slows an entity for far longer than half a second, so checking ten
+        // times less often loses nothing a player would notice and costs a tenth as much.
+        if (tickCount % COBWEB_SWEEP_INTERVAL_TICKS != 0) {
+            return;
+        }
+
         var level = level();
         var boundingBox = getBoundingBox();
         var minX = Mth.floor(boundingBox.minX);
@@ -695,6 +721,133 @@ public abstract class Xenomorph extends Alien implements ResinProducer, EntitySe
 
         var pos = hit.getBlockPos();
         return canFrenziedRaidBreakoutBlock(level().getBlockState(pos), pos) ? pos : null;
+    }
+
+    /** The hardness ceiling an ordinary dig respects - kept identical to {@code DigToTargetGoal.DESTROY_TIME_LIMIT}. */
+    private static final float SHOULDER_BREAK_DESTROY_TIME_LIMIT = 6.0F;
+
+    /**
+     * Progress per pass while WALKING - [stated] "the walking should break them at the same rate as deliberately
+     * digging". Kept identical to {@code DigToTargetGoal.BREAKING_SPEED}, so simply walking into something is already
+     * as effective as setting out to dig it.
+     */
+    private static final float SHOULDER_BREAK_BASE_SPEED = 50.0F;
+
+    /** [stated] "running would be 4x that value" - so a charging queen goes through walls at four times a dig. */
+    private static final float SHOULDER_BREAK_RUN_MULTIPLIER = 4.0F;
+
+    /** How far above its own walk pace a caste counts as running. */
+    private static final double SHOULDER_BREAK_RUN_FACTOR = 1.15;
+
+    /** Below this the caste fits through the openings that trap the big ones, so it has no business smashing them. */
+    private static final float SHOULDER_BREAK_MIN_HEIGHT = 3.0F;
+
+    /** Half a second. Often enough to keep moving, rare enough not to scan every tick. */
+    private static final int SHOULDER_BREAK_INTERVAL_TICKS = 10;
+
+    /** Roughly 0.05 blocks a tick - enough to tell walking from standing still and being shoved. */
+    private static final double SHOULDER_BREAK_MIN_SPEED_SQUARED = 0.0025;
+
+    /** A little past the hitbox, so it clears the way ahead rather than only what it is already inside. */
+    private static final double SHOULDER_BREAK_REACH = 0.25;
+
+    /**
+     * The big castes shoulder their way through low openings instead of standing in them looking foolish.
+     * <h2>Why the top half only</h2> [stated] "have it so the top half of the hitbox breaks any blocks the alien is
+     * normally able to break. That means that if its a wall the lower part 'legs' stops it from just plowing through it
+     * and making an uneeded tunnel."
+     * <p>
+     * So a 3-block arch, a low doorway or a stray floating block gets smashed as a harbinger comes through, while a
+     * solid wall still stops it - its legs meet the bottom half, which this never touches. A big xenomorph clears the
+     * ceiling, it does not bore a corridor.
+     * <h2>Who</h2> By HEIGHT, not by a list of castes, because the problem IS height. At 3.98 that is the queen,
+     * empress, harbinger, praetorian, predalien and carrier - [stated] "yeah for them too" - and any tall caste added
+     * later gets it for free. Ravagers, razor claws and chrysalises sit at 2.98 and fit through the gaps that trap the
+     * big ones, so they are naturally below the line. The ovipositor is excluded structurally: it extends Mob, not
+     * Xenomorph, and never pathfinds anyway.
+     * <h2>How fast</h2> PROGRESSIVE, not instant: blocks take damage through the same break-progress manager an
+     * ordinary dig uses, so a wall visibly cracks apart as something large leans into it. WALKING already matches the
+     * full dig rate, and RUNNING is four times that - a harbinger in pursuit does not slow down for architecture at
+     * all.
+     * <h2>When</h2> [stated] "any walking running or similar animation" - not only while chasing. A queen stuck on a
+     * stray block while merely walking looks just as silly. Gated on actually MOVING, so a stationary one never chews
+     * at its own architecture, and on {@code mobGriefing} - [stated] "if mobgriefing is off then i think we should
+     * respect their choice", which is also what every other breaking behaviour here does.
+     * <h2>What it may break</h2> [stated] "this method should also apply to the blocks they can walk and break too, so
+     * the behavior is the same whether they use an attack to break a block or just walk/run through it."
+     * <p>
+     * So this mirrors {@code DigToTargetGoal}'s rule EXACTLY - the one an ordinary dig uses - rather than either of the
+     * two special sets beside it. FRENZY_BREAKABLE is a RAID power and lets them through more than they normally
+     * manage; the containment rule is looser still, permitting anything with a collision shape so a captive can get out
+     * of a box. Walking through a doorway should be neither. A block a xenomorph could have chewed through is a block
+     * it can shoulder aside, and nothing more.
+     */
+    private void shoulderThroughObstructions() {
+        if (getBbHeight() < SHOULDER_BREAK_MIN_HEIGHT || tickCount % SHOULDER_BREAK_INTERVAL_TICKS != 0) {
+            return;
+        }
+
+        if (!level().getGameRules().getBoolean(GameRules.RULE_MOBGRIEFING)) {
+            return;
+        }
+
+        var motion = getDeltaMovement();
+        var speedSquared = motion.x * motion.x + motion.z * motion.z;
+        if (speedSquared < SHOULDER_BREAK_MIN_SPEED_SQUARED) {
+            return;
+        }
+
+        // [stated] "walking should break it at normal speed and running breaks it at 4x speed. that way running
+        // breaks the blocks faster while just walking carves it slower if at all."
+        //
+        // "Running" is measured against the caste's OWN walk speed rather than a flat number, so a queen and a
+        // predalien each get judged by their own gait instead of one threshold suiting neither.
+        var walkSpeed = getAttributeValue(net.minecraft.world.entity.ai.attributes.Attributes.MOVEMENT_SPEED);
+        var running = Math.sqrt(speedSquared) > walkSpeed * SHOULDER_BREAK_RUN_FACTOR;
+        var breakSpeed = SHOULDER_BREAK_BASE_SPEED * (running ? SHOULDER_BREAK_RUN_MULTIPLIER : 1.0F);
+
+        var box = getBoundingBox();
+        var shoulders = new net.minecraft.world.phys.AABB(
+            box.minX,
+            box.minY + box.getYsize() * 0.5,
+            box.minZ,
+            box.maxX,
+            box.maxY,
+            box.maxZ
+        ).inflate(SHOULDER_BREAK_REACH, 0.0, SHOULDER_BREAK_REACH);
+
+        for (
+            var pos : BlockPos.betweenClosed(
+                net.minecraft.core.BlockPos.containing(shoulders.minX, shoulders.minY, shoulders.minZ),
+                net.minecraft.core.BlockPos.containing(shoulders.maxX, shoulders.maxY, shoulders.maxZ)
+            )
+        ) {
+            if (canShoulderAside(pos)) {
+                com.blib.api.common.block.v1.BlockBreakProgressManager.damage(level(), pos, breakSpeed);
+            }
+        }
+    }
+
+    /**
+     * The SAME test an ordinary dig applies, so attacking a block and walking through it agree.
+     * <p>
+     * No block entities, nothing unbreakable, nothing tagged immune, and nothing harder than the dig limit - obsidian
+     * at 50 and iron at 5 are both well clear of a xenomorph's ordinary reach, and stay that way whether it swings at
+     * them or walks into them.
+     */
+    private boolean canShoulderAside(BlockPos pos) {
+        var state = level().getBlockState(pos);
+
+        return !state.isAir()
+            && !state.hasBlockEntity()
+            && state.getDestroySpeed(level(), pos) != -1.0F
+            && state.getBlock().defaultDestroyTime() < SHOULDER_BREAK_DESTROY_TIME_LIMIT
+            && !state.is(AlienBlockTags.XENOMORPH_IMMUNE)
+            // RESIN IS THEIR OWN HOUSE. [stated] "exclude resin for now, since the hive clears any obstructions in
+            // the hallways and chambers anyway as part of maintenance." Resin sits well under the hardness ceiling,
+            // so without this a queen jogging down her own corridor would strip the ceiling off it - and the hive
+            // would then rebuild exactly what she just removed.
+            && !state.is(AlienBlockTags.RESIN);
     }
 
     private boolean canFrenziedRaidBreakoutBlock(BlockState state, BlockPos pos) {

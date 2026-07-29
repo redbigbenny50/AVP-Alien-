@@ -158,6 +158,8 @@ public final class HiveLocation {
 
     private static final String NBT_ATTACK_CAMPAIGNS = "AttackCampaigns";
 
+    private static final String NBT_TERRITORY_VISITS = "TerritoryVisits";
+
     private static final String NBT_GRUDGE_PLAYER_ID = "GrudgePlayerId";
 
     private static final String NBT_RESCUE_CAMPAIGN = "RescueCampaign";
@@ -352,6 +354,16 @@ public final class HiveLocation {
     private final java.util.Map<UUID, com.alien.common.gameplay.hive.party.AttackCampaign> attackCampaigns;
 
     /**
+     * Everyone who has set foot in this territory, and when they first did.
+     * <p>
+     * Deliberately separate from {@link #attackCampaigns}, which only ever gets an entry when a player DAMAGES a member
+     * - that map answers "who has been fighting us", which is a different and equally useful question. This one answers
+     * "who has been here at all", and it is the only record that catches someone who walked in quietly, did something
+     * drastic, and walked out without throwing a punch.
+     */
+    private final java.util.Map<UUID, Long> territoryVisits;
+
+    /**
      * Post-replacement grudge: set when this location's founder queen is killed by a player; the crowned successor
      * prioritizes raiding this player on her first raid, then it clears. Null = no grudge.
      */
@@ -445,6 +457,7 @@ public final class HiveLocation {
         this.localReserves = new HiveLocationReserves(this::lineageVariantOrNull);
         this.parties = new java.util.ArrayList<>();
         this.attackCampaigns = new java.util.HashMap<>();
+        this.territoryVisits = new java.util.HashMap<>();
         this.grudgePlayerId = null;
         this.rescueCampaign = null;
         this.leadership = new HiveLocationLeadership();
@@ -922,6 +935,43 @@ public final class HiveLocation {
         return attackCampaigns;
     }
 
+    /** First-seen tick per player, oldest entry = who found this place first. */
+    public java.util.Map<UUID, Long> territoryVisits() {
+        return territoryVisits;
+    }
+
+    /** Thirty Minecraft days. Long enough to be a grudge, short enough not to be a census. */
+    private static final long TERRITORY_VISIT_MEMORY_TICKS = 24000L * 30L;
+
+    /** How often the ledger is actually swept. The memory is measured in days; the sweep need not be per-visit. */
+    private static final long TERRITORY_VISIT_PRUNE_INTERVAL_TICKS = 1200L;
+
+    private long lastVisitPruneTick = Long.MIN_VALUE;
+
+    /**
+     * Records a first visit, and forgets the ones old enough not to matter.
+     * <p>
+     * Later visits deliberately do NOT overwrite the first - the hive remembers when you first turned up, which is what
+     * makes this an order of arrival. But without the age-out it was an unbounded ledger: every player who ever stepped
+     * inside, kept forever and written to the region file on every save. On a long-running server that grows without
+     * limit for no benefit, since nothing consults a visit from months ago.
+     */
+    public void recordTerritoryVisit(UUID playerId, long tick) {
+        territoryVisits.putIfAbsent(playerId, tick);
+
+        // The sweep is O(entries) and this is called for EVERY player standing in territory on every aggro pass, so
+        // running it each time was quietly quadratic on a busy hive. Once a minute is ample for a thirty-day memory.
+        if (tick - lastVisitPruneTick < TERRITORY_VISIT_PRUNE_INTERVAL_TICKS) {
+            return;
+        }
+        lastVisitPruneTick = tick;
+
+        var cutoff = tick - TERRITORY_VISIT_MEMORY_TICKS;
+        if (cutoff > 0) {
+            territoryVisits.values().removeIf(firstSeen -> firstSeen < cutoff);
+        }
+    }
+
     public @Nullable UUID grudgePlayerId() {
         return grudgePlayerId;
     }
@@ -1226,6 +1276,17 @@ public final class HiveLocation {
             tag.put(NBT_ATTACK_CAMPAIGNS, campaignsTag);
         }
 
+        if (!territoryVisits.isEmpty()) {
+            var visitsTag = new ListTag();
+            for (var entry : territoryVisits.entrySet()) {
+                var entryTag = new CompoundTag();
+                entryTag.putUUID("PlayerId", entry.getKey());
+                entryTag.putLong("FirstSeen", entry.getValue());
+                visitsTag.add(entryTag);
+            }
+            tag.put(NBT_TERRITORY_VISITS, visitsTag);
+        }
+
         if (grudgePlayerId != null) {
             tag.putUUID(NBT_GRUDGE_PLAYER_ID, grudgePlayerId);
         }
@@ -1438,6 +1499,15 @@ public final class HiveLocation {
         location.rescueCampaign = tag.contains(NBT_RESCUE_CAMPAIGN)
             ? com.alien.common.gameplay.hive.party.RescueCampaign.load(tag.getCompound(NBT_RESCUE_CAMPAIGN))
             : null;
+
+        location.territoryVisits.clear();
+        if (tag.contains(NBT_TERRITORY_VISITS)) {
+            var visitsTag = tag.getList(NBT_TERRITORY_VISITS, Tag.TAG_COMPOUND);
+            for (var i = 0; i < visitsTag.size(); i++) {
+                var entryTag = visitsTag.getCompound(i);
+                location.territoryVisits.put(entryTag.getUUID("PlayerId"), entryTag.getLong("FirstSeen"));
+            }
+        }
 
         location.attackCampaigns.clear();
         if (tag.contains(NBT_ATTACK_CAMPAIGNS)) {

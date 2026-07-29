@@ -11,9 +11,17 @@ public class AlienAdvancements {
 
     public static final BLibAdvancement EAT_RAW_SCOURGE_JELLY = create("eat_raw_scourge_jelly");
 
+    public static final BLibAdvancement EAT_POISON_JELLY = create("eat_poison_jelly");
+
+    public static final BLibAdvancement EAT_EVERY_JELLY = create("eat_every_jelly");
+
+    public static final BLibAdvancement EAT_RAW_IRRADIATED_JELLY = create("eat_raw_irradiated_jelly");
+
     public static final BLibAdvancement KILL_A_HARBINGER = create("kill_a_harbinger");
 
     public static final BLibAdvancement KILL_A_HIVE = create("kill_a_hive");
+
+    public static final BLibAdvancement WITHSTAND_ATTACK_PARTY = create("withstand_attack_party");
 
     public static final BLibAdvancement KILL_A_LINEAGE = create("kill_a_lineage");
 

@@ -43,6 +43,7 @@ public class EnglishLanguageProvider extends FabricLanguageProvider {
 
         builder.add("death.attack.acid", "%1$s vaporized in acid");
         builder.add("death.attack.chestbursting", "%1$s gave birth");
+        builder.add("death.attack.radiation_sickness", "%1$s was welcomed to the wasteland");
         builder.add("death.attack.ravager_claw", "%1$s was torn apart");
         builder.add("death.attack.ravager_claw.player", "%1$s was torn apart by %2$s");
         builder.add("death.attack.ravager_special", "%1$s was eviscerated");
@@ -70,6 +71,11 @@ public class EnglishLanguageProvider extends FabricLanguageProvider {
         builder.add("item.minecraft.potion.effect.scourge", "Potion of Scourge");
         builder.add("item.minecraft.splash_potion.effect.scourge", "Splash Potion of Scourge");
         builder.add("item.minecraft.lingering_potion.effect.scourge", "Lingering Potion of Scourge");
+
+        builder.add("item.minecraft.potion.effect.irradiation", "Potion of Irradiation");
+        builder.add("item.minecraft.splash_potion.effect.irradiation", "Splash Potion of Irradiation");
+        builder.add("item.minecraft.lingering_potion.effect.irradiation", "Lingering Potion of Irradiation");
+        builder.add("item.minecraft.tipped_arrow.effect.irradiation", "Arrow of Irradiation");
         builder.add("item.minecraft.tipped_arrow.effect.scourge", "Arrow of Scourge");
 
         // Entities

@@ -8,6 +8,7 @@ import com.alien.common.gameplay.entity.living.alien.xenomorph.XenomorphConfig;
 import com.alien.common.gameplay.entity.living.alien.xenomorph.XenomorphPathConfig;
 import com.alien.common.gameplay.entity.living.alien.xenomorph.ai.egg_laying.EggLayer;
 import com.alien.common.gameplay.entity.living.alien.xenomorph.empress.ai.EmpressGOAP;
+import com.alien.common.gameplay.entity.living.alien.xenomorph.queen.QueenLifecyclePhaseManager;
 import com.alien.common.model.alien.variant.AlienVariant;
 import com.alien.common.registry.init.AlienEntityTypes;
 import com.alien.common.registry.init.AlienSoundEvents;
@@ -167,6 +168,16 @@ public class Empress extends Xenomorph implements GOAPUser<Empress>, EggLayer {
         return empressOvipositorManager;
     }
 
+    /** Damage accumulated toward being pulled off the eggsack, and when it was last added to. */
+    private float disturbanceAccumulator;
+
+    private int lastDisturbanceTick = Integer.MIN_VALUE;
+
+    /**
+     * Gap after which the accumulator is considered cold. Matches the queen's decay closely enough to feel the same.
+     */
+    private static final int DISTURBANCE_WINDOW_TICKS = 120;
+
     public EmpressData getEmpressData() {
         return empressData;
     }
@@ -175,9 +186,42 @@ public class Empress extends Xenomorph implements GOAPUser<Empress>, EggLayer {
     public boolean hurt(@NotNull DamageSource damageSource, float amount) {
         var wasHurt = super.hurt(damageSource, amount);
         if (wasHurt && !level().isClientSide) {
-            empressOvipositorManager.abandonOvipositor();
+            // ANY damage used to tear her off her eggsack - a syringe (0.01 damage), a stray splash potion, a snowball
+            // would all do it. Same disturbance bar the queen uses: one hard blow, or enough small hits before the
+            // accumulator bleeds off. Below that she takes the hit and keeps working, and the retaliation is cleared
+            // with it so her sensors do not simply pull her off a tick later.
+            if (registerDisturbance(amount)) {
+                empressOvipositorManager.abandonOvipositor();
+            } else if (empressOvipositorManager.hasOvipositor()) {
+                setLastHurtByMob(null);
+                setTarget(null);
+            }
         }
         return wasHurt;
+    }
+
+    /**
+     * The empress has no lifecycle phase manager, so she keeps her own copy of the queen's disturbance bar. Thresholds
+     * are shared deliberately - the two should feel identical to hit.
+     */
+    private boolean registerDisturbance(float amount) {
+        if (amount >= QueenLifecyclePhaseManager.HIBERNATION_DISTURBANCE_DAMAGE) {
+            disturbanceAccumulator = 0.0F;
+            return true;
+        }
+
+        if (tickCount - lastDisturbanceTick > DISTURBANCE_WINDOW_TICKS) {
+            disturbanceAccumulator = 0.0F;
+        }
+        lastDisturbanceTick = tickCount;
+
+        disturbanceAccumulator += amount;
+        if (disturbanceAccumulator >= QueenLifecyclePhaseManager.SUSTAINED_DISTURBANCE_DAMAGE) {
+            disturbanceAccumulator = 0.0F;
+            return true;
+        }
+
+        return false;
     }
 
     @Override

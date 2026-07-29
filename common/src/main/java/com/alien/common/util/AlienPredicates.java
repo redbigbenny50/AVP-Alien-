@@ -238,10 +238,25 @@ public class AlienPredicates {
 
     // This function is here for semantics reasons.
     public static boolean areAliensEnemies(Alien first, Alien second) {
+        // BONDED THROUGH PAIN. The irradiated strain is the one exception to hive war: every irradiated alien is
+        // allied to every other irradiated alien REGARDLESS OF LINEAGE, and hostile to everything else.
+        //
+        // This has to short-circuit BEFORE the lineage comparison, and that is the whole point. Each converted hive is
+        // minted its own lineage of one - it is an island - so by the ordinary rule two irradiated hives read as rival
+        // lineages and would fight. They do not. Note this also makes the strain's rescue behaviour work: any
+        // irradiated xenomorph will come for any other, which is the same fact seen from the other side.
+        if (isIrradiated(first) && isIrradiated(second)) {
+            return false;
+        }
+
         // Different strains always fight. Same-strain hives also fight when their lineages are not unified under the
         // same empress authority.
         return areAliensDifferentStrains(first, second)
             || AlienTerritoryWarSystem.areAlienLineagesEnemies(first, second);
+    }
+
+    private static boolean isIrradiated(Alien alien) {
+        return alien.getVariant() == com.alien.common.model.alien.variant.AlienVariant.IRRADIATED;
     }
 
     /**

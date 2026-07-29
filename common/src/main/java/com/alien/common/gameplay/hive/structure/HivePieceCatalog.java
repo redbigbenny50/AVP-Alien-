@@ -58,13 +58,16 @@ public final class HivePieceCatalog {
     /**
      * The strain mirror folders under {@code hive/} that hold full copies of the piece set. The NORMAL set lives at the
      * root ({@code hive/<type>/...}); each strain here has an identical tree at {@code hive/<strain>/<type>/...}.
-     * IRRADIATED has no set yet and falls back to the normal pieces until its folder exists (then add it here).
      */
-    private static final List<String> STRAIN_FOLDER_PREFIXES = List.of("aberrant/", "nether/");
+    private static final List<String> STRAIN_FOLDER_PREFIXES = List.of("aberrant/", "nether/", "irradiated/");
 
     /**
-     * The strain folder prefix for a lineage variant: {@code ""} (normal set) for normal, irradiated (no set yet), and
-     * unknown/null variants; {@code "aberrant/"} / {@code "nether/"} for their mirror sets.
+     * The strain folder prefix for a lineage variant: {@code ""} (the normal set) for normal and for unknown/null
+     * variants; a mirror folder for each of the three strains that has one.
+     * <p>
+     * IRRADIATED WAS MISSING HERE while its pieces already existed on disk. All 20 of them sit at
+     * {@code hive/irradiated/}, with a tree and piece names identical to nether's, but this method returned {@code ""}
+     * for the strain - so irradiated hives quietly built NORMAL rooms. Nothing errored; they simply looked wrong.
      */
     public static String strainFolderPrefix(
         @org.jetbrains.annotations.Nullable com.alien.common.model.alien.variant.AlienVariant variant
@@ -78,6 +81,9 @@ public final class HivePieceCatalog {
         }
         if (type == com.alien.common.data.AlienVariantTypes.NETHER) {
             return "nether/";
+        }
+        if (type == com.alien.common.data.AlienVariantTypes.IRRADIATED) {
+            return "irradiated/";
         }
         return "";
     }

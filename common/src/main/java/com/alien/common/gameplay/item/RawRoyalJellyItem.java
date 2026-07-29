@@ -49,7 +49,7 @@ public class RawRoyalJellyItem extends Item {
 
         var serverPlayer = JellyConsumption.serverPlayerOrNull(eater);
         if (serverPlayer != null) {
-            AlienAdvancements.EAT_RAW_ROYAL_JELLY.grant(serverPlayer);
+            JellyConsumption.grantJellyAdvancement(serverPlayer, AlienAdvancements.EAT_RAW_ROYAL_JELLY);
         }
 
         return result;

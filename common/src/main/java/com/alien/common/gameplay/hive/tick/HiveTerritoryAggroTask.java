@@ -40,6 +40,7 @@ public final class HiveTerritoryAggroTask {
     public static void run(ServerLevel level, HiveLocation location) {
         var intruders = intrudersInTerritory(level, location);
 
+        recordVisitors(level, location, intruders);
         trackIntrusionDwell(level, location, intruders);
 
         if (intruders.isEmpty()) {
@@ -52,6 +53,24 @@ public final class HiveTerritoryAggroTask {
             }
 
             aggroMembers(level, entry.getValue(), intruders);
+        }
+    }
+
+    /**
+     * Notes everyone who turns up, hostile or not.
+     * <p>
+     * Separate from dwell tracking below, which deliberately ignores a player who has not attacked anything - that map
+     * answers "who has been fighting us". This one answers "who has been here", and it is the only record that catches
+     * someone who walked in quietly, did something drastic and left without throwing a punch. Only the FIRST sighting
+     * is kept, so the ledger reads as an order of arrival rather than a last-seen list.
+     */
+    private static void recordVisitors(ServerLevel level, HiveLocation location, List<LivingEntity> intruders) {
+        var currentTick = level.getGameTime();
+
+        for (var intruder : intruders) {
+            if (intruder instanceof net.minecraft.server.level.ServerPlayer player) {
+                location.recordTerritoryVisit(player.getUUID(), currentTick);
+            }
         }
     }
 

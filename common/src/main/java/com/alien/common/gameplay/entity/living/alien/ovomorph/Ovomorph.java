@@ -3,6 +3,7 @@ package com.alien.common.gameplay.entity.living.alien.ovomorph;
 import com.alien.common.data.AlienVariantTypes;
 import com.alien.common.gameplay.entity.living.alien.Alien;
 import com.alien.common.gameplay.entity.living.alien.GrowthManager;
+import com.alien.common.gameplay.entity.living.alien.IrradiatedDetonation;
 import com.alien.common.gameplay.entity.living.alien.ovomorph.ai.OvomorphGOAP;
 import com.alien.common.gameplay.hive.convoy.ConvoyMemberTracker;
 import com.alien.common.model.alien.HatchState;
@@ -252,6 +253,22 @@ public class Ovomorph extends Alien implements GOAPUser<Ovomorph>, Shearable {
      * royal jelly promotion) so the paths cannot drift apart. Returns the new egg, or null when the type could not be
      * created.
      */
+    /**
+     * Turns this egg into an irradiated one, crown and all.
+     * <p>
+     * Deliberately resolves the NON-ROYAL type: there is no royal irradiated line, so a royal egg caught by a nuke
+     * becomes a plain irradiated one and the crown is spent - the same trade the jelly-fed conversion makes. Returns
+     * false when there is nothing to do (already irradiated, or client side).
+     */
+    public boolean convertToIrradiated(ServerLevel serverLevel) {
+        if (getVariant() == AlienVariant.IRRADIATED) {
+            return false;
+        }
+
+        var target = getType(AlienVariant.IRRADIATED, false);
+        return target != null && replaceWith(serverLevel, target) != null;
+    }
+
     private @Nullable Ovomorph replaceWith(ServerLevel serverLevel, EntityType<? extends Ovomorph> target) {
         var converted = target.create(serverLevel);
 
@@ -350,6 +367,25 @@ public class Ovomorph extends Alien implements GOAPUser<Ovomorph>, Shearable {
                     return InteractionResult.SUCCESS;
                 }
             }
+        } else if (
+            getVariant() != AlienVariant.IRRADIATED
+                && itemStack.is(com.alien.common.registry.init.item.AlienItems.RAW_IRRADIATED_JELLY.get())
+        ) {
+            // IRRADIATION: the same deliberate, one-egg-and-one-jelly investment royal jelly represents, pointed at
+            // STRAIN instead of rank. Normal, nether and aberrant eggs all take it.
+            //
+            // ROYALTY DOES NOT SURVIVE IT. There is no royal irradiated line - getType(IRRADIATED, true) is null by
+            // design - so a royal egg fed this becomes a plain irradiated one and the crown is spent. That is the
+            // trade, not an oversight: the irradiated strain does not breed through hosts at all, so a royal egg has
+            // nothing left to be royal FOR.
+            var irradiatedType = getType(AlienVariant.IRRADIATED, false);
+
+            if (irradiatedType != null && level() instanceof ServerLevel serverLevel) {
+                if (replaceWith(serverLevel, irradiatedType) != null) {
+                    itemStack.consume(1, player);
+                    return InteractionResult.SUCCESS;
+                }
+            }
         } else if (!isRooted.get() && itemStack.is(resinBallItem)) {
             level().playSound(null, this, AlienSoundEvents.ENTITY_OVOMORPH_ROOT.get(), SoundSource.PLAYERS, 1.0F, 1.0F);
             isRooted.set(true);
@@ -390,6 +426,17 @@ public class Ovomorph extends Alien implements GOAPUser<Ovomorph>, Shearable {
         var isHurt = super.hurt(damageSource, damage);
 
         if (!level().isClientSide && isHurt && damageSource.getEntity() != null) {
+            // An irradiated egg is ordnance, not a nursery. Damage sets it off instead of hatching it - the only way
+            // to open one deliberately is to let a host trigger it, and then what comes out is a bomb too.
+            //
+            // SHEARING IS UNAFFECTED: that removes the resin holding the egg down and never damages the egg, so
+            // harvesting one stays exactly as safe as it is for every other strain.
+            if (getVariant() == AlienVariant.IRRADIATED) {
+                IrradiatedDetonation.detonate(this);
+                discard();
+                return isHurt;
+            }
+
             tryHatch();
         }
 
@@ -496,7 +543,7 @@ public class Ovomorph extends Alien implements GOAPUser<Ovomorph>, Shearable {
             case NORMAL -> AlienEntityTypes.OVOMORPH.get();
             case NETHER -> AlienEntityTypes.NETHER_OVOMORPH.get();
             case ABERRANT -> AlienEntityTypes.ABERRANT_OVOMORPH.get();
-            case IRRADIATED -> null;
+            case IRRADIATED -> AlienEntityTypes.IRRADIATED_OVOMORPH.get();
         };
     }
 }

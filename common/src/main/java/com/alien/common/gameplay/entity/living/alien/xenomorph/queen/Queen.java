@@ -190,6 +190,50 @@ public class Queen extends Xenomorph implements GOAPUser<Queen>, EggLayer {
         return ovipositorManager != null && ovipositorManager.hasOvipositor();
     }
 
+    /** How far from her throne she tolerates being before drifting back. Generous - this is duty, not a tether. */
+    private static final double LEASH_RADIUS_BLOCKS = 24.0;
+
+    private static final double LEASH_RADIUS_SQUARED = LEASH_RADIUS_BLOCKS * LEASH_RADIUS_BLOCKS;
+
+    /** Unhurried. She is going home, not responding to anything. */
+    private static final double LEASH_RETURN_SPEED = 0.8;
+
+    /** Checked rarely; a boss ambling home does not need per-tick pathing. */
+    private static final int LEASH_CHECK_INTERVAL_TICKS = 40;
+
+    /**
+     * An irradiated queen keeps to her broken throne, but is not chained to it.
+     * <p>
+     * [stated] "she will try to stay in her chamber out of duty and a boss like fight, but shes NOT LOCKED TO THE
+     * CENTRE trying to make an eggsack." Her chamber is the hive's CORE CHUNKS - [stated] "thats her broken throne".
+     * <p>
+     * Deliberately a PULL and not a pin. She only drifts home when she has nothing to fight, so a player cannot park
+     * outside her chamber and plink at her while a leash drags her back out of reach - if she has a target she goes and
+     * gets it, wherever it stands. And it only applies while she HAS a hive: off her slab she is [stated] "just a
+     * roaming weapon of radioactive teeth and claws" with nowhere to be.
+     */
+    private void tickIrradiatedChamberLeash() {
+        if (level().isClientSide || tickCount % LEASH_CHECK_INTERVAL_TICKS != 0) {
+            return;
+        }
+
+        if (!com.alien.common.gameplay.hive.economy.IrradiatedHiveRules.isIrradiated(this) || getTarget() != null) {
+            return;
+        }
+
+        var location = com.alien.common.gameplay.hive.faction.HiveMemberLocationResolver.reserveReturnLocation(this);
+        if (location == null || !location.isAlive()) {
+            return;
+        }
+
+        var throne = location.centerPos();
+        if (blockPosition().distSqr(throne) <= LEASH_RADIUS_SQUARED) {
+            return;
+        }
+
+        getNavigation().moveTo(throne.getX() + 0.5, throne.getY(), throne.getZ() + 0.5, LEASH_RETURN_SPEED);
+    }
+
     @Override
     public void tick() {
         super.tick();
@@ -199,6 +243,7 @@ public class Queen extends Xenomorph implements GOAPUser<Queen>, EggLayer {
         bindManager.tick();
         rescueManager.tick();
         incapacitationManager.tick();
+        tickIrradiatedChamberLeash();
 
         // A pacified captive breeder holds still AND holds her FACING: idle look control would keep turning her body
         // in place, twisting her against the eggsack that is anchored to her rotation. Capture her facing once when
@@ -573,11 +618,36 @@ public class Queen extends Xenomorph implements GOAPUser<Queen>, EggLayer {
         }
 
         var wasHurt = super.hurt(damageSource, amount);
-        if (wasHurt) {
-            // Stage 3b: a solid hit rouses a hibernating queen (the manager filters by phase + damage threshold).
-            getLifecyclePhaseManager().onHibernationDamage(amount);
+        if (wasHurt && !level().isClientSide) {
+            // A hit only pulls her off her duty if it is worth reacting to - one hard blow, or enough small ones in
+            // quick succession. See QueenLifecyclePhaseManager.registerDisturbance.
+            //
+            // SHE STILL TOOK THE DAMAGE. This is about her ATTENTION, not her health: vanilla's hurt marks the
+            // attacker as her last-hurt-by, and her sensors turn that into a target, and a queen with a target stops
+            // tending her eggsack. So when the disturbance does not clear the bar, the retaliation is cleared with it
+            // - otherwise a syringe (0.01 damage) or a stray splash ends her egg-laying as surely as an axe.
+            if (getLifecyclePhaseManager().registerDisturbance(amount)) {
+                // Roused for real: she leaves the eggsack the same way the empress does - DESTRUCTIVELY. The
+                // ovipositor cannot exist off a royal (it self-discards the next tick without a living vehicle), so
+                // there is no dismounting it and no sitting back down. She grows a fresh one later through the normal
+                // creation path once she is calm and the cooldown allows, which is the real cost of getting her up.
+                ovipositorManager.abandonOvipositor();
+            } else if (isOnDuty()) {
+                setLastHurtByMob(null);
+                setTarget(null);
+            }
         }
         return wasHurt;
+    }
+
+    /**
+     * Whether she is doing something a light knock should not interrupt: riding her eggsack, or asleep.
+     * <p>
+     * A queen who is already up and walking about retaliates normally - the whole point is protecting the states where
+     * standing up COSTS her something.
+     */
+    private boolean isOnDuty() {
+        return isRidingOvipositor() || Boolean.TRUE.equals(isHibernating.get());
     }
 
     @Override

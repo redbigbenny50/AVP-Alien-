@@ -18,14 +18,17 @@ public class FoodAndDrinksCreativeModeTabInitializer {
         acceptPotion(output, AlienPotions.METAMORPHOSIS);
         acceptPotion(output, AlienPotions.GROWTH_SUPPRESSION);
         acceptPotion(output, AlienPotions.SCOURGE);
+        acceptPotion(output, AlienPotions.IRRADIATION);
 
         acceptSplashPotion(output, AlienPotions.METAMORPHOSIS);
         acceptSplashPotion(output, AlienPotions.GROWTH_SUPPRESSION);
         acceptSplashPotion(output, AlienPotions.SCOURGE);
+        acceptSplashPotion(output, AlienPotions.IRRADIATION);
 
         acceptLingeringPotion(output, AlienPotions.METAMORPHOSIS);
         acceptLingeringPotion(output, AlienPotions.GROWTH_SUPPRESSION);
         acceptLingeringPotion(output, AlienPotions.SCOURGE);
+        acceptLingeringPotion(output, AlienPotions.IRRADIATION);
     };
 
     private static void acceptPotion(CreativeModeTab.Output output, BLibHolder<Potion> potionHolder) {

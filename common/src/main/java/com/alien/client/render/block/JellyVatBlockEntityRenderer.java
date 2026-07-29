@@ -29,8 +29,8 @@ public class JellyVatBlockEntityRenderer extends AzBlockEntityRenderer<JellyVatB
     private static final ResourceLocation MODEL = AlienResources.blockGeoModelLocation("jelly_vat");
 
     /**
-     * The vat's shell, one per strain - every strain grows its own. The base name has no strain in it, so these do not
-     * follow a single pattern and are listed rather than derived.
+     * The vat's shell, one per strain - every strain grows its own. Names confirmed against the Blockbench project: the
+     * strain sits in the MIDDLE, unlike the fills, which put their qualifier after the base.
      */
     private static final ResourceLocation NORMAL_SHELL = AlienResources.blockTextureLocation("jelly_vat");
 
@@ -77,8 +77,13 @@ public class JellyVatBlockEntityRenderer extends AzBlockEntityRenderer<JellyVatB
     }
 
     /**
-     * Shell by STRAIN, fill by JELLY TYPE - two independent axes. Read straight off the vat rather than through a
-     * static, so it cannot depend on whether BLib calls this before or after {@code renderType}.
+     * SHELL by strain, FILL by jelly type - two independent axes, so an irradiated hive's converted vat gets the
+     * irradiated shell AND the irradiated fill, while a nether hive's scourge vat gets the nether shell with the
+     * scourge fill.
+     * <p>
+     * Read straight off the vat rather than through a static, so it cannot depend on whether BLib calls this before or
+     * after {@link #renderType}. All four shells share the model's UV layout, so this only swaps which sheet is
+     * sampled.
      */
     private static ResourceLocation shellFor(JellyVatBlockEntity vat) {
         return switch (vat.getStrain()) {
@@ -94,12 +99,10 @@ public class JellyVatBlockEntityRenderer extends AzBlockEntityRenderer<JellyVatB
      * {@link #currentFill} for the bone overrides, since BLib calls this per-vat before processing bones.
      */
     private static RenderType renderType(JellyVatBlockEntity vat) {
-        // A switch, not a ternary: the old form would have rendered an irradiated vat as a royal one rather than
-        // failing, which is the kind of wrong that never gets reported.
         currentFill = switch (vat.getJellyType()) {
-            case ROYAL -> ROYAL_FILL;
             case SCOURGE -> SCOURGE_FILL;
             case IRRADIATED -> IRRADIATED_FILL;
+            case ROYAL -> ROYAL_FILL;
         };
         return RenderType.entityCutoutNoCull(shellFor(vat));
     }

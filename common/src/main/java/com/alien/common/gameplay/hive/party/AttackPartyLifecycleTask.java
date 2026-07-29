@@ -59,6 +59,37 @@ public final class AttackPartyLifecycleTask {
         return target == null || !target.isAlive();
     }
 
+    /**
+     * She stops hunting, and says so.
+     * <p>
+     * NOTE ON THE CHIME: vanilla raids have no victory sound - winning one only rewrites the boss bar text, and the
+     * only raid sound is the horn that announces a wave. So this borrows the challenge-complete fanfare instead, which
+     * is the triumphant sting players actually associate with having survived something.
+     */
+    private static void relent(ServerLevel level, net.minecraft.world.entity.player.Player target) {
+        level.playSound(
+            null,
+            target.getX(),
+            target.getY(),
+            target.getZ(),
+            net.minecraft.sounds.SoundEvents.UI_TOAST_CHALLENGE_COMPLETE,
+            net.minecraft.sounds.SoundSource.PLAYERS,
+            1.0F,
+            1.0F
+        );
+
+        target.displayClientMessage(
+            net.minecraft.network.chat.Component
+                .literal("Her majesty relents... for now")
+                .withStyle(net.minecraft.ChatFormatting.GOLD),
+            false
+        );
+
+        if (target instanceof net.minecraft.server.level.ServerPlayer serverPlayer) {
+            com.alien.common.data.AlienAdvancements.WITHSTAND_ATTACK_PARTY.grant(serverPlayer);
+        }
+    }
+
     private static void resolve(
         ServerLevel serverLevel,
         HiveLocation location,
@@ -75,6 +106,13 @@ public final class AttackPartyLifecycleTask {
             var targetDead = target == null || !target.isAlive();
             if (targetDead || campaign.wavesSent() >= 2) {
                 campaign.markCleared();
+
+                // Only a SURVIVOR gets told it is over. A player who died to the waves has been answered already, and
+                // telling a corpse the queen relents would read as taunting rather than release.
+                if (!targetDead && target != null) {
+                    relent(serverLevel, target);
+                }
+
                 Alien.LOGGER.info(
                     "Hive: retribution campaign against player {} cleared at location {} ({})",
                     party.targetPlayerId(),

@@ -111,6 +111,7 @@ public final class AlienXenomorphHeadItems {
         spitterItem("spitter_head", "Spitter", AlienVariant.NORMAL, AlienEntityTypes.SPITTER, false),
         spitterItem("aberrant_spitter_head", "Aberrant Spitter", AlienVariant.ABERRANT, AlienEntityTypes.ABERRANT_SPITTER, false),
         spitterItem("nether_spitter_head", "Nether Spitter", AlienVariant.NETHER, AlienEntityTypes.NETHER_SPITTER, true),
+        spitterItem("irradiated_spitter_head", "Irradiated Spitter", AlienVariant.IRRADIATED, AlienEntityTypes.IRRADIATED_SPITTER, true),
         item("praetorian_head", "Praetorian", "praetorian", AlienEntityTypes.PRAETORIAN, false),
         item("aberrant_praetorian_head", "Aberrant Praetorian", "praetorian", AlienEntityTypes.ABERRANT_PRAETORIAN, false),
         item("irradiated_praetorian_head", "Irradiated Praetorian", "praetorian", AlienEntityTypes.IRRADIATED_PRAETORIAN, false),

@@ -56,6 +56,12 @@ public final class JellyProduction {
         HiveLocation location,
         com.alien.common.gameplay.hive.config.HiveConfig config
     ) {
+        // A converted hive is a white dwarf: it burns what it has and takes in nothing. Its jelly is whatever the
+        // royal and scourge pools merged into at conversion, and that number only ever goes down.
+        if (IrradiatedHiveRules.isIrradiated(location)) {
+            return;
+        }
+
         var queenCount = countTaggedProducers(location, AlienEntityTypeTags.QUEENS);
         var harbingerCount = countTaggedProducers(location, AlienEntityTypeTags.HARBINGERS);
 

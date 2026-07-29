@@ -62,7 +62,7 @@ public class RawScourgeJellyItem extends Item {
 
         var serverPlayer = JellyConsumption.serverPlayerOrNull(eater);
         if (serverPlayer != null) {
-            AlienAdvancements.EAT_RAW_SCOURGE_JELLY.grant(serverPlayer);
+            JellyConsumption.grantJellyAdvancement(serverPlayer, AlienAdvancements.EAT_RAW_SCOURGE_JELLY);
         }
 
         return result;

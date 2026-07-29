@@ -875,7 +875,11 @@ public abstract class Alien extends Monster implements DataUser {
      * </ul>
      */
     private boolean canBeIrradiatedByTouch(net.minecraft.world.entity.LivingEntity victim) {
-        if (victim instanceof Alien) {
+        // Aliens are radiation-immune AS A SPECIES - except the aberrant strain, which is not. Aberrants are the
+        // weak line: it is why they cannot convert to irradiated the way normal and nether do, and it is why they
+        // burn instead. The avp_human:radiation_resistant tag we contribute lists every alien EXCEPT them, and this
+        // mirrors it so claws and talons agree with the environment.
+        if (victim instanceof Alien irradiatedAlien && irradiatedAlien.getVariant() != AlienVariant.ABERRANT) {
             return false;
         }
         // NOTE: deliberately NOT refused for an already-irradiated victim any more. Under AVPHuman's exposure
@@ -993,12 +997,7 @@ public abstract class Alien extends Monster implements DataUser {
                 strainLeakData.add(alienVariant, 1);
 
                 if (!wasAlienVariantAlreadyPresent) {
-                    for (var player : serverLevel.players()) {
-                        player.sendSystemMessage(
-                            Component.literal(strainBasedLeakMessage)
-                                .withStyle(alienVariantType.chatColor(), ChatFormatting.ITALIC)
-                        );
-                    }
+                    announceStrainArrival(serverLevel, alienVariant, strainBasedLeakMessage);
                 }
             });
     }
@@ -1208,12 +1207,57 @@ public abstract class Alien extends Monster implements DataUser {
         campaign.setLastHostileTick(serverLevel.getGameTime());
     }
 
+    /**
+     * Tells the whole world a strain has arrived, and gives it a voice.
+     * <p>
+     * Public because IRRADIATED does not come through the leak path at all - it is announced from
+     * {@code NukeConversion} on every conversion, since a hive being MADE is a thing that can happen repeatedly and is
+     * worth hearing about each time. The other three fire once, on first sighting.
+     * <p>
+     * The sound is played AT EACH PLAYER rather than at a position, so a world-wide announcement is actually heard
+     * world-wide instead of only by whoever happens to be standing near the newcomer.
+     */
+    public static void announceStrainArrival(ServerLevel serverLevel, AlienVariant alienVariant, String message) {
+        var variantType = AlienVariantTypes.getFor(alienVariant);
+        var sound = strainArrivalSound(alienVariant);
+
+        for (var player : serverLevel.players()) {
+            player.sendSystemMessage(
+                Component.literal(message).withStyle(variantType.chatColor(), ChatFormatting.ITALIC)
+            );
+
+            serverLevel.playSound(
+                null,
+                player.getX(),
+                player.getY(),
+                player.getZ(),
+                sound,
+                net.minecraft.sounds.SoundSource.HOSTILE,
+                1.0F,
+                1.0F
+            );
+        }
+    }
+
+    /** One signature per strain, so you know what has turned up before you read the line. */
+    private static net.minecraft.sounds.SoundEvent strainArrivalSound(AlienVariant alienVariant) {
+        return switch (alienVariant) {
+            case NORMAL -> com.alien.common.registry.init.AlienSoundEvents.ENTITY_QUEEN_SCREAM.get();
+            case NETHER -> net.minecraft.sounds.SoundEvents.WITHER_SPAWN;
+            case ABERRANT -> net.minecraft.sounds.SoundEvents.ANVIL_USE;
+            case IRRADIATED -> net.minecraft.sounds.SoundEvents.WARDEN_EMERGE;
+        };
+    }
+
     // TODO: Use level-specific phrasing here.
     private @Nullable String getStrainLeakMessageForVariant(AlienVariant alienVariant) {
         return switch (alienVariant) {
             case NORMAL -> "The perfect organism has found a new world to conquer...";
             case NETHER -> "Hell has found its way into this plane of existence...";
             case ABERRANT -> "Genetic experiments have found their way into the wide open world...";
+            // Deliberately silent HERE. An irradiated strain is not a leak: nothing crossed over from anywhere, it
+            // is MADE out of a hive that was already present. It also has to announce itself on EVERY conversion
+            // rather than once per world the way a genuine leak does, so the line lives in NukeConversion instead.
             case IRRADIATED -> null;
         };
     }
@@ -1365,9 +1409,60 @@ public abstract class Alien extends Monster implements DataUser {
 
     private static final ResourceLocation aberrantDebuff = com.alien.Alien.MOD.resources().createLocation("aberrant_debuff");
 
+    private static final ResourceLocation predalienBuff = com.alien.Alien.MOD.resources().createLocation("predalien_buff");
+
     private static final ResourceLocation irradiatedBuff = com.alien.Alien.MOD.resources().createLocation("irradiated_buff");
 
+    /**
+     * Strain buffs, and the health correction that has to ride with them.
+     * <p>
+     * THE BUG THIS FIXES: {@link #applyBuff} raises MAX_HEALTH by 20% for an irradiated alien, but nothing moved its
+     * CURRENT health to match - so one spawned at its unbuffed value against a taller bar and visibly regenerated the
+     * difference through {@code healPassively}. It arrived wounded for no reason.
+     * <p>
+     * Corrected by SCALING rather than topping up, which is the same one line for two different situations:
+     * <ul>
+     * <li>A FRESH SPAWN is at full health, so the ratio holds it at full - 40/40 becomes 48/48.</li>
+     * <li>An alien TRANSITIONING to irradiated mid-life keeps the wound it already had - 20/40 becomes 24/48, still
+     * half. Topping up would have healed it as a side effect of changing strain, which is a free heal for anything
+     * caught in a nuke.</li>
+     * </ul>
+     * BOTH DIRECTIONS, deliberately - the aberrant debuff is the same code path at -20%, an 0.8x multiplier. It never
+     * showed the bug because dropping the maximum below current health makes vanilla clamp on its own, but that clamp
+     * is NOT proportional: a wounded aberrant at 20/40 keeps its 20 against a new max of 32 and comes out at 62%,
+     * relatively healthier for having been debuffed. Scaling both ways keeps a half-health alien at half whichever
+     * direction its maximum moved.
+     */
     private void applyDynamicAttributes() {
+        var maxHealthBefore = getMaxHealth();
+
+        applyVariantBuffs();
+
+        // Only ever true on the tick a modifier actually lands - applyBuff is guarded by hasModifier, so every
+        // subsequent tick leaves the maximum untouched and this does nothing.
+        var maxHealthAfter = getMaxHealth();
+        if (maxHealthAfter != maxHealthBefore && maxHealthBefore > 0.0F) {
+            setHealth(getHealth() * (maxHealthAfter / maxHealthBefore));
+        }
+    }
+
+    private void applyVariantBuffs() {
+        // PREDALIEN, and deliberately NOT part of the strain chain below - it is a CASTE buff, not a strain one, so it
+        // stacks with whichever strain the predalien happens to be.
+        //
+        // [stated] "predaliens get a buff of 1.5x... if they are irradiated they get both so a total of 1.7x. if its
+        // an aberrant predalien its 1.3x." That falls out for free from how applyBuff works: every modifier is
+        // computed as baseValue * percentage and added with ADD_VALUE, so they SUM against the base rather than
+        // compounding. On a 40-health base: +50% is +20, +20% irradiated is +8, and 40 + 20 + 8 = 68 = 1.7x exactly.
+        // Aberrant instead subtracts 8, giving 52 = 1.3x.
+        if (getType().is(AlienEntityTypeTags.PREDALIENS)) {
+            var percentage = 0.5;
+            applyBuff(Attributes.MAX_HEALTH, percentage, predalienBuff);
+            applyBuff(Attributes.ATTACK_DAMAGE, percentage, predalienBuff);
+            applyBuff(Attributes.ARMOR, percentage, predalienBuff);
+            applyBuff(Attributes.ARMOR_TOUGHNESS, percentage, predalienBuff);
+        }
+
         if (isAberrant()) {
             var percentage = -0.2;
             applyBuff(Attributes.MAX_HEALTH, percentage, aberrantDebuff);

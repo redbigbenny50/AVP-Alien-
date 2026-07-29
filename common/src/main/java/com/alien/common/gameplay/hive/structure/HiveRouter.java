@@ -46,9 +46,9 @@ public final class HiveRouter {
      */
     public static final double RESIN_COST_FACTOR = 1.5;
 
-    private static final int BASE_EXTENT = 9; // base footprint radius (19x19)
+    public static final int BASE_EXTENT = 9; // base footprint radius (19x19)
 
-    private static final int EMPRESS_EXTENT = 11; // empress-influenced footprint radius (23x23)
+    public static final int EMPRESS_EXTENT = 11; // empress-influenced footprint radius (23x23)
 
     private static final int GOAL_REACH = 1; // drop the room when a socket points within this many chunks of a goal
 

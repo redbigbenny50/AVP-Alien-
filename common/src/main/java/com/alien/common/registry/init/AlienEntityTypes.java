@@ -414,6 +414,37 @@ public class AlienEntityTypes {
             .sized(PROWLER_WIDTH, PROWLER_HEIGHT)
     );
 
+    /**
+     * The irradiated line has NO chestburster and NO adolescent, deliberately: an irradiated hive does not breed
+     * through hosts. Its egg and its hugger are ORDNANCE - the egg detonates, and the hugger detonates on the face it
+     * reaches instead of implanting anything. See IrradiatedDetonation.
+     */
+    /**
+     * The spitter the previous pass forgot. Every other caste had an irradiated form; this one fell through and left
+     * Spitter.getType returning null for the strain, so irradiated hives could never field one.
+     * <p>
+     * Nothing special is needed for its behaviour: its acid already reads the strain. An irradiated spitter's blood is
+     * FREEZING blood, and AcidBlockDamageUtil already branches on {@code acid.isIrradiated()} to turn what it destroys
+     * into blue ice (or netherrack over nether resin). Same geo, irradiated texture, and the spit inherits the rest.
+     */
+    public static final BLibHolder<EntityType<Spitter>> IRRADIATED_SPITTER = create(
+        "irradiated_spitter",
+        EntityType.Builder.of(Spitter::new, MobCategory.MONSTER)
+            .sized(SPITTER_WIDTH, SPITTER_HEIGHT)
+    );
+
+    public static final BLibHolder<EntityType<Facehugger>> IRRADIATED_FACEHUGGER = create(
+        "irradiated_facehugger",
+        EntityType.Builder.of(Facehugger::new, MobCategory.MONSTER)
+            .sized(FACEHUGGER_WIDTH, FACEHUGGER_HEIGHT)
+    );
+
+    public static final BLibHolder<EntityType<Ovomorph>> IRRADIATED_OVOMORPH = create(
+        "irradiated_ovomorph",
+        EntityType.Builder.of(Ovomorph::new, MobCategory.MISC)
+            .sized(OVOMORPH_WIDTH, OVOMORPH_HEIGHT)
+    );
+
     public static final BLibHolder<EntityType<Harbinger>> IRRADIATED_HARBINGER = create(
         "irradiated_harbinger",
         EntityType.Builder.of(Harbinger::new, MobCategory.MONSTER)

@@ -42,6 +42,14 @@ public final class JellyVatDisplay {
 
     /** Maintains vats and trickles bank surplus into them, for BOTH banks. Runs on the growth cadence. */
     public static void sync(ServerLevel level, HiveLocation location) {
+        // [stated] "they dont refill from the reserve and the hive doesnt consume the vats. they are left alone after
+        // they are converted." So the sync is severed in BOTH directions for a converted hive: nothing is pushed out
+        // to the vats and nothing is drawn back in. Whatever was in them at conversion, halved, is the player's prize
+        // for coming back and fighting for it.
+        if (IrradiatedHiveRules.isIrradiated(location)) {
+            return;
+        }
+
         syncBank(level, location, JellyType.ROYAL);
         syncBank(level, location, JellyType.SCOURGE);
     }
@@ -132,6 +140,14 @@ public final class JellyVatDisplay {
 
     /** Royal-bank shortfall cover: vaults drain before royal chambers - the queen's stores go last. */
     public static void coverShortfall(ServerLevel level, HiveLocation location, int needed) {
+        // [stated] "they dont refill from the reserve and the hive doesnt consume the vats. they are left alone after
+        // they are converted." So the sync is severed in BOTH directions for a converted hive: nothing is pushed out
+        // to the vats and nothing is drawn back in. Whatever was in them at conversion, halved, is the player's prize
+        // for coming back and fighting for it.
+        if (IrradiatedHiveRules.isIrradiated(location)) {
+            return;
+        }
+
         cover(level, location, needed, JellyType.ROYAL);
     }
 
@@ -144,6 +160,11 @@ public final class JellyVatDisplay {
     }
 
     private static void cover(ServerLevel level, HiveLocation location, int needed, JellyType type) {
+        // Every shortfall path funnels through here, so one gate covers royal and scourge and both overloads of each.
+        if (IrradiatedHiveRules.isIrradiated(location)) {
+            return;
+        }
+
         int missing = needed - bankGet(location, type);
         if (missing <= 0) {
             return;

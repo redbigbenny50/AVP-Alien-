@@ -50,7 +50,11 @@ public class HiveUnitPurchaseDataProvider implements DataProvider {
      * Predaliens are only ever produced while avp_predator is loaded - HiveBalanceTask holds that gate, since the
      * purchase file itself is static data that ships either way.
      */
-    private static final int PREDALIEN_CAP = 20;
+    /**
+     * [stated] lowered from 20. Hive-grown predaliens are opt-in now (see AlienGameRules), and when a world does turn
+     * them on they should be a handful of elites rather than a caste.
+     */
+    private static final int PREDALIEN_CAP = 10;
 
     private static final int WARRIOR_CAP = 50;
 

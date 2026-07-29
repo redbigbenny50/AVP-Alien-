@@ -209,6 +209,10 @@ public class AlienAdvancementProvider {
         addRemoveEmbryoWithChorusFruitAdvancement(root, consumer);
         addEatRawRoyalJellyAdvancement(root, consumer);
         addEatRawScourgeJellyAdvancement(root, consumer);
+        addEatPoisonJellyAdvancement(root, consumer);
+        addEatEveryJellyAdvancement(root, consumer);
+
+        addEatRawIrradiatedJellyAdvancement(root, consumer);
     }
 
     private static void addCombatAdvancements(
@@ -220,6 +224,7 @@ public class AlienAdvancementProvider {
         addShearAnOvomorphAdvancement(alienKillerAdvancement, consumer);
         addChitinArmorAdvancements(alienKillerAdvancement, consumer);
         addBlockSpitterSpitWithHeadShieldAdvancement(alienKillerAdvancement, consumer);
+        addWithstandAttackPartyAdvancement(alienKillerAdvancement, consumer);
 
         var royalAlienKillerAdvancement = addRoyalAlienKillerAdvancement(alienKillerAdvancement, consumer);
         addRoyalCombatAdvancements(royalAlienKillerAdvancement, consumer, avpHumanConsumer);
@@ -608,6 +613,24 @@ public class AlienAdvancementProvider {
             .save(consumer, AlienAdvancements.KILL_A_HIVE.resourceLocation().toString());
     }
 
+    private static AdvancementHolder addWithstandAttackPartyAdvancement(AdvancementHolder parent, Consumer<AdvancementHolder> consumer) {
+        return Advancement.Builder.advancement()
+            .addCriterion("withstand_attack_party", CriteriaTriggers.IMPOSSIBLE.createCriterion(new ImpossibleTrigger.TriggerInstance()))
+            .parent(parent)
+            .display(
+                AlienItems.RAW_ROYAL_JELLY.get(),
+                AlienAdvancements.WITHSTAND_ATTACK_PARTY.titleComponent(),
+                AlienAdvancements.WITHSTAND_ATTACK_PARTY.descriptionComponent(),
+                null,
+                AdvancementType.CHALLENGE,
+                true,
+                true,
+                false
+            )
+            .rewards(AdvancementRewards.Builder.experience(100))
+            .save(consumer, AlienAdvancements.WITHSTAND_ATTACK_PARTY.resourceLocation().toString());
+    }
+
     private static AdvancementHolder addLineageKillerAdvancement(AdvancementHolder parent, Consumer<AdvancementHolder> consumer) {
         return Advancement.Builder.advancement()
             .addCriterion("kill_a_lineage", CriteriaTriggers.IMPOSSIBLE.createCriterion(new ImpossibleTrigger.TriggerInstance()))
@@ -698,6 +721,75 @@ public class AlienAdvancementProvider {
                 false
             )
             .save(consumer, AlienAdvancements.EAT_RAW_SCOURGE_JELLY.resourceLocation().toString());
+    }
+
+    private static AdvancementHolder addEatPoisonJellyAdvancement(
+        AdvancementHolder parent,
+        Consumer<AdvancementHolder> consumer
+    ) {
+        return Advancement.Builder.advancement()
+            .addCriterion(
+                "eat_poison_jelly",
+                CriteriaTriggers.IMPOSSIBLE.createCriterion(new ImpossibleTrigger.TriggerInstance())
+            )
+            .parent(parent)
+            .display(
+                AlienItems.POISON_JELLY.get(),
+                AlienAdvancements.EAT_POISON_JELLY.titleComponent(),
+                AlienAdvancements.EAT_POISON_JELLY.descriptionComponent(),
+                null,
+                AdvancementType.TASK,
+                true,
+                true,
+                false
+            )
+            .save(consumer, AlienAdvancements.EAT_POISON_JELLY.resourceLocation().toString());
+    }
+
+    private static AdvancementHolder addEatEveryJellyAdvancement(
+        AdvancementHolder parent,
+        Consumer<AdvancementHolder> consumer
+    ) {
+        return Advancement.Builder.advancement()
+            .addCriterion(
+                "eat_every_jelly",
+                CriteriaTriggers.IMPOSSIBLE.createCriterion(new ImpossibleTrigger.TriggerInstance())
+            )
+            .parent(parent)
+            .display(
+                AlienItems.RAW_ROYAL_JELLY.get(),
+                AlienAdvancements.EAT_EVERY_JELLY.titleComponent(),
+                AlienAdvancements.EAT_EVERY_JELLY.descriptionComponent(),
+                null,
+                AdvancementType.GOAL,
+                true,
+                true,
+                false
+            )
+            .save(consumer, AlienAdvancements.EAT_EVERY_JELLY.resourceLocation().toString());
+    }
+
+    private static AdvancementHolder addEatRawIrradiatedJellyAdvancement(
+        AdvancementHolder parent,
+        Consumer<AdvancementHolder> consumer
+    ) {
+        return Advancement.Builder.advancement()
+            .addCriterion(
+                "eat_raw_irradiated_jelly",
+                CriteriaTriggers.IMPOSSIBLE.createCriterion(new ImpossibleTrigger.TriggerInstance())
+            )
+            .parent(parent)
+            .display(
+                AlienItems.RAW_IRRADIATED_JELLY.get(),
+                AlienAdvancements.EAT_RAW_IRRADIATED_JELLY.titleComponent(),
+                AlienAdvancements.EAT_RAW_IRRADIATED_JELLY.descriptionComponent(),
+                null,
+                AdvancementType.TASK,
+                true,
+                true,
+                false
+            )
+            .save(consumer, AlienAdvancements.EAT_RAW_IRRADIATED_JELLY.resourceLocation().toString());
     }
 
     private static Advancement.Builder addMobsToKill(

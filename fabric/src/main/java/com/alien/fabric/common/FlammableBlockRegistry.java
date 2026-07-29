@@ -118,7 +118,21 @@ public class FlammableBlockRegistry {
         setFlammable(fireBlock, IrradiatedAlienResinBlocks.IRRADIATED_RESIN_TENDRIL_STAIRS);
     }
 
+    /**
+     * Resin BURNS but never CARRIES fire.
+     * <p>
+     * The two numbers are vanilla's and they do different jobs. IGNITE ODDS is how readily fire propagates ONTO a
+     * position because of this block - at anything above zero, a hive's own walls become a fuse and one torch runs the
+     * length of a corridor. BURN ODDS is how readily the block itself is consumed while fire is already touching it,
+     * and consuming it is what triggers the basalt conversion in {@code MixinBlockBehaviour_ResinConversion}.
+     * <p>
+     * So: ZERO ignite, so nothing spreads; 20 burn - vanilla's wood rate - so the one block actually alight is eaten
+     * and turns to basalt. [stated] "the fire shouldnt spread, it should only burn and convert the one block."
+     * <p>
+     * For scale, vanilla wood is {@code 5, 20} and wool is {@code 30, 60}. This was {@code 1, 20}: a one-in-a-hundred
+     * chance per attempt is small, but over a whole hive of resin it is not nothing, which is what made fire crawl.
+     */
     private static void setFlammable(FireBlock fireBlock, BLibHolder<? extends Block> holder) {
-        fireBlock.setFlammable(holder.get(), 1, 20);
+        fireBlock.setFlammable(holder.get(), 0, 20);
     }
 }

@@ -1,9 +1,0 @@
-{
-  "replace": false,
-  "values": [
-    {
-      "id": "#avp_alien:aliens",
-      "required": false
-    }
-  ]
-}

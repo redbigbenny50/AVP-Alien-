@@ -91,6 +91,14 @@ public final class MigrationDispatch {
         long currentTick,
         HiveConfig config
     ) {
+        // AN IRRADIATED HIVE NEVER MIGRATES. [stated] "they dont make new hives, they maintain their current slab
+        // only. once more an island among a sea of hives." It is also structurally impossible: each converted hive is
+        // minted its OWN lineage of one, so pickClosestSister could never find a sister anyway. This says why, rather
+        // than leaving it as an accident of the lineage split that a later change could undo.
+        if (com.alien.common.gameplay.hive.economy.IrradiatedHiveRules.isIrradiated(source)) {
+            return false;
+        }
+
         var destination = pickClosestSister(source, lineage);
         if (destination == null) {
             Alien.LOGGER.info(

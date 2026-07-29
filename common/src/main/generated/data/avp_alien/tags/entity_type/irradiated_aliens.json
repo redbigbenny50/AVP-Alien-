@@ -1,5 +1,8 @@
 {
   "values": [
+    "avp_alien:irradiated_spitter",
+    "avp_alien:irradiated_facehugger",
+    "avp_alien:irradiated_ovomorph",
     "avp_alien:irradiated_carrier",
     "avp_alien:irradiated_chrysalis",
     "avp_alien:irradiated_crusher",

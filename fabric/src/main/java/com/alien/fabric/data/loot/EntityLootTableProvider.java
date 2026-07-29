@@ -169,6 +169,10 @@ public class EntityLootTableProvider extends SimpleFabricLootTableProvider {
             AlienEntityTypes.NETHER_SPITTER.get().getDefaultLootTable(),
             WarriorLootTable.create(provider, AlienVariantTypes.NETHER)
         );
+        biConsumer.accept(
+            AlienEntityTypes.IRRADIATED_SPITTER.get().getDefaultLootTable(),
+            WarriorLootTable.create(provider, AlienVariantTypes.IRRADIATED)
+        );
 
         // Aberrant
         biConsumer.accept(

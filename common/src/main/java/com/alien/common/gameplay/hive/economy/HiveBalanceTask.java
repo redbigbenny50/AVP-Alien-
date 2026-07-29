@@ -7,6 +7,7 @@ import com.alien.common.gameplay.hive.id.LineageIds;
 import com.alien.common.gameplay.hive.location.HiveLocation;
 import com.alien.common.gameplay.hive.location.HiveLocationRegistry;
 import com.alien.common.registry.HiveUnitPurchaseRegistry;
+import com.alien.common.registry.init.AlienGameRules;
 import com.alien.common.registry.tag.AlienEntityTypeTags;
 import com.alien.compatibility.avp_predator.AVPPredator;
 import net.minecraft.server.MinecraftServer;
@@ -269,9 +270,24 @@ public final class HiveBalanceTask {
 
         return switch (server.overworld().getRandom().nextInt(6)) {
             case 0 -> AlienEntityTypeTags.SPITTERS;
-            case 1 -> AVPPredator.MOD.isLoaded() ? AlienEntityTypeTags.PREDALIENS : caste;
+            case 1 -> hivesMayBreedPredaliens(server) ? AlienEntityTypeTags.PREDALIENS : caste;
             default -> caste;
         };
+    }
+
+    /**
+     * BOTH conditions, and the gamerule is off by default.
+     * <p>
+     * A hive growing predaliens out of simulated reserves was contentious - it makes them ordinary stock rather than
+     * what happens when a predator meets a facehugger. So it is opt-in per world AND still requires AVP: Predator,
+     * because the gamerule cannot conjure a species from a mod that is not installed.
+     * <p>
+     * This roll is the ONLY source of hive-grown predaliens: they have no computeDeficits entry, so switching it off
+     * removes them from hive production entirely rather than merely making them rarer.
+     */
+    private static boolean hivesMayBreedPredaliens(MinecraftServer server) {
+        return AVPPredator.MOD.isLoaded()
+            && server.getGameRules().getBoolean(AlienGameRules.AVP_ALIEN_HIVES_BREED_PREDALIENS);
     }
 
     private static boolean tryCommitCaste(
@@ -294,9 +310,12 @@ public final class HiveBalanceTask {
         if (outputType == null) {
             return false;
         }
+        // ONE HARBINGER PER RAID CHAMBER. This was a hardcoded 1, so an empress hive's extra raid chamber bought
+        // nothing - see IrradiatedHiveRules.harbingerCap. The away-in-raid check stands: a harbinger out on a raid
+        // still occupies its chamber.
         if (
             outputType.is(AlienEntityTypeTags.HARBINGERS)
-                && (CastePopulation.countCaste(location, AlienEntityTypeTags.HARBINGERS) >= 1
+                && (CastePopulation.countCaste(location, AlienEntityTypeTags.HARBINGERS) >= IrradiatedHiveRules.harbingerCap(location)
                     || hasHarbingerAwayInRaid(location, lineage))
         ) {
             return false;
@@ -316,15 +335,29 @@ public final class HiveBalanceTask {
             return false;
         }
 
-        // Vats are the hive's savings: tap them only when the bank alone can't cover the jelly cost.
+        var irradiated = IrradiatedHiveRules.isIrradiated(location);
+
+        // A converted hive cannot make anyone NEW - only promote somebody who already exists. See the rules class.
+        if (irradiated && !IrradiatedHiveRules.allowsPurchase(purchase)) {
+            return false;
+        }
+
+        // Vats are the hive's savings: tap them only when the bank alone can't cover the jelly cost. An irradiated
+        // hive's vats are loot rather than savings, so these are no-ops there (gated inside JellyVatDisplay).
         JellyVatDisplay.coverShortfall(server, location, purchase.royalJelly());
         JellyVatDisplay.coverScourgeShortfall(server, location, purchase.scourgeJelly());
 
-        var biomassCost = biomassCost(purchase, location);
+        // [stated] every promotion costs a flat 1 biomass + 1 jelly, whatever the caste. The merged pool lives in
+        // royalJelly for an irradiated hive - scourgeJelly is zeroed at conversion and stays zero - so one field
+        // answers the whole cost. Everything that used royal or scourge simply uses irradiated instead.
+        var biomassCost = irradiated ? IrradiatedHiveRules.PROMOTION_BIOMASS_COST : biomassCost(purchase, location);
+        var jellyCost = irradiated ? IrradiatedHiveRules.PROMOTION_JELLY_COST : purchase.royalJelly();
+        var scourgeCost = irradiated ? 0 : purchase.scourgeJelly();
+
         if (
             location.biomass() < biomassCost
-                || location.royalJelly() < purchase.royalJelly()
-                || location.scourgeJelly() < purchase.scourgeJelly()
+                || location.royalJelly() < jellyCost
+                || location.scourgeJelly() < scourgeCost
         ) {
             return false;
         }
@@ -333,8 +366,12 @@ public final class HiveBalanceTask {
         var inputTypes = new ArrayList<EntityType<?>>(purchase.inputEntities().size());
         for (var input : purchase.inputEntities()) {
             var type = input.entity();
-            // Stored nursery eggs back the ovomorph reserve: consume chamber stock when the reserve runs short.
-            EggStock.coverInputShortfall(server, location, type, input.count());
+            // Stored nursery eggs back the ovomorph reserve: consume chamber stock when the reserve runs short. An
+            // irradiated hive has no egg pipeline at all - its nurseries are dead rooms - and allowsPurchase has
+            // already refused anything with an ovomorph input, so there is nothing here to top up.
+            if (!irradiated) {
+                EggStock.coverInputShortfall(server, location, type, input.count());
+            }
             if (location.localReserves().getCount(type) < input.count()) {
                 return false;
             }
@@ -347,8 +384,8 @@ public final class HiveBalanceTask {
 
         // All gates pass — commit.
         location.setBiomass(location.biomass() - biomassCost);
-        location.setRoyalJelly(location.royalJelly() - purchase.royalJelly());
-        location.setScourgeJelly(location.scourgeJelly() - purchase.scourgeJelly());
+        location.setRoyalJelly(location.royalJelly() - jellyCost);
+        location.setScourgeJelly(location.scourgeJelly() - scourgeCost);
 
         for (var i = 0; i < purchase.inputEntities().size(); i++) {
             var count = purchase.inputEntities().get(i).count();
