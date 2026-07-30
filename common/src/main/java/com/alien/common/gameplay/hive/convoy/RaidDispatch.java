@@ -75,12 +75,15 @@ public final class RaidDispatch {
             }
 
             // Post-replacement grudge runs UNGATED (a lone hive whose queen was killed still gets one grudge raid once
-            // it has a queen again) — checked before, and independent of, the empress-gated kill-threshold auto-raid.
+            // it has a queen again) — checked before, and independent of, the kill-threshold auto-raid below.
             scanGrudge(server, factionId, lineage, currentTick, config);
 
-            if (lineage.empressId() == null) {
-                continue;
-            }
+            // NO EMPRESS GATE. Raids are HARBINGER-gated and nothing else: eligibleSources already requires a living
+            // harbinger plus enough banked reserves to fill the wave profile. An empress ENHANCES raiding (second raid
+            // chamber, so a second harbinger, plus the wider footprint) but was never meant to be a prerequisite.
+            // This used to `continue` on a null empressId, which silently made the kill-threshold auto-raid impossible
+            // for any lineage under 4 hives - directly contradicting this class's own javadoc, and the reason testers
+            // reported raids never firing.
             scanLineage(server, factionId, lineage, currentTick, config);
         }
     }
@@ -341,8 +344,13 @@ public final class RaidDispatch {
             return false;
         }
 
+        // Revenge under an empress draws from a wider roster - the scourge tier rides along, harbinger excluded.
+        // Gated on the LINEAGE rather than the source hive because the profile has to be chosen before
+        // eligibleSources picks one, and influence follows empressId across every hive she holds anyway.
         var waveProfile = revenge
-            ? RaidWaveProfileRegistry.revenge()
+            ? (lineage.empressId() != null
+                ? RaidWaveProfileRegistry.revengeEmpress()
+                : RaidWaveProfileRegistry.revenge())
             : RaidWaveProfileRegistry.forVariant(lineage.variant());
         HiveLocation source = null;
         EntityReserves composition = null;

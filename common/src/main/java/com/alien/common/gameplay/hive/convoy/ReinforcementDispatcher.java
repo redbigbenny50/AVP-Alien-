@@ -61,7 +61,7 @@ public final class ReinforcementDispatcher {
             if (lineage.empressId() == null) {
                 continue;
             }
-            if (lineage.locationsById().size() < 2) {
+            if (lineage.activeLocationCount() < 2) {
                 continue;
             }
 
@@ -81,7 +81,8 @@ public final class ReinforcementDispatcher {
         var receivers = new ArrayList<HiveLocation>();
 
         for (var location : lineage.locationsById().values()) {
-            if (!location.isAlive()) {
+            if (!location.isAlive() || location.isExiled()) {
+                // A remnant neither donates nor receives - the lineage has written it off.
                 continue;
             }
             var reserveTotal = location.localReserves().getCountMatching(profile::matches);

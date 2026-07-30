@@ -16,15 +16,15 @@ import net.minecraft.world.entity.ai.attributes.Attributes;
  * <p>
  * Deliberately untiered: knockback immunity is binary, so an amplifier would have nothing to say.
  */
-public class SecurementStatusEffect extends MobEffect {
+public class ImmovableStatusEffect extends MobEffect {
 
     private static final int ANCHOR_GREY_COLOR = 0x6E7B8B;
 
-    public SecurementStatusEffect() {
+    public ImmovableStatusEffect() {
         super(MobEffectCategory.BENEFICIAL, ANCHOR_GREY_COLOR);
         addAttributeModifier(
             Attributes.KNOCKBACK_RESISTANCE,
-            AlienResources.location("securement_knockback_resistance"),
+            AlienResources.location("immovable_knockback_resistance"),
             1.0,
             AttributeModifier.Operation.ADD_VALUE
         );

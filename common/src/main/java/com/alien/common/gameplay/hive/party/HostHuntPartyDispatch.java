@@ -64,9 +64,7 @@ public final class HostHuntPartyDispatch {
         var spawnPos = surfaceVents.get(serverLevel.random.nextInt(surfaceVents.size()));
 
         // Size scales with claims but is CAPPED (bonus spitters ride on top of this budget).
-        var hostCap = com.alien.common.gameplay.hive.structure.HiveRouter.isEmpressInfluenced(location)
-            ? config.hostHuntPartyMaxSizeEmpress()
-            : config.hostHuntPartyMaxSize();
+        var hostCap = com.alien.common.gameplay.hive.empress.EmpressCaps.scale(location, config.hostHuntPartyMaxSize());
         var desiredSize = Math.min(
             hostCap,
             Math.max(

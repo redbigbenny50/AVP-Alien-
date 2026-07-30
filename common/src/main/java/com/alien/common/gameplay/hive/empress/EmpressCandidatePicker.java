@@ -5,87 +5,113 @@ import com.alien.common.gameplay.hive.economy.CastePopulation;
 import com.alien.common.gameplay.hive.faction.LineageFactionData;
 import com.alien.common.gameplay.hive.location.HiveLocation;
 import com.alien.common.gameplay.hive.location.HiveLocationRegistry;
-import com.alien.common.registry.tag.AlienEntityTypeTags;
-import net.minecraft.server.MinecraftServer;
+import net.minecraft.server.level.ServerLevel;
 import org.jetbrains.annotations.Nullable;
 
-import java.util.UUID;
-
 /**
- * Picks which queen of a lineage should become its empress, deterministically.
+ * Elects which of a lineage's hives becomes the empress SEAT, deterministically and <b>without loading anything</b>.
  * <p>
- * A queen is only a <b>candidate</b> at all if she is <b>unbound</b> (not {@link Queen#isContained()}),
- * <b>uninhibited</b> (not {@link Queen#isInhibited()}), has an established hive — a location, a placed slab, and an
- * eggsack (i.e., she has founded: {@link Queen#hasOvipositor()}) — and her hive's tracked member count is at least
- * {@code config.empressCandidateMinMembers()} (a pass/fail eligibility floor, not a ranking factor).
+ * This used to rank live {@link Queen} entities drawn from {@code loadedMembersByType}, which quietly made the player's
+ * standing position decide the succession: hives sit hundreds of blocks apart, so typically zero or one candidate was
+ * ever loaded at once. With one loaded there was no contest to hold, and with none loaded no empress could
+ * <em>ever</em> emerge no matter how large the empire grew. Queens are also deliberately never virtualized into
+ * reserves (see {@code HiveIdentityReserveUnloadHandler} - a founder queen carries the lineage and rides an ovipositor
+ * that would be orphaned), so an unloaded queen is unreachable NBT rather than an object we could rank.
  * <p>
- * Among eligible candidates, comparators apply in order:
+ * So the election ranks LOCATIONS on persisted state, and the body is reconciled later - the same
+ * decide-abstractly-then-catch-up contract {@link com.alien.common.gameplay.hive.growth.CatchUpEngine} already uses for
+ * biomass and claims. A location is a candidate when it is alive, has a seated queen ({@code founderId != null} - the
+ * same "not queenless" test the growth and economy tasks already trust for unloaded hives), and clears
+ * {@code config.empressCandidateMinMembers()}.
+ * <p>
+ * Comparators, in the design's stated priority (claims, then members, then age):
  * <ol>
- * <li>Most claimed chunks on her hive location wins.</li>
- * <li>If tied, older queen wins (compare entity {@code tickCount}).</li>
- * <li>If still tied — queen at the older location wins (seat location's {@code ageInTicks}), then founder tiebreak,
- * then UUID lex compare — kept as a last-resort total order so the result is stable across restarts.</li>
+ * <li>Most claimed chunks wins.</li>
+ * <li>If tied, the larger hive wins ({@link CastePopulation#totalTrackedPopulation}, which counts loaded members
+ * <em>plus</em> reserves - and since fungible members virtualize into reserves on unload, it reads about the same
+ * whether the hive is loaded or not, which is what makes comparing across load states fair at all).</li>
+ * <li>If tied, the older hive wins. This replaces the old "older queen wins" step, which needed her {@code tickCount}
+ * and so needed her loaded; seat age was already the next tiebreak and is the honest proxy.</li>
+ * <li>Then the lineage founder's own seat wins, then location-id lex - a last-resort total order so the result is
+ * stable across restarts and identical on every server that evaluates it.</li>
  * </ol>
- * <p>
- * Returns {@code null} when no eligible loaded queens exist in any of the lineage's locations. Phase 10 calls this from
- * {@link EmpressEmergenceTask}.
  */
 public final class EmpressCandidatePicker {
 
     private EmpressCandidatePicker() {}
 
-    public static @Nullable Queen pick(MinecraftServer server, LineageFactionData lineage) {
-        var serverLevel = server.getLevel(lineage.dimension());
-        if (serverLevel == null) {
-            return null;
-        }
-
+    /**
+     * The best seat for an empress, or {@code null} if this lineage has no hive with a seated queen. Reads only
+     * persisted location state - safe to call when nothing in the lineage is loaded.
+     */
+    public static @Nullable HiveLocation pickSeat(LineageFactionData lineage) {
         var config = HiveLocationRegistry.INSTANCE.config();
         Candidate best = null;
 
         for (var location : lineage.locationsById().values()) {
-            for (var entry : location.loadedMembersByType().entrySet()) {
-                if (!entry.getKey().is(AlienEntityTypeTags.QUEENS)) {
-                    continue;
-                }
-                for (var uuid : entry.getValue()) {
-                    var entity = serverLevel.getEntity(uuid);
-                    if (!(entity instanceof Queen queen) || !queen.isAlive()) {
-                        continue;
-                    }
-                    if (!queen.hasOvipositor()) {
-                        // Only a founded queen (one who has laid her ovipositor/eggsack) may become an empress. A
-                        // pre-founding queen merely wandering in claimed territory would be stranded, since the empress
-                        // pipeline assumes she already has a hive and never founds one.
-                        continue;
-                    }
-                    if (queen.isContained()) {
-                        // Bound (chained/enclosed) queens can never become empress — she must be unbound.
-                        continue;
-                    }
-                    if (queen.isInhibited()) {
-                        // Inhibited queens can never become empress — she must be uninhibited.
-                        continue;
-                    }
-                    if (CastePopulation.totalTrackedPopulation(location) < config.empressCandidateMinMembers()) {
-                        // Eligibility floor, not a ranking factor — her hive must be at least this populous to be
-                        // considered at all.
-                        continue;
-                    }
+            if (!location.isAlive() || location.isExiled()) {
+                // An exiled remnant is alive but written off - it can never seat the next empress.
+                continue;
+            }
+            if (location.founderId() == null) {
+                // Null founder == queenless, which is what QueenInhibitionService sets when a queen is inhibited and
+                // what the growth/economy tasks already read. A hive with no seated queen has nobody to crown.
+                continue;
+            }
 
-                    var candidate = new Candidate(queen, location.claimedChunks().size(), location.ageInTicks());
+            // Computed once and reused: it is both the eligibility floor AND the second comparator.
+            var members = CastePopulation.totalTrackedPopulation(location);
+            if (members < config.empressCandidateMinMembers()) {
+                // Eligibility floor. Defaults to 0 (off) - the design gate is hive COUNT, not population.
+                continue;
+            }
 
-                    if (best == null || compare(candidate, best, lineage) > 0) {
-                        best = candidate;
-                    }
-                }
+            var candidate = new Candidate(
+                location,
+                location.claimedChunks().size(),
+                members,
+                location.ageInTicks()
+            );
+
+            if (best == null || compare(candidate, best, lineage) > 0) {
+                best = candidate;
             }
         }
 
-        return best == null ? null : best.queen();
+        return best == null ? null : best.location();
     }
 
-    /** Returns > 0 when {@code a} is preferred over {@code b}. Walks the comparator chain until one differentiates. */
+    /**
+     * The living, eligible queen physically seated at {@code location}, or {@code null}.
+     * <p>
+     * Called when an elected seat finally loads, to find the body the election already committed to. The eligibility
+     * re-check matters: election happens abstractly and possibly a long time earlier, so she may have been captured or
+     * inhibited in the meantime. Returning null there tells the caller to release the seat and re-elect.
+     */
+    public static @Nullable Queen resolveSeatedQueen(ServerLevel serverLevel, HiveLocation location) {
+        var founderId = location.founderId();
+        if (founderId == null) {
+            return null;
+        }
+
+        var entity = serverLevel.getEntity(founderId);
+        if (!(entity instanceof Queen queen) || !queen.isAlive() || queen.isRemoved()) {
+            return null;
+        }
+        if (!queen.hasOvipositor()) {
+            // Only a founded queen may be crowned - the empress pipeline assumes she already holds a hive and never
+            // founds one, so a pre-founding queen would be stranded.
+            return null;
+        }
+        if (queen.isContained() || queen.isInhibited()) {
+            // Bound or inhibited queens can never become empress.
+            return null;
+        }
+
+        return queen;
+    }
+
+    /** Returns &gt; 0 when {@code a} is the better seat. Walks the chain until one differentiates. */
     private static int compare(Candidate a, Candidate b, LineageFactionData lineage) {
         // 1. Most claims wins.
         var claimCmp = Integer.compare(a.claimCount(), b.claimCount());
@@ -93,45 +119,36 @@ public final class EmpressCandidatePicker {
             return claimCmp;
         }
 
-        // 2. Older queen wins.
-        var tickCmp = Integer.compare(a.queen().tickCount, b.queen().tickCount);
-        if (tickCmp != 0) {
-            return tickCmp;
+        // 2. Bigger hive wins (tracked members: loaded + reserves).
+        var memberCmp = Integer.compare(a.memberCount(), b.memberCount());
+        if (memberCmp != 0) {
+            return memberCmp;
         }
 
-        // 3. Queen at the older location wins (location ageInTicks).
+        // 3. Older hive wins.
         var seatCmp = Long.compare(a.locationAgeTicks(), b.locationAgeTicks());
         if (seatCmp != 0) {
             return seatCmp;
         }
 
-        // 4. Founder match wins.
+        // 4. The lineage founder's own seat wins.
         var founderId = lineage.founderId();
         if (founderId != null) {
-            if (founderId.equals(a.queen().getUUID()) && !founderId.equals(b.queen().getUUID())) {
-                return 1;
-            }
-            if (founderId.equals(b.queen().getUUID()) && !founderId.equals(a.queen().getUUID())) {
-                return -1;
+            var aFounder = founderId.equals(a.location().founderId());
+            var bFounder = founderId.equals(b.location().founderId());
+            if (aFounder != bFounder) {
+                return aFounder ? 1 : -1;
             }
         }
 
-        // 5. UUID lex compare — lex-greater wins so smaller UUIDs lose. Stable across restarts.
-        return uuidLex(a.queen().getUUID(), b.queen().getUUID());
+        // 5. Location-id lex - lex-greater wins, so the order is total and stable across restarts.
+        return a.location().id().value().toString().compareTo(b.location().id().value().toString());
     }
 
-    private static int uuidLex(UUID a, UUID b) {
-        var hi = Long.compare(a.getMostSignificantBits(), b.getMostSignificantBits());
-        if (hi != 0) {
-            return hi;
-        }
-        return Long.compare(a.getLeastSignificantBits(), b.getLeastSignificantBits());
-    }
-
-    /** Cached per-candidate metrics so comparisons don't repeatedly re-walk {@link HiveLocation} lookups. */
     private record Candidate(
-        Queen queen,
+        HiveLocation location,
         int claimCount,
+        int memberCount,
         long locationAgeTicks
     ) {}
 }

@@ -101,6 +101,10 @@ public final class HiveLocation {
 
     private static final String NBT_NO_CONTACT_TICKS_ACCRUED = "NoContactTicksAccrued";
 
+    private static final String NBT_EXILED = "Exiled";
+
+    private static final String NBT_DAUGHTER_HIVES_FOUNDED = "DaughterHivesFounded";
+
     private static final String NBT_COMBAT_RESPITE_REMAINING_TICKS = "CombatRespiteRemainingTicks";
 
     private static final String NBT_COMBAT_KILLS_SINCE_LAST_RESPITE = "CombatKillsSinceLastRespite";
@@ -219,6 +223,40 @@ public final class HiveLocation {
      * inside the territory. Persisted across restarts.
      */
     private long noContactTicksAccrued;
+
+    /**
+     * This location is an EXILED EMPRESS REMNANT: her seat fell, the lineage evacuated everything fungible, and she was
+     * left behind with whatever praetorians, crushers and predaliens refused to leave.
+     * <p>
+     * A remnant is still a real, alive location - it has to be, or there would be nothing to fight at - but it STOPS
+     * COUNTING as one of the lineage's hives. It cannot be elected as the next empress seat, it does not count toward
+     * the emergence threshold or the spread caps, convoys will not route to or from it, and it will not re-trigger
+     * migration. It has no economy and no future: the empress here has surrendered her ovipositor and can never lay
+     * again. It exists to be killed.
+     */
+    private boolean exiled;
+
+    /**
+     * How many daughter hives this location has seeded in its lifetime. Never decrements - losing a daughter does not
+     * buy the right to make another, or a hive under pressure would breed indefinitely.
+     */
+    private int daughterHivesFounded;
+
+    /**
+     * Whether this hive is under empress influence - a READ-HOT mirror of the router's set.
+     * <p>
+     * The authority is still {@code HiveRouter}, and {@code EmpressInfluenceSync} is the only writer. This exists
+     * because the router keeps influence in a synchronized set backed by a WeakHashMap: correct, and fine while nothing
+     * called it, but every per-caste cap check, the member cap, all four party sizes, the nuke footprint and the
+     * per-alien stat buff now ask this question - several of them inside HiveBalanceTask, which scans every location
+     * every tick with no throttling. That turned a lock acquisition into a hot path. This makes the read a field access
+     * and leaves the router's set to do what only it can: notice the TRANSITION and reset DONE/STITCHING so a finished
+     * hive resumes building.
+     * <p>
+     * Deliberately NOT persisted. It is derived from {@code lineage.empressId()}, which is, so the reconcile restores
+     * it within one sweep of a world load - the same contract the router itself documents.
+     */
+    private boolean empressInfluenced;
 
     /**
      * Whether the royal-replacement "firewall" fund is currently available to cover a queen crowning in
@@ -1020,6 +1058,33 @@ public final class HiveLocation {
         this.removalReason = removalReason;
     }
 
+    /** See the {@code empressInfluenced} field javadoc. Written only by EmpressInfluenceSync. */
+    public boolean isEmpressInfluenced() {
+        return empressInfluenced;
+    }
+
+    public void setEmpressInfluenced(boolean empressInfluenced) {
+        this.empressInfluenced = empressInfluenced;
+    }
+
+    /** Lifetime count of daughter hives seeded from here. See the field javadoc. */
+    public int daughterHivesFounded() {
+        return daughterHivesFounded;
+    }
+
+    public void setDaughterHivesFounded(int daughterHivesFounded) {
+        this.daughterHivesFounded = Math.max(0, daughterHivesFounded);
+    }
+
+    /** See the {@code exiled} field javadoc - an exiled empress remnant, alive but no longer counted. */
+    public boolean isExiled() {
+        return exiled;
+    }
+
+    public void setExiled(boolean exiled) {
+        this.exiled = exiled;
+    }
+
     public boolean isAlive() {
         return removalReason == null;
     }
@@ -1133,6 +1198,12 @@ public final class HiveLocation {
         tag.putLong(NBT_EVACUATING_REMAINING, evacuatingRemainingTicks);
         if (noContactTicksAccrued > 0L) {
             tag.putLong(NBT_NO_CONTACT_TICKS_ACCRUED, noContactTicksAccrued);
+        }
+        if (exiled) {
+            tag.putBoolean(NBT_EXILED, true);
+        }
+        if (daughterHivesFounded > 0) {
+            tag.putInt(NBT_DAUGHTER_HIVES_FOUNDED, daughterHivesFounded);
         }
         // Only persist when it deviates from the fresh-location default (available, nothing accrued, no sample yet) —
         // keeps untouched locations' NBT unchanged, matching the sibling fields' save-if-nonzero convention.
@@ -1371,6 +1442,8 @@ public final class HiveLocation {
         location.noContactTicksAccrued = tag.contains(NBT_NO_CONTACT_TICKS_ACCRUED)
             ? Math.max(0L, tag.getLong(NBT_NO_CONTACT_TICKS_ACCRUED))
             : 0L;
+        location.exiled = tag.getBoolean(NBT_EXILED);
+        location.daughterHivesFounded = Math.max(0, tag.getInt(NBT_DAUGHTER_HIVES_FOUNDED));
         // Hives saved before this state existed load gracefully as a fresh location: fund available, nothing
         // accrued, no sample taken yet — exactly the private-constructor defaults, so no migration is needed.
         location.firewallFundAvailable = !tag.contains(NBT_FIREWALL_FUND_AVAILABLE) || tag.getBoolean(NBT_FIREWALL_FUND_AVAILABLE);

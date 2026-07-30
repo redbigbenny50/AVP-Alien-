@@ -90,6 +90,7 @@ public class EnUsEntityProvider {
         addEntity(builder, AlienEntityTypes.NETHER_WARRIOR, "Nether Warrior");
         addEntity(builder, AlienEntityTypes.OVOMORPH, "Ovomorph");
         addEntity(builder, AlienEntityTypes.OVIPOSITOR, "Ovipositor");
+        addEntity(builder, AlienEntityTypes.EMPRESS_OVIPOSITOR, "Empress Ovipositor");
         addEntity(builder, AlienEntityTypes.ROYAL_COCOON, "Royal Cocoon");
         addEntity(builder, AlienEntityTypes.ABERRANT_ROYAL_COCOON, "Aberrant Royal Cocoon");
         addEntity(builder, AlienEntityTypes.NETHER_ROYAL_COCOON, "Nether Royal Cocoon");

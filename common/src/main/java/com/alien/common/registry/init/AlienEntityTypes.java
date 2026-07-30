@@ -4,6 +4,7 @@ import com.alien.Alien;
 import com.alien.common.gameplay.entity.acid.Acid;
 import com.alien.common.gameplay.entity.living.alien.adolescent.Adolescent;
 import com.alien.common.gameplay.entity.living.alien.chestburster.Chestburster;
+import com.alien.common.gameplay.entity.living.alien.ovipositor.EmpressOvipositor;
 import com.alien.common.gameplay.entity.living.alien.ovipositor.Ovipositor;
 import com.alien.common.gameplay.entity.living.alien.ovomorph.Ovomorph;
 import com.alien.common.gameplay.entity.living.alien.parasite.facehugger.Facehugger;
@@ -629,6 +630,21 @@ public class AlienEntityTypes {
         "nether_warrior",
         EntityType.Builder.of(Warrior::new, MobCategory.MONSTER)
             .sized(WARRIOR_WIDTH, WARRIOR_HEIGHT)
+    );
+
+    /**
+     * Sized from the GEO, not guessed: the empress model measures 1.29x wider and 1.14x taller than the queen's, so her
+     * hitbox takes the queen ovipositor's 5.0 x 3.25 scaled by the same ratios. Both stay far smaller than the visual
+     * model, which is deliberate and inherited - a 14-block-wide collision box would be unplayable.
+     */
+    public static final float EMPRESS_OVIPOSITOR_WIDTH = 6.5F;
+
+    public static final float EMPRESS_OVIPOSITOR_HEIGHT = 3.7F;
+
+    public static final BLibHolder<EntityType<EmpressOvipositor>> EMPRESS_OVIPOSITOR = create(
+        "empress_ovipositor",
+        EntityType.Builder.of(EmpressOvipositor::new, MobCategory.MONSTER)
+            .sized(EMPRESS_OVIPOSITOR_WIDTH, EMPRESS_OVIPOSITOR_HEIGHT)
     );
 
     public static final BLibHolder<EntityType<Ovipositor>> OVIPOSITOR = create(

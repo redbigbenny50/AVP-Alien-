@@ -712,7 +712,7 @@ public class AlienEntityTypeTagProvider extends FabricTagProvider.EntityTypeTagP
 
         getOrCreateTagBuilder(StellarisEntityTypeTags.NO_OXYGEN_NEEDED)
             .addTag(AlienEntityTypeTags.ALIENS)
-            .add(AlienEntityTypes.OVIPOSITOR.get());
+            .add(AlienEntityTypes.OVIPOSITOR.get(), AlienEntityTypes.EMPRESS_OVIPOSITOR.get());
     }
 
     /**

@@ -75,7 +75,7 @@ public final class SpreadZoneCheck {
                 var cap = lineage.empressId() != null
                     ? Math.min(config.maxLocationsUnderEmpress(), config.maxLocationsPerLineage())
                     : config.maxLocationsPerLineage();
-                if (lineage.locationsById().size() >= cap) {
+                if (lineage.activeLocationCount() >= cap) {
                     return new SpreadZoneResult.NewLineage();
                 }
                 ownLineageInRange = factionId;
@@ -117,7 +117,7 @@ public final class SpreadZoneCheck {
             var cap = lineage.empressId() != null
                 ? Math.min(config.maxLocationsUnderEmpress(), config.maxLocationsPerLineage())
                 : config.maxLocationsPerLineage();
-            if (lineage.locationsById().size() >= cap) {
+            if (lineage.activeLocationCount() >= cap) {
                 continue; // this lineage is full - can't adopt her; she'd invade unless another has room
             }
             var distance = nearestLocationDistance(lineage, candidateChunk);

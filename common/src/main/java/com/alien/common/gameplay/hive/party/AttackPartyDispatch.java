@@ -67,9 +67,7 @@ public final class AttackPartyDispatch {
         }
 
         // Size scales with claims but is CAPPED - unbounded scaling put ~20 members on a large hive.
-        var attackCap = com.alien.common.gameplay.hive.structure.HiveRouter.isEmpressInfluenced(location)
-            ? config.attackPartyMaxSizeEmpress()
-            : config.attackPartyMaxSize();
+        var attackCap = com.alien.common.gameplay.hive.empress.EmpressCaps.scale(location, config.attackPartyMaxSize());
         var desiredSize = Math.min(
             attackCap,
             Math.max(

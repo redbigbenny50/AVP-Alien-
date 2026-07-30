@@ -5,6 +5,7 @@ import com.alien.common.gameplay.block.entity.jelly.JellyVatBlockEntity;
 import com.alien.common.gameplay.hive.faction.LineageFactionData;
 import com.alien.common.gameplay.hive.id.LineageIds;
 import com.alien.common.gameplay.hive.location.HiveLocation;
+import com.alien.common.gameplay.hive.structure.HiveFootprint;
 import com.alien.common.gameplay.hive.structure.HiveRouter;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.LivingEntity;
@@ -107,12 +108,10 @@ public final class NukeStrike {
      * ledger ever saw inside it.
      */
     public static java.util.List<UUID> resolveAllCulprits(ServerLevel level, HiveLocation location) {
-        var extent = HiveRouter.isEmpressInfluenced(location) ? HiveRouter.EMPRESS_EXTENT : HiveRouter.BASE_EXTENT;
-        var hive = location.centerPos();
         var culprits = new java.util.LinkedHashSet<UUID>();
 
         for (var player : level.players()) {
-            if (Math.abs(player.getX() - hive.getX()) <= extent && Math.abs(player.getZ() - hive.getZ()) <= extent) {
+            if (HiveFootprint.contains(location, player.getX(), player.getZ())) {
                 culprits.add(player.getUUID());
             }
         }
@@ -124,14 +123,11 @@ public final class NukeStrike {
     }
 
     private static @Nullable UUID resolveCulprit(ServerLevel level, HiveLocation location, Vec3 center) {
-        var extent = HiveRouter.isEmpressInfluenced(location) ? HiveRouter.EMPRESS_EXTENT : HiveRouter.BASE_EXTENT;
-        var hive = location.centerPos();
-
         UUID closest = null;
         var closestDistance = Double.MAX_VALUE;
 
         for (var player : level.players()) {
-            if (Math.abs(player.getX() - hive.getX()) > extent || Math.abs(player.getZ() - hive.getZ()) > extent) {
+            if (!HiveFootprint.contains(location, player.getX(), player.getZ())) {
                 continue;
             }
 
@@ -185,19 +181,13 @@ public final class NukeStrike {
      * Measured to the NEAREST POINT of the square rather than its centre, so clipping the corner of a big hive counts.
      */
     private static boolean territoryReached(HiveLocation location, Vec3 center, int reach) {
-        var extent = HiveRouter.isEmpressInfluenced(location) ? HiveRouter.EMPRESS_EXTENT : HiveRouter.BASE_EXTENT;
-        var hive = location.centerPos();
-
-        var dx = Math.max(0.0, Math.abs(center.x - (hive.getX() + 0.5)) - extent);
-        var dz = Math.max(0.0, Math.abs(center.z - (hive.getZ() + 0.5)) - extent);
-
-        return dx * dx + dz * dz <= (double) reach * reach;
+        return HiveFootprint.distanceTo(location, center.x, center.z) <= reach;
     }
 
     private static void destroy(ServerLevel level, HiveLocation location, LineageFactionData lineage, Vec3 center) {
         // BOTH read BEFORE the kill: LocationDeathHandler tears the location down, HiveRouter forgets its influence,
         // and the attack-campaign ledger goes with the location.
-        var empressInfluenced = HiveRouter.isEmpressInfluenced(location);
+        var empressInfluenced = location.isEmpressInfluenced();
         var culprit = resolveCulprit(level, location, center);
 
         var killed = killMembersInside(level, location);
@@ -241,8 +231,6 @@ public final class NukeStrike {
      * should be able to walk into the crater and pick up what was in it.
      */
     private static int killMembersInside(ServerLevel level, HiveLocation location) {
-        var extent = HiveRouter.isEmpressInfluenced(location) ? HiveRouter.EMPRESS_EXTENT : HiveRouter.BASE_EXTENT;
-        var hive = location.centerPos();
         var killed = 0;
 
         for (var members : location.loadedMembersByType().values()) {
@@ -251,7 +239,7 @@ public final class NukeStrike {
                     continue;
                 }
 
-                if (Math.abs(member.getX() - hive.getX()) > extent || Math.abs(member.getZ() - hive.getZ()) > extent) {
+                if (!HiveFootprint.contains(location, member.getX(), member.getZ())) {
                     continue;
                 }
 

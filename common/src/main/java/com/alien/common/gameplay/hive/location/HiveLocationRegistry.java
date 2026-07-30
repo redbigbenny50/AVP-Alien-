@@ -519,6 +519,9 @@ public final class HiveLocationRegistry {
             com.alien.common.gameplay.hive.convoy.MigrationDispatch.scanAndDispatch(server);
             com.alien.common.gameplay.hive.convoy.RaidDispatch.scanAndDispatch(server);
             com.alien.common.gameplay.hive.empress.EmpressEmergenceTask.scanAndStart(server);
+            // Re-assert the router's memory-only empress-influence set. Reconciled rather than pushed, so it
+            // survives restarts and needs no hook on every event that could change the answer.
+            com.alien.common.gameplay.hive.empress.EmpressInfluenceSync.syncAll(server);
         }
 
         if (server.overworld().getGameTime() % Math.max(1L, config.contestTickWindow()) == 0L) {

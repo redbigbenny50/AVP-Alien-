@@ -10,7 +10,7 @@ import com.alien.common.gameplay.hive.faction.LineageFactionData;
 import com.alien.common.gameplay.hive.faction.VariantFactionRegistry;
 import com.alien.common.gameplay.hive.id.LineageIds;
 import com.alien.common.gameplay.hive.location.HiveLocation;
-import com.alien.common.gameplay.hive.structure.HiveRouter;
+import com.alien.common.gameplay.hive.structure.HiveFootprint;
 import com.alien.common.model.alien.variant.AlienVariant;
 import com.alien.common.registry.init.AlienFactionDataTypes;
 import com.alien.common.registry.tag.AlienEntityTypeTags;
@@ -95,8 +95,6 @@ public final class NukeConversion {
      * drift as free agents rather than vanishing.
      */
     private static void evictOutsiders(ServerLevel level, HiveLocation location) {
-        var extent = HiveRouter.isEmpressInfluenced(location) ? HiveRouter.EMPRESS_EXTENT : HiveRouter.BASE_EXTENT;
-        var hive = location.centerPos();
         var locationFaction = Alien.MOD.factions().get(location.id().value());
 
         if (locationFaction == null) {
@@ -111,10 +109,7 @@ public final class NukeConversion {
                     continue;
                 }
 
-                if (
-                    Math.abs(entity.getX() - hive.getX()) <= extent
-                        && Math.abs(entity.getZ() - hive.getZ()) <= extent
-                ) {
+                if (HiveFootprint.contains(location, entity.getX(), entity.getZ())) {
                     continue;
                 }
 
@@ -186,16 +181,13 @@ public final class NukeConversion {
      * protects a specimen someone captured and dragged off. Killed rather than discarded so loot tables fire.
      */
     private static void killEveryoneHome(ServerLevel level, HiveLocation location) {
-        var extent = HiveRouter.isEmpressInfluenced(location) ? HiveRouter.EMPRESS_EXTENT : HiveRouter.BASE_EXTENT;
-        var hive = location.centerPos();
-
         for (var members : location.loadedMembersByType().values()) {
             for (var memberId : new ArrayList<>(members)) {
                 if (!(level.getEntity(memberId) instanceof LivingEntity member) || !member.isAlive()) {
                     continue;
                 }
 
-                if (Math.abs(member.getX() - hive.getX()) > extent || Math.abs(member.getZ() - hive.getZ()) > extent) {
+                if (!HiveFootprint.contains(location, member.getX(), member.getZ())) {
                     continue;
                 }
 
@@ -206,16 +198,7 @@ public final class NukeConversion {
 
     /** Every egg still standing becomes ordnance. Royal eggs lose the crown - there is no royal irradiated line. */
     private static void convertEggs(ServerLevel level, HiveLocation location) {
-        var extent = HiveRouter.isEmpressInfluenced(location) ? HiveRouter.EMPRESS_EXTENT : HiveRouter.BASE_EXTENT;
-        var hive = location.centerPos();
-        var box = new net.minecraft.world.phys.AABB(
-            hive.getX() - extent,
-            level.getMinBuildHeight(),
-            hive.getZ() - extent,
-            hive.getX() + extent,
-            level.getMaxBuildHeight(),
-            hive.getZ() + extent
-        );
+        var box = HiveFootprint.column(location, level.getMinBuildHeight(), level.getMaxBuildHeight());
 
         for (var egg : level.getEntitiesOfClass(Ovomorph.class, box)) {
             egg.convertToIrradiated(level);

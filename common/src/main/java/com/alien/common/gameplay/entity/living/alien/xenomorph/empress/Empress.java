@@ -111,12 +111,12 @@ public class Empress extends Xenomorph implements GOAPUser<Empress>, EggLayer {
 
     @Override
     protected boolean canEntityRideAlien(@NotNull Entity passenger) {
-        return Objects.equals(passenger.getType(), AlienEntityTypes.OVIPOSITOR.get());
+        return Objects.equals(passenger.getType(), AlienEntityTypes.EMPRESS_OVIPOSITOR.get());
     }
 
     @Override
     protected void positionRider(@NotNull Entity passenger, @NotNull MoveFunction callback) {
-        if (passenger.getType() == AlienEntityTypes.OVIPOSITOR.get()) {
+        if (passenger.getType() == AlienEntityTypes.EMPRESS_OVIPOSITOR.get()) {
             var relativePos = com.blib.api.common.entity.v1.EntityUtil.getRelativePosition(this, 3, 0.01, 5.25);
             callback.accept(passenger, relativePos.x, relativePos.y, relativePos.z);
             return;
@@ -177,6 +177,23 @@ public class Empress extends Xenomorph implements GOAPUser<Empress>, EggLayer {
      * Gap after which the accumulator is considered cold. Matches the queen's decay closely enough to feel the same.
      */
     private static final int DISTURBANCE_WINDOW_TICKS = 120;
+
+    /** True once her hive has fallen and the lineage has left her behind. See {@link EmpressData}. */
+    public boolean isExiled() {
+        return empressData.isExiled();
+    }
+
+    /**
+     * Send her into exile. One-way, and it takes her ovipositor with it - she guards the chamber from here on and will
+     * never lay another egg.
+     */
+    public void exile() {
+        if (empressData.isExiled()) {
+            return;
+        }
+        empressData.setExiled();
+        empressOvipositorManager.abandonOvipositor();
+    }
 
     public EmpressData getEmpressData() {
         return empressData;

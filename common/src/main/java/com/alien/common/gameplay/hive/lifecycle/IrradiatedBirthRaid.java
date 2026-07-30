@@ -201,9 +201,10 @@ public final class IrradiatedBirthRaid extends SavedData {
      */
     private static void sendRaid(ServerLevel level, HiveLocation location, List<ServerPlayer> cluster) {
         var quarry = cluster.get(0);
-        var cap = com.alien.common.gameplay.hive.structure.HiveRouter.isEmpressInfluenced(location)
-            ? HiveLocationRegistry.INSTANCE.config().attackPartyMaxSizeEmpress()
-            : HiveLocationRegistry.INSTANCE.config().attackPartyMaxSize();
+        var cap = com.alien.common.gameplay.hive.empress.EmpressCaps.scale(
+            location,
+            HiveLocationRegistry.INSTANCE.config().attackPartyMaxSize()
+        );
 
         var sent = 0;
         var types = new ArrayList<>(location.localReserves().getAvailableEntityTypes());

@@ -45,7 +45,7 @@ public class Ovipositor extends Mob {
     public void knockback(double strength, double x, double z) {}
 
     @Override
-    protected final boolean canRide(@NotNull Entity vehicle) {
+    protected boolean canRide(@NotNull Entity vehicle) {
         return super.canRide(vehicle) && vehicle.getType().is(AlienEntityTypeTags.QUEENS);
     }
 

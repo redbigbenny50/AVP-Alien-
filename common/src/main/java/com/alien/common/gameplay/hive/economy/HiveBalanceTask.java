@@ -63,14 +63,32 @@ public final class HiveBalanceTask {
 
     private static final int MEMBER_CAP = 250;
 
-    private static final int EMPRESS_MEMBER_CAP = 400;
+    /**
+     * Lineages are processed in buckets: each one is evaluated once per this many ticks, chosen by its own id hash so
+     * the empire spreads evenly across ticks instead of spiking on one. Nothing here needs per-tick resolution - it
+     * only needs to happen about once a second.
+     */
+    private static final int LINEAGE_BUCKET_TICKS = 20;
+
+    /**
+     * Offset within the bucket window, distinct per scan, so one lineage's economy tasks land on DIFFERENT ticks.
+     * Without it every scan would pick the same lineage on the same tick and the saving would be a smaller spike rather
+     * than no spike.
+     */
+    private static final int BUCKET_PHASE = 7;
 
     public static void scanAll(MinecraftServer server) {
         var config = HiveLocationRegistry.INSTANCE.config();
         var populationPerChunk = config.populationPerChunk();
+        var currentTick = server.overworld().getGameTime();
 
         for (var factionId : new ArrayList<>(Alien.MOD.factions().getAllIds())) {
             if (!LineageIds.isLineageId(factionId)) {
+                continue;
+            }
+            // A purchase that could have happened this tick happens within a second instead. This is the heaviest
+            // per-tick scan in the hive system - it walks every purchase's conditions for every location.
+            if (Math.floorMod(currentTick - factionId.hashCode(), LINEAGE_BUCKET_TICKS) != BUCKET_PHASE) {
                 continue;
             }
             var faction = Alien.MOD.factions().get(factionId);
@@ -102,9 +120,7 @@ public final class HiveBalanceTask {
         // defense: 250, raised to 400 under empress influence. Exempt: the queen, eggs (never tracked), and
         // the queen's founding retinue (1 praetorian + 2 drones). Members from other sources currently count
         // too (origin isn't tagged); if convoy bonuses visibly eat cap space, origin tagging is the fix.
-        var memberCap = com.alien.common.gameplay.hive.structure.HiveRouter.isEmpressInfluenced(location)
-            ? EMPRESS_MEMBER_CAP
-            : MEMBER_CAP;
+        var memberCap = com.alien.common.gameplay.hive.empress.EmpressCaps.scale(location, MEMBER_CAP);
         var retinueAllowance = Math.min(1, pop.getOrDefault(AlienEntityTypeTags.PRAETORIANS, 0))
             + Math.min(2, pop.getOrDefault(AlienEntityTypeTags.DRONES, 0));
         // Carve-crew transients (design §8.5): reserve-materialized build workers don't count against the cap while
@@ -497,8 +513,13 @@ public final class HiveBalanceTask {
                     }
                 }
                 case HiveUnitPurchaseCondition.MaxEntityCountInLocation max -> {
+                    // EVERY per-caste ceiling in every purchase file passes through here - warriors, praetorians,
+                    // crushers, spitters, the lot - so scaling it here is what makes an empress hive half again
+                    // bigger in its whole standing army rather than just in its worker count. The harbinger is the
+                    // sole exception and needs no special-casing: it is capped by MaxPerRaidChamber below, which
+                    // she already raises by granting the hive a second raid chamber.
                     var current = CastePopulation.countEntity(location, max.entity());
-                    if (current >= max.value()) {
+                    if (current >= com.alien.common.gameplay.hive.empress.EmpressCaps.scale(location, max.value())) {
                         return false;
                     }
                 }

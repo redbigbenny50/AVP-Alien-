@@ -145,7 +145,7 @@ public final class HiveLocationFoundingService {
         // Adds the queen to both the lineage faction (idempotent) and the new location faction.
         LocationMembership.join(location, queen);
 
-        if (lineageData.locationsById().size() >= 4 && lineageData.empressId() == null) {
+        if (lineageData.activeLocationCount() >= 4 && lineageData.empressId() == null) {
             // Arm the empress-emergence hint at the SAME threshold EmpressEmergenceTask actually fires at (4+
             // locations, per the updated leadership design). This flag also pauses QueenlessMaturationTask for the
             // lineage; arming it at the old 2+ suppressed queenless maturation two hives before an empress could

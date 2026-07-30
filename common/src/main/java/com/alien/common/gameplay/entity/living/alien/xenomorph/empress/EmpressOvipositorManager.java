@@ -47,6 +47,21 @@ public class EmpressOvipositorManager implements NBTSerializable {
 
         this.hadOvipositorLastTick = hasOvipositor;
 
+        // Exile is applied to the LOCATION, which can happen while she is unloaded - so the entity-side flag is
+        // latched here, the first time she ticks at a remnant. Once latched it is permanent and travels with her
+        // even if she wanders off the ruin.
+        if (!empress.isExiled()) {
+            var location = currentLocation();
+            if (location != null && location.isExiled()) {
+                empress.exile();
+                return;
+            }
+        } else if (hasOvipositor) {
+            // Defensive: an exiled empress must never be wearing one.
+            abandonOvipositor();
+            return;
+        }
+
         if (hasOvipositor) {
             getOvipositor().ifSome(ovipositor -> {
                 ovipositor.setYRot(empress.getYRot());
@@ -78,7 +93,7 @@ public class EmpressOvipositorManager implements NBTSerializable {
     public @Nullable Ovipositor getOvipositorOrNull() {
         return (Ovipositor) empress.getPassengers()
             .stream()
-            .filter(passenger -> passenger.getType() == AlienEntityTypes.OVIPOSITOR.get())
+            .filter(passenger -> passenger.getType() == AlienEntityTypes.EMPRESS_OVIPOSITOR.get())
             .findFirst()
             .orElse(null);
     }
@@ -97,7 +112,7 @@ public class EmpressOvipositorManager implements NBTSerializable {
             ovipositor.discard();
         });
         for (var passenger : List.copyOf(empress.getPassengers())) {
-            if (passenger.getType() == AlienEntityTypes.OVIPOSITOR.get()) {
+            if (passenger.getType() == AlienEntityTypes.EMPRESS_OVIPOSITOR.get()) {
                 passenger.stopRiding();
                 passenger.discard();
             }
@@ -114,7 +129,7 @@ public class EmpressOvipositorManager implements NBTSerializable {
     }
 
     private void createOvipositor() {
-        var ovipositor = AlienEntityTypes.OVIPOSITOR.get().create(empress.level());
+        var ovipositor = AlienEntityTypes.EMPRESS_OVIPOSITOR.get().create(empress.level());
 
         if (ovipositor != null) {
             ovipositor.moveTo(empress.position(), empress.getYRot(), empress.getXRot());
@@ -130,7 +145,8 @@ public class EmpressOvipositorManager implements NBTSerializable {
     }
 
     private boolean canCreateOvipositor() {
-        return empress.getTarget() == null
+        return !empress.isExiled()
+            && empress.getTarget() == null
             && AlienVariantTypes.getFor(empress.getVariant()).canReproduce()
             && !empress.isPoisoned()
             && !ovipositorCreationCooldown.isActive()

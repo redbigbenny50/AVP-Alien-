@@ -1036,6 +1036,15 @@ public abstract class Alien extends Monster implements DataUser {
                 recordHiveCombatKill(player);
             }
             ConvoyMemberTracker.unregisterKilled(this);
+            // ANY royal death (queen or empress, any cause, killer or not) surrenders the founder pointer on the
+            // hives she was seated at. Before this, setFounderId(null) had exactly one caller in the whole tree -
+            // QueenInhibitionService - so a location kept naming a long-dead queen forever. That made
+            // "founderId != null" read as "once had a queen" rather than "has a living queen", which stalled the
+            // post-replacement grudge (it waits for a successor that the queenless path never crowned) and let the
+            // empress election seat a hive with no queen in it at all.
+            if (getType().is(AlienEntityTypeTags.QUEENS)) {
+                onRoyalDiedClearFounder();
+            }
             // Hive empress death clears the lineage's empress slot so the next emergence ritual can fire.
             if (getType().is(AlienEntityTypeTags.EMPRESSES)) {
                 onEmpressDied();
@@ -1129,6 +1138,37 @@ public abstract class Alien extends Monster implements DataUser {
         return false;
     }
 
+    /**
+     * Clear this royal's founder pointer on every hive that named her.
+     * <p>
+     * Scans the locations of every lineage she belonged to rather than trusting a single resolver, because a royal can
+     * die outside her own claimed chunks (dragged off by a raid, killed mid-convoy, executed in a player's lab) and the
+     * seat still has to be released. Null founder is the established "queenless" state the growth, economy and
+     * maturation tasks already read - see QueenInhibitionService, which sets exactly this.
+     */
+    private void onRoyalDiedClearFounder() {
+        for (var factionId : com.alien.Alien.MOD.factions().getFactionIds(getUUID())) {
+            if (!com.alien.common.gameplay.hive.id.LineageIds.isLineageId(factionId)) {
+                continue;
+            }
+            var faction = com.alien.Alien.MOD.factions().get(factionId);
+            if (faction == null || !(faction.data() instanceof LineageFactionData lineage)) {
+                continue;
+            }
+            for (var location : lineage.locationsById().values()) {
+                if (getUUID().equals(location.founderId())) {
+                    location.setFounderId(null);
+                    com.alien.Alien.LOGGER.info(
+                        "Hive: royal {} died - location {} is now queenless",
+                        getUUID(),
+                        location.id()
+                    );
+                }
+            }
+            lineage.markDirty();
+        }
+    }
+
     private void onEmpressDied() {
         for (var factionId : com.alien.Alien.MOD.factions().getFactionIds(getUUID())) {
             if (!com.alien.common.gameplay.hive.id.LineageIds.isLineageId(factionId)) {
@@ -1140,6 +1180,15 @@ public abstract class Alien extends Monster implements DataUser {
             }
             if (getUUID().equals(lineage.empressId())) {
                 lineage.setEmpressId(null);
+                lineage.setPendingEmpressSeatId(null);
+
+                // Killing her has to BUY something. Without this the lineage still holds 4+ hives, so the very next
+                // scan crowns her successor and the players get nothing for the fight.
+                var server = level().getServer();
+                if (server != null) {
+                    var cooldown = HiveLocationRegistry.INSTANCE.config().empressCrowningCooldownTicks();
+                    lineage.setEmpressCooldownUntilTick(server.overworld().getGameTime() + cooldown);
+                }
             }
             com.alien.Alien.LOGGER.info(
                 "Hive: empress {} died — lineage {} has {} location(s); empress slot cleared",
@@ -1413,6 +1462,16 @@ public abstract class Alien extends Monster implements DataUser {
 
     private static final ResourceLocation irradiatedBuff = com.alien.Alien.MOD.resources().createLocation("irradiated_buff");
 
+    private static final ResourceLocation empressBuff = com.alien.Alien.MOD.resources().createLocation("empress_buff");
+
+    /**
+     * Empress influence changes rarely, so the membership walk is throttled rather than run every tick.
+     * <p>
+     * Phased by entity id, not raw tickCount: a hive that spawns a wave of forty aliens in one tick would otherwise
+     * give them all the same modulo phase, and every one of them would do the walk on the same tick forever.
+     */
+    private static final int EMPRESS_BUFF_RECHECK_TICKS = 40;
+
     /**
      * Strain buffs, and the health correction that has to ride with them.
      * <p>
@@ -1476,6 +1535,30 @@ public abstract class Alien extends Monster implements DataUser {
             applyBuff(Attributes.ARMOR, percentage, irradiatedBuff);
             applyBuff(Attributes.ARMOR_TOUGHNESS, percentage, irradiatedBuff);
         }
+
+        // EMPRESS: a third, independent axis. Strain is what you ARE and caste is what you GREW INTO; this is who
+        // you ANSWER TO, so it stacks with both. [stated] "an irradaiated predalien empress for example would have 3
+        // bonuses empress bonus, predalien bonus, and irradiated bonus." Summed against base like every other buff
+        // here, so on a 40-health base: +50% predalien +20, +20% irradiated +8, +30% empress +12, total 80 = 2.0x.
+        //
+        // The ONLY buff on this list that can be taken away, so unlike the others it also has to be REMOVED - she
+        // dies, she is exiled, the hive leaves her lineage, or the alien simply walks off her territory. The
+        // enclosing applyDynamicAttributes rescales current health proportionally in BOTH directions, so losing it
+        // wounds rather than kills.
+        if (!level().isClientSide && (tickCount + getId()) % EMPRESS_BUFF_RECHECK_TICKS == 0) {
+            if (isUnderEmpressInfluence()) {
+                var percentage = 0.3;
+                applyBuff(Attributes.MAX_HEALTH, percentage, empressBuff);
+                applyBuff(Attributes.ATTACK_DAMAGE, percentage, empressBuff);
+                applyBuff(Attributes.ARMOR, percentage, empressBuff);
+                applyBuff(Attributes.ARMOR_TOUGHNESS, percentage, empressBuff);
+            } else {
+                removeBuff(Attributes.MAX_HEALTH, empressBuff);
+                removeBuff(Attributes.ATTACK_DAMAGE, empressBuff);
+                removeBuff(Attributes.ARMOR, empressBuff);
+                removeBuff(Attributes.ARMOR_TOUGHNESS, empressBuff);
+            }
+        }
     }
 
     private void applyBuff(Holder<Attribute> attribute, double percentage, ResourceLocation resourceLocation) {
@@ -1487,6 +1570,40 @@ public abstract class Alien extends Monster implements DataUser {
 
         var modifier = new AttributeModifier(resourceLocation, instance.getBaseValue() * percentage, AttributeModifier.Operation.ADD_VALUE);
         instance.addPermanentModifier(modifier);
+    }
+
+    /**
+     * Whether this alien BELONGS to a hive under empress influence - by MEMBERSHIP, not by where it is standing.
+     * <p>
+     * [stated] "its meant to apply to the whole hive raids included a empress is punishing it makes you want to find
+     * and kill her." A positional test would have quietly switched the buff off the moment a raid crossed its own
+     * border, which is exactly the fight where it is supposed to matter. Strain and caste buffs travel with the
+     * creature; so does this one.
+     */
+    private boolean isUnderEmpressInfluence() {
+        for (var factionId : com.alien.Alien.MOD.factions().getFactionIds(getUUID())) {
+            if (!com.alien.common.gameplay.hive.id.HiveLocationIds.isHiveLocationId(factionId)) {
+                continue;
+            }
+            var location = HiveLocationRegistry.INSTANCE.get(
+                com.alien.common.gameplay.hive.id.HiveLocationId.of(factionId)
+            );
+            if (location != null && location.isEmpressInfluenced()) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /** The mirror of {@link #applyBuff} - only needed for buffs that can be revoked, which today means the empress. */
+    private void removeBuff(Holder<Attribute> attribute, ResourceLocation resourceLocation) {
+        var instance = getAttributes().getInstance(attribute);
+
+        if (instance == null || !instance.hasModifier(resourceLocation)) {
+            return;
+        }
+
+        instance.removeModifier(resourceLocation);
     }
 
     public static AttributeSupplier.Builder createAlienAttributes() {

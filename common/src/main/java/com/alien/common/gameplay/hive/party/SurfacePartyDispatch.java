@@ -54,9 +54,7 @@ public final class SurfacePartyDispatch {
         }
 
         // Size scales with claims but is CAPPED - unbounded scaling put 20+ runners on a large hive.
-        var surfaceCap = com.alien.common.gameplay.hive.structure.HiveRouter.isEmpressInfluenced(location)
-            ? config.surfacePartyMaxSizeEmpress()
-            : config.surfacePartyMaxSize();
+        var surfaceCap = com.alien.common.gameplay.hive.empress.EmpressCaps.scale(location, config.surfacePartyMaxSize());
         var desiredSize = Math.min(
             surfaceCap,
             Math.max(

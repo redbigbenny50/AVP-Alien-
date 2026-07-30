@@ -302,9 +302,9 @@ public class QueenLifecyclePhaseManager implements NBTSerializable {
         }
         var faction = Alien.MOD.factions().get(location.lineageFactionId());
         if (
-                faction == null
-                        || !(faction.data() instanceof com.alien.common.gameplay.hive.faction.LineageFactionData lineage)
-                        || lineage.locationsById().size() >= WILD_ADOPTION_LINEAGE_CAP
+            faction == null
+                || !(faction.data() instanceof com.alien.common.gameplay.hive.faction.LineageFactionData lineage)
+                || lineage.locationsById().size() >= WILD_ADOPTION_LINEAGE_CAP
         ) {
             return false;
         }
@@ -312,9 +312,9 @@ public class QueenLifecyclePhaseManager implements NBTSerializable {
         queen.isHibernating.set(false);
         phase = QueenLifecyclePhase.FOUNDING_HANDOFF;
         Alien.LOGGER.info(
-                "Queen lifecycle: freed queen {} adopted by lineage {} as a daughter queen — rescue debt honored",
-                queen.getUUID(),
-                location.lineageFactionId()
+            "Queen lifecycle: freed queen {} adopted by lineage {} as a daughter queen — rescue debt honored",
+            queen.getUUID(),
+            location.lineageFactionId()
         );
         return true;
     }
@@ -347,9 +347,9 @@ public class QueenLifecyclePhaseManager implements NBTSerializable {
         // A sleeping queen taking root nearby is not announced outright - but instincts notice. The italic whisper
         // in her strain's color is the quiet tier: no scream, just dread. Waking her earns the scream.
         broadcastToNearbyPlayers(
-                net.minecraft.network.chat.Component
-                        .literal("Your instincts warn you danger is near...")
-                        .withStyle(com.alien.common.data.AlienVariantTypes.getFor(queen).chatColor(), net.minecraft.ChatFormatting.ITALIC)
+            net.minecraft.network.chat.Component
+                .literal("Your instincts warn you danger is near...")
+                .withStyle(com.alien.common.data.AlienVariantTypes.getFor(queen).chatColor(), net.minecraft.ChatFormatting.ITALIC)
         );
     }
 
@@ -368,10 +368,10 @@ public class QueenLifecyclePhaseManager implements NBTSerializable {
         this.phase = QueenLifecyclePhase.FOUNDING_HANDOFF;
         queen.isHibernating.set(false);
         broadcastToNearbyPlayers(
-                net.minecraft.network.chat.Component
-                        .literal("Something ancient screams towards the heavens...")
-                        .withStyle(com.alien.common.data.AlienVariantTypes.getFor(queen).chatColor()),
-                true
+            net.minecraft.network.chat.Component
+                .literal("Something ancient screams towards the heavens...")
+                .withStyle(com.alien.common.data.AlienVariantTypes.getFor(queen).chatColor()),
+            true
         );
     }
 
@@ -396,16 +396,16 @@ public class QueenLifecyclePhaseManager implements NBTSerializable {
         // reachable) until the anchor cell, its headroom, and its floor are all lava-free. Unloaded chunks are
         // handled at arrival instead (the pocket carve seals hazards with resin).
         if (
-                queen.level() instanceof ServerLevel foundingLevel
-                        && foundingLevel.isLoaded(chunk.getWorldPosition())
+            queen.level() instanceof ServerLevel foundingLevel
+                && foundingLevel.isLoaded(chunk.getWorldPosition())
         ) {
             var probe = chunk.getMiddleBlockPosition(targetY);
             int maxY = queen.blockPosition().getY();
             while (
-                    probe.getY() < maxY
-                            && (foundingLevel.getBlockState(probe).liquid()
-                            || foundingLevel.getBlockState(probe.above()).liquid()
-                            || foundingLevel.getBlockState(probe.below()).liquid())
+                probe.getY() < maxY
+                    && (foundingLevel.getBlockState(probe).liquid()
+                        || foundingLevel.getBlockState(probe.above()).liquid()
+                        || foundingLevel.getBlockState(probe.below()).liquid())
             ) {
                 probe = probe.above();
             }
@@ -415,11 +415,11 @@ public class QueenLifecyclePhaseManager implements NBTSerializable {
         this.phase = QueenLifecyclePhase.LOCATION;
 
         Alien.LOGGER.info(
-                "Queen lifecycle: {} entering LOCATION — committed anchor chunk {} target Y {} (anchor {})",
-                queen.getUUID(),
-                chunk,
-                targetY,
-                anchor
+            "Queen lifecycle: {} entering LOCATION — committed anchor chunk {} target Y {} (anchor {})",
+            queen.getUUID(),
+            chunk,
+            targetY,
+            anchor
         );
     }
 
@@ -446,7 +446,20 @@ public class QueenLifecyclePhaseManager implements NBTSerializable {
      */
     private void enterHibernation() {
         this.phase = QueenLifecyclePhase.HIBERNATION;
-        this.hibernationTicksRemaining = HIBERNATION_DURATION_TICKS;
+
+        // A HIVE-RAISED queen does not sleep. Hibernation is the WILD queen's bargain: she takes root alone in the
+        // open with nothing to protect her, so she waits out a long vulnerable sleep before she is strong enough to
+        // found. A daughter promoted inside a defended hive has already had that protection - she was raised in the
+        // chamber, escorted out, and dispatched with orders - so she founds on arrival.
+        //
+        // This is not only pacing. The sleep clock ONLY advances while her chunk is entity-ticking, so a dispatched
+        // daughter whose player wandered off would sleep forever and never found - and her mother hive would have
+        // already spent the jelly, the praetorian, and one of its two lifetime daughters on her. It also made a
+        // WATCHED hive spread an hour slower than an ignored one, since the unloaded path mints its daughter
+        // outright.
+        //
+        // Zero rather than a skipped phase so the existing wake-and-hand-off path runs unchanged on the next tick.
+        this.hibernationTicksRemaining = wildSpawned ? HIBERNATION_DURATION_TICKS : 0;
         this.hibernationActivity = HibernationActivity.ASLEEP;
         this.disturbanceCalmTicks = 0;
         queen.isHibernating.set(true);
@@ -460,10 +473,10 @@ public class QueenLifecyclePhaseManager implements NBTSerializable {
         }
 
         Alien.LOGGER.info(
-                "Queen lifecycle: {} entering HIBERNATION at anchor {} — sleeping {} ticks",
-                queen.getUUID(),
-                anchor,
-                hibernationTicksRemaining
+            "Queen lifecycle: {} entering HIBERNATION at anchor {} — sleeping {} ticks",
+            queen.getUUID(),
+            anchor,
+            hibernationTicksRemaining
         );
     }
 
@@ -491,9 +504,9 @@ public class QueenLifecyclePhaseManager implements NBTSerializable {
 
         queen.isHibernating.set(false);
         Alien.LOGGER.info(
-                "Queen lifecycle: {} woke from HIBERNATION at anchor {} — handing off to founding",
-                queen.getUUID(),
-                anchor
+            "Queen lifecycle: {} woke from HIBERNATION at anchor {} — handing off to founding",
+            queen.getUUID(),
+            anchor
         );
 
         if (wildSpawned) {
@@ -527,7 +540,7 @@ public class QueenLifecyclePhaseManager implements NBTSerializable {
             var withinRange = false;
             for (var chunk : location.claimedChunks()) {
                 if (
-                        Math.max(Math.abs(chunk.x - queenChunk.x), Math.abs(chunk.z - queenChunk.z)) <= WILD_ADOPTION_RANGE_CHUNKS
+                    Math.max(Math.abs(chunk.x - queenChunk.x), Math.abs(chunk.z - queenChunk.z)) <= WILD_ADOPTION_RANGE_CHUNKS
                 ) {
                     withinRange = true;
                     break;
@@ -539,9 +552,9 @@ public class QueenLifecyclePhaseManager implements NBTSerializable {
 
             var faction = Alien.MOD.factions().get(location.lineageFactionId());
             if (
-                    faction == null
-                            || !(faction.data() instanceof com.alien.common.gameplay.hive.faction.LineageFactionData lineage)
-                            || lineage.locationsById().size() >= WILD_ADOPTION_LINEAGE_CAP
+                faction == null
+                    || !(faction.data() instanceof com.alien.common.gameplay.hive.faction.LineageFactionData lineage)
+                    || lineage.locationsById().size() >= WILD_ADOPTION_LINEAGE_CAP
             ) {
                 continue;
             }
@@ -550,9 +563,9 @@ public class QueenLifecyclePhaseManager implements NBTSerializable {
             queen.isHibernating.set(false);
             phase = QueenLifecyclePhase.FOUNDING_HANDOFF;
             Alien.LOGGER.info(
-                    "Queen lifecycle: wild queen {} adopted by lineage {} — waking to found",
-                    queen.getUUID(),
-                    location.lineageFactionId()
+                "Queen lifecycle: wild queen {} adopted by lineage {} — waking to found",
+                queen.getUUID(),
+                location.lineageFactionId()
             );
             return true;
         }
@@ -563,10 +576,10 @@ public class QueenLifecyclePhaseManager implements NBTSerializable {
     /** "You have awakened a slumbering nightmare" — sent to every player whose activity accumulated her sleep clock. */
     private void broadcastWildAwakening() {
         broadcastToNearbyPlayers(
-                net.minecraft.network.chat.Component
-                        .literal("You have awakened a slumbering nightmare")
-                        .withStyle(com.alien.common.data.AlienVariantTypes.getFor(queen).chatColor()),
-                true
+            net.minecraft.network.chat.Component
+                .literal("You have awakened a slumbering nightmare")
+                .withStyle(com.alien.common.data.AlienVariantTypes.getFor(queen).chatColor()),
+            true
         );
     }
 
@@ -588,10 +601,10 @@ public class QueenLifecyclePhaseManager implements NBTSerializable {
             if (player.distanceToSqr(queen) <= WILD_AWAKENING_BROADCAST_RANGE * WILD_AWAKENING_BROADCAST_RANGE) {
                 if (withQueenScream) {
                     player.playNotifySound(
-                            com.alien.common.registry.init.AlienSoundEvents.ENTITY_QUEEN_SCREAM.get(),
-                            net.minecraft.sounds.SoundSource.MASTER,
-                            1,
-                            1
+                        com.alien.common.registry.init.AlienSoundEvents.ENTITY_QUEEN_SCREAM.get(),
+                        net.minecraft.sounds.SoundSource.MASTER,
+                        1,
+                        1
                     );
                 }
                 player.sendSystemMessage(message);
@@ -612,9 +625,9 @@ public class QueenLifecyclePhaseManager implements NBTSerializable {
         if (disturbanceCalmTicks >= HIBERNATION_CALM_TICKS) {
             hibernationActivity = HibernationActivity.RETURNING;
             Alien.LOGGER.info(
-                    "Queen lifecycle: {} hibernation threat clear — returning to anchor {}",
-                    queen.getUUID(),
-                    anchor
+                "Queen lifecycle: {} hibernation threat clear — returning to anchor {}",
+                queen.getUUID(),
+                anchor
             );
         }
     }
@@ -635,7 +648,7 @@ public class QueenLifecyclePhaseManager implements NBTSerializable {
         }
 
         var arrived = queen.distanceToSqr(anchor.getX() + 0.5, anchor.getY(), anchor.getZ() + 0.5) <= RETURN_ARRIVAL_RADIUS
-                * RETURN_ARRIVAL_RADIUS;
+            * RETURN_ARRIVAL_RADIUS;
         if (arrived) {
             resumeSleep();
         }
@@ -693,10 +706,10 @@ public class QueenLifecyclePhaseManager implements NBTSerializable {
         disturbanceCalmTicks = 0;
         queen.isHibernating.set(false);
         Alien.LOGGER.info(
-                "Queen lifecycle: {} disturbed in HIBERNATION ({} dmg, {}) — defending",
-                queen.getUUID(),
-                amount,
-                reason
+            "Queen lifecycle: {} disturbed in HIBERNATION ({} dmg, {}) — defending",
+            queen.getUUID(),
+            amount,
+            reason
         );
     }
 
@@ -710,9 +723,9 @@ public class QueenLifecyclePhaseManager implements NBTSerializable {
         }
         this.anchor = queen.blockPosition();
         Alien.LOGGER.info(
-                "Queen lifecycle: {} could not path back to its anchor — re-anchoring at {}",
-                queen.getUUID(),
-                anchor
+            "Queen lifecycle: {} could not path back to its anchor — re-anchoring at {}",
+            queen.getUUID(),
+            anchor
         );
         resumeSleep();
     }
@@ -726,10 +739,10 @@ public class QueenLifecyclePhaseManager implements NBTSerializable {
         }
         queen.isHibernating.set(true);
         Alien.LOGGER.info(
-                "Queen lifecycle: {} resumed HIBERNATION at anchor {} — {} ticks left",
-                queen.getUUID(),
-                anchor,
-                hibernationTicksRemaining
+            "Queen lifecycle: {} resumed HIBERNATION at anchor {} — {} ticks left",
+            queen.getUUID(),
+            anchor,
+            hibernationTicksRemaining
         );
     }
 
@@ -748,12 +761,12 @@ public class QueenLifecyclePhaseManager implements NBTSerializable {
 
         var chunkPos = new ChunkPos(queen.blockPosition());
         var box = new AABB(
-                chunkPos.getMinBlockX(),
-                queen.getY() - 24.0,
-                chunkPos.getMinBlockZ(),
-                chunkPos.getMaxBlockX() + 1,
-                queen.getY() + 24.0,
-                chunkPos.getMaxBlockZ() + 1
+            chunkPos.getMinBlockX(),
+            queen.getY() - 24.0,
+            chunkPos.getMinBlockZ(),
+            chunkPos.getMaxBlockX() + 1,
+            queen.getY() + 24.0,
+            chunkPos.getMaxBlockZ() + 1
         );
         for (var player : queen.level().getEntitiesOfClass(Player.class, box)) {
             if (!player.isCreative() && !player.isSpectator()) {
@@ -797,8 +810,8 @@ public class QueenLifecyclePhaseManager implements NBTSerializable {
             return true;
         }
         return !state.hasBlockEntity()
-                && state.getDestroySpeed(level, pos) >= 0.0F
-                && !state.is(AlienBlockTags.XENOMORPH_IMMUNE);
+            && state.getDestroySpeed(level, pos) >= 0.0F
+            && !state.is(AlienBlockTags.XENOMORPH_IMMUNE);
     }
 
     /**
@@ -819,9 +832,9 @@ public class QueenLifecyclePhaseManager implements NBTSerializable {
         }
 
         var resin = com.alien.common.data.AlienVariantTypes.getFor(queen.getVariant())
-                .resin()
-                .get()
-                .defaultBlockState();
+            .resin()
+            .get()
+            .defaultBlockState();
         for (var dx = -ARRIVAL_POCKET_RADIUS; dx <= ARRIVAL_POCKET_RADIUS; dx++) {
             for (var dz = -ARRIVAL_POCKET_RADIUS; dz <= ARRIVAL_POCKET_RADIUS; dz++) {
                 // FLOOR SEAL: whatever is under each pocket cell, if it is liquid (a lava/water lake edge she
@@ -933,8 +946,8 @@ public class QueenLifecyclePhaseManager implements NBTSerializable {
                         continue;
                     }
                     var distToward = Math.max(
-                            Math.abs(candidate.x - toward.x),
-                            Math.abs(candidate.z - toward.z)
+                        Math.abs(candidate.x - toward.x),
+                        Math.abs(candidate.z - toward.z)
                     );
                     if (distToward < bestToward) {
                         bestToward = distToward;
@@ -950,10 +963,10 @@ public class QueenLifecyclePhaseManager implements NBTSerializable {
     }
 
     private List<ChunkPos> farEnoughChunksInRing(
-            ChunkPos center,
-            int radius,
-            ResourceKey<Level> dimension,
-            int minimum
+        ChunkPos center,
+        int radius,
+        ResourceKey<Level> dimension,
+        int minimum
     ) {
         var out = new ArrayList<ChunkPos>();
         for (var dx = -radius; dx <= radius; dx++) {
@@ -1019,8 +1032,8 @@ public class QueenLifecyclePhaseManager implements NBTSerializable {
     public void load(CompoundTag compoundTag) {
         if (compoundTag.contains(PHASE_TAG)) {
             this.phase = QueenLifecyclePhase.byNameOrDefault(
-                    compoundTag.getString(PHASE_TAG),
-                    QueenLifecyclePhase.DEVELOPING
+                compoundTag.getString(PHASE_TAG),
+                QueenLifecyclePhase.DEVELOPING
             );
         }
 

@@ -38,6 +38,10 @@ public class EntityLootTableProvider extends SimpleFabricLootTableProvider {
     @Override
     public void generate(BiConsumer<ResourceKey<LootTable>, LootTable.Builder> biConsumer) {
         biConsumer.accept(AlienEntityTypes.OVIPOSITOR.get().getDefaultLootTable(), OvipositorLootTable.create(provider));
+        biConsumer.accept(
+            AlienEntityTypes.EMPRESS_OVIPOSITOR.get().getDefaultLootTable(),
+            OvipositorLootTable.create(provider)
+        );
 
         // Normal
         biConsumer.accept(

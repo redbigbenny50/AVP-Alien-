@@ -7,13 +7,13 @@ import com.alien.common.gameplay.effect.FrenzyStatusEffect;
 import com.alien.common.gameplay.effect.GlowingTalonsStatusEffect;
 import com.alien.common.gameplay.effect.GrowthSuppressionStatusEffect;
 import com.alien.common.gameplay.effect.HivesBaneStatusEffect;
+import com.alien.common.gameplay.effect.ImmovableStatusEffect;
 import com.alien.common.gameplay.effect.JellySicknessStatusEffect;
 import com.alien.common.gameplay.effect.MarkedForDeathStatusEffect;
 import com.alien.common.gameplay.effect.MetamorphosisStatusEffect;
 import com.alien.common.gameplay.effect.RadiationResistanceStatusEffect;
 import com.alien.common.gameplay.effect.RadiationSicknessStatusEffect;
 import com.alien.common.gameplay.effect.ScourgeStatusEffect;
-import com.alien.common.gameplay.effect.SecurementStatusEffect;
 import com.blib.api.common.registry.v1.BLibHolder;
 import com.blib.api.common.registry.v1.BLibRegistry;
 import net.minecraft.core.Holder;
@@ -54,7 +54,7 @@ public class AlienMobEffects {
 
     private static final BLibHolder<MobEffect> SCOURGE = create("scourge", ScourgeStatusEffect::new);
 
-    private static final BLibHolder<MobEffect> SECUREMENT = create("securement", SecurementStatusEffect::new);
+    private static final BLibHolder<MobEffect> IMMOVABLE = create("immovable", ImmovableStatusEffect::new);
 
     private static final BLibHolder<MobEffect> MARKED_FOR_DEATH = create(
         "marked_for_death",
@@ -101,8 +101,8 @@ public class AlienMobEffects {
         return METAMORPHOSIS.getBackingHolder();
     }
 
-    public static Holder<MobEffect> getSecurementHolder() {
-        return SECUREMENT.getBackingHolder();
+    public static Holder<MobEffect> getImmovableHolder() {
+        return IMMOVABLE.getBackingHolder();
     }
 
     public static Holder<MobEffect> getScourgeHolder() {

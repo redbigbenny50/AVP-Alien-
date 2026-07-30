@@ -13,7 +13,7 @@ import org.jetbrains.annotations.NotNull;
 
 /**
  * What the scourge tier runs on. Where royal jelly makes you quick, this makes you immovable: Strength II, Resistance
- * II and Securement - total knockback immunity - for thirty seconds. It is the rarer of the two by some distance, since
+ * II and Immovable - total knockback immunity - for thirty seconds. It is the rarer of the two by some distance, since
  * the only source is the harbinger, and a hive is allowed exactly one of those.
  * <p>
  * Same shared sickness window as royal jelly. See {@link JellyConsumption} for why they deliberately share it.
@@ -52,10 +52,10 @@ public class RawScourgeJellyItem extends Item {
                 JellyConsumption.BUFF_AMPLIFIER
             )
         );
-        // Securement is untiered - knockback immunity is on or off - so it rides at amplifier 0 while its companions
+        // Immovable is untiered - knockback immunity is on or off - so it rides at amplifier 0 while its companions
         // sit at II.
         eater.addEffect(
-            new MobEffectInstance(AlienMobEffects.getSecurementHolder(), JellyConsumption.BUFF_DURATION_TICKS, 0)
+            new MobEffectInstance(AlienMobEffects.getImmovableHolder(), JellyConsumption.BUFF_DURATION_TICKS, 0)
         );
 
         JellyConsumption.consume(eater);

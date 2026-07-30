@@ -147,6 +147,49 @@ public record RaidWaveProfile(List<Wave> waves) {
         );
     }
 
+    /**
+     * Revenge under an EMPRESS: the same three waves, but the scourge tier is allowed to ride along.
+     * <p>
+     * [stated] "when the revenge parties go out for a killed queen under an empress influence scourge xenos can be
+     * members of those parties except for the harbinger. So its another boost to lethality." The harbinger is excluded
+     * because it is the hive's only scourge-jelly factory and the raid key itself - spending it on a revenge party
+     * would disable the very capability that lets her keep raiding.
+     * <p>
+     * Scourge pools are deliberately narrow (weight 1, cap 2) against the line troops' 4s and 3s: killing a queen under
+     * an empress should mean meeting something you have not met before, not a wave made entirely of it.
+     */
+    public static RaidWaveProfile revengeEmpressFallback() {
+        return new RaidWaveProfile(
+            List.of(
+                revengeEmpressWave(),
+                revengeEmpressWave(),
+                revengeEmpressWave()
+            )
+        );
+    }
+
+    private static Wave revengeEmpressWave() {
+        return new Wave(
+            REVENGE_WAVE_SIZE,
+            DEFAULT_BUFFER_TICKS,
+            List.of(),
+            List.of(
+                PoolEntry.tagPool(AlienEntityTypeTags.WARRIORS, 4, REVENGE_WAVE_SIZE),
+                PoolEntry.tagPool(AlienEntityTypeTags.PROWLERS, 4, REVENGE_WAVE_SIZE),
+                PoolEntry.tagPool(AlienEntityTypeTags.SPITTERS, 3, REVENGE_WAVE_SIZE),
+                PoolEntry.tagPool(AlienEntityTypeTags.PRAETORIANS, 1, 2),
+                PoolEntry.tagPool(AlienEntityTypeTags.CRUSHERS, 1, 2),
+                // The scourge tier, minus HARBINGERS. Listed caste by caste rather than via the SCOURGE_ALIENS
+                // tag precisely so the harbinger cannot be swept in by a future edit to that tag.
+                PoolEntry.tagPool(AlienEntityTypeTags.RAVAGERS, 1, 2),
+                PoolEntry.tagPool(AlienEntityTypeTags.RAZOR_CLAWS, 1, 2),
+                PoolEntry.tagPool(AlienEntityTypeTags.CARRIERS, 1, 1),
+                PoolEntry.tagPool(AlienEntityTypeTags.BURSTERS, 1, 2),
+                PoolEntry.tagPool(AlienEntityTypeTags.CHRYSALISES, 1, 1)
+            )
+        );
+    }
+
     /** One revenge wave: 6 bodies drawn from the standing army, elites rarer than the rank and file. */
     private static Wave revengeWave() {
         return new Wave(

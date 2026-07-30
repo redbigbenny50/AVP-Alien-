@@ -68,6 +68,12 @@ public final class HiveLocationLoadedTickTask {
             return;
         }
 
+        // An empress elected while this hive was unloaded gets her body the moment it comes back. The crown was
+        // already hers - this is only the molt catching up with it.
+        if (location.id().equals(lineage.pendingEmpressSeatId())) {
+            com.alien.common.gameplay.hive.empress.EmpressEmergenceRitual.tryMaterialize(serverLevel, location, lineage);
+        }
+
         var currentTick = serverLevel.getGameTime();
         if (!hasLoadedClaimedChunk(serverLevel, location)) {
             return;
@@ -103,7 +109,19 @@ public final class HiveLocationLoadedTickTask {
         // limit; gate to a coarse cadence. Abstract spread follows this loaded-location cadence; unloaded locations
         // use HiveLocationSlowTickTask's bounded randomized fallback.
         if (currentTick % 20L == 0L) {
+            // Reconcile on the coarse cadence rather than every tick: a hive that just loaded still starts building
+            // at 23x23 within a second, and the periodic sweep is the real guarantee anyway.
+            com.alien.common.gameplay.hive.empress.EmpressInfluenceSync.sync(location, lineage);
             CatchUpEngine.catchUpTo(serverLevel, location, lineage, currentTick);
+            // A watched hive raises its own founding queen instead of teleporting the outcome. This stamps the
+            // shared spread cooldown on success, so the abstract attempt below is already blocked for this hive.
+            com.alien.common.gameplay.hive.growth.QueenPromotionService.tryPromote(
+                serverLevel,
+                location,
+                lineage,
+                HiveLocationRegistry.INSTANCE.config(),
+                currentTick
+            );
             AbstractSpreadAttempt.tryRun(server, location.lineageFactionId(), lineage, location, currentTick);
 
             var config = HiveLocationRegistry.INSTANCE.config();

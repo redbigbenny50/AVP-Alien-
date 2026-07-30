@@ -30,13 +30,28 @@ import java.util.ArrayList;
  */
 public final class JellyProduction {
 
+    /**
+     * Lineages are processed in buckets, each evaluated once per this many ticks, chosen by its own id hash so the
+     * empire spreads across ticks instead of spiking on one.
+     * <p>
+     * SAFE BECAUSE THIS IS AN ACCUMULATOR: the production model is "add the producer count each tick, grant when the
+     * accumulator crosses the threshold". An evaluation that stands for {@code LINEAGE_BUCKET_TICKS} ticks therefore
+     * adds that many ticks' worth, and the output is IDENTICAL - just granted in slightly coarser steps. Counting
+     * producers is the expensive part (it walks loaded members and reserves per caste) and now happens 1/20th as often.
+     */
+    private static final int LINEAGE_BUCKET_TICKS = 20;
+
     private JellyProduction() {}
 
     public static void scanAndProduce(MinecraftServer server) {
         var config = HiveLocationRegistry.INSTANCE.config();
+        var currentTick = server.overworld().getGameTime();
 
         for (var factionId : new ArrayList<>(Alien.MOD.factions().getAllIds())) {
             if (!LineageIds.isLineageId(factionId)) {
+                continue;
+            }
+            if (Math.floorMod(currentTick - factionId.hashCode(), LINEAGE_BUCKET_TICKS) != 0) {
                 continue;
             }
             var faction = Alien.MOD.factions().get(factionId);
@@ -66,7 +81,7 @@ public final class JellyProduction {
         var harbingerCount = countTaggedProducers(location, AlienEntityTypeTags.HARBINGERS);
 
         if (queenCount > 0) {
-            var nextRoyal = location.royalJellyAccumulator() + queenCount;
+            var nextRoyal = location.royalJellyAccumulator() + (long) queenCount * LINEAGE_BUCKET_TICKS;
             var royalThreshold = config.royalJellyTicksPerProduction();
             if (nextRoyal >= royalThreshold) {
                 grantRoyal(location, (int) (nextRoyal / royalThreshold), royalJellyCap(location));
@@ -74,7 +89,7 @@ public final class JellyProduction {
             }
             location.setRoyalJellyAccumulator(nextRoyal);
 
-            var nextQueenScourge = location.queenScourgeAccumulator() + queenCount;
+            var nextQueenScourge = location.queenScourgeAccumulator() + (long) queenCount * LINEAGE_BUCKET_TICKS;
             var queenScourgeThreshold = config.scourgeJellyTicksPerQueenProduction();
             if (nextQueenScourge >= queenScourgeThreshold) {
                 grantScourge(location, (int) (nextQueenScourge / queenScourgeThreshold), scourgeJellyCap(location));
@@ -84,7 +99,7 @@ public final class JellyProduction {
         }
 
         if (harbingerCount > 0) {
-            var nextHarbScourge = location.harbingerScourgeAccumulator() + harbingerCount;
+            var nextHarbScourge = location.harbingerScourgeAccumulator() + (long) harbingerCount * LINEAGE_BUCKET_TICKS;
             var harbScourgeThreshold = config.scourgeJellyTicksPerHarbingerProduction();
             if (nextHarbScourge >= harbScourgeThreshold) {
                 grantScourge(location, (int) (nextHarbScourge / harbScourgeThreshold), scourgeJellyCap(location));
@@ -108,10 +123,25 @@ public final class JellyProduction {
         return count;
     }
 
+    /**
+     * Territory buys jelly capacity - but never below {@code minRoyalJellyCap}.
+     * <p>
+     * The raw chunk count alone silently gated the two costs the royal line depends on. Crowning a successor and
+     * promoting a founder queen both cost 100, so a hive holding fewer than 100 chunks could not bank the price at all
+     * - not slowly, EVER. A hive that lost its queen before growing that large stayed queenless permanently, which is
+     * not what the replacement firewall was written to do.
+     */
     public static int royalJellyCap(HiveLocation location) {
-        return location.claimedChunks().size();
+        var floor = HiveLocationRegistry.INSTANCE.config().minRoyalJellyCap();
+        return Math.max(floor, location.claimedChunks().size());
     }
 
+    /**
+     * Scourge deliberately gets NO floor. Nothing in the scourge economy costs more than a couple of units - the
+     * harbinger is 1 - so the chunk count never blocked it the way it blocked royal, and scourge is meant to be the
+     * scarce currency. Handing small hives a guaranteed scourge bank would loosen the tier that is supposed to be hard
+     * to reach.
+     */
     public static int scourgeJellyCap(HiveLocation location) {
         return location.claimedChunks().size();
     }

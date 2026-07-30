@@ -65,6 +65,11 @@ public final class HiveConfigSchema {
             "empressMoltDurationTicks",
             "localLeaderPickCadenceTicks",
             "empressCandidateMinMembers",
+            "empressCrowningCooldownTicks",
+            "empressCapPercent",
+            "maxDaughterHivesPerLocation",
+            "queenPromotionJellyCost",
+            "queenPromotionMoltTicks",
             "firewallCooldownTicks",
             "firewallStabilityScanIntervalTicks",
             "firewallJellyFloor",
@@ -129,7 +134,8 @@ public final class HiveConfigSchema {
             "maxOvomorphsPerHiveLocation",
             "royalJellyTicksPerProduction",
             "scourgeJellyTicksPerQueenProduction",
-            "scourgeJellyTicksPerHarbingerProduction"
+            "scourgeJellyTicksPerHarbingerProduction",
+            "minRoyalJellyCap"
         ),
         group("Queen Lifecycle", "queenFrontEndPhasesEnabled"),
         group(
