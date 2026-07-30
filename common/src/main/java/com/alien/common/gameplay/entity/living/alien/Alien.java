@@ -1047,6 +1047,18 @@ public abstract class Alien extends Monster implements DataUser {
             }
             // Hive empress death clears the lineage's empress slot so the next emergence ritual can fire.
             if (getType().is(AlienEntityTypeTags.EMPRESSES)) {
+                // BROKEN THRONE: she was cast out by her own empire and died on the ruin it left her, guarded by
+                // whatever refused to leave. Checked BEFORE onEmpressDied because exile has already surrendered the
+                // lineage's empressId - the only thing that still remembers what she was is the flag on her.
+                // A code grant rather than a kill criterion: "exiled" is entity state, not an entity type, so no tag
+                // could tell this death apart from killing a reigning empress.
+                if (
+                    this instanceof com.alien.common.gameplay.entity.living.alien.xenomorph.empress.Empress empress
+                        && empress.isExiled()
+                        && getKillCredit() instanceof net.minecraft.server.level.ServerPlayer throneBreaker
+                ) {
+                    com.alien.common.data.AlienAdvancements.BROKEN_THRONE.grant(throneBreaker);
+                }
                 onEmpressDied();
             }
             // Queen killed by a player → revenge raid (ungated 3-wave strike against the killer), and mark her

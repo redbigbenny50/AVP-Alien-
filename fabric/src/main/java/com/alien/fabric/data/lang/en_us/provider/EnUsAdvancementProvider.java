@@ -134,6 +134,13 @@ public class EnUsAdvancementProvider {
 
         addAdvancement(
             builder,
+            AlienAdvancements.BROKEN_THRONE,
+            "Broken Throne",
+            "Kill an exiled empress on the ruin her own empire left her"
+        );
+
+        addAdvancement(
+            builder,
             AlienAdvancements.WEAR_CHITIN_ARMOR,
             "Cover Me with... Uh...",
             "Equip a full set of chitin armor"

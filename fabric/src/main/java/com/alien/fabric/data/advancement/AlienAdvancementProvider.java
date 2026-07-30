@@ -235,7 +235,8 @@ public class AlienAdvancementProvider {
         Consumer<AdvancementHolder> consumer,
         Consumer<AdvancementHolder> avpHumanConsumer
     ) {
-        addEmpressKillerAdvancement(royalAlienKillerAdvancement, consumer);
+        var empressKillerAdvancement = addEmpressKillerAdvancement(royalAlienKillerAdvancement, consumer);
+        addBrokenThroneAdvancement(empressKillerAdvancement, consumer);
         var harbingerKillerAdvancement = addHarbingerKillerAdvancement(royalAlienKillerAdvancement, consumer);
         addRaidAdvancements(harbingerKillerAdvancement, consumer);
         addHiveDestructionAdvancements(royalAlienKillerAdvancement, consumer, avpHumanConsumer);
@@ -448,6 +449,31 @@ public class AlienAdvancementProvider {
             )
             .requirements(AdvancementRequirements.Strategy.OR)
             .save(consumer, AlienAdvancements.KILL_A_ROYAL_ALIEN.resourceLocation().toString());
+    }
+
+    /**
+     * Killing an empress who was EXILED - cast out by her own empire when her seat fell, left on a stripped remnant
+     * with only the heavies that refused the evacuation order.
+     * <p>
+     * IMPOSSIBLE criterion because it is granted from code: exile is entity state rather than an entity type, so a kill
+     * criterion on the EMPRESSES tag could not tell this apart from killing a reigning one.
+     */
+    private static AdvancementHolder addBrokenThroneAdvancement(AdvancementHolder parent, Consumer<AdvancementHolder> consumer) {
+        return Advancement.Builder.advancement()
+            .addCriterion("broken_throne", CriteriaTriggers.IMPOSSIBLE.createCriterion(new ImpossibleTrigger.TriggerInstance()))
+            .parent(parent)
+            .display(
+                AlienItems.RAW_ROYAL_JELLY.get(),
+                AlienAdvancements.BROKEN_THRONE.titleComponent(),
+                AlienAdvancements.BROKEN_THRONE.descriptionComponent(),
+                null,
+                AdvancementType.CHALLENGE,
+                true,
+                true,
+                false
+            )
+            .rewards(AdvancementRewards.Builder.experience(100))
+            .save(consumer, AlienAdvancements.BROKEN_THRONE.resourceLocation().toString());
     }
 
     private static AdvancementHolder addEmpressKillerAdvancement(AdvancementHolder parent, Consumer<AdvancementHolder> consumer) {

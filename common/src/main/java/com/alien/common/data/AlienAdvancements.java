@@ -41,6 +41,9 @@ public class AlienAdvancements {
 
     public static final BLibAdvancement KILL_AN_EMPRESS = create("kill_an_empress");
 
+    /** Killing an EXILED empress on her remnant - see EmpressExileService. Granted from code, not a kill criterion. */
+    public static final BLibAdvancement BROKEN_THRONE = create("broken_throne");
+
     public static final BLibAdvancement LEAD_RAID_TO_ENEMY_HIVE = create("lead_raid_to_enemy_hive");
 
     public static final BLibAdvancement DEFEAT_A_RAID = create("defeat_a_raid");
