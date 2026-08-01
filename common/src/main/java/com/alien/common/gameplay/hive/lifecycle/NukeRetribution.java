@@ -50,9 +50,9 @@ public final class NukeRetribution extends SavedData {
     private final List<Pending> pending;
 
     private record Pending(
-        long dueTick,
-        UUID target,
-        String lineageFactionId
+            long dueTick,
+            UUID target,
+            String lineageFactionId
     ) {}
 
     public NukeRetribution() {
@@ -64,15 +64,23 @@ public final class NukeRetribution extends SavedData {
     }
 
     /** Queues a reckoning against {@code target}, to be answered by {@code lineageFactionId} a day from now. */
+    /**
+     * How long a debt waits before re-checking when the lineage survives but no hive can field the raid -
+     * [stated] Aug 1: "go with your lean if the hive dies inbetween only then is it forgotten." 5 minutes: cheap
+     * enough to feel prompt when the empire recovers, sparse enough that a permanently crippled lineage costs
+     * one map-and-scan every 5 minutes while it waits.
+     */
+    private static final long STAGING_RETRY_TICKS = 5L * 60L * 20L;
+
     public static void schedule(ServerLevel level, String lineageFactionId, UUID target) {
         var data = getOrCreate(level);
         data.pending.add(new Pending(level.getGameTime() + RETRIBUTION_DELAY_TICKS, target, lineageFactionId));
         data.setDirty();
 
         Alien.LOGGER.info(
-            "Nuke: lineage {} will answer for its lost hive in {} ticks",
-            lineageFactionId,
-            RETRIBUTION_DELAY_TICKS
+                "Nuke: lineage {} will answer for its lost hive in {} ticks",
+                lineageFactionId,
+                RETRIBUTION_DELAY_TICKS
         );
     }
 
@@ -107,29 +115,42 @@ public final class NukeRetribution extends SavedData {
 
             data.setDirty();
             for (var entry : due) {
-                answer(level, entry);
+                if (!answer(level, entry)) {
+                    // THE DEBT SURVIVES A WEAK MOMENT. The lineage is alive but no hive of hers can field the
+                    // raid right now (all depleted, too new, or mid-crisis) - the reckoning is deferred, not
+                    // forgiven. Re-queued with a pushed-out due tick so the re-check runs on a lazy cadence
+                    // instead of every tick. The debt dies in exactly one place: with the lineage itself.
+                    data.pending.add(new Pending(now + STAGING_RETRY_TICKS, entry.target(), entry.lineageFactionId()));
+                }
             }
         }
     }
 
-    private static void answer(ServerLevel level, Pending entry) {
+    /**
+     * @return true when the debt is CONSUMED - the campaign opened, or the lineage is dead and there is no one
+     *     left to collect. False means "not now, but the debt stands": the lineage lives but cannot currently
+     *     field the raid (or the target slipped away between the presence peek and this call), and the caller
+     *     re-queues the entry for a later attempt.
+     */
+    private static boolean answer(ServerLevel level, Pending entry) {
         var faction = Alien.MOD.factions().get(net.minecraft.resources.ResourceLocation.parse(entry.lineageFactionId()));
         if (faction == null || !(faction.data() instanceof LineageFactionData lineage) || !lineage.isAlive()) {
-            // She did not survive to collect. Nothing to send, and nothing to say.
-            return;
+            // She did not survive to collect. Nothing to send, and nothing to say. This is the ONLY way a debt
+            // is forgotten - [stated] "if the hive dies inbetween only then is it forgotten."
+            return true;
         }
 
         var staging = strongestHive(lineage);
         if (staging == null) {
-            return;
+            // Alive but spent - every hive too depleted to answer. The caller re-queues; the empire licks its
+            // wounds, rebuilds, and the scream comes when it can.
+            return false;
         }
 
         var player = level.getServer().getPlayerList().getPlayer(entry.target());
         if (player == null) {
-            // Should not happen - tick() only removes an entry from the queue once the target is online. If they
-            // vanished between the check and this call, the entry has already been consumed; losing this one edge
-            // case is acceptable rather than re-inserting mid-iteration.
-            return;
+            // They slipped offline between tick()'s presence peek and this call. The debt stands - re-queue.
+            return false;
         }
 
         var campaign = staging.attackCampaigns().computeIfAbsent(entry.target(), ignored -> new AttackCampaign());
@@ -137,16 +158,17 @@ public final class NukeRetribution extends SavedData {
         campaign.beginCampaign(level.getGameTime());
 
         player.displayClientMessage(
-            Component.literal("A scream pierces your mind calling for retribution").withStyle(ChatFormatting.DARK_RED),
-            false
+                Component.literal("A scream pierces your mind calling for retribution").withStyle(ChatFormatting.DARK_RED),
+                false
         );
 
         Alien.LOGGER.info(
-            "Nuke: lineage {} opened a retribution campaign against {} from location {}",
-            entry.lineageFactionId(),
-            entry.target(),
-            staging.id().value()
+                "Nuke: lineage {} opened a retribution campaign against {} from location {}",
+                entry.lineageFactionId(),
+                entry.target(),
+                staging.id().value()
         );
+        return true;
     }
 
     /** Whichever of her hives can field the most - "the most raid members available". */
