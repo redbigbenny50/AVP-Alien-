@@ -24,6 +24,23 @@ public class OvipositorManager implements NBTSerializable {
 
     private final Queen queen;
 
+    /** The founding-floor bone block matching a queen's strain. */
+    private static net.minecraft.world.level.block.Block strainResinBone(Queen queen) {
+        var type = com.alien.common.data.AlienVariantTypes.getFor(queen.getVariant());
+
+        if (type == com.alien.common.data.AlienVariantTypes.ABERRANT) {
+            return com.alien.common.registry.init.block.AberrantAlienResinBlocks.ABERRANT_RESIN_BONE.get();
+        }
+        if (type == com.alien.common.data.AlienVariantTypes.NETHER) {
+            return com.alien.common.registry.init.block.NetherAlienResinBlocks.NETHER_RESIN_BONE.get();
+        }
+        if (type == com.alien.common.data.AlienVariantTypes.IRRADIATED) {
+            return com.alien.common.registry.init.block.IrradiatedAlienResinBlocks.IRRADIATED_RESIN_BONE.get();
+        }
+
+        return com.alien.common.registry.init.block.AlienResinBlocks.RESIN_BONE.get();
+    }
+
     private boolean hadOvipositorLastTick;
 
     public OvipositorManager(Queen queen) {
@@ -316,9 +333,11 @@ public class OvipositorManager implements NBTSerializable {
             return;
         }
         var level = queen.level();
-        // resin_bone is in NORMAL_RESIN, so it satisfies the "on variant resin" / support-point gates and counts as
-        // spawnable resin. Used for the founding floor as a distinct, bone-like pad.
-        var floorState = com.alien.common.registry.init.block.AlienResinBlocks.RESIN_BONE.get().defaultBlockState();
+        // Resin bone is a distinct, bone-like pad for the founding floor - and it MUST be her own strain's.
+        // This was hardcoded to the NORMAL block, whose only tag is NORMAL_RESIN, so a nether/aberrant/irradiated
+        // queen laid a floor that failed her own "on variant resin" and support-point gates: she would carpet her
+        // chamber and then be unable to use it.
+        var floorState = strainResinBone(queen).defaultBlockState();
 
         // Anchor the disc to the CENTER CHUNK's middle at the slab floor Y, NOT under the queen - so the floor is
         // deterministic and aligned with the built chamber regardless of exactly where she's standing. FILL every

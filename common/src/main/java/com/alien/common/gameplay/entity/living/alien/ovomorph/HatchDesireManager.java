@@ -81,15 +81,43 @@ public class HatchDesireManager {
         }
     }
 
-    /** A free host within reach of this egg - e.g. one webbed into a host-chamber wall right in front of it. */
+    /**
+     * A host within reach of this egg - e.g. one webbed into a host-chamber wall right in front of it, which is the
+     * entire point of the host chamber and must keep working.
+     * <p>
+     * A host BEING CARRIED HOME is excluded. {@code isFreeHost} does not look at whether the hive has already claimed a
+     * host, so a capture party hauling one back through its own corridors was setting off every egg it passed within
+     * {@code ADJACENT_HOST_RADIUS} - desire builds at {@code ADJACENT_HOST_DESIRE} per 20-tick cycle, so roughly five
+     * seconds of proximity is enough, and a drone walking a captive down a hall clears that beside egg after egg. The
+     * result is huggers hatching the length of the hive for a host that was never theirs to take: it is already spoken
+     * for, and it is going to be webbed in front of an egg of its own on arrival.
+     * <p>
+     * LINE OF SIGHT IS REQUIRED, matching the vibration path. Without it this test was purely a distance sphere, so a
+     * captive webbed in a host chamber primed every egg within 2.5 blocks THROUGH THE WALLS - and egg chambers are
+     * built around host chambers, so eggs one room over hatched on their own with no host anywhere they could reach.
+     * The asymmetry made it worse: desire climbs 20 per cycle and decays only 1, so five seconds of a neighbour through
+     * a wall beats a hundred seconds of quiet.
+     */
     private boolean hasAdjacentFreeHost() {
         var box = ovomorph.getBoundingBox().inflate(ADJACENT_HOST_RADIUS);
         for (var candidate : ovomorph.level().getEntitiesOfClass(LivingEntity.class, box)) {
+            if (isBeingCarriedHome(candidate)) {
+                continue;
+            }
+            if (!ovomorph.getSensing().hasLineOfSight(candidate)) {
+                continue;
+            }
             if (AlienPredicates.isFreeHost(ovomorph, candidate)) {
                 return true;
             }
         }
         return false;
+    }
+
+    /** Riding the captor that caught it. Mirrors the carried-host half of {@code AlienPredicates.isCapturedHost}. */
+    private static boolean isBeingCarriedHome(LivingEntity candidate) {
+        return candidate.getVehicle() instanceof com.alien.common.gameplay.entity.living.alien.Alien captor
+            && com.alien.common.gameplay.hive.party.HostCaptureTask.carriedHost(captor) == candidate;
     }
 
     public boolean wantsToHatch() {

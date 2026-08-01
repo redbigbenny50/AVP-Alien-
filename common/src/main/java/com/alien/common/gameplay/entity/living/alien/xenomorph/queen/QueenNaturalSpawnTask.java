@@ -357,7 +357,10 @@ public class QueenNaturalSpawnTask {
             return;
         }
         if (diagLastLogGameTime >= 0L) {
-            Alien.LOGGER.info(
+            // DEBUG, not INFO: this repeats every interval for as long as the guarantee stays unfulfilled, so at
+            // INFO it floods the server console indefinitely whenever a world cannot place its first queen. The
+            // method javadoc already says the intent is for a debug.log to name the blocker - this puts it there.
+            Alien.LOGGER.debug(
                 "Queen spawning: first-queen guarantee still unfulfilled — last {}t: chunkTries={} (unloaded={}), samples failed: noFloor/sky={}, playerNear={}, rules(claimed/peaceful)={}, typeNull={} (difficulty={})",
                 now - diagLastLogGameTime,
                 diagChunkTries,

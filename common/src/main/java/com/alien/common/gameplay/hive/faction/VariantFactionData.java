@@ -33,6 +33,10 @@ public class VariantFactionData extends FactionData {
 
     private static final String NBT_QUEEN_MOTHERS = "QueenMothersByDimension";
 
+    private static final String NBT_EMPRESS_RESCUES = "EmpressRescuesSpent";
+
+    private static final String NBT_COUNT_KEY = "Count";
+
     private static final String NBT_DIMENSION_KEY = "Dimension";
 
     private static final String NBT_UUID_KEY = "Uuid";
@@ -52,11 +56,25 @@ public class VariantFactionData extends FactionData {
 
     private final Map<ResourceKey<Level>, UUID> queenMotherIdsByDimension;
 
+    /**
+     * Network-wide rescue transfers already spent, keyed by EMPRESS ID.
+     * <p>
+     * Keyed on her id rather than on a lineage because her corridor network spans several, and rather than on her
+     * entity because abstract-first means she can be ruling without a body. A NEW empress is a new UUID and so starts
+     * clean - killing her is a genuine reset, not a partial one.
+     * <p>
+     * PRUNED BY RECONCILE, never by deletion at the point of use. Five separate paths null an empressId - the task's
+     * release, the ritual's release, exile, her death, and a corridor being severed - and expecting every one of them
+     * to also clean up here is exactly the kind of bookkeeping that gets missed when a sixth is added.
+     */
+    private final Map<UUID, Integer> empressRescuesSpent;
+
     public VariantFactionData() {
         this.variant = DEFAULT_VARIANT;
         this.ageInTicks = 0L;
         this.nextLineageNumber = 0L;
         this.queenMotherIdsByDimension = new HashMap<>();
+        this.empressRescuesSpent = new HashMap<>();
     }
 
     /** Returns the next lineage number and advances the counter. Monotonic — dead lineages don't release numbers. */
@@ -110,6 +128,36 @@ public class VariantFactionData extends FactionData {
         this.ageInTicks++;
     }
 
+    /**
+     * Record the queen mother for a dimension. Prefer {@code QueenMotherAscension.ascend}, which also restores every
+     * hive's daughter allowance - that surge is the point of the tier and should not be a separate step someone has to
+     * remember.
+     */
+    public void setQueenMother(ResourceKey<Level> dimension, UUID queenMotherId) {
+        queenMotherIdsByDimension.put(dimension, queenMotherId);
+        markDirty();
+    }
+
+    /** Rescue transfers this empress has already spent network-wide. */
+    public int empressRescuesSpent(UUID empressId) {
+        return empressRescuesSpent.getOrDefault(empressId, 0);
+    }
+
+    public void recordEmpressRescue(UUID empressId) {
+        empressRescuesSpent.merge(empressId, 1, Integer::sum);
+        markDirty();
+    }
+
+    /**
+     * Drop every budget entry whose empress no longer rules anything. Self-cleaning: an id orphaned by ANY route -
+     * including ones not yet invented - disappears on the next sweep.
+     */
+    public void pruneEmpressRescues(java.util.Set<UUID> empressIdsInUse) {
+        if (empressRescuesSpent.keySet().retainAll(empressIdsInUse)) {
+            markDirty();
+        }
+    }
+
     public Map<ResourceKey<Level>, UUID> queenMotherIdsByDimension() {
         return queenMotherIdsByDimension;
     }
@@ -132,6 +180,15 @@ public class VariantFactionData extends FactionData {
                 queenMotherIdsByDimension.put(dim, entry.getUUID(NBT_UUID_KEY));
             }
         }
+
+        empressRescuesSpent.clear();
+        if (tag.contains(NBT_EMPRESS_RESCUES)) {
+            var listTag = tag.getList(NBT_EMPRESS_RESCUES, net.minecraft.nbt.Tag.TAG_COMPOUND);
+            for (var i = 0; i < listTag.size(); i++) {
+                var entry = listTag.getCompound(i);
+                empressRescuesSpent.put(entry.getUUID(NBT_UUID_KEY), entry.getInt(NBT_COUNT_KEY));
+            }
+        }
     }
 
     @Override
@@ -139,6 +196,15 @@ public class VariantFactionData extends FactionData {
         tag.putByte(NBT_VARIANT_ID, (byte) variant.getId());
         tag.putLong(NBT_AGE_IN_TICKS, ageInTicks);
         tag.putLong(NBT_NEXT_LINEAGE_NUMBER, nextLineageNumber);
+
+        var rescues = new net.minecraft.nbt.ListTag();
+        for (var entry : empressRescuesSpent.entrySet()) {
+            var entryTag = new CompoundTag();
+            entryTag.putUUID(NBT_UUID_KEY, entry.getKey());
+            entryTag.putInt(NBT_COUNT_KEY, entry.getValue());
+            rescues.add(entryTag);
+        }
+        tag.put(NBT_EMPRESS_RESCUES, rescues);
 
         var queenMothers = new net.minecraft.nbt.ListTag();
         for (var entry : queenMotherIdsByDimension.entrySet()) {

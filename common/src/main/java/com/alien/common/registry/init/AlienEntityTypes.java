@@ -129,9 +129,17 @@ public class AlienEntityTypes {
     public static final float PROWLER_HEIGHT = 0.98F;
 
     // Queen
-    public static final float QUEEN_WIDTH = 1.98F;
+    public static final float QUEEN_WIDTH = 3.8F;
 
-    public static final float QUEEN_HEIGHT = 3.98F;
+    public static final float QUEEN_HEIGHT = 5.0F;
+
+    // Empress. Split from the queen's constants rather than shared: all four empresses used to be sized with
+    // QUEEN_WIDTH/QUEEN_HEIGHT, so the two could never differ, and growing the queen would have silently grown
+    // her too. Started at the same figures so nothing regresses and she is never SMALLER than a queen - but she
+    // is the larger creature and this is the pair to raise if her hitbox should reflect that.
+    public static final float EMPRESS_WIDTH = 3.8F;
+
+    public static final float EMPRESS_HEIGHT = 5.0F;
 
     // Ravager
     public static final float RAVAGER_WIDTH = 0.98F;
@@ -274,7 +282,7 @@ public class AlienEntityTypes {
     public static final BLibHolder<EntityType<Empress>> ABERRANT_EMPRESS = create(
         "aberrant_empress",
         EntityType.Builder.of(Empress::new, MobCategory.MONSTER)
-            .sized(QUEEN_WIDTH, QUEEN_HEIGHT)
+            .sized(EMPRESS_WIDTH, EMPRESS_HEIGHT)
     );
 
     public static final BLibHolder<EntityType<Burster>> ABERRANT_BURSTER = create(
@@ -358,7 +366,7 @@ public class AlienEntityTypes {
     public static final BLibHolder<EntityType<Empress>> EMPRESS = create(
         "empress",
         EntityType.Builder.of(Empress::new, MobCategory.MONSTER)
-            .sized(QUEEN_WIDTH, QUEEN_HEIGHT)
+            .sized(EMPRESS_WIDTH, EMPRESS_HEIGHT)
     );
 
     public static final BLibHolder<EntityType<Harbinger>> HARBINGER = create(
@@ -473,7 +481,7 @@ public class AlienEntityTypes {
     public static final BLibHolder<EntityType<Empress>> IRRADIATED_EMPRESS = create(
         "irradiated_empress",
         EntityType.Builder.of(Empress::new, MobCategory.MONSTER)
-            .sized(QUEEN_WIDTH, QUEEN_HEIGHT)
+            .sized(EMPRESS_WIDTH, EMPRESS_HEIGHT)
     );
 
     public static final BLibHolder<EntityType<Burster>> IRRADIATED_BURSTER = create(
@@ -605,7 +613,7 @@ public class AlienEntityTypes {
     public static final BLibHolder<EntityType<Empress>> NETHER_EMPRESS = create(
         "nether_empress",
         EntityType.Builder.of(Empress::new, MobCategory.MONSTER)
-            .sized(QUEEN_WIDTH, QUEEN_HEIGHT)
+            .sized(EMPRESS_WIDTH, EMPRESS_HEIGHT)
     );
 
     public static final BLibHolder<EntityType<Burster>> NETHER_BURSTER = create(
@@ -869,6 +877,7 @@ public class AlienEntityTypes {
         ATTRIBUTE_REGISTRY.register(EMPRESS, Empress::createEmpressAttributes);
         ATTRIBUTE_REGISTRY.register(HARBINGER, Harbinger::createHarbingerAttributes);
         ATTRIBUTE_REGISTRY.register(FACEHUGGER, Facehugger::createFacehuggerAttributes);
+        ATTRIBUTE_REGISTRY.register(IRRADIATED_FACEHUGGER, Facehugger::createFacehuggerAttributes);
         ATTRIBUTE_REGISTRY.register(IRRADIATED_CARRIER, Carrier::createCarrierAttributes);
         ATTRIBUTE_REGISTRY.register(IRRADIATED_CHRYSALIS, Chrysalis::createChrysalisAttributes);
         ATTRIBUTE_REGISTRY.register(IRRADIATED_CRUSHER, Crusher::createCrusherAttributes);
@@ -914,10 +923,12 @@ public class AlienEntityTypes {
         ATTRIBUTE_REGISTRY.register(NETHER_SPITTER, Spitter::createSpitterAttributes);
         ATTRIBUTE_REGISTRY.register(NETHER_WARRIOR, Warrior::createWarriorAttributes);
         ATTRIBUTE_REGISTRY.register(OVIPOSITOR, Ovipositor::createOvipositorAttributes);
+        ATTRIBUTE_REGISTRY.register(EMPRESS_OVIPOSITOR, EmpressOvipositor::createEmpressOvipositorAttributes);
         ATTRIBUTE_REGISTRY.register(ROYAL_COCOON, RoyalCocoon::createRoyalCocoonAttributes);
         ATTRIBUTE_REGISTRY.register(ABERRANT_ROYAL_COCOON, RoyalCocoon::createRoyalCocoonAttributes);
         ATTRIBUTE_REGISTRY.register(NETHER_ROYAL_COCOON, RoyalCocoon::createRoyalCocoonAttributes);
         ATTRIBUTE_REGISTRY.register(OVOMORPH, Ovomorph::createOvomorphAttributes);
+        ATTRIBUTE_REGISTRY.register(IRRADIATED_OVOMORPH, Ovomorph::createOvomorphAttributes);
         ATTRIBUTE_REGISTRY.register(PRAETORIAN, Praetorian::createPraetorianAttributes);
         ATTRIBUTE_REGISTRY.register(PREDALIEN, Predalien::createPredalienAttributes);
         ATTRIBUTE_REGISTRY.register(PREDALIEN_ADOLESCENT, PredalienAdolescent::createPredalienAdolescentAttributes);
@@ -944,6 +955,7 @@ public class AlienEntityTypes {
         ATTRIBUTE_REGISTRY.register(BURSTER, Burster::createBursterAttributes);
         ATTRIBUTE_REGISTRY.register(RUNNER, Runner::createRunnerAttributes);
         ATTRIBUTE_REGISTRY.register(SPITTER, Spitter::createSpitterAttributes);
+        ATTRIBUTE_REGISTRY.register(IRRADIATED_SPITTER, Spitter::createSpitterAttributes);
         ATTRIBUTE_REGISTRY.register(WARRIOR, Warrior::createWarriorAttributes);
     }
 }

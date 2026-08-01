@@ -44,11 +44,22 @@ public final class LineageDeathHandler {
      */
     private static final int BUCKET_PHASE = 13;
 
+    /**
+    * Reused snapshot buffer for the per-tick faction scan. The scan runs only on the single server thread, so one
+    * static scratch list per scan is safe; clear+addAll keeps the same iterate-a-snapshot semantics (the loop body
+    * may mutate the live faction registry) while allocating nothing once the backing array has grown - this scan
+    * used to build a fresh ArrayList of every faction id EVERY TICK just to run its bucket filter.
+    */
+    private static final java.util.List<net.minecraft.resources.ResourceLocation> SCAN_SCRATCH =
+        new java.util.ArrayList<>();
+
     public static void scanAndKill(MinecraftServer server) {
         var deathQueue = new ArrayList<ResourceLocation>();
         var currentTick = server.overworld().getGameTime();
 
-        for (var factionId : new ArrayList<>(Alien.MOD.factions().getAllIds())) {
+        SCAN_SCRATCH.clear();
+        SCAN_SCRATCH.addAll(Alien.MOD.factions().getAllIds());
+        for (var factionId : SCAN_SCRATCH) {
             if (!LineageIds.isLineageId(factionId)) {
                 continue;
             }

@@ -28,7 +28,8 @@ public record AttackType(
     DamageApplicator damageApplicator,
     Supplier<? extends AttackExecutor> executorFactory,
     Predicate<Xenomorph> activationCondition,
-    Set<XenomorphAttackLimbRequirement> limbRequirements
+    Set<XenomorphAttackLimbRequirement> limbRequirements,
+    boolean crawlAttack
 ) {
 
     private static final Map<String, AttackType> REGISTRY = new ConcurrentHashMap<>();
@@ -52,6 +53,28 @@ public record AttackType(
     }
 
     public boolean canUse(Xenomorph xenomorph) {
+        // POSTURE GATE - DELIBERATELY HALF-STRENGTH FOR NOW (Aug 1 decision). The full rule is "a crawling
+        // xenomorph may use ONLY crawl attacks", but crawl-attack clips exist for just three castes (ravager,
+        // harbinger, queen), so the strict gate would leave every other caste unable to attack while crawling -
+        // and the rule-3 retreat behaviour that is supposed to catch a disarmed crawler is not built yet. Until
+        // the missing clips are authored, only the SAFE half is enforced:
+        // - a crawl attack can never be used while standing (nothing plays a prone clip upright);
+        // - a crawling caste WITH no crawl attacks still falls through to its standing attacks, i.e. today's
+        // live behaviour of standing up to strike. The ravager is unaffected: its selectAttack crawl branch
+        // picks CRAWL_ATTACK before the standing set is ever considered.
+        // TO RESTORE THE FULL RULE once every caste has crawl attacks + retreat exists, change this back to:
+        // if (xenomorph.getCrawlingManager().isCrawling() != crawlAttack) return false;
+        if (crawlAttack && !xenomorph.getCrawlingManager().isCrawling()) {
+            return false;
+        }
+
+        // POSTURE TRANSITION GATE. While a drop/rise clip plays (CrawlingManager's block window) no attack of any
+        // kind may start - [stated] the transitions are "blocking while they play". Attacks already running when
+        // the posture flips are not cancelled; this only stops NEW ones from starting mid-clip.
+        if (xenomorph.getCrawlingManager().isPostureTransitioning()) {
+            return false;
+        }
+
         if (!activationCondition.test(xenomorph)) {
             return false;
         }
@@ -90,6 +113,8 @@ public record AttackType(
         private Predicate<Xenomorph> activationCondition = xenomorph -> true;
 
         private final EnumSet<XenomorphAttackLimbRequirement> limbRequirements = EnumSet.noneOf(XenomorphAttackLimbRequirement.class);
+
+        private boolean crawlAttack;
 
         private Builder(String id) {
             this.id = id;
@@ -135,12 +160,28 @@ public record AttackType(
             return this;
         }
 
+        /** Usable ONLY while crawling. Everything else is a standing attack and is barred while prone. */
+        public Builder crawlAttack() {
+            this.crawlAttack = true;
+            return this;
+        }
+
         public Builder requiresHead() {
             return requires(XenomorphAttackLimbRequirement.HEAD);
         }
 
         public Builder requiresTail() {
             return requires(XenomorphAttackLimbRequirement.TAIL);
+        }
+
+        public Builder requiresLeftArm() {
+            limbRequirements.add(XenomorphAttackLimbRequirement.LEFT_ARM);
+            return this;
+        }
+
+        public Builder requiresRightArm() {
+            limbRequirements.add(XenomorphAttackLimbRequirement.RIGHT_ARM);
+            return this;
         }
 
         public Builder requiresAnyArm() {
@@ -171,7 +212,8 @@ public record AttackType(
                 damageApplicator,
                 executorFactory,
                 activationCondition,
-                limbRequirements
+                limbRequirements,
+                crawlAttack
             );
         }
     }

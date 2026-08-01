@@ -50,9 +50,9 @@ public final class NukeRetribution extends SavedData {
     private final List<Pending> pending;
 
     private record Pending(
-        long dueTick,
-        UUID target,
-        String lineageFactionId
+            long dueTick,
+            UUID target,
+            String lineageFactionId
     ) {}
 
     public NukeRetribution() {
@@ -70,9 +70,9 @@ public final class NukeRetribution extends SavedData {
         data.setDirty();
 
         Alien.LOGGER.info(
-            "Nuke: lineage {} will answer for its lost hive in {} ticks",
-            lineageFactionId,
-            RETRIBUTION_DELAY_TICKS
+                "Nuke: lineage {} will answer for its lost hive in {} ticks",
+                lineageFactionId,
+                RETRIBUTION_DELAY_TICKS
         );
     }
 
@@ -88,6 +88,13 @@ public final class NukeRetribution extends SavedData {
             var due = new ArrayList<Pending>();
             data.pending.removeIf(entry -> {
                 if (entry.dueTick() > now) {
+                    return false;
+                }
+                // OFFLINE TARGETS ARE RE-QUEUED, not dropped - [stated] Aug 1: "re-queue until they log in." The
+                // entry stays in the pending list untouched (already persisted, already past due) and this check
+                // simply runs again next tick; the moment they appear on the player list the debt fires. Logging
+                // out therefore delays the reckoning but never voids it - the same rule the attack parties follow.
+                if (level.getServer().getPlayerList().getPlayer(entry.target()) == null) {
                     return false;
                 }
                 due.add(entry);
@@ -119,8 +126,9 @@ public final class NukeRetribution extends SavedData {
 
         var player = level.getServer().getPlayerList().getPlayer(entry.target());
         if (player == null) {
-            // Offline. The debt is NOT re-queued - a reckoning that stalks someone across sessions forever stops
-            // being a consequence and becomes a haunting.
+            // Should not happen - tick() only removes an entry from the queue once the target is online. If they
+            // vanished between the check and this call, the entry has already been consumed; losing this one edge
+            // case is acceptable rather than re-inserting mid-iteration.
             return;
         }
 
@@ -129,15 +137,15 @@ public final class NukeRetribution extends SavedData {
         campaign.beginCampaign(level.getGameTime());
 
         player.displayClientMessage(
-            Component.literal("A scream pierces your mind calling for retribution").withStyle(ChatFormatting.DARK_RED),
-            false
+                Component.literal("A scream pierces your mind calling for retribution").withStyle(ChatFormatting.DARK_RED),
+                false
         );
 
         Alien.LOGGER.info(
-            "Nuke: lineage {} opened a retribution campaign against {} from location {}",
-            entry.lineageFactionId(),
-            entry.target(),
-            staging.id().value()
+                "Nuke: lineage {} opened a retribution campaign against {} from location {}",
+                entry.lineageFactionId(),
+                entry.target(),
+                staging.id().value()
         );
     }
 

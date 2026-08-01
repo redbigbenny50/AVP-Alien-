@@ -19,23 +19,11 @@ public final class HiveRenderHook {
         if (event.getStage() != RenderLevelStageEvent.Stage.AFTER_TRANSLUCENT_BLOCKS) {
             return;
         }
-        // DIAGNOSTIC (remove later): log once per second whether the hook fires and how many hives are cached.
-        if (DIAG && System.currentTimeMillis() - lastDiag > 1000L) {
-            lastDiag = System.currentTimeMillis();
-            com.alien.Alien.LOGGER.info(
-                "[hive-render] NeoForge hook firing; cached hives={}",
-                com.alien.client.render.hive.ClientHiveRenderCache.current().size()
-            );
-        }
         var buffers = Minecraft.getInstance().renderBuffers().bufferSource();
         HiveRenderer.render(
-            event.getPoseStack(),
-            buffers,
-            event.getCamera().getPosition()
+                event.getPoseStack(),
+                buffers,
+                event.getCamera().getPosition()
         );
     }
-
-    private static final boolean DIAG = true;
-
-    private static long lastDiag;
 }

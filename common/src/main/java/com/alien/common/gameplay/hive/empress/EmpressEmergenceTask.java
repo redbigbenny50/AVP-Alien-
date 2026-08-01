@@ -61,6 +61,8 @@ public final class EmpressEmergenceTask {
                 EmpressEmergenceRitual.cancelFor(server, factionId);
                 lineage.setPendingEmpressSeatId(null);
                 lineage.setEmpressId(null);
+                // A successor must not inherit her predecessor's exposure.
+                lineage.setEmpressRevealed(false);
             }
 
             if (currentTick < lineage.empressCooldownUntilTick()) {

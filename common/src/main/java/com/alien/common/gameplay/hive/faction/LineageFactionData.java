@@ -66,6 +66,8 @@ public class LineageFactionData extends FactionData {
 
     private static final String NBT_EMPRESS_COOLDOWN_UNTIL = "EmpressCooldownUntil";
 
+    private static final String NBT_EMPRESS_REVEALED = "EmpressRevealed";
+
     private static final String NBT_LINEAGE_NUMBER = "LineageNumber";
 
     private static final String NBT_NEXT_LOCATION_NUMBER = "NextLocationNumber";
@@ -122,6 +124,14 @@ public class LineageFactionData extends FactionData {
      */
     private long empressCooldownUntilTick;
 
+    /**
+     * Her position has been given away by a second rescue into the same hive. One-way for this empress.
+     * <p>
+     * She does not relocate afterwards - the player earned the coordinates. This flag is what her dig-in response
+     * reads, and it stops the reveal message repeating on every subsequent transfer.
+     */
+    private boolean empressRevealed;
+
     /** Per-variant lineage index assigned at mint (used in {@link FactionNaming} paths). -1 = unassigned. */
     private long lineageNumber;
 
@@ -156,6 +166,7 @@ public class LineageFactionData extends FactionData {
         this.pendingEmpressEmergence = false;
         this.pendingEmpressSeatId = null;
         this.empressCooldownUntilTick = 0L;
+        this.empressRevealed = false;
         this.lineageNumber = -1L;
         this.nextLocationNumber = 0L;
         this.locationsById = new LinkedHashMap<>();
@@ -413,6 +424,16 @@ public class LineageFactionData extends FactionData {
         return count;
     }
 
+    /** True once a second rescue has given her position away. See the field javadoc. */
+    public boolean empressRevealed() {
+        return empressRevealed;
+    }
+
+    public void setEmpressRevealed(boolean empressRevealed) {
+        this.empressRevealed = empressRevealed;
+        markDirty();
+    }
+
     /** Game tick before which no new empress may be crowned. 0 = none. See the field javadoc. */
     public long empressCooldownUntilTick() {
         return empressCooldownUntilTick;
@@ -557,6 +578,7 @@ public class LineageFactionData extends FactionData {
         }
 
         this.empressCooldownUntilTick = tag.getLong(NBT_EMPRESS_COOLDOWN_UNTIL);
+        this.empressRevealed = tag.getBoolean(NBT_EMPRESS_REVEALED);
         this.lineageNumber = tag.contains(NBT_LINEAGE_NUMBER) ? tag.getLong(NBT_LINEAGE_NUMBER) : -1L;
         this.nextLocationNumber = tag.getLong(NBT_NEXT_LOCATION_NUMBER);
 
@@ -659,6 +681,9 @@ public class LineageFactionData extends FactionData {
             tag.putString(NBT_PENDING_EMPRESS_SEAT, pendingEmpressSeatId.value().toString());
         }
         tag.putLong(NBT_EMPRESS_COOLDOWN_UNTIL, empressCooldownUntilTick);
+        if (empressRevealed) {
+            tag.putBoolean(NBT_EMPRESS_REVEALED, true);
+        }
         if (lineageNumber >= 0) {
             tag.putLong(NBT_LINEAGE_NUMBER, lineageNumber);
         }

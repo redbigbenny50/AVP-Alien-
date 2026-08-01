@@ -79,6 +79,9 @@ public class ItemModelProvider extends FabricModelProvider {
         generateStandardItem(generators, AlienItems.PLATED_NETHER_CHITIN);
         generateStandardItem(generators, AlienItems.RAW_ROYAL_JELLY);
         generateStandardItem(generators, AlienItems.RAW_SCOURGE_JELLY);
+        // Was missing entirely, so raw_irradiated_jelly had no item model and rendered untextured despite its
+        // png being present and correctly named. The other three jellies were all here.
+        generateStandardItem(generators, AlienItems.RAW_IRRADIATED_JELLY);
         generateStandardItem(generators, AlienItems.RESIN_BALL);
         generateStandardItem(generators, AlienItems.ROYALTY_POTTERY_SHERD);
         generateStandardItem(generators, AlienItems.VECTOR_POTTERY_SHERD);

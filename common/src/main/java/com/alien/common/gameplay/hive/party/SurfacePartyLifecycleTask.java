@@ -480,8 +480,8 @@ public final class SurfacePartyLifecycleTask {
                     if (
                         !state.isAir()
                             && !state.canBeReplaced()
-                            && !state.is(com.alien.common.registry.init.block.AlienResinBlocks.RESIN_VEIN.get())
-                            && !state.is(com.alien.common.registry.init.block.AlienResinBlocks.RESIN_WEB.get())
+                            && !state.is(com.alien.common.registry.tag.AlienBlockTags.RESIN_VEINS)
+                            && !state.is(com.alien.common.registry.tag.AlienBlockTags.RESIN_WEBS)
                     ) {
                         continue;
                     }

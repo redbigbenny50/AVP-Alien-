@@ -4,7 +4,6 @@ import com.alien.client.render.QueenShackleAnchorCache;
 import com.alien.common.gameplay.block.capture.anchor.AnchorBlock;
 import com.alien.common.gameplay.block.entity.capture.anchor.AnchorBlockEntity;
 import com.alien.common.registry.init.item.AlienItems;
-import com.blib.api.client.render.v1.item.BLibItemTransformOverrides;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.math.Axis;
 import net.minecraft.client.Minecraft;
@@ -55,7 +54,6 @@ public class AnchorBlockEntityRenderer implements BlockEntityRenderer<AnchorBloc
         var facing = state.getValue(HorizontalDirectionalBlock.FACING);
 
         poseStack.pushPose();
-        boolean wall = false;
 
         switch (face) {
             case FLOOR -> {
@@ -68,7 +66,6 @@ public class AnchorBlockEntityRenderer implements BlockEntityRenderer<AnchorBloc
                 poseStack.mulPose(Axis.YP.rotationDegrees(-facing.toYRot()));
             }
             case WALL -> {
-                wall = true;
                 poseStack.translate(
                     0.5 - facing.getStepX() * SEAT_OFFSET,
                     0.5,
@@ -79,28 +76,32 @@ public class AnchorBlockEntityRenderer implements BlockEntityRenderer<AnchorBloc
             }
         }
 
-        var mc = Minecraft.getInstance();
-        var priorWall = BLibItemTransformOverrides.isRenderAsWallBlock();
-        var priorGround = BLibItemTransformOverrides.isRenderAsGroundBlock();
-        BLibItemTransformOverrides.setRenderAsWallBlock(wall);
-        BLibItemTransformOverrides.setRenderAsGroundBlock(!wall);
+        // SEAT CORRECTION - [stated] tester bug: "when placed it renders at the top of its block space not the
+        // bottom like a slab. ceiling and wall do the same." The item pipeline this routes through (vanilla's
+        // -0.5 centering + AzItemRenderer's re-center) lands the GEO BASE half a block up local +Y from the origin
+        // we just built, so the plate (authored y 0-8px, a bottom slab) drew as a TOP-half slab, and the same
+        // half-block error followed the rotation onto ceilings and walls. Every face's rotation above is built so
+        // local +Y points AWAY from its mount surface, so one pull-back seats all three: floor base lands at
+        // -SEAT_OFFSET (pressed into the floor), the flipped ceiling base at 1.0+SEAT_OFFSET (flush underneath),
+        // and the wall plate slides half a block onto its wall face at unchanged height. Applied in LOCAL space,
+        // after the rotations, deliberately - that is what makes it one line instead of three per-face cases.
+        poseStack.translate(0.0, -0.5, 0.0);
 
-        try {
-            mc.getItemRenderer()
-                .renderStatic(
-                    new ItemStack(AlienItems.ANCHOR.get()),
-                    ItemDisplayContext.FIXED,
-                    packedLight,
-                    packedOverlay,
-                    poseStack,
-                    source,
-                    entity.getLevel(),
-                    0
-                );
-        } finally {
-            BLibItemTransformOverrides.setRenderAsWallBlock(priorWall);
-            BLibItemTransformOverrides.setRenderAsGroundBlock(priorGround);
-        }
+        // The BLibItemTransformOverrides wall/ground toggling that used to wrap this call is GONE, deliberately:
+        // it selected the geo-bone template's fixed_wall/fixed_ground contexts, and the anchor moved to
+        // AzItemRenderer (July 31), which never reads those overrides - the toggles were inert and misleading.
+        var mc = Minecraft.getInstance();
+        mc.getItemRenderer()
+            .renderStatic(
+                new ItemStack(AlienItems.ANCHOR.get()),
+                ItemDisplayContext.FIXED,
+                packedLight,
+                packedOverlay,
+                poseStack,
+                source,
+                entity.getLevel(),
+                0
+            );
 
         poseStack.popPose();
 

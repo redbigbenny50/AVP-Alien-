@@ -105,6 +105,8 @@ public final class HiveLocation {
 
     private static final String NBT_DAUGHTER_HIVES_FOUNDED = "DaughterHivesFounded";
 
+    private static final String NBT_EMPRESS_RESCUES_RECEIVED = "EmpressRescuesReceived";
+
     private static final String NBT_COMBAT_RESPITE_REMAINING_TICKS = "CombatRespiteRemainingTicks";
 
     private static final String NBT_COMBAT_KILLS_SINCE_LAST_RESPITE = "CombatKillsSinceLastRespite";
@@ -142,6 +144,10 @@ public final class HiveLocation {
     private static final String NBT_INHIBITED = "Inhibited";
 
     private static final String NBT_CLAIMED_CHUNKS = "ClaimedChunks";
+
+    private static final String NBT_LAST_COMBAT_DAMAGE_TICK = "LastCombatDamageTick";
+
+    private static final String NBT_SIEGE_COMBAT_TICKS = "SiegeCombatTicks";
 
     private static final String NBT_CHUNK_CLAIM_TICKS = "ChunkClaimTicks";
 
@@ -241,6 +247,12 @@ public final class HiveLocation {
      * buy the right to make another, or a hive under pressure would breed indefinitely.
      */
     private int daughterHivesFounded;
+
+    /**
+     * How many times an empress has refilled this hive's firewall fund from a sibling. Never decrements - the point is
+     * that her rescues are finite PER HIVE, so a besieged one is worth besieging to the end.
+     */
+    private int empressRescuesReceived;
 
     /**
      * Whether this hive is under empress influence - a READ-HOT mirror of the router's set.
@@ -350,6 +362,12 @@ public final class HiveLocation {
     private long harbingerScourgeAccumulator;
 
     private final Set<ChunkPos> claimedChunks;
+
+    /** Game time of the last qualifying combat hit on a member inside claimed territory (0 = never). */
+    private long lastCombatDamageTick;
+
+    /** Accumulated active-combat time (ticks) - the siege clock territory attrition keys on. */
+    private long siegeCombatTicks;
 
     private final Map<ChunkPos, Long> chunkClaimTicks;
 
@@ -486,6 +504,8 @@ public final class HiveLocation {
         this.queenScourgeAccumulator = 0L;
         this.harbingerScourgeAccumulator = 0L;
         this.claimedChunks = new LinkedHashSet<>();
+        this.lastCombatDamageTick = 0L;
+        this.siegeCombatTicks = 0L;
         this.chunkClaimTicks = new HashMap<>();
         this.decoratedChunks = new HashSet<>();
         this.structureRoleByChunk = new HashMap<>();
@@ -871,6 +891,29 @@ public final class HiveLocation {
         return claimedChunks;
     }
 
+    /**
+     * SIEGE CLOCK. [stated] territory attrition happens "during combat or post combat ... it needs to be prolonged
+     * combat for a long duration over 15 minutes or so of active combat/aggro with a player or enemy faction" - not as
+     * a background tax, and not from brief surface skirmishes. Members record qualifying hits here (see the hurt hook
+     * in the Alien entity base); PopulationPressureDecayTask turns recent hits into accumulated siege time and only
+     * shaves territory while the accumulated clock is past the threshold.
+     */
+    public long lastCombatDamageTick() {
+        return lastCombatDamageTick;
+    }
+
+    public void recordCombatDamage(long gameTime) {
+        this.lastCombatDamageTick = Math.max(this.lastCombatDamageTick, gameTime);
+    }
+
+    public long siegeCombatTicks() {
+        return siegeCombatTicks;
+    }
+
+    public void setSiegeCombatTicks(long value) {
+        this.siegeCombatTicks = Math.max(0L, value);
+    }
+
     public Map<ChunkPos, Long> chunkClaimTicks() {
         return chunkClaimTicks;
     }
@@ -1067,6 +1110,15 @@ public final class HiveLocation {
         this.empressInfluenced = empressInfluenced;
     }
 
+    /** Times an empress has refilled this hive's firewall fund. See the field javadoc. */
+    public int empressRescuesReceived() {
+        return empressRescuesReceived;
+    }
+
+    public void setEmpressRescuesReceived(int empressRescuesReceived) {
+        this.empressRescuesReceived = Math.max(0, empressRescuesReceived);
+    }
+
     /** Lifetime count of daughter hives seeded from here. See the field javadoc. */
     public int daughterHivesFounded() {
         return daughterHivesFounded;
@@ -1205,6 +1257,9 @@ public final class HiveLocation {
         if (daughterHivesFounded > 0) {
             tag.putInt(NBT_DAUGHTER_HIVES_FOUNDED, daughterHivesFounded);
         }
+        if (empressRescuesReceived > 0) {
+            tag.putInt(NBT_EMPRESS_RESCUES_RECEIVED, empressRescuesReceived);
+        }
         // Only persist when it deviates from the fresh-location default (available, nothing accrued, no sample yet) —
         // keeps untouched locations' NBT unchanged, matching the sibling fields' save-if-nonzero convention.
         if (!firewallFundAvailable) {
@@ -1260,6 +1315,13 @@ public final class HiveLocation {
         }
         if (harbingerScourgeAccumulator > 0L) {
             tag.putLong(NBT_HARBINGER_SCOURGE_ACCUMULATOR, harbingerScourgeAccumulator);
+        }
+
+        if (lastCombatDamageTick > 0L) {
+            tag.putLong(NBT_LAST_COMBAT_DAMAGE_TICK, lastCombatDamageTick);
+        }
+        if (siegeCombatTicks > 0L) {
+            tag.putLong(NBT_SIEGE_COMBAT_TICKS, siegeCombatTicks);
         }
 
         var claimedTag = new ListTag();
@@ -1444,6 +1506,7 @@ public final class HiveLocation {
             : 0L;
         location.exiled = tag.getBoolean(NBT_EXILED);
         location.daughterHivesFounded = Math.max(0, tag.getInt(NBT_DAUGHTER_HIVES_FOUNDED));
+        location.empressRescuesReceived = Math.max(0, tag.getInt(NBT_EMPRESS_RESCUES_RECEIVED));
         // Hives saved before this state existed load gracefully as a fresh location: fund available, nothing
         // accrued, no sample taken yet — exactly the private-constructor defaults, so no migration is needed.
         location.firewallFundAvailable = !tag.contains(NBT_FIREWALL_FUND_AVAILABLE) || tag.getBoolean(NBT_FIREWALL_FUND_AVAILABLE);
@@ -1483,6 +1546,9 @@ public final class HiveLocation {
         location.royalJellyAccumulator = Math.max(0L, tag.getLong(NBT_ROYAL_JELLY_ACCUMULATOR));
         location.queenScourgeAccumulator = Math.max(0L, tag.getLong(NBT_QUEEN_SCOURGE_ACCUMULATOR));
         location.harbingerScourgeAccumulator = Math.max(0L, tag.getLong(NBT_HARBINGER_SCOURGE_ACCUMULATOR));
+
+        location.lastCombatDamageTick = Math.max(0L, tag.getLong(NBT_LAST_COMBAT_DAMAGE_TICK));
+        location.siegeCombatTicks = Math.max(0L, tag.getLong(NBT_SIEGE_COMBAT_TICKS));
 
         if (tag.contains(NBT_CLAIMED_CHUNKS)) {
             var claimedTag = tag.getList(NBT_CLAIMED_CHUNKS, Tag.TAG_COMPOUND);

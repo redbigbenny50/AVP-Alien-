@@ -230,7 +230,13 @@ public class Carrier extends Xenomorph implements GOAPUser<Carrier> {
             }
 
             facehugger.moveTo(getX(), getY(), getZ(), getYRot(), getXRot());
-            facehugger.setPersistenceRequired();
+            // NO setPersistenceRequired - deliberately removed (Aug 1). While riding the spine a hugger is already
+            // despawn-proof (vanilla Mob.requiresCustomPersistence() is literally isPassenger()), and one attached
+            // to a host is protected by Facehugger.isPersistenceRequired's own override. The flag's only real
+            // effect was on RELEASED huggers, which it made immortal - every scatter permanently added up to six
+            // never-despawning facehuggers, the accumulation behind the tester-reported overpop. Released strays
+            // are now ordinary mobs: they hunt while a player is near and despawn like anything else once the
+            // fight moves on. "Released huggers are gone for good" still holds - they never return to the spine.
             level().addFreshEntity(facehugger);
 
             if (!facehugger.startRiding(this, true)) {

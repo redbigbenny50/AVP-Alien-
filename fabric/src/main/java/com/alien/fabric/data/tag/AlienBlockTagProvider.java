@@ -444,6 +444,7 @@ public class AlienBlockTagProvider extends FabricTagProvider.BlockTagProvider {
     @Override
     protected void addTags(HolderLookup.Provider wrapperLookup) {
         addCompatibilityTags();
+        addWallTags();
 
         getOrCreateTagBuilder(AlienBlockTags.IRRADIATED_RESIN)
             .add(
@@ -590,7 +591,6 @@ public class AlienBlockTagProvider extends FabricTagProvider.BlockTagProvider {
                 AlienResinBlocks.RESIN_BRICK_STAIRS.get(),
                 AlienResinBlocks.RESIN_BRICK_WALL.get(),
                 AlienResinBlocks.RESIN_VENT.get(),
-                AlienResinBlocks.RIBBED_RESIN.get(),
                 AlienResinBlocks.SMOOTH_RESIN.get(),
                 AlienResinBlocks.SMOOTH_RESIN_SLAB.get(),
                 AlienResinBlocks.SMOOTH_RESIN_STAIRS.get(),
@@ -750,6 +750,16 @@ public class AlienBlockTagProvider extends FabricTagProvider.BlockTagProvider {
                 IrradiatedAlienResinBlocks.IRRADIATED_RESIN_VEIN.get(),
                 NetherAlienResinBlocks.NETHER_RESIN_VEIN.get(),
                 AlienResinBlocks.RESIN_VEIN.get()
+            );
+
+        // The FLOOR tendril of each strain - slabs and stairs deliberately excluded, chamber furniture needs a
+        // full block under it.
+        getOrCreateTagBuilder(AlienBlockTags.RESIN_TENDRILS)
+            .add(
+                AberrantAlienResinBlocks.ABERRANT_RESIN_TENDRIL.get(),
+                IrradiatedAlienResinBlocks.IRRADIATED_RESIN_TENDRIL.get(),
+                NetherAlienResinBlocks.NETHER_RESIN_TENDRIL.get(),
+                AlienResinBlocks.RESIN_TENDRIL.get()
             );
 
         getOrCreateTagBuilder(AlienBlockTags.RESIN_VENTS)
@@ -941,6 +951,43 @@ public class AlienBlockTagProvider extends FabricTagProvider.BlockTagProvider {
         getOrCreateTagBuilder(BlockTags.NEEDS_STONE_TOOL)
             .addTag(AlienBlockTags.CHITIN)
             .addTag(AlienBlockTags.RESIN);
+    }
+
+    /**
+     * Every wall block belongs in {@code minecraft:walls}, or it will not connect to anything.
+     * <p>
+     * {@code WallBlock.connectsTo} joins to a neighbour when the neighbour is IN THIS TAG, presents a sturdy face, or
+     * is iron bars / a fence gate. A wall's own side face is not sturdy - only its top is - so membership of this tag
+     * is the ONLY thing that makes wall-to-wall connections happen. Without it the models and blockstates are perfectly
+     * correct and you still get a row of disconnected posts, which is exactly what the testers saw.
+     * <p>
+     * It also cuts both ways with the rest of the game: vanilla and other mods' walls will not connect to these either
+     * until they are in here.
+     */
+    private void addWallTags() {
+        getOrCreateTagBuilder(BlockTags.WALLS)
+            .add(
+                AlienResinBlocks.RESIN_BRICK_WALL.get(),
+                AlienResinBlocks.SMOOTH_RESIN_WALL.get(),
+                AberrantAlienResinBlocks.ABERRANT_RESIN_BRICK_WALL.get(),
+                AberrantAlienResinBlocks.SMOOTH_ABERRANT_RESIN_WALL.get(),
+                IrradiatedAlienResinBlocks.IRRADIATED_RESIN_BRICK_WALL.get(),
+                IrradiatedAlienResinBlocks.SMOOTH_IRRADIATED_RESIN_WALL.get(),
+                NetherAlienResinBlocks.NETHER_RESIN_BRICK_WALL.get(),
+                NetherAlienResinBlocks.SMOOTH_NETHER_RESIN_WALL.get(),
+                AlienChitinBlocks.CHITIN_BLOCK_WALL.get(),
+                AlienChitinBlocks.CHITIN_BRICK_WALL.get(),
+                AlienChitinBlocks.POLISHED_CHITIN_WALL.get(),
+                AberrantAlienChitinBlocks.ABERRANT_CHITIN_BLOCK_WALL.get(),
+                AberrantAlienChitinBlocks.ABERRANT_CHITIN_BRICK_WALL.get(),
+                AberrantAlienChitinBlocks.POLISHED_ABERRANT_CHITIN_WALL.get(),
+                IrradiatedAlienChitinBlocks.IRRADIATED_CHITIN_BLOCK_WALL.get(),
+                IrradiatedAlienChitinBlocks.IRRADIATED_CHITIN_BRICK_WALL.get(),
+                IrradiatedAlienChitinBlocks.POLISHED_IRRADIATED_CHITIN_WALL.get(),
+                NetherAlienChitinBlocks.NETHER_CHITIN_BLOCK_WALL.get(),
+                NetherAlienChitinBlocks.NETHER_CHITIN_BRICK_WALL.get(),
+                NetherAlienChitinBlocks.POLISHED_NETHER_CHITIN_WALL.get()
+            );
     }
 
     private void addCompatibilityTags() {

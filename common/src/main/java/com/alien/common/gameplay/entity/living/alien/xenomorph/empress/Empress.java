@@ -32,7 +32,13 @@ import org.jetbrains.annotations.Nullable;
 
 import java.util.Objects;
 
-public class Empress extends Xenomorph implements GOAPUser<Empress>, EggLayer {
+public class Empress extends Xenomorph
+    implements GOAPUser<Empress>, EggLayer, com.alien.common.gameplay.entity.CrawlPostureTransitionListener {
+
+    @Override
+    public int crawlPostureTransitionTicks(boolean enteringCrawl) {
+        return enteringCrawl ? EmpressAnimationRefs.CRAWL_DROP_TICKS : EmpressAnimationRefs.CRAWL_RISE_TICKS;
+    }
 
     public static final AttackType SWIPE_DOWN = AttackType.builder("empress_swipe_down")
         .requiresAnyArm()
@@ -114,10 +120,42 @@ public class Empress extends Xenomorph implements GOAPUser<Empress>, EggLayer {
         return Objects.equals(passenger.getType(), AlienEntityTypes.EMPRESS_OVIPOSITOR.get());
     }
 
+    // Where her eggsack rides. EntityUtil.getRelativePosition takes (LATERAL, VERTICAL, FORWARD) relative to body
+    // facing - confirmed from BLib's bytecode, which builds a forward vector, a perpendicular from it, and offsets
+    // from the bounding-box centre.
+    //
+    // All three were copied verbatim from Queen.positionRider. The seat is the FIRST CUBE IN gFullSack - named
+    // queenattachcube in Blockbench - and that one pivot is the only thing worth measuring. Not the hitboxes (both
+    // royals share QUEEN_WIDTH/QUEEN_HEIGHT, so they carry no signal at all) and not the model bounds (the shells
+    // differ in size and lean, but the seat does not move with them):
+    //
+    // ovipositor.geo gFullSack cube pivot [ -47.5053, 24.1, -73.87715 ]
+    // empress_ovipositor.geo gFullSack cube pivot [ -0.7, 24.1, -65.46152 ]
+    // delta [ +46.8053, 0.0, +8.41563 ] = [ +2.9253, 0, +0.5260 ] blocks
+    //
+    // The axis mapping is confirmed by the queen's own value: -(-47.5053)/16 = 2.9691, and her lateral param is 3.
+    // Her seat sits nearly three blocks off her sack's centre line and the parameter cancels it almost exactly. The
+    // empress's seat is all but centred (-0.7u), so she needs almost NO lateral offset - inheriting the queen's 3
+    // threw the sack the better part of three blocks sideways, which is the whole bug.
+
+    /** 3 - 2.9253. Her seat is centred where the queen's is not, so this collapses to almost nothing. */
+    private static final double OVIPOSITOR_RIDE_LATERAL = 0.0747;
+
+    /** Unchanged - the seat is at the same height on both models (Y 24.1 on each). */
+    private static final double OVIPOSITOR_RIDE_LIFT = 0.01;
+
+    /** 5.25 - 0.5260. Her seat sits slightly further back along the sack, so it rides slightly closer in. */
+    private static final double OVIPOSITOR_RIDE_DISTANCE = 4.724;
+
     @Override
     protected void positionRider(@NotNull Entity passenger, @NotNull MoveFunction callback) {
         if (passenger.getType() == AlienEntityTypes.EMPRESS_OVIPOSITOR.get()) {
-            var relativePos = com.blib.api.common.entity.v1.EntityUtil.getRelativePosition(this, 3, 0.01, 5.25);
+            var relativePos = com.blib.api.common.entity.v1.EntityUtil.getRelativePosition(
+                this,
+                OVIPOSITOR_RIDE_LATERAL,
+                OVIPOSITOR_RIDE_LIFT,
+                OVIPOSITOR_RIDE_DISTANCE
+            );
             callback.accept(passenger, relativePos.x, relativePos.y, relativePos.z);
             return;
         }

@@ -23,6 +23,12 @@ public class RavagerAnimator extends AzEntityAnimator<Ravager> {
 
     private int previousAttackId = Integer.MIN_VALUE;
 
+    /** Crawl-edge tracker for the posture transitions. Null until first observed so a mid-crawl load doesn't replay a drop. */
+    private Boolean previousCrawling;
+
+    /** Ticks the current crawl transition one-shot still owns the track. */
+    private int crawlOneShotHoldTicks;
+
     /**
      * This caste authors an EMERGE-oriented molt clip ({@code molt.emerge}) rather than the {@code molt.enter} most
      * castes ship, so it stays on the emerge-first path: the clip plays forwards to emerge and backwards to cocoon in.
@@ -65,6 +71,31 @@ public class RavagerAnimator extends AzEntityAnimator<Ravager> {
     private void runPassiveAnimations(Ravager ravager) {
         var dispatcher = ravager.getAnimationDispatcher();
 
+        // Crawl posture transitions - edge-driven one-shots off the synced crawl flag; a leg-loss collapse plays
+        // the same drop clip at double speed with half the hold ([stated]). Above the attack block so a posture
+        // change visually pre-empts a swing; the server blocks NEW attacks for the same window.
+        if (crawlOneShotHoldTicks > 0) {
+            crawlOneShotHoldTicks--;
+            return;
+        }
+        boolean crawlingNow = ravager.getCrawlingManager().isCrawling();
+        if (previousCrawling == null) {
+            previousCrawling = crawlingNow;
+        } else if (crawlingNow != previousCrawling) {
+            previousCrawling = crawlingNow;
+            if (crawlingNow) {
+                var collapse = ravager.getCrawlingManager().isLegForcedCrawl();
+                dispatcher.crawlDown(collapse ? 2.0F : 1.0F);
+                crawlOneShotHoldTicks = collapse
+                    ? Math.max(1, RavagerAnimationRefs.CRAWL_DOWN_TICKS / 2)
+                    : RavagerAnimationRefs.CRAWL_DOWN_TICKS;
+            } else {
+                dispatcher.crawlUp();
+                crawlOneShotHoldTicks = RavagerAnimationRefs.CRAWL_UP_TICKS;
+            }
+            return;
+        }
+
         var attackType = ravager.attackType.get();
         var attackId = ravager.attackId.get();
 
@@ -82,6 +113,8 @@ public class RavagerAnimator extends AzEntityAnimator<Ravager> {
                     dispatcher.tailAttack(speed);
                 else if (attackType == Ravager.SWIM_ATTACK)
                     dispatcher.swimAttack(speed);
+                else if (attackType == Ravager.CRAWL_ATTACK)
+                    dispatcher.crawlAttack(speed);
                 else if (attackType == RavagerSpecialCleaveAttack.WINDUP)
                     dispatcher.specialCleaveWarmup(calculateWindupAnimationSpeed(ravager));
                 else if (attackType == RavagerSpecialCleaveAttack.ATTACK)

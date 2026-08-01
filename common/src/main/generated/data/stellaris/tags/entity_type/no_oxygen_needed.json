@@ -2,6 +2,9 @@
   "values": [
     "#avp_alien:aliens",
     "avp_alien:ovipositor",
-    "avp_alien:empress_ovipositor"
+    "avp_alien:empress_ovipositor",
+    "avp_alien:royal_cocoon",
+    "avp_alien:aberrant_royal_cocoon",
+    "avp_alien:nether_royal_cocoon"
   ]
 }

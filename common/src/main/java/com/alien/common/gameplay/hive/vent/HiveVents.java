@@ -1,6 +1,5 @@
 package com.alien.common.gameplay.hive.vent;
 
-import com.alien.common.registry.init.block.AlienResinBlocks;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.sounds.SoundEvents;
@@ -140,8 +139,8 @@ public final class HiveVents {
         // Resin VEINS grow over vents just like webs do. A vein must not seal a vent shut - xenomorphs pass
         // straight through their own resin.
         return state.isAir()
-            || state.is(AlienResinBlocks.RESIN_WEB.get())
-            || state.is(AlienResinBlocks.RESIN_VEIN.get());
+            || state.is(com.alien.common.registry.tag.AlienBlockTags.RESIN_WEBS)
+            || state.is(com.alien.common.registry.tag.AlienBlockTags.RESIN_VEINS);
     }
 
     /**

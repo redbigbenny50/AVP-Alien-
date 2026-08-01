@@ -35,10 +35,6 @@
       },
       {
         "max_count": 1,
-        "tag": "avp_alien:carriers"
-      },
-      {
-        "max_count": 1,
         "tag": "avp_alien:praetorians"
       },
       {

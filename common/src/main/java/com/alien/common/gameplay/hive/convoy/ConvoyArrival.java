@@ -100,14 +100,10 @@ public final class ConvoyArrival {
             destination.setBiomass(destination.biomass() + migration.biomassPayload());
         }
 
-        // If carrying empress: respawn her at the destination's center. For Phase 8b, we just log it; Phase 10's
-        // empress emergence ritual + entity-respawn machinery will be wired together with this.
-        if (migration.carriesEmpress()) {
-            Alien.LOGGER.info(
-                "Migration {} arrived carrying empress — empress respawn at destination is Phase 10 work",
-                migration.id()
-            );
-        }
+        // AN EMPRESS NEVER ARRIVES. The flag is still set at dispatch and still persisted, so in-flight convoys in
+        // older saves keep decoding, but there is deliberately nothing to do with it: when her seat is evacuated she
+        // is EXILED there rather than carried (see EmpressExileService), which replaced the respawn this used to
+        // promise. The old line claimed "Phase 10 work" and Phase 10 never came - it was superseded, not deferred.
 
         Alien.LOGGER.info(
             "Migration {} arrived at location {} (lineage {}); composition + {} biomass payload delivered",

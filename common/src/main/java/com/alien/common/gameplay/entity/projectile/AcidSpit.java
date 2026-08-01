@@ -20,6 +20,18 @@ import org.jetbrains.annotations.NotNull;
 
 public class AcidSpit extends ThrowableProjectile {
 
+    /**
+     * Acid does not burn - matching {@code Acid}, which overrides this the same way.
+     * <p>
+     * The last entity in the mod that did not extend {@code Alien} and so inherited none of its fire immunity. A thrown
+     * projectile is unlikely to meet fire in its short life, but a nether spitter firing across lava is exactly the
+     * case where it would, and there is no reason for the shot to be more flammable than the thing that spat it.
+     */
+    @Override
+    public boolean fireImmune() {
+        return true;
+    }
+
     private static final int MAX_LIFETIME_IN_TICKS = 60;
 
     private static final float DAMAGE = 6.0F;

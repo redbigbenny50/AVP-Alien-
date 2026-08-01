@@ -31,7 +31,10 @@ public record ReinforcementProfile(List<RaidWaveProfile.PoolEntry> pools) {
                 RaidWaveProfile.PoolEntry.tagPool(AlienEntityTypeTags.RAZOR_CLAWS, 1, 2),
                 RaidWaveProfile.PoolEntry.tagPool(AlienEntityTypeTags.BURSTERS, 1, 3),
                 RaidWaveProfile.PoolEntry.tagPool(AlienEntityTypeTags.RAVAGERS, 1, 1),
-                RaidWaveProfile.PoolEntry.tagPool(AlienEntityTypeTags.CARRIERS, 1, 1),
+                // NO CARRIERS. [stated] "lets remove them from any of the hive spawns including the raid room and
+                // the harbingers reinforcements to it. have carriers only in Raids." A reinforcement carrier was
+                // also a facehugger leak: arrival recalls the convoy's materialized members, and recall scatters a
+                // carrier's spine payload (up to 6 huggers) AT THE HIVE before folding the carrier away.
                 RaidWaveProfile.PoolEntry.tagPool(AlienEntityTypeTags.PRAETORIANS, 1, 1),
                 RaidWaveProfile.PoolEntry.tagPool(AlienEntityTypeTags.CRUSHERS, 1, 1)
             )

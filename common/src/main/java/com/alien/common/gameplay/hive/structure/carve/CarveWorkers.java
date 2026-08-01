@@ -179,7 +179,13 @@ public final class CarveWorkers {
      * claws IS the higher-priority job).
      */
     private static boolean hasRealTask(Xenomorph drone) {
-        return EggDutyGuard.isOnEggDuty(drone) || drone.partyMembership() != null || drone.isVehicle();
+        // A worker marked for reserve return is LEAVING - it is walking to a vent to fold into the bank, and
+        // re-drafting it onto the next site would strand it marked-and-busy (the brood bank could then yank it
+        // mid-dig). Departure counts as a task.
+        return EggDutyGuard.isOnEggDuty(drone)
+            || drone.partyMembership() != null
+            || drone.isVehicle()
+            || drone.isMarkedForReserveReturn();
     }
 
     private static void release(Xenomorph drone, CarveSite site, java.util.Iterator<Map.Entry<UUID, Role>> iterator) {
@@ -324,10 +330,19 @@ public final class CarveWorkers {
         }
     }
 
+    /** Close enough to a vent to fold into it right at disband - same reach the brood bank uses. */
+    private static final double DISBAND_VENT_RANGE_SQUARED = 4.0 * 4.0;
+
     /**
      * Completion (or never-wedge fallback): everyone still materialized folds back into reserves identity-intact - the
-     * brood-bank absorb idiom, {@code BEEHIVE_ENTER} chirp and all. Borrowed workers just get their gait back and
-     * return to whatever the hive AI wants of them.
+     * brood-bank absorb idiom. But NOT by discarding the whole crew on the spot: [stated] tester report "when the
+     * builders finished a royal tunnel they all despawned" - a finished piece made its entire materialized crew blink
+     * out mid-air at once, which reads as a despawn bug and violates the fiction rule the brood bank itself states
+     * ("seen slipping into the hive's duct network, not blinking out of the air"). So: a worker already AT a vent
+     * absorbs immediately, chirp and all; everyone else is MARKED for reserve return and handed to BroodBankTask, which
+     * walks them to the nearest vent and folds them there (identity-intact for marked returners), absorbing in place
+     * only after the same grace window the bank uses - the bank never wedges. A hive with no vents at all keeps the old
+     * instant absorb. Borrowed workers just get their gait back, unchanged.
      */
     static void disband(ServerLevel level, HiveLocation location, CarveSite site) {
         for (UUID id : new ArrayList<>(site.workers.keySet())) {
@@ -335,26 +350,40 @@ public final class CarveWorkers {
                 continue;
             }
             if (site.materializedWorkers.contains(id)) {
-                if (location.localReserves().addReturningIdentityMember(drone)) {
-                    level.playSound(
-                        null,
-                        drone.getX(),
-                        drone.getY(),
-                        drone.getZ(),
-                        SoundEvents.BEEHIVE_ENTER,
-                        SoundSource.HOSTILE,
-                        0.6F,
-                        0.9F
+                var vent = com.alien.common.gameplay.hive.economy.BroodBankTask.nearestVent(location, drone.blockPosition());
+
+                if (
+                    vent == null
+                        || drone.distanceToSqr(vent.getX() + 0.5, vent.getY() + 0.5, vent.getZ() + 0.5) <= DISBAND_VENT_RANGE_SQUARED
+                ) {
+                    // At a vent already (or the hive has none to walk to): fold in now, exactly as before.
+                    if (location.localReserves().addReturningIdentityMember(drone)) {
+                        level.playSound(
+                            null,
+                            drone.getX(),
+                            drone.getY(),
+                            drone.getZ(),
+                            SoundEvents.BEEHIVE_ENTER,
+                            SoundSource.HOSTILE,
+                            0.6F,
+                            0.9F
+                        );
+                        drone.discard();
+                        continue;
+                    }
+                    // Variant mismatch (shouldn't happen for the hive's own reserves) - leave it in the world as a
+                    // member.
+                    Alien.LOGGER.warn(
+                        "Hive at {}: could not fold carve worker {} back into reserves - leaving it as a member.",
+                        location.centerPos(),
+                        id
                     );
-                    drone.discard();
-                    continue;
+                } else {
+                    // Not at a vent yet: mark it and start it walking. BroodBankTask takes it from here on the
+                    // hive's loaded cadence.
+                    drone.markForReserveReturn(level.getGameTime());
+                    drone.getNavigation().moveTo(vent.getX() + 0.5, vent.getY(), vent.getZ() + 0.5, 1.0);
                 }
-                // Variant mismatch (shouldn't happen for the hive's own reserves) - leave it in the world as a member.
-                Alien.LOGGER.warn(
-                    "Hive at {}: could not fold carve worker {} back into reserves - leaving it as a member.",
-                    location.centerPos(),
-                    id
-                );
             }
             if (((CarveWorker) drone).carveDigMode().get() != 0) {
                 ((CarveWorker) drone).carveDigMode().set(0);

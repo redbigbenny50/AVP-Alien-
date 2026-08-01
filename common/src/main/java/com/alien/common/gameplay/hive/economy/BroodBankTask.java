@@ -76,8 +76,13 @@ public final class BroodBankTask {
             }
 
             // Past the grace window and still not at a vent: bank it where it stands. The fiction bends; the bank
-            // never wedges.
-            if (alien.tickCount >= ABSORB_AGE_TICKS + ABSORB_GRACE_TICKS) {
+            // never wedges. Marked returners (disbanded carve crews) time their grace from the MARK, not from age -
+            // they are often minutes old and would otherwise blink out instantly, which is the exact mass-vanish
+            // this path exists to prevent.
+            var graceExpired = alien.isMarkedForReserveReturn()
+                ? level.getGameTime() - alien.reserveReturnMarkedAtTick() >= ABSORB_GRACE_TICKS
+                : alien.tickCount >= ABSORB_AGE_TICKS + ABSORB_GRACE_TICKS;
+            if (graceExpired) {
                 absorb(level, location, alien, alien.blockPosition());
                 continue;
             }
@@ -91,6 +96,21 @@ public final class BroodBankTask {
     }
 
     private static boolean isAbsorbable(HiveLocation location, Alien alien) {
+        // MARKED RETURNERS bypass every gate but life itself. A disbanded carve crew ([stated] tester report:
+        // "when the builders finished a royal tunnel they all despawned") is sent here by CarveWorkers.disband
+        // instead of being discarded on the spot - the walk to the vent is the whole point ("seen slipping into
+        // the hive's duct network, not blinking out of the air", per the class comment above). They are reserve-
+        // materialized (not host-born) and freshly spawned (under ABSORB_AGE), so the normal gates would reject
+        // them; the mark IS the eligibility.
+        if (alien.isMarkedForReserveReturn()) {
+            // Life, combat, and a genuinely higher-priority job are the only things that defer a marked returner -
+            // if it somehow joined a party or picked up cargo after being marked, that job wins until it is done.
+            return alien.isAlive()
+                && alien.getTarget() == null
+                && alien.partyMembership() == null
+                && !alien.isVehicle()
+                && !alien.isPassenger();
+        }
         if (!alien.isHostBorn() || !alien.isAlive() || alien.tickCount < ABSORB_AGE_TICKS) {
             return false;
         }
@@ -121,7 +141,13 @@ public final class BroodBankTask {
     }
 
     private static void absorb(ServerLevel level, HiveLocation location, Alien alien, BlockPos at) {
-        if (!location.localReserves().addBrood(alien.getType(), 1)) {
+        // Marked returners fold back IDENTITY-INTACT - mirroring what CarveWorkers.disband did when it absorbed at
+        // the site, so walking to the vent first never costs the worker its identity. Everything else banks as
+        // fungible brood, unchanged.
+        var returned = alien.isMarkedForReserveReturn()
+            ? location.localReserves().addReturningIdentityMember(alien)
+            : location.localReserves().addBrood(alien.getType(), 1);
+        if (!returned) {
             return; // variant mismatch (logged by the bank) - leave it be rather than delete it for nothing
         }
         level.playSound(
@@ -137,7 +163,8 @@ public final class BroodBankTask {
         alien.discard();
     }
 
-    private static @Nullable BlockPos nearestVent(HiveLocation location, BlockPos from) {
+    /** Public so CarveWorkers.disband can aim its disbanding crew at the same vents this task uses. */
+    public static @Nullable BlockPos nearestVent(HiveLocation location, BlockPos from) {
         BlockPos best = null;
         double bestDist = Double.MAX_VALUE;
         for (var vent : location.ventManager().allVents()) {

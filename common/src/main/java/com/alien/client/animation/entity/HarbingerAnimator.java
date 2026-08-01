@@ -22,6 +22,12 @@ public class HarbingerAnimator extends AzEntityAnimator<Harbinger> {
 
     private int previousAttackId = Integer.MIN_VALUE;
 
+    /** Crawl-edge tracker for the posture transitions. Null until first observed so a mid-crawl load doesn't replay a drop. */
+    private Boolean previousCrawling;
+
+    /** Ticks the current crawl transition one-shot still owns the track. */
+    private int crawlOneShotHoldTicks;
+
     private final CocoonAnimationStateTracker<Harbinger> cocoonAnimationStateTracker = new CocoonAnimationStateTracker<>();
 
     public HarbingerAnimator() {
@@ -58,6 +64,31 @@ public class HarbingerAnimator extends AzEntityAnimator<Harbinger> {
     private void runPassiveAnimations(Harbinger harbinger) {
         var dispatcher = harbinger.getAnimationDispatcher();
 
+        // Crawl posture transitions - edge-driven one-shots off the synced crawl flag; a leg-loss collapse plays
+        // the same drop clip at double speed with half the hold ([stated]). Above the attack block so a posture
+        // change visually pre-empts a swing; the server blocks NEW attacks for the same window.
+        if (crawlOneShotHoldTicks > 0) {
+            crawlOneShotHoldTicks--;
+            return;
+        }
+        boolean crawlingNow = harbinger.getCrawlingManager().isCrawling();
+        if (previousCrawling == null) {
+            previousCrawling = crawlingNow;
+        } else if (crawlingNow != previousCrawling) {
+            previousCrawling = crawlingNow;
+            if (crawlingNow) {
+                var collapse = harbinger.getCrawlingManager().isLegForcedCrawl();
+                dispatcher.crawlDown(collapse ? 2.0F : 1.0F);
+                crawlOneShotHoldTicks = collapse
+                    ? Math.max(1, HarbingerAnimationRefs.CRAWL_DOWN_TICKS / 2)
+                    : HarbingerAnimationRefs.CRAWL_DOWN_TICKS;
+            } else {
+                dispatcher.crawlUp();
+                crawlOneShotHoldTicks = HarbingerAnimationRefs.CRAWL_UP_TICKS;
+            }
+            return;
+        }
+
         var attackType = harbinger.attackType.get();
         var attackId = harbinger.attackId.get();
 
@@ -71,6 +102,12 @@ public class HarbingerAnimator extends AzEntityAnimator<Harbinger> {
                     dispatcher.rightClawAttack(speed);
                 } else if (attackType == Harbinger.TAIL) {
                     dispatcher.tailAttack(speed);
+                } else if (attackType == Harbinger.CRAWL_BITE) {
+                    dispatcher.biteAttack(speed);
+                } else if (attackType == Harbinger.CRAWL_WHIPSTAB_LEFT) {
+                    dispatcher.leftWhipstabAttack(speed);
+                } else if (attackType == Harbinger.CRAWL_WHIPSTAB_RIGHT) {
+                    dispatcher.rightWhipstabAttack(speed);
                 }
 
                 previousAttackId = attackId;
@@ -108,6 +145,12 @@ public class HarbingerAnimator extends AzEntityAnimator<Harbinger> {
             animationName = HarbingerAnimationRefs.ATTACK_CLAW_ANIMATION_NAME;
         } else if (attackType == Harbinger.TAIL) {
             animationName = HarbingerAnimationRefs.ATTACK_TAIL_ANIMATION_NAME;
+        } else if (attackType == Harbinger.CRAWL_BITE) {
+            animationName = HarbingerAnimationRefs.ATTACK_BITE_ANIMATION_NAME;
+        } else if (attackType == Harbinger.CRAWL_WHIPSTAB_LEFT) {
+            animationName = HarbingerAnimationRefs.ATTACKCRAWL_LEFT_WHIPSTAB_ANIMATION_NAME;
+        } else if (attackType == Harbinger.CRAWL_WHIPSTAB_RIGHT) {
+            animationName = HarbingerAnimationRefs.ATTACKCRAWL_RIGHT_WHIPSTAB_ANIMATION_NAME;
         } else {
             animationName = null;
         }

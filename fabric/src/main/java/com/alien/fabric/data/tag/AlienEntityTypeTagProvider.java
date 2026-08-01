@@ -403,6 +403,9 @@ public class AlienEntityTypeTagProvider extends FabricTagProvider.EntityTypeTagP
 
     private void addNetherAliens() {
         getOrCreateTagBuilder(AlienEntityTypeTags.NETHER_ALIENS)
+            // Was missing entirely. Besides fire immunity this tag also gates nether-resin spawn validity, so the
+            // cocoon was excluded from both.
+            .add(AlienEntityTypes.NETHER_ROYAL_COCOON.get())
             .add(
                 AlienEntityTypes.NETHER_ADOLESCENT.get(),
                 AlienEntityTypes.NETHER_BOILER.get(),
@@ -710,9 +713,21 @@ public class AlienEntityTypeTagProvider extends FabricTagProvider.EntityTypeTagP
         getOrCreateTagBuilder(GigTags.FACEHUGGER_BLACKLIST)
             .addTag(AlienEntityTypeTags.ALIENS);
 
+        // Nothing in the species breathes. The ALIENS tag covers every entity that extends Alien; the rest are
+        // listed by hand because they are plain Mobs and no strain tag will ever hold them - the same blind spot
+        // that left nether cocoons flammable. The ovipositors were remembered here and the royal cocoons were not,
+        // so a royal molting in vacuum suffocated inside her own shell.
+        //
+        // Acid and acid spit are deliberately absent: neither is a LivingEntity, so suffocation cannot apply.
         getOrCreateTagBuilder(StellarisEntityTypeTags.NO_OXYGEN_NEEDED)
             .addTag(AlienEntityTypeTags.ALIENS)
-            .add(AlienEntityTypes.OVIPOSITOR.get(), AlienEntityTypes.EMPRESS_OVIPOSITOR.get());
+            .add(
+                AlienEntityTypes.OVIPOSITOR.get(),
+                AlienEntityTypes.EMPRESS_OVIPOSITOR.get(),
+                AlienEntityTypes.ROYAL_COCOON.get(),
+                AlienEntityTypes.ABERRANT_ROYAL_COCOON.get(),
+                AlienEntityTypes.NETHER_ROYAL_COCOON.get()
+            );
     }
 
     /**

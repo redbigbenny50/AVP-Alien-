@@ -83,6 +83,47 @@ public class HarbingerAnimationDispatcher {
         WALK.dispatchForEntity(harbinger);
     }
 
+    /** The crawl BITE reuses {@link #biteAttack} - the model's only bite clip is already the crawl one. */
+    public void leftWhipstabAttack(float speed) {
+        AzCommand.<Harbinger>replay()
+            .play(
+                AzAlienAnimationUtil.BODY,
+                HarbingerAnimationRefs.ATTACKCRAWL_LEFT_WHIPSTAB_ANIMATION_NAME,
+                AzPlayBehaviors.PLAY_ONCE
+            )
+            .setSpeed(AzAlienAnimationUtil.BODY, speed)
+            .build()
+            .dispatchForEntity(harbinger);
+    }
+
+    public void rightWhipstabAttack(float speed) {
+        AzCommand.<Harbinger>replay()
+            .play(
+                AzAlienAnimationUtil.BODY,
+                HarbingerAnimationRefs.ATTACKCRAWL_RIGHT_WHIPSTAB_ANIMATION_NAME,
+                AzPlayBehaviors.PLAY_ONCE
+            )
+            .setSpeed(AzAlienAnimationUtil.BODY, speed)
+            .build()
+            .dispatchForEntity(harbinger);
+    }
+
+    /** Crawl posture transitions - one-shots on the crawl edge; speed 2 on a leg-loss collapse. */
+    public void crawlDown(float speed) {
+        AzCommand.<Harbinger>replay()
+            .play(AzAlienAnimationUtil.BODY, HarbingerAnimationRefs.CRAWL_DOWN_ANIMATION_NAME, AzPlayBehaviors.PLAY_ONCE)
+            .setSpeed(AzAlienAnimationUtil.BODY, speed)
+            .build()
+            .dispatchForEntity(harbinger);
+    }
+
+    public void crawlUp() {
+        AzCommand.<Harbinger>replay()
+            .play(AzAlienAnimationUtil.BODY, HarbingerAnimationRefs.CRAWL_UP_ANIMATION_NAME, AzPlayBehaviors.PLAY_ONCE)
+            .build()
+            .dispatchForEntity(harbinger);
+    }
+
     public void biteAttack() {
         BITE_ATTACK.dispatchForEntity(harbinger);
     }

@@ -61,7 +61,8 @@ public final class HiveBalanceTask {
     /** The room whose count caps the harbinger. A second one requires empress influence to build. */
     private static final String RAID_CHAMBER_ROOM_TYPE = "chamber_raid";
 
-    private static final int MEMBER_CAP = 250;
+    /** Public so the empress's last stand can measure how far short her seat is when she levies the network. */
+    public static final int MEMBER_CAP = 250;
 
     /**
      * Lineages are processed in buckets: each one is evaluated once per this many ticks, chosen by its own id hash so
@@ -77,12 +78,23 @@ public final class HiveBalanceTask {
      */
     private static final int BUCKET_PHASE = 7;
 
+    /**
+    * Reused snapshot buffer for the per-tick faction scan. The scan runs only on the single server thread, so one
+    * static scratch list per scan is safe; clear+addAll keeps the same iterate-a-snapshot semantics (the loop body
+    * may mutate the live faction registry) while allocating nothing once the backing array has grown - this scan
+    * used to build a fresh ArrayList of every faction id EVERY TICK just to run its bucket filter.
+    */
+    private static final java.util.List<net.minecraft.resources.ResourceLocation> SCAN_SCRATCH =
+        new java.util.ArrayList<>();
+
     public static void scanAll(MinecraftServer server) {
         var config = HiveLocationRegistry.INSTANCE.config();
         var populationPerChunk = config.populationPerChunk();
         var currentTick = server.overworld().getGameTime();
 
-        for (var factionId : new ArrayList<>(Alien.MOD.factions().getAllIds())) {
+        SCAN_SCRATCH.clear();
+        SCAN_SCRATCH.addAll(Alien.MOD.factions().getAllIds());
+        for (var factionId : SCAN_SCRATCH) {
             if (!LineageIds.isLineageId(factionId)) {
                 continue;
             }

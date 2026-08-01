@@ -197,8 +197,13 @@ public class Alien {
         com.alien.common.gameplay.hive.migration.OldHiveMigrator.run(server);
         com.alien.common.gameplay.claim.LegacyPlayerClaimMigration.migrateToBLib(server);
         HiveLocationRegistry.INSTANCE.rebuildFromFactions();
-        com.alien.common.gameplay.hive.migration.LegacyHiveRecovery.detectAndRecover(server);
-        HiveLocationRegistry.INSTANCE.rebuildFromFactions();
+        // The recovery pass needs a populated registry to inspect, hence the rebuild ABOVE it; the rebuild BELOW
+        // only exists to pick up factions the recovery just created, so it is skipped when the recovery repaired
+        // nothing. On a clean world that second pass was byte-identical to the first - the "registry rebuild runs
+        // twice" every load in the tester logs.
+        if (com.alien.common.gameplay.hive.migration.LegacyHiveRecovery.detectAndRecover(server)) {
+            HiveLocationRegistry.INSTANCE.rebuildFromFactions();
+        }
         HiveLocationRegistry.INSTANCE.repairTerritoryClaims(server);
     }
 

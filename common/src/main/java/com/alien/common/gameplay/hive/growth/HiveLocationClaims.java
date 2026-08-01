@@ -113,6 +113,14 @@ public final class HiveLocationClaims {
     /**
      * Releases any claimed chunk that no longer has a cardinally-adjacent path back to the location center. Returns the
      * number of extra chunks released.
+     * <p>
+     * STRUCTURE CHUNKS ARE EXEMPT. [stated] "when they start construction/carving it claims those chunks so the claims
+     * grow with the building" - a chunk holding a built piece is the hive itself, not abstract territory, and it is
+     * physically connected through the halls whatever the CLAIM graph momentarily looks like. Before this exemption,
+     * one mid-corridor release (a contested-chunk strip, an inhibition sever, a decay shave) broke the cardinal path
+     * and this pruner then amputated every claim beyond the break INCLUDING built rooms - the "rooms with no claims
+     * connecting them to the queen room" testers screenshotted. The chamber systems (jelly, eggs, vents) all key on
+     * claimed structure chunks, so an amputated room also silently stopped functioning.
      */
     public static int releaseDisconnectedClaims(ServerLevel level, HiveLocation location) {
         var centerChunk = new ChunkPos(location.centerPos());
@@ -127,7 +135,7 @@ public final class HiveLocationClaims {
 
         var disconnected = new ArrayList<ChunkPos>();
         for (var chunk : location.claimedChunks()) {
-            if (!connected.contains(chunk)) {
+            if (!connected.contains(chunk) && !location.structurePieceByChunk().containsKey(chunk)) {
                 disconnected.add(chunk);
             }
         }
@@ -202,6 +210,40 @@ public final class HiveLocationClaims {
         }
 
         return connected;
+    }
+
+    /**
+     * Claims every chunk that holds a built structure piece but has somehow lost its claim. The claim is created at
+     * piece placement (planner, router, founding, catch-up all claim on place), so under normal operation this finds
+     * nothing - it exists to HEAL: worlds where the old disconnection pruner amputated room claims get them back, and
+     * any future release path that touches a structure chunk is undone on the next scan. [stated] "build it into the
+     * structure itself instead of relying on surface party for the actual claims solely."
+     * <p>
+     * Skips chunks currently claimed by a DIFFERENT registered location (e.g. a hall conquered in a war) - healing must
+     * not re-ignite settled territory fights. Returns the number of chunks reclaimed.
+     */
+    public static int reclaimStructureChunks(ServerLevel level, HiveLocation location, long currentTick) {
+        var reclaimed = 0;
+        for (var chunk : new ArrayList<>(location.structurePieceByChunk().keySet())) {
+            if (location.claimedChunks().contains(chunk)) {
+                continue;
+            }
+            var owner = HiveLocationRegistry.INSTANCE.getByChunk(location.dimension(), chunk);
+            if (owner != null && owner != location) {
+                continue;
+            }
+            if (claim(level, location, chunk, currentTick)) {
+                reclaimed++;
+            }
+        }
+        if (reclaimed > 0) {
+            Alien.LOGGER.info(
+                "Hive: reclaimed {} structure chunk(s) for location {} - built halls carry their own claims",
+                reclaimed,
+                location.id().value()
+            );
+        }
+        return reclaimed;
     }
 
     /**

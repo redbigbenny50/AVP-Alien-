@@ -61,6 +61,13 @@ public final class AttackPartyDispatch {
             return;
         }
 
+        // A target currently in creative or spectator gets a POSTPONEMENT, exactly like having no legal ambush
+        // spot: nothing is spent and the wave stays due, so switching modes delays the reckoning but never voids
+        // it. Ambushing an untouchable player would burn the wave's members on a fight that cannot happen.
+        if (targetPlayer.isCreative() || targetPlayer.isSpectator()) {
+            return;
+        }
+
         var spawnPos = findAmbushPos(serverLevel, targetPlayer);
         if (spawnPos == null) {
             return;

@@ -65,7 +65,11 @@ public final class HiveLocationFoundingService {
         // [stated] she may still JOIN an existing irradiated hive if she finds one - that is ordinary membership, not
         // founding, and goes nowhere near this method.
         if (IrradiatedHiveRules.isIrradiated(queen)) {
-            Alien.LOGGER.info("Founding refused for irradiated queen {} - the strain does not found", queen.getUUID());
+            // DEBUG, not INFO: this is a PERMANENT property of the strain, not an event, and her lifecycle keeps
+            // re-attempting to found for as long as she is alive - a live log showed 63 identical lines in ten
+            // minutes from a single queen. The reason is documented directly above; it does not need repeating
+            // into the server console every attempt.
+            Alien.LOGGER.debug("Founding refused for irradiated queen {} - the strain does not found", queen.getUUID());
             return null;
         }
 

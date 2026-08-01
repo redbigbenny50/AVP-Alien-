@@ -74,6 +74,8 @@ public record HiveConfig(
     int empressCandidateMinMembers,
     long empressCrowningCooldownTicks,
     int empressCapPercent,
+    int empressRescuesPerHive,
+    int empressRescueBudget,
     long firewallCooldownTicks,
     long firewallStabilityScanIntervalTicks,
     int firewallJellyFloor,
@@ -134,7 +136,6 @@ public record HiveConfig(
     int combatRespiteKillThreshold,
     long combatRespiteMinTicks,
     long combatRespiteMaxTicks,
-    int maxOvomorphsPerHiveLocation,
     long royalJellyTicksPerProduction,
     long scourgeJellyTicksPerQueenProduction,
     long scourgeJellyTicksPerHarbingerProduction,
@@ -264,6 +265,11 @@ public record HiveConfig(
             5L * TICKS_PER_MINECRAFT_DAY, // empressCrowningCooldownTicks: after an empress DIES, her lineage cannot
             // crown another for 5 Minecraft days. Killing her is meant to buy the players breathing room, not to
             // start a countdown to the next one.
+            2, // empressRescuesPerHive: how many times she will refill ONE hive's firewall fund before writing it
+               // off. Two extra lives, not immortality - die a third time and the hive dies like any other.
+            6, // empressRescueBudget: NETWORK-WIDE cap on transfers for one empress, keyed on her empressId. This is
+               // what makes broad pressure viable: without it the only answer to her is to besiege a single hive to its
+               // third death, because she could rescue everywhere forever. A fresh empress gets a fresh budget.
             150, // empressCapPercent: a BLANKET percentage on every ceiling an empress raises - one rule instead of a
             // hand-tuned twin per cap. It covers the working population (250 -> 375), all four party sizes (attack
             // 8 -> 12, biomass hunting 7 -> 11, surface 5 -> 8, host hunt 4 -> 6), AND every per-caste ceiling in the
@@ -341,7 +347,6 @@ public record HiveConfig(
             40, // combatRespiteKillThreshold: 2x hiveSpawnerMinimumLoadedXenomorphs default, intentionally not coupled
             10L * TICKS_PER_SECOND, // combatRespiteMinTicks
             TICKS_PER_MINUTE, // combatRespiteMaxTicks
-            30, // maxOvomorphsPerHiveLocation
             TICKS_PER_MINUTE, // royalJellyTicksPerProduction (1 game-min per queen)
             100L * TICKS_PER_MINUTE, // scourgeJellyTicksPerQueenProduction (100 game-min per queen)
             TICKS_PER_MINUTE, // scourgeJellyTicksPerHarbingerProduction (1 game-min per harbinger)

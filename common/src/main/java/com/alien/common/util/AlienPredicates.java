@@ -101,6 +101,12 @@ public class AlienPredicates {
      * Deliberately routed through {@code HostCaptureTask.carriedHost}, which only ever returns a NON-alien passenger,
      * so this covers captives without also shielding an ovomorph riding an egg-hauler from a rival hive's attention.
      */
+    /**
+     * How far above a ground alien a hunting target may sit before it counts as unreachable. Roughly the height a
+     * xenomorph can close on by jumping or by walking up terrain; anything hovering higher is never caught.
+     */
+    private static final double MAX_HUNTABLE_HEIGHT_ABOVE = 4.0;
+
     private static boolean isCapturedHost(@NotNull LivingEntity potentialTarget) {
         // On a drone's back, on its way home.
         if (
@@ -115,6 +121,30 @@ public class AlienPredicates {
         // dragging home got executed in its own chamber, purely because marines are a hated faction. Killing the thing
         // you captured is the same self-sabotage as the spitter shooting the wolf a drone was carrying.
         return HostParking.isParked(potentialTarget);
+    }
+
+    /**
+     * Blocks a GROUND caste from committing to prey it can never actually reach.
+     * <p>
+     * A biomass hunting party that aggros a phantom walks under it forever: the target is legitimate, the pathing is
+     * legitimate, and the party circles beneath it until something else interrupts. Blaze, breeze and ghast do the same
+     * thing, and the catch-all at the bottom of the tier check sweeps every modded flyer into the same trap, so naming
+     * the four in a tag would only fix the four we happen to know about.
+     * <p>
+     * Height rather than pathfinding on purpose: this runs inside target selection, and building a Path per candidate
+     * per scan is far too expensive for what it buys. A hoverer sits well above its pursuer, so the gap is the cheap
+     * tell.
+     * <p>
+     * Applies ONLY to proactive HUNTING. Retaliation is checked earlier and is untouched - something that hurts this
+     * alien stays a valid target however far out of reach it is, which is what keeps a spitter shooting back at a blaze
+     * instead of ignoring it. Climbers are exempt: a xenomorph on a wall reaches things a drone on the floor cannot.
+     */
+    private static boolean isReachableForHunting(@NotNull Alien alien, @NotNull LivingEntity potentialTarget) {
+        if (alien.onClimbable() || alien.isInWater() || potentialTarget.isInWater()) {
+            return true;
+        }
+
+        return potentialTarget.getY() - alien.getY() <= MAX_HUNTABLE_HEIGHT_ABOVE;
     }
 
     private static boolean isTargetThreatAllowed(@NotNull Alien alien, @NotNull LivingEntity potentialTarget) {
@@ -160,7 +190,8 @@ public class AlienPredicates {
         }
 
         if (potentialTarget.getType().is(AlienEntityTypeTags.XENOMORPH_THREAT_2_LOW_DANGER)) {
-            return isHiveLowOnBiomass(alien) || isActiveBiomassHuntingPartyMember(alien);
+            return isReachableForHunting(alien, potentialTarget)
+                && (isHiveLowOnBiomass(alien) || isActiveBiomassHuntingPartyMember(alien));
         }
 
         if (potentialTarget.getType().is(AlienEntityTypeTags.XENOMORPH_THREAT_1_PASSIVE)) {
@@ -169,7 +200,8 @@ public class AlienPredicates {
 
         // Match the old 1.21.1 aggro baseline: anything valid and not explicitly ignored/passive/high-danger is
         // treated as low danger, so modded hostile mobs still enter the biomass-gated prey pool without a data tag.
-        return isHiveLowOnBiomass(alien) || isActiveBiomassHuntingPartyMember(alien);
+        return isReachableForHunting(alien, potentialTarget)
+            && (isHiveLowOnBiomass(alien) || isActiveBiomassHuntingPartyMember(alien));
     }
 
     /**

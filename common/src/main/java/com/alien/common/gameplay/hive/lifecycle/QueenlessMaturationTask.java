@@ -183,6 +183,18 @@ public final class QueenlessMaturationTask {
                 return;
             }
 
+            // An empress will refill a spent fund from a healthy sibling's rather than let the hive be written off.
+            // Reallocation, not immunity: the donor surrenders its own safety net. Bounded per hive and
+            // network-wide, and the second rescue into one hive gives her position away.
+            if (!location.firewallFundAvailable()) {
+                com.alien.common.gameplay.hive.empress.EmpressRescueService.tryRescue(
+                    serverLevel,
+                    location,
+                    lineage,
+                    config
+                );
+            }
+
             if (!location.firewallFundAvailable()) {
                 Alien.LOGGER.info(
                     "Hive: crowning denied for leader {} (lineage {}) — firewall fund still spent, {}/{} stable ticks accrued",

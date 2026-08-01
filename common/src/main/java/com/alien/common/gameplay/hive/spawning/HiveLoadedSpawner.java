@@ -300,9 +300,16 @@ public final class HiveLoadedSpawner {
         ) {
             return 8;
         }
+        // CARRIERS NEVER MATERIALIZE IN-HIVE - [stated] "have carriers only in Raids." Every reserve-spawned
+        // carrier arms a 6-facehugger spine payload (ReserveSpawnUtil), so each in-hive materialization dumped up
+        // to six huggers around the queen - the tester-reported facehugger overpop, which appeared exactly when
+        // hives unlocked carrier production. Zero weight removes them from every in-hive spawn path this class
+        // serves, raid room included; RaidDispatch fields them from the same reserves unaffected.
+        if (type.is(AlienEntityTypeTags.CARRIERS)) {
+            return 0;
+        }
         if (
-            type.is(AlienEntityTypeTags.CARRIERS)
-                || type.is(AlienEntityTypeTags.RAVAGERS)
+            type.is(AlienEntityTypeTags.RAVAGERS)
                 || type.is(AlienEntityTypeTags.RAZOR_CLAWS)
                 || type.is(AlienEntityTypeTags.PREDALIENS)
                 || type.is(AlienEntityTypeTags.CHRYSALISES)

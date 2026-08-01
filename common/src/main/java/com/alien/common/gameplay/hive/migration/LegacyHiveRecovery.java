@@ -69,7 +69,13 @@ public final class LegacyHiveRecovery {
 
     private LegacyHiveRecovery() {}
 
-    public static void detectAndRecover(MinecraftServer server) {
+    /**
+     * @return true when the pass actually repaired something - the caller uses this to decide whether the registry
+     *     rebuild needs a second run. A clean world (no legacy data, or already recovered) returns false, which is
+     *     what stops the byte-identical double rebuild that used to run on every load.
+     */
+    public static boolean detectAndRecover(MinecraftServer server) {
+        var repairedAnything = new boolean[1];
         LegacyHiveRecoveryData.getOrCreate(server)
             .ifSome(data -> {
                 var snapshots = readLegacyHiveSnapshots(server);
@@ -89,6 +95,7 @@ public final class LegacyHiveRecovery {
                         repaired++;
                     }
                 }
+                repairedAnything[0] = repaired > 0;
 
                 data.setRecoveryApplied(true);
                 Alien.LOGGER.info(
@@ -97,6 +104,7 @@ public final class LegacyHiveRecovery {
                     snapshots.size()
                 );
             });
+        return repairedAnything[0];
     }
 
     private static boolean snapshotNeedsRepair(LegacyHiveRecoveryData data, LegacyHiveSnapshot snapshot) {

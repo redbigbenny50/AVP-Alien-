@@ -84,7 +84,17 @@ public class LayEggAction {
             return Action.Signal.ABORT;
         }
 
-        ovomorph.setPos(eggLayer.getEggLayingPosition());
+        // SNAP TO THE BLOCK CENTRE. The lay position is a free Vec3 offset from the royal's facing, so it lands
+        // wherever the maths puts it - which is almost never a block centre, and an egg is a block-sized thing
+        // that reads as misplaced the moment it straddles a seam. Centring on X/Z costs nothing, makes the offset
+        // constants only need to be right to within half a block, and applies to every royal rather than being
+        // tuned per-model. Y is left exactly as computed so she still lays at the height she was going to.
+        var layPosition = eggLayer.getEggLayingPosition();
+        ovomorph.setPos(
+            Math.floor(layPosition.x) + 0.5,
+            layPosition.y,
+            Math.floor(layPosition.z) + 0.5
+        );
         ovomorph.setPersistenceRequired();
         ovomorph.isRooted.set(false);
 

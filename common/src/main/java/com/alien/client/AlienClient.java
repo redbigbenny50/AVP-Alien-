@@ -46,6 +46,9 @@ import com.alien.client.render.entity.RunnerRenderer;
 import com.alien.client.render.entity.SpitterRenderer;
 import com.alien.client.render.entity.WarriorRenderer;
 import com.alien.client.render.entity.parasite.facehugger.FacehuggerRenderer;
+import com.alien.client.render.item.AnchorItemRenderer;
+import com.alien.client.render.item.InhibitorItemRenderer;
+import com.alien.client.render.item.TrackerItemRenderer;
 import com.alien.common.registry.init.AlienBlockEntityTypes;
 import com.alien.common.registry.init.AlienEntityTypes;
 import com.alien.common.registry.init.AlienParticleTypes;
@@ -313,10 +316,16 @@ public class AlienClient {
             registerAsset(entry.head(), entry.itemPath());
             registerAsset(entry.headShield(), entry.shieldItemPath());
         });
-        registerAsset(AlienItems.ANCHOR, "anchor");
         registerAsset(AlienItems.JELLY_VAT, "jelly_vat");
-        registerAsset(AlienItems.INHIBITOR, "inhibitor");
-        registerAsset(AlienItems.TRACKER, "tracker");
+
+        // ANCHOR, INHIBITOR AND TRACKER USE AzItemRenderer INSTEAD, not the geo-bone/template path above.
+        // The template renderer replaces vanilla display handling with BLib's own transform system - block
+        // units instead of sixteenths, no implicit centring - so every Blockbench value has to be re-derived by
+        // hand, per item, per context. AzItemRenderer leaves vanilla's display block alone, so models/item/*.json
+        // is the raw Blockbench export and behaves as previewed. Animation still works through it.
+        MOD.registries().registerItemRenderer(AlienItems.ANCHOR, name -> AnchorItemRenderer::new);
+        MOD.registries().registerItemRenderer(AlienItems.INHIBITOR, name -> InhibitorItemRenderer::new);
+        MOD.registries().registerItemRenderer(AlienItems.TRACKER, name -> TrackerItemRenderer::new);
     }
 
     private static void registerAsset(BLibHolder<Item> holder, String configPath) {

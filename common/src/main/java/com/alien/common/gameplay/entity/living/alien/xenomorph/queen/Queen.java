@@ -51,7 +51,13 @@ import org.jetbrains.annotations.Nullable;
 
 import java.util.Objects;
 
-public class Queen extends Xenomorph implements GOAPUser<Queen>, EggLayer {
+public class Queen extends Xenomorph
+    implements GOAPUser<Queen>, EggLayer, com.alien.common.gameplay.entity.CrawlPostureTransitionListener {
+
+    @Override
+    public int crawlPostureTransitionTicks(boolean enteringCrawl) {
+        return enteringCrawl ? QueenAnimationRefs.CRAWL_DROP_TICKS : QueenAnimationRefs.CRAWL_RISE_TICKS;
+    }
 
     public static final AttackType SWIPE_DOWN = AttackType.builder("queen_swipe_down")
         .requiresAnyArm()
@@ -62,6 +68,18 @@ public class Queen extends Xenomorph implements GOAPUser<Queen>, EggLayer {
     public static final AttackType BACKHAND = AttackType.builder("queen_backhand")
         .requiresAnyArm()
         .defaultDurationInTicks(15)
+        .sound(AlienSoundEvents.ENTITY_XENOMORPH_ATTACK)
+        .build();
+
+    /**
+     * Her ground game: [stated] a crawling xenomorph fights with crawl attacks, and she has the clip
+     * ({@code crawl_attack}, 0.5s). Marked {@code crawlAttack()} so the posture gate confines it to the ground and
+     * the config's crawl preference makes it her ONLY pick while crawling - a legless queen is still a queen.
+     */
+    public static final AttackType CRAWL_ATTACK = AttackType.builder("queen_crawl_attack")
+        .crawlAttack()
+        .requiresAnyArm()
+        .defaultDurationInTicks(QueenAnimationRefs.CRAWL_ATTACK_DURATION_TICKS)
         .sound(AlienSoundEvents.ENTITY_XENOMORPH_ATTACK)
         .build();
 
@@ -77,11 +95,16 @@ public class Queen extends Xenomorph implements GOAPUser<Queen>, EggLayer {
                 .addRegular(SWIPE_DOWN)
                 .addRegular(BACKHAND)
                 .addRegular(TAIL_STRIKE)
+                .addRegular(CRAWL_ATTACK)
                 .build()
         )
         .parallelDigCount(4)
         .pushedByFluid(false)
-        .canCrawl(false)
+        // A queen ducks too. She is 3.8 x 5.0 and needs a FIVE-block opening standing, which no ordinary corridor
+        // gives her - crawling scales her to 2.0 and drops that to two. Her crawl set was fully animated all along
+        // (crawl, crawl.idle, crawl.rise, crawl.drop, crawl_attack) and wired in QueenAnimationDispatcher; only
+        // this flag kept any of it from ever playing.
+        .canCrawl(true)
         .build();
 
     /**

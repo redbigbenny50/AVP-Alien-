@@ -14,6 +14,22 @@ import org.jetbrains.annotations.NotNull;
 
 public class Ovipositor extends Mob {
 
+    /**
+     * The eggsack burns only if its royal does.
+     * <p>
+     * There is ONE ovipositor type for every strain - the sack takes its strain from the queen it rides, which is why
+     * the renderer resolves its texture off her too - so there is no nether entity type to tag and no variant of its
+     * own to read. Deferring to the royal is the only correct answer, and it is also the most general one: whatever
+     * makes her immune makes the organ growing out of her immune, now and for any strain added later.
+     * <p>
+     * Inherited by {@code EmpressOvipositor}, so the empress's sack is covered by the same rule.
+     */
+    @Override
+    public boolean fireImmune() {
+        return (getVehicle() instanceof com.alien.common.gameplay.entity.living.alien.Alien royal && royal.fireImmune())
+            || super.fireImmune();
+    }
+
     public static AttributeSupplier.Builder createOvipositorAttributes() {
         return createMobAttributes()
             .add(Attributes.MAX_HEALTH, 100)

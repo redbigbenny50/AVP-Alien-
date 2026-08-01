@@ -50,6 +50,9 @@ public class AlienBlockTags {
 
     public static final TagKey<Block> RESIN_VEINS = create("resin_veins");
 
+    /** Every strain's floor tendril. Chamber furniture (egg beds, jelly vats) only grows on these. */
+    public static final TagKey<Block> RESIN_TENDRILS = create("resin_tendrils");
+
     public static final TagKey<Block> RESIN_VENTS = create("resin_vents");
 
     public static final TagKey<Block> RESIN_WEBS = create("resin_webs");

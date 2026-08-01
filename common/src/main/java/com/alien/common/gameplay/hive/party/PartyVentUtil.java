@@ -2,7 +2,6 @@ package com.alien.common.gameplay.hive.party;
 
 import com.alien.common.gameplay.hive.location.HiveLocation;
 import com.alien.common.gameplay.hive.vent.VentKind;
-import com.alien.common.registry.init.block.AlienResinBlocks;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.server.level.ServerLevel;
@@ -97,8 +96,8 @@ public final class PartyVentUtil {
         }
         return state.isAir()
             || state.canBeReplaced()
-            || state.is(AlienResinBlocks.RESIN_VEIN.get())
-            || state.is(AlienResinBlocks.RESIN_WEB.get());
+            || state.is(com.alien.common.registry.tag.AlienBlockTags.RESIN_VEINS)
+            || state.is(com.alien.common.registry.tag.AlienBlockTags.RESIN_WEBS);
     }
 
     /** The hive's front doors: vents dropped in the open by surface parties. Host hunts use only these. */

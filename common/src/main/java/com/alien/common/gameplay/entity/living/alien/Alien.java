@@ -127,6 +127,14 @@ public abstract class Alien extends Monster implements DataUser {
 
     private int lastHurtTimeInTicks;
 
+    /**
+     * Game time at which this alien was told to walk to a vent and fold into its hive's reserves (0 = not marked).
+     * TRANSIENT by design: if the chunk unloads or the server restarts mid-walk, the mark is simply lost and the alien
+     * carries on as an ordinary member - a harmless fallback, never a leak. Set by CarveWorkers.disband; consumed by
+     * BroodBankTask, which routes marked aliens to the nearest vent and returns them IDENTITY-INTACT.
+     */
+    private long reserveReturnMarkedAtTick;
+
     private boolean hasAnimationMovementSample;
 
     private double lastAnimationMovementSampleX;
@@ -631,6 +639,20 @@ public abstract class Alien extends Monster implements DataUser {
                 recordAttackByPlayer(player);
             }
 
+            // SIEGE CLOCK FEED. [stated] territory attrition keys on "prolonged combat ... over 15 minutes or so of
+            // active combat/aggro with a player or enemy faction" in the hive's territory. A qualifying hit is: a
+            // hive member, standing in a chunk its location claims, hurt by a player or by a living attacker from
+            // OUTSIDE its own lineage (same-lineage crossfire and acid splash are not a siege). Environmental damage
+            // has no attacking entity and never qualifies. Duration filtering happens in PopulationPressureDecayTask
+            // - this just timestamps the hit.
+            if (
+                !level().isClientSide
+                    && getType().is(AlienEntityTypeTags.XENOMORPHS)
+                    && damageSource.getEntity() instanceof LivingEntity attackerEntity
+            ) {
+                recordSiegeDamage(attackerEntity);
+            }
+
             if (canBleedAcid() && damageSource != damageSources().genericKill()) {
                 var randomPos = AcidBleedUtil.computeRandomPosFromBoundingBox(this);
                 AcidBleedUtil.spawnAcid(this, damage, randomPos);
@@ -964,6 +986,45 @@ public abstract class Alien extends Monster implements DataUser {
         }
     }
 
+    private void recordSiegeDamage(LivingEntity attackerEntity) {
+        // Creative/spectator hits are not a siege - same rule as the intrusion timer ([stated] Aug 1): an admin
+        // sword-testing in creative must not start 15 minutes of territory attrition against the hive.
+        if (
+            attackerEntity instanceof net.minecraft.world.entity.player.Player player
+                && (player.isCreative() || player.isSpectator())
+        ) {
+            return;
+        }
+        var location = HiveMemberLocationResolver.reserveReturnLocation(this);
+        if (location == null || !location.claimedChunks().contains(chunkPosition())) {
+            return;
+        }
+        if (attackerEntity instanceof Alien attackerAlien) {
+            var attackerLocation = HiveMemberLocationResolver.reserveReturnLocation(attackerAlien);
+            if (
+                attackerLocation != null
+                    && attackerLocation.lineageFactionId() != null
+                    && attackerLocation.lineageFactionId().equals(location.lineageFactionId())
+            ) {
+                return;
+            }
+        }
+        location.recordCombatDamage(level().getGameTime());
+    }
+
+    /** Marks this alien to walk to a vent and fold back into reserves. See {@code reserveReturnMarkedAtTick}. */
+    public void markForReserveReturn(long gameTime) {
+        this.reserveReturnMarkedAtTick = Math.max(1L, gameTime);
+    }
+
+    public boolean isMarkedForReserveReturn() {
+        return reserveReturnMarkedAtTick > 0L;
+    }
+
+    public long reserveReturnMarkedAtTick() {
+        return reserveReturnMarkedAtTick;
+    }
+
     private @Nullable HiveLocation reserveReturnLocation() {
         var ownedLocation = HiveMemberLocationResolver.reserveReturnLocation(this);
         if (ownedLocation != null) {
@@ -1004,6 +1065,44 @@ public abstract class Alien extends Monster implements DataUser {
 
     @Override
     public void remove(@NotNull RemovalReason removalReason) {
+        // DIAGNOSTIC (queen bug 1 - "she seems to despawn while digging her core"). Every mod-side removal path was
+        // audited and none can touch a queen (eviction exempts avp mobs, brood bank is host-born-only, convoys never
+        // carry queens, the reserve unload handler guards the QUEENS tag), and vanilla distance-despawn is disabled
+        // by her persistence - so whatever removes her is unknown, and this names it: reason + caller stack at the
+        // exact moment. Prime suspect: PEACEFUL difficulty, which Monster.checkDespawn honours REGARDLESS of
+        // persistence (shouldDespawnInPeaceful is never overridden in this mod). Remove once the culprit is known.
+        if (
+            !level().isClientSide
+                && !isRemoved()
+                && getType().is(AlienEntityTypeTags.QUEENS)
+        ) {
+            if (removalReason == RemovalReason.UNLOADED_TO_CHUNK || removalReason == RemovalReason.CHANGED_DIMENSION) {
+                // Normal chunk churn - one line, no stack, so "unloaded at T and never seen again" is visible in a
+                // timeline without drowning the log.
+                com.alien.Alien.LOGGER.info(
+                    "QUEEN-DIAG {} {} removed reason={} pos={} - routine unload, should reappear on chunk load",
+                    getType().builtInRegistryHolder().key().location(),
+                    getUUID(),
+                    removalReason,
+                    blockPosition()
+                );
+            } else {
+                com.alien.Alien.LOGGER.warn(
+                    "QUEEN-DIAG {} {} REMOVED reason={} pos={} difficulty={} persistent={} phase={} - caller stack follows",
+                    getType().builtInRegistryHolder().key().location(),
+                    getUUID(),
+                    removalReason,
+                    blockPosition(),
+                    level().getDifficulty(),
+                    isPersistenceRequired(),
+                    this instanceof com.alien.common.gameplay.entity.living.alien.xenomorph.queen.Queen queen
+                        ? String.valueOf(queen.getLifecyclePhaseManager().getPhase())
+                        : "n/a",
+                    new Throwable("QUEEN-DIAG removal stack (not an error)")
+                );
+            }
+        }
+
         super.remove(removalReason);
         // Hive: BLib's faction system handles removal cleanup automatically when the entity is killed or
         // discarded — no manual hive.removeHiveMember call needed.

@@ -228,6 +228,25 @@ public class QueenLifecyclePhaseManager implements NBTSerializable {
             return;
         }
 
+        // AN IRRADIATED QUEEN HAS NO FRONT-END AT ALL. [stated] "she doesnt try to build a hive like how normal
+        // queens do, she just exists... shes just a roaming weapon of radioactive teeth and claws." Developing,
+        // choosing an anchor, digging it out and sleeping in it are every one of them work toward a founding that
+        // can never happen: HiveLocationFoundingService refuses her strain at the door.
+        //
+        // Left to run she completed the whole chain, reached FOUNDING_HANDOFF, and then hammered that refusal on a
+        // ~10s loop for as long as she lived - a tester's log carried 63 identical lines from ONE queen inside ten
+        // minutes. Freezing her here means the attempt is never made rather than made and rejected, and it also
+        // spares her the pointless dig.
+        //
+        // She may still JOIN an existing irradiated hive - that is ordinary membership and never touches this
+        // front-end. Shaped after the bound-queen guard above, including clearing a dig left mid-swing.
+        if (com.alien.common.gameplay.hive.economy.IrradiatedHiveRules.isIrradiated(queen)) {
+            if (queen.isDigging()) {
+                queen.setDigging(false);
+            }
+            return;
+        }
+
         // Safety net only: the DIG action owns the digging state (set while it performs, cleared on its finish), so she
         // is noclip *only* while actively digging — never while idle/combat movement is in control. This just clears
         // any
@@ -444,6 +463,16 @@ public class QueenLifecyclePhaseManager implements NBTSerializable {
     /**
      * Begins the sleep at the committed anchor. The hibernation GOAP hold pins her here and runs the sleep animation.
      */
+    /** True when this queen already belongs to a hive location - i.e. a hive promoted and sent her. */
+    private boolean wasDispatchedByAHive() {
+        for (var factionId : com.alien.Alien.MOD.factions().getFactionIds(queen.getUUID())) {
+            if (com.alien.common.gameplay.hive.id.HiveLocationIds.isHiveLocationId(factionId)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     private void enterHibernation() {
         this.phase = QueenLifecyclePhase.HIBERNATION;
 
@@ -459,7 +488,16 @@ public class QueenLifecyclePhaseManager implements NBTSerializable {
         // outright.
         //
         // Zero rather than a skipped phase so the existing wake-and-hand-off path runs unchanged on the next tick.
-        this.hibernationTicksRemaining = wildSpawned ? HIBERNATION_DURATION_TICKS : 0;
+        // NOT `wildSpawned`. That was the first attempt and it was wrong: the flag is set only on the two genuinely
+        // WILD paths, so a queen placed by egg or command is false too - and she skipped the sleep entirely,
+        // waking the same tick she entered. A live log caught it exactly: "entering HIBERNATION ... sleeping 0
+        // ticks" followed 42ms later by "woke from HIBERNATION".
+        //
+        // The real question is whether a HIVE SENT HER. A daughter promoted by QueenPromotionService carries her
+        // mother's location membership across the molt, so she already belongs to a hive; a wild or hand-spawned
+        // queen belongs to nothing. Only the dispatched one skips - she was raised in a defended chamber and left
+        // with orders, which is the whole reason she does not need to lie dormant first.
+        this.hibernationTicksRemaining = wasDispatchedByAHive() ? 0 : HIBERNATION_DURATION_TICKS;
         this.hibernationActivity = HibernationActivity.ASLEEP;
         this.disturbanceCalmTicks = 0;
         queen.isHibernating.set(true);

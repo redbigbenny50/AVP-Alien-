@@ -186,8 +186,8 @@ public final class HostChamberSlots {
     private static boolean isOpenForHost(ServerLevel level, BlockPos pos) {
         var state = level.getBlockState(pos);
         return state.isAir()
-            || state.is(com.alien.common.registry.init.block.AlienResinBlocks.RESIN_VEIN.get())
-            || state.is(com.alien.common.registry.init.block.AlienResinBlocks.RESIN_WEB.get());
+            || state.is(com.alien.common.registry.tag.AlienBlockTags.RESIN_VEINS)
+            || state.is(com.alien.common.registry.tag.AlienBlockTags.RESIN_WEBS);
     }
 
     private static Direction facing(ServerLevel level, BlockPos spot, int minX, int minZ) {

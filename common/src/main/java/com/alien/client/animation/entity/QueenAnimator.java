@@ -39,6 +39,9 @@ public class QueenAnimator extends AzEntityAnimator<Queen> {
 
     private int previousAttackId = Integer.MIN_VALUE;
 
+    /** Crawl-edge tracker for the posture transitions. Null until first observed so a mid-crawl load doesn't replay a drop. */
+    private Boolean previousCrawling;
+
     /** Edge-detects the digging state so digdown/digup one-shots fire once on start/stop. */
     /**
      * Ticks a dig one-shot still needs before anything else may dispatch. Both dig triptychs fire a short PLAY_ONCE
@@ -226,6 +229,28 @@ public class QueenAnimator extends AzEntityAnimator<Queen> {
             return;
         }
 
+        // Crawl posture transitions - same edge-driven shape as the dig triptychs above, keyed off the synced
+        // crawl flag. The one-shot fires on the edge and holds the track for the clip's ticks; a leg-loss collapse
+        // plays the SAME drop clip at double speed with half the hold ([stated]). Placed above the attack block so
+        // a posture change visually pre-empts a swing; the server blocks NEW attacks for the same window.
+        boolean crawlingNow = queen.getCrawlingManager().isCrawling();
+        if (previousCrawling == null) {
+            previousCrawling = crawlingNow;
+        } else if (crawlingNow != previousCrawling) {
+            previousCrawling = crawlingNow;
+            if (crawlingNow) {
+                var collapse = queen.getCrawlingManager().isLegForcedCrawl();
+                dispatcher.crawlDrop(collapse ? 2.0F : 1.0F);
+                digOneShotHoldTicks = collapse
+                    ? Math.max(1, QueenAnimationRefs.CRAWL_DROP_TICKS / 2)
+                    : QueenAnimationRefs.CRAWL_DROP_TICKS;
+            } else {
+                dispatcher.crawlRise();
+                digOneShotHoldTicks = QueenAnimationRefs.CRAWL_RISE_TICKS;
+            }
+            return;
+        }
+
         var attackType = queen.attackType.get();
         var attackId = queen.attackId.get();
 
@@ -243,6 +268,8 @@ public class QueenAnimator extends AzEntityAnimator<Queen> {
                     dispatcher.backhandAttack(animationName, speed);
                 } else if (attackType == Queen.TAIL_STRIKE) {
                     dispatcher.tailStrikeAttack(animationName, speed);
+                } else if (attackType == Queen.CRAWL_ATTACK) {
+                    dispatcher.crawlAttack(speed);
                 }
 
                 previousAttackId = attackId;
@@ -286,6 +313,9 @@ public class QueenAnimator extends AzEntityAnimator<Queen> {
     }
 
     private String selectAttackAnimation(Queen queen, AttackType attackType, int attackId) {
+        if (attackType == Queen.CRAWL_ATTACK) {
+            return QueenAnimationRefs.CRAWL_ATTACK_ANIMATION_NAME;
+        }
         if (attackType == Queen.SWIPE_DOWN) {
             return chooseArmAnimation(
                 queen,
