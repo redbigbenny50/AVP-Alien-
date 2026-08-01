@@ -57,15 +57,23 @@ neoForge {
 
 sourceSets.main.resources { srcDir 'src/generated/resources' }
 
+// During local AVP development, use the freshly built Human module instead of Gradle's remote artifact cache. CI and
+// standalone checkouts retain the published Maven dependency below.
+def localAvpHumanJar = rootProject.file("../AVP-Human-/neoforge/build/libs/avp_human-neoforge-${minecraft_version}-${project.avp_human_version}.jar")
+
 dependencies {
     implementation "dev.architectury:architectury-neoforge:${project.architectury_version}"
     implementation "me.shedaniel.cloth:cloth-config-neoforge:${project.cloth_version}"
     implementation("com.blib:blib-neoforge-${minecraft_version}:${project.blib_version}") {
         exclude group: 'org.slf4j', module: 'slf4j-api'
     }
-    implementation("com.avp.human:avp_human-neoforge-${minecraft_version}:${project.avp_human_version}") {
-        exclude group: 'org.slf4j', module: 'slf4j-api'
-        exclude group: 'com.blib'
+    if (localAvpHumanJar.exists()) {
+        implementation files(localAvpHumanJar)
+    } else {
+        implementation("com.avp.human:avp_human-neoforge-${minecraft_version}:${project.avp_human_version}") {
+            exclude group: 'org.slf4j', module: 'slf4j-api'
+            exclude group: 'com.blib'
+        }
     }
     implementation("com.avp.predator:avp_predator-neoforge-${minecraft_version}:${project.avp_predator_version}") {
         exclude group: 'org.slf4j', module: 'slf4j-api'
