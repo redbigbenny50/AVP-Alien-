@@ -1021,6 +1021,16 @@ public abstract class Alien extends Monster implements DataUser {
         return reserveReturnMarkedAtTick > 0L;
     }
 
+    /**
+     * Clears the reserve-return mark. Used by the crawl-retreat rule when its conditions stop holding (the xenomorph
+     * found headroom to stand, so its standing attacks are back and it should fight, not be quietly banked the next
+     * time it idles). A disband-marked carve worker that briefly entered and left retreat loses its disband mark too -
+     * it then simply lives on as an ordinary member, which is harmless.
+     */
+    public void clearReserveReturnMark() {
+        this.reserveReturnMarkedAtTick = 0L;
+    }
+
     public long reserveReturnMarkedAtTick() {
         return reserveReturnMarkedAtTick;
     }

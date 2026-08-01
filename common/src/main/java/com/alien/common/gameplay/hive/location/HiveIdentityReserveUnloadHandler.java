@@ -38,6 +38,12 @@ public final class HiveIdentityReserveUnloadHandler {
         var returned = alien.isPersistenceRequired()
             ? returnLocation.localReserves().addReturningIdentityMember(alien)
             : returnLocation.localReserves().addReturningMember(alien.getType(), 1);
+        // A MARKED returner (the crawl-retreat rule, or a disbanded carve worker) refused by a full reserve joins
+        // the brood bank instead - [stated] "if the reserves are full it will join the host born bank as a bonus."
+        // The brood bank is uncapped, so a retreating cripple that made it out is never turned away at the door.
+        if (!returned && alien.isMarkedForReserveReturn()) {
+            returned = returnLocation.localReserves().addBrood(alien.getType(), 1);
+        }
         if (!returned) {
             return false;
         }

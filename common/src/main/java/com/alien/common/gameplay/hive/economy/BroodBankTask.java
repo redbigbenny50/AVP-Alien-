@@ -144,8 +144,12 @@ public final class BroodBankTask {
         // Marked returners fold back IDENTITY-INTACT - mirroring what CarveWorkers.disband did when it absorbed at
         // the site, so walking to the vent first never costs the worker its identity. Everything else banks as
         // fungible brood, unchanged.
+        // Marked returners fall back to the brood bank when the identity return is refused - [stated] "if the
+        // reserves are full it will join the host born bank as a bonus." (A variant mismatch fails both adds and
+        // still leaves the entity be, unchanged.)
         var returned = alien.isMarkedForReserveReturn()
             ? location.localReserves().addReturningIdentityMember(alien)
+                || location.localReserves().addBrood(alien.getType(), 1)
             : location.localReserves().addBrood(alien.getType(), 1);
         if (!returned) {
             return; // variant mismatch (logged by the bank) - leave it be rather than delete it for nothing

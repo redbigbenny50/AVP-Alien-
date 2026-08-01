@@ -481,6 +481,108 @@ public abstract class Xenomorph extends Alien implements ResinProducer, EntitySe
         beginAttack(newDurationInTicks);
     }
 
+    // ---- RULE-3 CRAWL RETREAT ------------------------------------------------------------------------------------
+    // [stated] "if a xeno morph is crawling and it loses its arms and so cant do basic attacks it will try to
+    // escape back to the hive. This can be trying to use a surface vent if one is close by or moving to an
+    // unloaded chunk. if it can get there and unload it will rejoin the reserves. if the reserves are full it will
+    // join the host born bank as a bonus." And on the bite: "when both arms are lost its merely used defensively
+    // if it gets attacked or an enemy gets too close. its priority is escaping not killing a target."
+    //
+    // The two escape routes map onto machinery that already exists: reaching a vent inside the hive footprint is
+    // BroodBankTask's marked-returner absorb (the crew-disband walk), and getting far enough away that the chunk
+    // unloads is HiveIdentityReserveUnloadHandler - both now carry the reserves-full -> brood-bonus fallback. This
+    // driver only supplies the missing middle: the mark, the defensive-only targeting, and the steering.
+
+    /** Enemy inside this range keeps (or justifies) a target while retreating - "an enemy gets too close". */
+    private static final double RETREAT_DEFENSE_RANGE_SQUARED = 6.0 * 6.0;
+
+    /** How long a hit keeps its attacker as a valid defensive target - "if it gets attacked". */
+    private static final int RETREAT_RETALIATION_TICKS = 100;
+
+    /** A vent within this range counts as "close by" and is walked to; beyond it, the xeno flees toward unload. */
+    private static final double RETREAT_VENT_RANGE_SQUARED = 64.0 * 64.0;
+
+    /** Whether the CURRENT reserve-return mark was set by the retreat rule (transient - re-derived after load). */
+    private boolean crawlRetreatMarked;
+
+    private long lastRetreatSteerTick;
+
+    private void tickCrawlRetreat() {
+        var retreating = getCrawlingManager().isCrawling()
+            && !XenomorphAttackLimbRequirement.ANY_ARM.isSatisfiedBy(this)
+            && !getType().is(AlienEntityTypeTags.QUEENS)
+            && convoyMembership() == null
+            && !hasCustomName();
+
+        com.alien.common.gameplay.hive.location.HiveLocation location = null;
+        if (retreating) {
+            location = com.alien.common.gameplay.hive.faction.HiveMemberLocationResolver.reserveReturnLocation(this);
+            // A hiveless stray has nowhere to crawl back to and nothing to rejoin - it keeps fighting instead.
+            retreating = location != null && location.isAlive();
+        }
+
+        if (!retreating) {
+            if (crawlRetreatMarked) {
+                crawlRetreatMarked = false;
+                clearReserveReturnMark();
+            }
+            return;
+        }
+
+        if (!crawlRetreatMarked) {
+            crawlRetreatMarked = true;
+            markForReserveReturn(level().getGameTime());
+        }
+
+        // DEFENSIVE-ONLY TARGETING. A target is kept only while it is genuinely a threat: it hit us recently, or
+        // it is within arm's - well, bite's - reach. Anything further is dropped, which is what turns the crawl
+        // bite (still usable, requiresHead) into a defensive tool: the normal attack machinery fires it against
+        // whatever qualifies here, and the crawl-preference selection already excludes the arm attacks the limbs
+        // can no longer satisfy. With no qualifying threat the target is null and the legs do the talking.
+        var target = getTarget();
+        if (target != null) {
+            var recentlyHitByTarget = getLastHurtByMob() == target
+                && tickCount - getLastHurtByMobTimestamp() <= RETREAT_RETALIATION_TICKS;
+            if (!recentlyHitByTarget && distanceToSqr(target) > RETREAT_DEFENSE_RANGE_SQUARED) {
+                setTarget(null);
+                target = null;
+            }
+        }
+        if (target != null) {
+            return; // defend where it stands; escape resumes the moment the threat lapses
+        }
+
+        // ESCAPE STEERING, re-issued once a second so the GOAP brain's idle wandering cannot unpick it. A vent
+        // close by is walked to (BroodBankTask absorbs marked returners at vents inside the footprint); otherwise
+        // it moves away from the nearest player, which is exactly the direction chunks unload in - and the unload
+        // handler banks it the moment they do.
+        var gameTime = level().getGameTime();
+        if (gameTime - lastRetreatSteerTick < 20L) {
+            return;
+        }
+        lastRetreatSteerTick = gameTime;
+
+        var vent = com.alien.common.gameplay.hive.economy.BroodBankTask.nearestVent(location, blockPosition());
+        if (vent != null && vent.distSqr(blockPosition()) <= RETREAT_VENT_RANGE_SQUARED) {
+            getNavigation().moveTo(vent.getX() + 0.5, vent.getY(), vent.getZ() + 0.5, 1.0);
+            return;
+        }
+
+        var nearestPlayer = level().getNearestPlayer(this, 128.0);
+        if (nearestPlayer != null) {
+            var away = net.minecraft.world.entity.ai.util.DefaultRandomPos.getPosAway(
+                this,
+                16,
+                7,
+                nearestPlayer.position()
+            );
+            if (away != null) {
+                getNavigation().moveTo(away.x, away.y, away.z, 1.0);
+            }
+        }
+        // No player within 128 blocks: stand still and let the chunk unload around it - that IS the escape.
+    }
+
     @Override
     public void tick() {
         super.tick();
@@ -506,6 +608,7 @@ public abstract class Xenomorph extends Alien implements ResinProducer, EntitySe
         if (!level().isClientSide) {
             cooldownTracker.tick();
             clearExpiredHiveIntruderTarget();
+            tickCrawlRetreat();
         }
 
         if (!level().isClientSide && isLunging.get() && onGround()) {
