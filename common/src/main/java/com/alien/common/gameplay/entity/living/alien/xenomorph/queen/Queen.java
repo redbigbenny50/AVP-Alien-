@@ -51,8 +51,7 @@ import org.jetbrains.annotations.Nullable;
 
 import java.util.Objects;
 
-public class Queen extends Xenomorph
-    implements GOAPUser<Queen>, EggLayer, com.alien.common.gameplay.entity.CrawlPostureTransitionListener {
+public class Queen extends Xenomorph implements GOAPUser<Queen>, EggLayer, com.alien.common.gameplay.entity.CrawlPostureTransitionListener {
 
     @Override
     public int crawlPostureTransitionTicks(boolean enteringCrawl) {
@@ -73,8 +72,8 @@ public class Queen extends Xenomorph
 
     /**
      * Her ground game: [stated] a crawling xenomorph fights with crawl attacks, and she has the clip
-     * ({@code crawl_attack}, 0.5s). Marked {@code crawlAttack()} so the posture gate confines it to the ground and
-     * the config's crawl preference makes it her ONLY pick while crawling - a legless queen is still a queen.
+     * ({@code crawl_attack}, 0.5s). Marked {@code crawlAttack()} so the posture gate confines it to the ground and the
+     * config's crawl preference makes it her ONLY pick while crawling - a legless queen is still a queen.
      */
     public static final AttackType CRAWL_ATTACK = AttackType.builder("queen_crawl_attack")
         .crawlAttack()

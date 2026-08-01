@@ -238,17 +238,17 @@ public class EmpressOvipositorManager implements NBTSerializable {
 
     /**
      * Support probes MEASURED, no longer the queen's verbatim (they were 1.5/2.5, -2/2, 5.7/8.25, 0/7 - her exact
-     * four). Correction applied: the SEAT-CUBE DELTA (+2.9253 lateral, +0.526 forward blocks), the same rule that
-     * fixed the ride offset and the egg-laying position, and it is verified three independent ways: (1) his
-     * in-world gold/diamond egg markers settled the sign and magnitude; (2) the ride seat
-     * (queenattachcube) moved by exactly this in the geo; (3) measured differentially for THIS fix, the throne and
-     * outer support families' ground feet moved by exactly (+2.92, +0.53) blocks between ovipositor.geo and
-     * empress_ovipositor.geo - the support structure shifted RIGIDLY with the model re-centering, so the queen's
-     * probe pattern translated by the seat delta lands on her actual supports.
+     * four). Correction applied: the SEAT-CUBE DELTA (+2.9253 lateral, +0.526 forward blocks), the same rule that fixed
+     * the ride offset and the egg-laying position, and it is verified three independent ways: (1) his in-world
+     * gold/diamond egg markers settled the sign and magnitude; (2) the ride seat (queenattachcube) moved by exactly
+     * this in the geo; (3) measured differentially for THIS fix, the throne and outer support families' ground feet
+     * moved by exactly (+2.92, +0.53) blocks between ovipositor.geo and empress_ovipositor.geo - the support structure
+     * shifted RIGIDLY with the model re-centering, so the queen's probe pattern translated by the seat delta lands on
+     * her actual supports.
      * <p>
-     * The REAR support family alone reshaped beyond the rigid move (her sack is longer, 247.1u vs 190.8u tail
-     * tip). Measured empress rear feet, model units /16, for a one-pass in-game fine-tune of the far/back probes
-     * if they ever misbehave: left rear (3.92, 0.37), right rear (0.15, 4.74).
+     * The REAR support family alone reshaped beyond the rigid move (her sack is longer, 247.1u vs 190.8u tail tip).
+     * Measured empress rear feet, model units /16, for a one-pass in-game fine-tune of the far/back probes if they ever
+     * misbehave: left rear (3.92, 0.37), right rear (0.15, 4.74).
      */
     private boolean canOvipositorFit() {
         var leftBottomSupport = EntityUtil.getRelativePosition(empress, 4.4253, 0, 3.026);

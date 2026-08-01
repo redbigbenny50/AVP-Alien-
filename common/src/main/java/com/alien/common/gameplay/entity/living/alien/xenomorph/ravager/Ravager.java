@@ -27,8 +27,7 @@ import org.jetbrains.annotations.Nullable;
 
 import java.util.Arrays;
 
-public class Ravager extends Xenomorph
-    implements GOAPUser<Ravager>, com.alien.common.gameplay.entity.CrawlPostureTransitionListener {
+public class Ravager extends Xenomorph implements GOAPUser<Ravager>, com.alien.common.gameplay.entity.CrawlPostureTransitionListener {
 
     @Override
     public int crawlPostureTransitionTicks(boolean enteringCrawl) {

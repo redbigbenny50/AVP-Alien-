@@ -71,9 +71,9 @@ public class CrawlingManager implements NBTSerializable {
     }
 
     /**
-     * Edge detection for the crawl transitions ([stated] blocking drop/rise clips; leg-loss collapse = same drop
-     * clip faster, so its block is HALVED to match the doubled playback). Runs after the state write each server
-     * tick; castes that don't implement the listener flip instantly, exactly as before.
+     * Edge detection for the crawl transitions ([stated] blocking drop/rise clips; leg-loss collapse = same drop clip
+     * faster, so its block is HALVED to match the doubled playback). Runs after the state write each server tick;
+     * castes that don't implement the listener flip instantly, exactly as before.
      */
     private void detectPostureFlip() {
         var nowCrawling = isCrawling();

@@ -38,12 +38,11 @@ public final class XenomorphAttackConfig {
     /**
      * Picks a weighted-random regular attack whose cooldown is ready and whose requirements are satisfied.
      * <p>
-     * CRAWL PREFERENCE: while the xenomorph is crawling, if ANY usable-and-ready regular is a crawl attack, the
-     * pick is restricted to crawl attacks only. This gives a caste WITH crawl attacks the full posture rule ("a
-     * crawling xenomorph uses only crawl attacks") without touching the softened gate in AttackType.canUse - a
-     * caste with crawl clips fights properly from the ground, while one without any still falls through to its
-     * standing set exactly as before. The ravager is unaffected: its own selectAttack never reaches this method
-     * while crawling.
+     * CRAWL PREFERENCE: while the xenomorph is crawling, if ANY usable-and-ready regular is a crawl attack, the pick is
+     * restricted to crawl attacks only. This gives a caste WITH crawl attacks the full posture rule ("a crawling
+     * xenomorph uses only crawl attacks") without touching the softened gate in AttackType.canUse - a caste with crawl
+     * clips fights properly from the ground, while one without any still falls through to its standing set exactly as
+     * before. The ravager is unaffected: its own selectAttack never reaches this method while crawling.
      */
     public @Nullable AttackType selectRegular(RandomSource random, AttackCooldownTracker cooldownTracker, Xenomorph xenomorph) {
         var restrictToCrawlAttacks = false;

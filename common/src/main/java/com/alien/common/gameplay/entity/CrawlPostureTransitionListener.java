@@ -8,12 +8,12 @@ package com.alien.common.gameplay.entity;
  * fires the drop/rise one-shot on the edge, and holds the track for the same tick counts (shared as constants in the
  * caste's AnimationRefs so the two sides can never disagree).
  * <p>
- * A caste that does not implement this keeps today's behaviour exactly: the posture snaps and nothing blocks -
- * which is correct, because with no clip there is nothing to wait for.
+ * A caste that does not implement this keeps today's behaviour exactly: the posture snaps and nothing blocks - which is
+ * correct, because with no clip there is nothing to wait for.
  * <p>
- * LEG-LOSS COLLAPSE is handled by the CALLER, not here: [stated] "a leg-loss collapse plays the same drop clip
- * FASTER" - CrawlingManager halves the returned enter duration when the flip was forced by a detached leg, and the
- * animators play the same drop clip at double speed off the same detection.
+ * LEG-LOSS COLLAPSE is handled by the CALLER, not here: [stated] "a leg-loss collapse plays the same drop clip FASTER"
+ * - CrawlingManager halves the returned enter duration when the flip was forced by a detached leg, and the animators
+ * play the same drop clip at double speed off the same detection.
  */
 public interface CrawlPostureTransitionListener {
 

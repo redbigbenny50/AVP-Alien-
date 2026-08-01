@@ -32,8 +32,7 @@ import org.jetbrains.annotations.Nullable;
 
 import java.util.Objects;
 
-public class Empress extends Xenomorph
-    implements GOAPUser<Empress>, EggLayer, com.alien.common.gameplay.entity.CrawlPostureTransitionListener {
+public class Empress extends Xenomorph implements GOAPUser<Empress>, EggLayer, com.alien.common.gameplay.entity.CrawlPostureTransitionListener {
 
     @Override
     public int crawlPostureTransitionTicks(boolean enteringCrawl) {

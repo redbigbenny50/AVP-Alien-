@@ -21,9 +21,9 @@ public final class HiveRenderHook {
         }
         var buffers = Minecraft.getInstance().renderBuffers().bufferSource();
         HiveRenderer.render(
-                event.getPoseStack(),
-                buffers,
-                event.getCamera().getPosition()
+            event.getPoseStack(),
+            buffers,
+            event.getCamera().getPosition()
         );
     }
 }

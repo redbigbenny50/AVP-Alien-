@@ -22,7 +22,10 @@ public class HarbingerAnimator extends AzEntityAnimator<Harbinger> {
 
     private int previousAttackId = Integer.MIN_VALUE;
 
-    /** Crawl-edge tracker for the posture transitions. Null until first observed so a mid-crawl load doesn't replay a drop. */
+    /**
+     * Crawl-edge tracker for the posture transitions. Null until first observed so a mid-crawl load doesn't replay a
+     * drop.
+     */
     private Boolean previousCrawling;
 
     /** Ticks the current crawl transition one-shot still owns the track. */

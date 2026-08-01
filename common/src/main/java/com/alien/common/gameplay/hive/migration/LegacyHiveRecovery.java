@@ -71,8 +71,8 @@ public final class LegacyHiveRecovery {
 
     /**
      * @return true when the pass actually repaired something - the caller uses this to decide whether the registry
-     *     rebuild needs a second run. A clean world (no legacy data, or already recovered) returns false, which is
-     *     what stops the byte-identical double rebuild that used to run on every load.
+     *         rebuild needs a second run. A clean world (no legacy data, or already recovered) returns false, which is
+     *         what stops the byte-identical double rebuild that used to run on every load.
      */
     public static boolean detectAndRecover(MinecraftServer server) {
         var repairedAnything = new boolean[1];

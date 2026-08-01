@@ -50,9 +50,9 @@ public final class NukeRetribution extends SavedData {
     private final List<Pending> pending;
 
     private record Pending(
-            long dueTick,
-            UUID target,
-            String lineageFactionId
+        long dueTick,
+        UUID target,
+        String lineageFactionId
     ) {}
 
     public NukeRetribution() {
@@ -70,9 +70,9 @@ public final class NukeRetribution extends SavedData {
         data.setDirty();
 
         Alien.LOGGER.info(
-                "Nuke: lineage {} will answer for its lost hive in {} ticks",
-                lineageFactionId,
-                RETRIBUTION_DELAY_TICKS
+            "Nuke: lineage {} will answer for its lost hive in {} ticks",
+            lineageFactionId,
+            RETRIBUTION_DELAY_TICKS
         );
     }
 
@@ -137,15 +137,15 @@ public final class NukeRetribution extends SavedData {
         campaign.beginCampaign(level.getGameTime());
 
         player.displayClientMessage(
-                Component.literal("A scream pierces your mind calling for retribution").withStyle(ChatFormatting.DARK_RED),
-                false
+            Component.literal("A scream pierces your mind calling for retribution").withStyle(ChatFormatting.DARK_RED),
+            false
         );
 
         Alien.LOGGER.info(
-                "Nuke: lineage {} opened a retribution campaign against {} from location {}",
-                entry.lineageFactionId(),
-                entry.target(),
-                staging.id().value()
+            "Nuke: lineage {} opened a retribution campaign against {} from location {}",
+            entry.lineageFactionId(),
+            entry.target(),
+            staging.id().value()
         );
     }
 

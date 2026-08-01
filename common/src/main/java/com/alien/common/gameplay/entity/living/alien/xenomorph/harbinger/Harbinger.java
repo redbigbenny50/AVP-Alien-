@@ -24,8 +24,7 @@ import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.AABB;
 import org.jetbrains.annotations.Nullable;
 
-public class Harbinger extends Xenomorph
-    implements GOAPUser<Harbinger>, com.alien.common.gameplay.entity.CrawlPostureTransitionListener {
+public class Harbinger extends Xenomorph implements GOAPUser<Harbinger>, com.alien.common.gameplay.entity.CrawlPostureTransitionListener {
 
     @Override
     public int crawlPostureTransitionTicks(boolean enteringCrawl) {
@@ -58,10 +57,10 @@ public class Harbinger extends Xenomorph
 
     /**
      * Ground game ([stated] Aug 1). The bite reuses the model's only bite clip (already ground-authored as
-     * {@code attack.crawlbite}); the whipstabs are per-arm - each requires ITS OWN whip via the sided arm
-     * requirements, so a harbinger that loses the left whip keeps stabbing with the right, and losing both
-     * silences the stabs while the bite fights on. All three are {@code crawlAttack()}: the posture gate keeps
-     * them on the ground and the config's crawl preference makes them her whole moveset while down there.
+     * {@code attack.crawlbite}); the whipstabs are per-arm - each requires ITS OWN whip via the sided arm requirements,
+     * so a harbinger that loses the left whip keeps stabbing with the right, and losing both silences the stabs while
+     * the bite fights on. All three are {@code crawlAttack()}: the posture gate keeps them on the ground and the
+     * config's crawl preference makes them her whole moveset while down there.
      */
     public static final AttackType CRAWL_BITE = AttackType.builder("harbinger_crawl_bite")
         .crawlAttack()

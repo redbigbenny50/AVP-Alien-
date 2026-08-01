@@ -24,19 +24,21 @@ public enum XenomorphAttackLimbRequirement {
         }
     },
     /**
-     * A SPECIFIC arm, by side - for attacks whose clip is authored for one limb (the harbinger's left/right
-     * whipstabs). Rule 2's logic half at per-limb granularity: lose the left whip and the left stab alone goes
-     * dark, the right keeps working. Sides are matched on the limb definition id path ("left_arm"/"right_arm",
-     * the names AlienLimbDefinitionDataProvider registers for every caste); a caste with no sided arm definition
-     * passes, mirroring how the category checks treat an empty definition list.
+     * A SPECIFIC arm, by side - for attacks whose clip is authored for one limb (the harbinger's left/right whipstabs).
+     * Rule 2's logic half at per-limb granularity: lose the left whip and the left stab alone goes dark, the right
+     * keeps working. Sides are matched on the limb definition id path ("left_arm"/"right_arm", the names
+     * AlienLimbDefinitionDataProvider registers for every caste); a caste with no sided arm definition passes,
+     * mirroring how the category checks treat an empty definition list.
      */
     LEFT_ARM {
+
         @Override
         public boolean isSatisfiedBy(Xenomorph xenomorph) {
             return hasUsableSidedArm(xenomorph, "left_arm");
         }
     },
     RIGHT_ARM {
+
         @Override
         public boolean isSatisfiedBy(Xenomorph xenomorph) {
             return hasUsableSidedArm(xenomorph, "right_arm");
