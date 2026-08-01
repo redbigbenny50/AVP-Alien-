@@ -463,8 +463,17 @@ public class QueenLifecyclePhaseManager implements NBTSerializable {
     /**
      * Begins the sleep at the committed anchor. The hibernation GOAP hold pins her here and runs the sleep animation.
      */
-    /** True when this queen already belongs to a hive location - i.e. a hive promoted and sent her. */
+    /**
+     * True when a hive genuinely promoted and sent this queen. Membership ALONE is not enough - finalizeSpawn
+     * auto-joins any xenomorph spawned inside a claimed chunk, so a spawn-egged queen placed in territory was instantly
+     * a "member" and skipped her sleep ([stated] "wild queen hibernation is still ending in 1 second"; the log's
+     * "sleeping 0 ticks" was this). The player-placed flag breaks the tie: transitions never call finalizeSpawn, so a
+     * promoted daughter can never carry it, while an egg or command queen always does.
+     */
     private boolean wasDispatchedByAHive() {
+        if (queen.isPlayerPlaced()) {
+            return false;
+        }
         for (var factionId : com.alien.Alien.MOD.factions().getFactionIds(queen.getUUID())) {
             if (com.alien.common.gameplay.hive.id.HiveLocationIds.isHiveLocationId(factionId)) {
                 return true;

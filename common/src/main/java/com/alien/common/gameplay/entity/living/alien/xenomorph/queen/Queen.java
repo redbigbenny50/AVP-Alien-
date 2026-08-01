@@ -341,7 +341,29 @@ public class Queen extends Xenomorph implements GOAPUser<Queen>, EggLayer, com.a
             applyNaturalSpawnEffects();
         }
 
+        // PLAYER-PLACED marker for the hibernation rule. finalizeSpawn's auto-join makes any queen spawned inside
+        // a claimed chunk a hive-location member instantly, which made a spawn-egged queen indistinguishable from
+        // a dispatched daughter - and she skipped her sleep ([stated] tester report: "wild queen hibernation is
+        // still ending in 1 second"; the log showed "sleeping 0 ticks"). Spawn TYPE is the true discriminator:
+        // transitions never call finalizeSpawn, so a promoted daughter can never carry this flag, while an egg,
+        // command, or dispenser queen always does. The lifecycle manager reads it alongside the membership test.
+        if (
+            spawnType == MobSpawnType.SPAWN_EGG
+                || spawnType == MobSpawnType.COMMAND
+                || spawnType == MobSpawnType.BUCKET
+                || spawnType == MobSpawnType.DISPENSER
+        ) {
+            this.playerPlaced = true;
+        }
+
         return super.finalizeSpawn(serverLevelAccessor, difficulty, spawnType, spawnGroupData);
+    }
+
+    /** See finalizeSpawn - persisted so a relog cannot turn a placed queen into a "dispatched daughter". */
+    private boolean playerPlaced;
+
+    public boolean isPlayerPlaced() {
+        return playerPlaced;
     }
 
     @Override
@@ -706,6 +728,7 @@ public class Queen extends Xenomorph implements GOAPUser<Queen>, EggLayer, com.a
         this.loadedWithoutLifecycleState =
             !compoundTag.contains(LIFECYCLE_PHASE_TAG) && !compoundTag.contains(LEGACY_DORMANT_TAG);
         this.legacyDormant = compoundTag.getBoolean(LEGACY_DORMANT_TAG);
+        this.playerPlaced = compoundTag.getBoolean("PlayerPlaced");
         ovipositorManager.load(compoundTag);
         queenData.load(compoundTag);
         lifecyclePhaseManager.load(compoundTag);
@@ -719,6 +742,7 @@ public class Queen extends Xenomorph implements GOAPUser<Queen>, EggLayer, com.a
     @Override
     public void addAdditionalSaveData(@NotNull CompoundTag compoundTag) {
         super.addAdditionalSaveData(compoundTag);
+        compoundTag.putBoolean("PlayerPlaced", playerPlaced);
         compoundTag.putBoolean(LEGACY_DORMANT_TAG, legacyDormant);
         ovipositorManager.save(compoundTag);
         queenData.save(compoundTag);

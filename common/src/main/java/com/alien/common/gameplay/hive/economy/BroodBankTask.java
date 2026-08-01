@@ -96,6 +96,15 @@ public final class BroodBankTask {
     }
 
     private static boolean isAbsorbable(HiveLocation location, Alien alien) {
+        // ROYALTY IS NEVER BANKED - either path, no exceptions. Caught live by QUEEN-DIAG (Aug 1 tester log): a
+        // host-born praetorian promoted to daughter queen kept hostBorn=true across the molt (the flag survives
+        // transitions BY DESIGN), stood idle in her mother's structure footprint during FOUNDING_HANDOFF, passed
+        // every gate below, and was absorbed into the brood bank as an integer - discarded mid-founding. The
+        // unload handler has guarded the QUEENS tag against exactly this since its own version of the bug; this
+        // task needed the same guard and never had it. The tag covers queens AND empresses.
+        if (alien.getType().is(AlienEntityTypeTags.QUEENS)) {
+            return false;
+        }
         // MARKED RETURNERS bypass every gate but life itself. A disbanded carve crew ([stated] tester report:
         // "when the builders finished a royal tunnel they all despawned") is sent here by CarveWorkers.disband
         // instead of being discarded on the spot - the walk to the vent is the whole point ("seen slipping into

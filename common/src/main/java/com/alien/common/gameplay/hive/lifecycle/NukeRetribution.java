@@ -50,9 +50,9 @@ public final class NukeRetribution extends SavedData {
     private final List<Pending> pending;
 
     private record Pending(
-            long dueTick,
-            UUID target,
-            String lineageFactionId
+        long dueTick,
+        UUID target,
+        String lineageFactionId
     ) {}
 
     public NukeRetribution() {
@@ -65,10 +65,10 @@ public final class NukeRetribution extends SavedData {
 
     /** Queues a reckoning against {@code target}, to be answered by {@code lineageFactionId} a day from now. */
     /**
-     * How long a debt waits before re-checking when the lineage survives but no hive can field the raid -
-     * [stated] Aug 1: "go with your lean if the hive dies inbetween only then is it forgotten." 5 minutes: cheap
-     * enough to feel prompt when the empire recovers, sparse enough that a permanently crippled lineage costs
-     * one map-and-scan every 5 minutes while it waits.
+     * How long a debt waits before re-checking when the lineage survives but no hive can field the raid - [stated] Aug
+     * 1: "go with your lean if the hive dies inbetween only then is it forgotten." 5 minutes: cheap enough to feel
+     * prompt when the empire recovers, sparse enough that a permanently crippled lineage costs one map-and-scan every 5
+     * minutes while it waits.
      */
     private static final long STAGING_RETRY_TICKS = 5L * 60L * 20L;
 
@@ -78,9 +78,9 @@ public final class NukeRetribution extends SavedData {
         data.setDirty();
 
         Alien.LOGGER.info(
-                "Nuke: lineage {} will answer for its lost hive in {} ticks",
-                lineageFactionId,
-                RETRIBUTION_DELAY_TICKS
+            "Nuke: lineage {} will answer for its lost hive in {} ticks",
+            lineageFactionId,
+            RETRIBUTION_DELAY_TICKS
         );
     }
 
@@ -127,10 +127,10 @@ public final class NukeRetribution extends SavedData {
     }
 
     /**
-     * @return true when the debt is CONSUMED - the campaign opened, or the lineage is dead and there is no one
-     *     left to collect. False means "not now, but the debt stands": the lineage lives but cannot currently
-     *     field the raid (or the target slipped away between the presence peek and this call), and the caller
-     *     re-queues the entry for a later attempt.
+     * @return true when the debt is CONSUMED - the campaign opened, or the lineage is dead and there is no one left to
+     *         collect. False means "not now, but the debt stands": the lineage lives but cannot currently field the
+     *         raid (or the target slipped away between the presence peek and this call), and the caller re-queues the
+     *         entry for a later attempt.
      */
     private static boolean answer(ServerLevel level, Pending entry) {
         var faction = Alien.MOD.factions().get(net.minecraft.resources.ResourceLocation.parse(entry.lineageFactionId()));
@@ -158,15 +158,15 @@ public final class NukeRetribution extends SavedData {
         campaign.beginCampaign(level.getGameTime());
 
         player.displayClientMessage(
-                Component.literal("A scream pierces your mind calling for retribution").withStyle(ChatFormatting.DARK_RED),
-                false
+            Component.literal("A scream pierces your mind calling for retribution").withStyle(ChatFormatting.DARK_RED),
+            false
         );
 
         Alien.LOGGER.info(
-                "Nuke: lineage {} opened a retribution campaign against {} from location {}",
-                entry.lineageFactionId(),
-                entry.target(),
-                staging.id().value()
+            "Nuke: lineage {} opened a retribution campaign against {} from location {}",
+            entry.lineageFactionId(),
+            entry.target(),
+            staging.id().value()
         );
         return true;
     }
