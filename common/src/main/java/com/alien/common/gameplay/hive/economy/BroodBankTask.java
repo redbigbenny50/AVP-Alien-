@@ -53,7 +53,12 @@ public final class BroodBankTask {
 
     /** Runs on the hive's 200-tick loaded cadence - absorption is a chore, not a reaction. */
     public static void run(ServerLevel level, HiveLocation location) {
-        var chunks = location.structurePieceByChunk().keySet();
+        // END-STYLE: there is no structure - banking is VENT-ONLY across the whole claimed territory, and it is the
+        // End's entire population model, so the scan box is the claimed footprint at full height (islands scatter
+        // vertically). No vent standing means nothing banks - the End absorb below requires vent contact and never
+        // uses the bank-in-place fallback, so a player who wants all their xenomorphs visible just keeps no vents.
+        var endStyle = com.alien.common.gameplay.hive.dimension.EndStyleHiveRules.isEndStyle(level);
+        var chunks = endStyle ? location.claimedChunks() : location.structurePieceByChunk().keySet();
         if (chunks.isEmpty()) {
             return;
         }
@@ -65,7 +70,9 @@ public final class BroodBankTask {
             maxX = Math.max(maxX, chunk.getMaxBlockX());
             maxZ = Math.max(maxZ, chunk.getMaxBlockZ());
         }
-        var box = new AABB(minX, location.hiveFloorY(), minZ, maxX + 1, location.hiveCeilingY() + 1, maxZ + 1);
+        var box = endStyle
+            ? new AABB(minX, level.getMinBuildHeight(), minZ, maxX + 1, level.getMaxBuildHeight(), maxZ + 1)
+            : new AABB(minX, location.hiveFloorY(), minZ, maxX + 1, location.hiveCeilingY() + 1, maxZ + 1);
 
         for (var alien : level.getEntitiesOfClass(Alien.class, box, candidate -> isAbsorbable(location, candidate))) {
             var vent = nearestVent(location, alien.blockPosition());
@@ -79,6 +86,9 @@ public final class BroodBankTask {
             // never wedges. Marked returners (disbanded carve crews) time their grace from the MARK, not from age -
             // they are often minutes old and would otherwise blink out instantly, which is the exact mass-vanish
             // this path exists to prevent.
+            if (endStyle) {
+                continue; // END-STYLE: banking is VENT-ONLY - "if theres no vent they wont store". Never in place.
+            }
             var graceExpired = alien.isMarkedForReserveReturn()
                 ? level.getGameTime() - alien.reserveReturnMarkedAtTick() >= ABSORB_GRACE_TICKS
                 : alien.tickCount >= ABSORB_AGE_TICKS + ABSORB_GRACE_TICKS;
@@ -105,6 +115,10 @@ public final class BroodBankTask {
         if (alien.getType().is(AlienEntityTypeTags.QUEENS)) {
             return false;
         }
+        // END-STYLE eligibility differences ([stated] spec): summoned and spawn-egged xenomorphs bank too - the
+        // reserve stores PLAYER CHOICES, and host-born is only one of the supply routes - so the host-born gate is
+        // waived; name-tagged xenomorphs NEVER bank (pets, not hive property); adults-only and the task-free gates
+        // below apply unchanged. Handled by treating an End non-host-born adult exactly like a host-born one.
         // MARKED RETURNERS bypass every gate but life itself. A disbanded carve crew ([stated] tester report:
         // "when the builders finished a royal tunnel they all despawned") is sent here by CarveWorkers.disband
         // instead of being discarded on the spot - the walk to the vent is the whole point ("seen slipping into
@@ -120,7 +134,12 @@ public final class BroodBankTask {
                 && !alien.isVehicle()
                 && !alien.isPassenger();
         }
-        if (!alien.isHostBorn() || !alien.isAlive() || alien.tickCount < ABSORB_AGE_TICKS) {
+        var endStyle = alien.level() instanceof ServerLevel serverLevel
+            && com.alien.common.gameplay.hive.dimension.EndStyleHiveRules.isEndStyle(serverLevel);
+        if (alien.hasCustomName() && endStyle) {
+            return false; // [stated] "name tagged xenos dont get absorbed into the reserves"
+        }
+        if ((!alien.isHostBorn() && !endStyle) || !alien.isAlive() || alien.tickCount < ABSORB_AGE_TICKS) {
             return false;
         }
         var type = alien.getType();
@@ -146,7 +165,8 @@ public final class BroodBankTask {
         ) {
             return false;
         }
-        return InteriorSweepDuty.isInsideHive(location, alien);
+        // END-STYLE: there is no structure interior; the claimed-territory scan box is the boundary.
+        return endStyle || InteriorSweepDuty.isInsideHive(location, alien);
     }
 
     private static void absorb(ServerLevel level, HiveLocation location, Alien alien, BlockPos at) {
@@ -156,10 +176,16 @@ public final class BroodBankTask {
         // Marked returners fall back to the brood bank when the identity return is refused - [stated] "if the
         // reserves are full it will join the host born bank as a bonus." (A variant mismatch fails both adds and
         // still leaves the entity be, unchanged.)
-        var returned = alien.isMarkedForReserveReturn()
+        // END-STYLE: everything banks IDENTITY-INTACT into the one universal capless store - the exact xenomorph
+        // the player supplied comes back out of the vents, which is the whole point of "storing player choices".
+        var endStyleAbsorb = level != null
+            && com.alien.common.gameplay.hive.dimension.EndStyleHiveRules.isEndStyle(level);
+        var returned = endStyleAbsorb
             ? location.localReserves().addReturningIdentityMember(alien)
-                || location.localReserves().addBrood(alien.getType(), 1)
-            : location.localReserves().addBrood(alien.getType(), 1);
+            : alien.isMarkedForReserveReturn()
+                ? location.localReserves().addReturningIdentityMember(alien)
+                    || location.localReserves().addBrood(alien.getType(), 1)
+                : location.localReserves().addBrood(alien.getType(), 1);
         if (!returned) {
             return; // variant mismatch (logged by the bank) - leave it be rather than delete it for nothing
         }

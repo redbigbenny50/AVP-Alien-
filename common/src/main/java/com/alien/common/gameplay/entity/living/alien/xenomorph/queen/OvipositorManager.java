@@ -170,7 +170,11 @@ public class OvipositorManager implements NBTSerializable {
         var target = com.alien.common.gameplay.hive.growth.BiomassIncome.foundingBiomassTarget(
             HiveLocationRegistry.INSTANCE.config()
         );
-        if (location.biomass() < target) {
+        // END-STYLE: the biomass tank is WAIVED - biomass generation is off in end-style dimensions (anything that
+        // accumulates unused is off), so the tank would never fill and she would never grow her eggsack, which the
+        // design explicitly keeps ("her making an eggsack and eggs should still work"). The player brought her;
+        // the fortress does not farm for the privilege.
+        if (!location.isEndStyleHive() && location.biomass() < target) {
             return;
         }
 

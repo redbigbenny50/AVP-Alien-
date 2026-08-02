@@ -234,6 +234,9 @@ public final class HiveLocationFoundingService {
         // registry byChunk index, BLib territory map) stay synchronized. Direct claimedChunks().add(...)
         // would miss the BLib territory addClaim and leave the core chunks unclaimed in the UI.
         if (queen.level() instanceof net.minecraft.server.level.ServerLevel serverLevel) {
+            if (com.alien.common.gameplay.hive.dimension.EndStyleHiveRules.isEndStyle(serverLevel)) {
+                location.markEndStyleHive();
+            }
             claimInitialCore(serverLevel, location, centerChunk, currentGameTime, buildStructure);
         } else {
             addInitialCoreOffline(location, centerChunk, currentGameTime);
@@ -249,7 +252,14 @@ public final class HiveLocationFoundingService {
         long currentGameTime,
         boolean buildStructure
     ) {
-        var radius = HiveLocationRegistry.INSTANCE.config().initialHiveLocationClaimRadiusChunks();
+        // END-STYLE: the FULL footprint is claimed at placement ([stated] "it might be best to have the hive area
+        // stay the same 19x19") - there are no surface parties to grow it and no decay to shrink it, so the
+        // territory the fortress will ever hold is granted whole on founding day. Other lineages' chunks are still
+        // respected. No structure is stamped: an End hive builds nothing but its worker vents.
+        var endStyle = location.isEndStyleHive();
+        var radius = endStyle
+            ? com.alien.common.gameplay.hive.structure.HiveRouter.BASE_EXTENT
+            : HiveLocationRegistry.INSTANCE.config().initialHiveLocationClaimRadiusChunks();
         for (var dx = -radius; dx <= radius; dx++) {
             for (var dz = -radius; dz <= radius; dz++) {
                 var chunk = new ChunkPos(centerChunk.x + dx, centerChunk.z + dz);
@@ -266,8 +276,9 @@ public final class HiveLocationFoundingService {
         }
 
         // Structure system: stamp queen-chamber roles onto the claimed core and register royal exits as frontier
-        // sockets for the planner. Skipped for logical-only claims (an inhibited captive queen never builds a hive).
-        if (buildStructure) {
+        // sockets for the planner. Skipped for logical-only claims (an inhibited captive queen never builds a hive)
+        // and for END-STYLE hives (no construction of any kind).
+        if (buildStructure && !endStyle) {
             com.alien.common.gameplay.hive.structure.HiveStructureFounding.establishQueenChamber(
                 level.getServer(),
                 location,

@@ -62,6 +62,9 @@ public final class FirewallStabilityTask {
             }
 
             for (var location : new ArrayList<>(lineage.locationsById().values())) {
+                if (com.alien.common.gameplay.hive.dimension.EndStyleHiveRules.isEndStyle(server, location)) {
+                    continue; // END-STYLE: no firewall economy - queen succession is the regent rule instead
+                }
                 if (!location.isAlive() || location.firewallFundAvailable()) {
                     continue;
                 }

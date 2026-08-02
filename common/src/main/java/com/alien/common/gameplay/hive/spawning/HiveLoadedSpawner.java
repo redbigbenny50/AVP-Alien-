@@ -52,6 +52,13 @@ public final class HiveLoadedSpawner {
             if (!location.isAlive() || location.isInhibited()) {
                 continue; // inhibited (severed contained-breeder) locations spawn no castes.
             }
+            if (com.alien.common.gameplay.hive.dimension.EndStyleHiveRules.isEndStyle(server, location)) {
+                // END-STYLE: no ambient materialization. The bank holds player choices and pays them out through
+                // exactly two doors - the worker deployment (EndHiveTickTask, 10 active) and vent defense. Idle
+                // ambience would drain the player's bank into scenery, the precise "30+ xenos standing around"
+                // this dimension's design forbids.
+                continue;
+            }
             // Founding lockout: a queen-founded hive that has not yet established its egg sack spawns NOTHING. The
             // queen must fill her biomass tank and commit (resin floor + ovipositor) before the territory comes alive.
             // Stops random xenomorphs appearing before there are any eggs. Queenless hives are unaffected.

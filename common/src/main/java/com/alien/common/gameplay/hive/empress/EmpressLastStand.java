@@ -45,7 +45,13 @@ public final class EmpressLastStand {
      *
      * @return how many members were moved, for logging by the caller.
      */
-    public static int fortify(HiveLocation seat, UUID empressId) {
+    public static int fortify(net.minecraft.server.level.ServerLevel seatLevel, HiveLocation seat, UUID empressId) {
+        if (com.alien.common.gameplay.hive.dimension.EndStyleHiveRules.forbidsApexEconomy(seatLevel)) {
+            // END-STYLE HARD GATE: the levy moves banked members between hives, and End banks are the PLAYER'S
+            // hand-fed property. The trigger chain (reveal <- rescue) is already dead here, but this stays so no
+            // future change reopens it by accident.
+            return 0;
+        }
         var donors = donorsFor(empressId, seat);
         if (donors.isEmpty()) {
             return 0;

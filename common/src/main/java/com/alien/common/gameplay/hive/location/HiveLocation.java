@@ -147,6 +147,12 @@ public final class HiveLocation {
 
     private static final String NBT_LAST_COMBAT_DAMAGE_TICK = "LastCombatDamageTick";
 
+    private static final String NBT_END_PURE_BANK_SINCE_MILLIS = "EndPureBankSinceMillis";
+
+    private static final String NBT_END_WORKER_VENTED_CHUNKS = "EndWorkerVentedChunks";
+
+    private static final String NBT_END_STYLE_HIVE = "EndStyleHive";
+
     private static final String NBT_SIEGE_COMBAT_TICKS = "SiegeCombatTicks";
 
     private static final String NBT_CHUNK_CLAIM_TICKS = "ChunkClaimTicks";
@@ -366,6 +372,46 @@ public final class HiveLocation {
     /** Game time of the last qualifying combat hit on a member inside claimed territory (0 = never). */
     private long lastCombatDamageTick;
 
+    /**
+     * END-STYLE CULL CLOCK (wall-clock millis; 0 = not running). Set when an end-style hive is reduced to PURE BANK -
+     * zero vents, zero living surface members - and cleared the moment either comes back. After seven real days
+     * latched, EndHiveTickTask culls the hive and the territory drops. See EndStyleHiveRules.CULL_GRACE_MILLIS.
+     */
+    private long endPureBankSinceMillis;
+
+    public long endPureBankSinceMillis() {
+        return endPureBankSinceMillis;
+    }
+
+    public void setEndPureBankSinceMillis(long millis) {
+        this.endPureBankSinceMillis = millis;
+    }
+
+    /**
+     * END-STYLE: chunks where a WORKER has ever placed a vent, keyed by ChunkPos.toLong(). Once ever, per chunk:
+     * [stated] "only the workers can place a vent in a chunk and if its broken thats it" - the workers never replace a
+     * broken vent, only the player can (a player-placed vent of the strain binds itself normally).
+     */
+    private final java.util.Set<Long> endWorkerVentedChunks = new java.util.HashSet<>();
+
+    public java.util.Set<Long> endWorkerVentedChunks() {
+        return endWorkerVentedChunks;
+    }
+
+    /**
+     * Stamped TRUE at founding when the hive was founded in an end-style dimension (EndStyleHiveRules). Persisted so
+     * per-location reads (the slab band below, banking, chores) never need a level lookup.
+     */
+    private boolean endStyleHive;
+
+    public boolean isEndStyleHive() {
+        return endStyleHive;
+    }
+
+    public void markEndStyleHive() {
+        this.endStyleHive = true;
+    }
+
     /** Accumulated active-combat time (ticks) - the siege clock territory attrition keys on. */
     private long siegeCombatTicks;
 
@@ -568,6 +614,11 @@ public final class HiveLocation {
      * Y of the hive's floor — the elevation the hive was founded at. The slab band is measured from here.
      */
     public int hiveFloorY() {
+        // END-STYLE: the slab extends HIGHER AND LOWER from the queen ([stated]) - islands scatter vertically, so
+        // the band is centered on her rather than sitting on top of her founding Y.
+        if (endStyleHive) {
+            return centerPos.getY() - com.alien.common.gameplay.hive.dimension.EndStyleHiveRules.VERTICAL_SLAB_HALF_HEIGHT;
+        }
         return centerPos.getY();
     }
 
@@ -575,6 +626,9 @@ public final class HiveLocation {
      * Y of the top of the hive's slab band (exclusive). Floor + {@link #SLAB_HEIGHT}.
      */
     public int hiveCeilingY() {
+        if (endStyleHive) {
+            return centerPos.getY() + com.alien.common.gameplay.hive.dimension.EndStyleHiveRules.VERTICAL_SLAB_HALF_HEIGHT;
+        }
         return centerPos.getY() + SLAB_HEIGHT;
     }
 
@@ -1319,6 +1373,9 @@ public final class HiveLocation {
 
         if (lastCombatDamageTick > 0L) {
             tag.putLong(NBT_LAST_COMBAT_DAMAGE_TICK, lastCombatDamageTick);
+            tag.putLong(NBT_END_PURE_BANK_SINCE_MILLIS, endPureBankSinceMillis);
+            tag.putLongArray(NBT_END_WORKER_VENTED_CHUNKS, endWorkerVentedChunks.stream().mapToLong(Long::longValue).toArray());
+            tag.putBoolean(NBT_END_STYLE_HIVE, endStyleHive);
         }
         if (siegeCombatTicks > 0L) {
             tag.putLong(NBT_SIEGE_COMBAT_TICKS, siegeCombatTicks);
@@ -1548,6 +1605,11 @@ public final class HiveLocation {
         location.harbingerScourgeAccumulator = Math.max(0L, tag.getLong(NBT_HARBINGER_SCOURGE_ACCUMULATOR));
 
         location.lastCombatDamageTick = Math.max(0L, tag.getLong(NBT_LAST_COMBAT_DAMAGE_TICK));
+        location.endPureBankSinceMillis = Math.max(0L, tag.getLong(NBT_END_PURE_BANK_SINCE_MILLIS));
+        for (var packed : tag.getLongArray(NBT_END_WORKER_VENTED_CHUNKS)) {
+            location.endWorkerVentedChunks.add(packed);
+        }
+        location.endStyleHive = tag.getBoolean(NBT_END_STYLE_HIVE);
         location.siegeCombatTicks = Math.max(0L, tag.getLong(NBT_SIEGE_COMBAT_TICKS));
 
         if (tag.contains(NBT_CLAIMED_CHUNKS)) {

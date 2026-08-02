@@ -27,6 +27,10 @@ public final class PopulationPressureDecayTask {
         var config = HiveLocationRegistry.INSTANCE.config();
 
         for (var location : HiveLocationRegistry.INSTANCE.all()) {
+            if (com.alien.common.gameplay.hive.dimension.EndStyleHiveRules.isEndStyle(server, location)) {
+                continue; // END-STYLE: no decay and no siege attrition - a fixed footprint is permanent while the hive
+                          // lives
+            }
             if (!location.isAlive() || location.isInhibited() || location.claimedChunks().size() <= 1) {
                 continue;
             }

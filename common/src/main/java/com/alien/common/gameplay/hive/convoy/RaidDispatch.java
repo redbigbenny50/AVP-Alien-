@@ -102,6 +102,9 @@ public final class RaidDispatch {
         HiveConfig config
     ) {
         for (var location : lineage.locationsById().values()) {
+            if (com.alien.common.gameplay.hive.dimension.EndStyleHiveRules.isEndStyle(server, location)) {
+                continue; // END-STYLE: no raids - convoys of every type are off
+            }
             var grudgePlayerId = location.grudgePlayerId();
             if (grudgePlayerId == null) {
                 continue;
@@ -355,7 +358,7 @@ public final class RaidDispatch {
         HiveLocation source = null;
         EntityReserves composition = null;
 
-        for (var candidate : eligibleSources(lineage, currentTick, config, waveProfile)) {
+        for (var candidate : eligibleSources(server, lineage, currentTick, config, waveProfile)) {
             var candidateComposition = drainComposition(
                 candidate.localReserves(),
                 waveProfile,
@@ -428,6 +431,7 @@ public final class RaidDispatch {
     }
 
     private static List<HiveLocation> eligibleSources(
+        MinecraftServer server,
         LineageFactionData lineage,
         long currentTick,
         HiveConfig config,
@@ -436,6 +440,9 @@ public final class RaidDispatch {
         var candidates = new ArrayList<HiveLocation>();
 
         for (var location : lineage.locationsById().values()) {
+            if (com.alien.common.gameplay.hive.dimension.EndStyleHiveRules.isEndStyle(server, location)) {
+                continue; // END-STYLE: an End hive never stages or sources a raid, even for an overworld sibling
+            }
             if (!location.isAlive()) {
                 continue;
             }

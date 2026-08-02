@@ -59,6 +59,9 @@ public final class MigrationDispatch {
             // Snapshot the location set since we'll mutate via removeLocation.
             var locations = new java.util.ArrayList<>(lineage.locationsById().values());
             for (var location : locations) {
+                if (com.alien.common.gameplay.hive.dimension.EndStyleHiveRules.isEndStyle(server, location)) {
+                    continue; // END-STYLE: no migration convoys (and so no migration-triggered empress exile)
+                }
                 if (!location.isAlive() || location.isExiled()) {
                     // A remnant has nothing left to evacuate and must never re-trigger the migration that made it.
                     continue;

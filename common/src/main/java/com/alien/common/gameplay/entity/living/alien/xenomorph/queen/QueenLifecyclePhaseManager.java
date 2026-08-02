@@ -404,6 +404,24 @@ public class QueenLifecyclePhaseManager implements NBTSerializable {
 
     /** Reads her situation and commits a hive anchor (chunk-center XZ + weighted target Y), then enters LOCATION. */
     private void enterLocation() {
+        // END-STYLE: no digging - there is only void below the island. She founds WHERE SHE STANDS, the same shape
+        // the world's first wild queen uses (anchor in place, straight to the handoff), skipping LOCATION and the
+        // hibernation that follows it entirely. The player placed her deliberately; siting the island IS the
+        // placement puzzle, and the fortress rises at the spot they chose.
+        if (
+            queen.level() instanceof ServerLevel endCheckLevel
+                && com.alien.common.gameplay.hive.dimension.EndStyleHiveRules.isEndStyle(endCheckLevel)
+        ) {
+            this.anchor = queen.blockPosition();
+            this.phase = QueenLifecyclePhase.FOUNDING_HANDOFF;
+            queen.isHibernating.set(false);
+            Alien.LOGGER.info(
+                "Queen lifecycle: {} entering FOUNDING_HANDOFF in place (end-style dimension, no dig) at {}",
+                queen.getUUID(),
+                anchor
+            );
+            return;
+        }
         var chunk = pickAnchorChunk();
         var targetY = pickTargetY();
         // She digs down or settles level - never rises. If she is already at or below the rolled depth

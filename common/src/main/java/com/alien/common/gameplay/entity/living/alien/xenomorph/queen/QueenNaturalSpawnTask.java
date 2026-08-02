@@ -101,6 +101,9 @@ public class QueenNaturalSpawnTask {
     private static boolean diagPeacefulWarned;
 
     public static void tick(ServerLevel serverLevel) {
+        if (com.alien.common.gameplay.hive.dimension.EndStyleHiveRules.isEndStyle(serverLevel)) {
+            return; // END-STYLE: wild queens never take root here - hives are brought, not born
+        }
         if (serverLevel.getGameTime() % RUN_INTERVAL_TICKS != 0 || serverLevel.players().isEmpty()) {
             return;
         }

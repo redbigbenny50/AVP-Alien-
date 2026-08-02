@@ -86,6 +86,27 @@ public final class HiveLocationLoadedTickTask {
             com.alien.common.gameplay.hive.defense.VentDefenseTask.run(serverLevel, location);
         }
 
+        // ---- END-STYLE HIVES branch off here and run NOTHING below this block. ---------------------------------
+        // The End hive is a player-built fortress, not a self-growing empire: no construction, no expansion, no
+        // parties, no economy, no simulated growth. What it keeps from above: defense (aggro + vent defense), and
+        // what it adds lives in EndHiveTickTask (worker deployment, egg placement around the queen, the regent
+        // check, the seven-day cull clock). Attack parties still run - they are the hive's teeth - and the brood
+        // bank still runs because vent-only banking IS the End's population model. Everything else on this driver
+        // is autonomy an End hive does not have. See EndStyleHiveRules for the full ruleset.
+        if (com.alien.common.gameplay.hive.dimension.EndStyleHiveRules.isEndStyle(serverLevel)) {
+            if (currentTick % 20L == 0L) {
+                com.alien.common.gameplay.hive.empress.EmpressInfluenceSync.sync(location, lineage);
+                var endConfig = HiveLocationRegistry.INSTANCE.config();
+                AttackPartyDispatch.tryRun(server, location, endConfig);
+                AttackPartyLifecycleTask.run(server, location, endConfig);
+            }
+            if (currentTick % 200L == 0L) {
+                com.alien.common.gameplay.hive.economy.BroodBankTask.run(serverLevel, location);
+            }
+            com.alien.common.gameplay.hive.tick.EndHiveTickTask.run(server, serverLevel, location, lineage, currentTick);
+            return;
+        }
+
         // Inhibited (severed contained-breeder) locations run no autonomy below this line — no biomass income, no
         // claim expansion, no abstract spread. Defense (aggro, above) and her own combat / egg-laying are unaffected.
         if (location.isInhibited()) {

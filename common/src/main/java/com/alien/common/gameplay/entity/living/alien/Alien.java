@@ -987,6 +987,11 @@ public abstract class Alien extends Monster implements DataUser {
     }
 
     private void recordSiegeDamage(LivingEntity attackerEntity) {
+        // A LEADERSHIP DUEL is not a siege - [stated] "this is a battle for leadership": the empresses' mutual
+        // blows are sanctioned by the species and feed no clocks, no grudges, no attrition.
+        if (com.alien.common.gameplay.hive.empress.EndEmpressDuel.isDuelist(attackerEntity.getUUID())) {
+            return;
+        }
         // Creative/spectator hits are not a siege - same rule as the intrusion timer ([stated] Aug 1): an admin
         // sword-testing in creative must not start 15 minutes of territory attrition against the hive.
         if (
@@ -1179,9 +1184,37 @@ public abstract class Alien extends Monster implements DataUser {
             ) {
                 onQueenKilled(queenKiller, queenLevel);
             }
+            // END-STYLE succession: ANY royal death (any killer, any cause) in an end-style hive raises a regent
+            // praetorian at the spot - [stated] "when a queen dies a praetorian spawns out of the reserves. and
+            // persists." Deliberately outside the player-killer gate above: a queen who suffocates or falls to a
+            // mob still leaves her fortress a regent.
+            if (
+                getType().is(AlienEntityTypeTags.QUEENS)
+                    && level() instanceof ServerLevel regentLevel
+                    && com.alien.common.gameplay.hive.dimension.EndStyleHiveRules.isEndStyle(regentLevel)
+            ) {
+                com.alien.common.gameplay.hive.lifecycle.EndRegent.onRoyalDied(regentLevel, this);
+            }
         }
 
         super.die(damageSource);
+    }
+
+    /**
+     * OBSERVE, DON'T INTERFERE - [stated] "the other aliens dont join in the fight they will observe but not
+     * interfere." While a leadership duel runs, no xenomorph may attack either duelist - only the rival empress herself
+     * may. Vanilla consults canAttack before committing to a target, so this one gate covers every AI route. Players
+     * are not bound by the ritual.
+     */
+    @Override
+    public boolean canAttack(@NotNull LivingEntity target) {
+        if (
+            com.alien.common.gameplay.hive.empress.EndEmpressDuel.isDuelist(target.getUUID())
+                && !com.alien.common.gameplay.hive.empress.EndEmpressDuel.isDuelist(getUUID())
+        ) {
+            return false;
+        }
+        return super.canAttack(target);
     }
 
     private void onQueenKilled(ServerPlayer killer, ServerLevel serverLevel) {

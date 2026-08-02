@@ -532,6 +532,10 @@ public final class HiveLocationRegistry {
         // Order matters: location dormancy first so per-location rules fire before lineage-empty cleanup picks up
         // newly-zero-location lineages this tick.
         com.alien.common.gameplay.hive.lifecycle.LocationDormancyTask.scanAll(server);
+        // END-STYLE: the leadership duel sweep - rare-event cheap, per end-style level only.
+        for (var duelLevel : server.getAllLevels()) {
+            com.alien.common.gameplay.hive.empress.EndEmpressDuel.tick(duelLevel);
+        }
         com.alien.common.gameplay.hive.lifecycle.LineageDeathHandler.scanAndKill(server);
 
         // An empress collecting on a hive lost to a nuke. Cheap when nothing is pending, which is almost always.

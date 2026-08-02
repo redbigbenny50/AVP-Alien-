@@ -65,11 +65,12 @@ public final class ReinforcementDispatcher {
                 continue;
             }
 
-            scanLineage(factionId, lineage, currentTick, config, server.overworld().random);
+            scanLineage(server, factionId, lineage, currentTick, config, server.overworld().random);
         }
     }
 
     private static void scanLineage(
+        MinecraftServer server,
         ResourceLocation lineageFactionId,
         LineageFactionData lineage,
         long currentTick,
@@ -81,6 +82,9 @@ public final class ReinforcementDispatcher {
         var receivers = new ArrayList<HiveLocation>();
 
         for (var location : lineage.locationsById().values()) {
+            if (com.alien.common.gameplay.hive.dimension.EndStyleHiveRules.isEndStyle(server, location)) {
+                continue; // END-STYLE: End hives neither send nor receive reinforcement convoys
+            }
             if (!location.isAlive() || location.isExiled()) {
                 // A remnant neither donates nor receives - the lineage has written it off.
                 continue;

@@ -95,6 +95,18 @@ public class DropOffEggAction {
 
     private static final int SEARCH_RETRY_DELAY_TICKS = 20;
 
+    /**
+     * Consecutive fully-exhausted searches (every bed, host drop, and queen-zone cell refused) before the hauler gives
+     * up and SHELVES the egg where it stands. A couple of empties can be transient - a chamber chunk mid-load, a race
+     * on the last bed - but this many in a row means the hive genuinely has nowhere to put an egg (testers: 24/24 beds
+     * occupied and the queen dead). Rooting the egg at the hauler's feet generalizes the existing "eggs accumulate
+     * around the queen once the nursery is full" rule to the queenless case, and rooting flips canBeHeld() false, so a
+     * shelved egg stops broadcasting pickup requests - no haul-shelve-haul loop.
+     */
+    private static final int SHELVE_AFTER_EXHAUSTED_SEARCHES = 6;
+
+    private static final StateKey<Integer> KEY_EXHAUSTED_SEARCHES = StateKey.sensed("egg_drop_exhausted_searches");
+
     private static final int MAX_REMEMBERED_FAILED_SPOTS = 32;
 
     private static final int MAX_PATH_VALIDATION_ATTEMPTS = 24;
@@ -201,9 +213,29 @@ public class DropOffEggAction {
                 // let the next retry reconsider the whole nursery. Spots that really are bad simply fail again.
                 blackboard.set(KEY_FAILED_SPOTS, List.<BlockPos>of());
 
+                // A FROZEN HAULER IS THE ONE FORBIDDEN OUTCOME. Count consecutive exhausted searches; past the
+                // threshold, root the egg right here and finish - the runner returns to its normal duties and the
+                // egg sits shelved like any nursery-overflow clutch egg until something hatches it or clears it.
+                var exhausted = blackboard.getOrDefault(KEY_EXHAUSTED_SEARCHES, 0) + 1;
+                blackboard.set(KEY_EXHAUSTED_SEARCHES, exhausted);
+                if (exhausted >= SHELVE_AFTER_EXHAUSTED_SEARCHES) {
+                    var shelf = findShelfSpot(xenomorph);
+                    placeEggs(xenomorph, shelf);
+                    com.alien.Alien.LOGGER.info(
+                        "Egg haul SHELVED at {}: no destination after {} exhausted searches - egg rooted in place, "
+                            + "hauler released.",
+                        BlockPos.containing(shelf),
+                        exhausted
+                    );
+                    return Action.Signal.ABORT;
+                }
+
                 scheduleSearchRetry(blackboard, xenomorph.tickCount);
                 return Action.Signal.CONTINUE;
             }
+
+            // A destination exists again - the drought is over, so the shelve countdown starts fresh.
+            blackboard.set(KEY_EXHAUSTED_SEARCHES, 0);
 
             // Ours now - other haulers will look elsewhere. The claim expires by itself if we never arrive.
             claimSpot(xenomorph, freeSpot.get());
@@ -435,6 +467,40 @@ public class DropOffEggAction {
             ovomorph.yHeadRotO = randomYaw;
             ovomorph.yBodyRotO = randomYaw;
         });
+    }
+
+    /**
+     * Where to root an egg the hive has no home for: the hauler's own feet when nothing else claims that spot,
+     * otherwise the first free horizontal neighbor with solid footing. Falls back to the feet even when crowded - two
+     * overlapping shelved eggs beat one eternally frozen hauler.
+     */
+    private static Vec3 findShelfSpot(Xenomorph xenomorph) {
+        var feet = xenomorph.blockPosition();
+        var level = xenomorph.level();
+        var candidates = new BlockPos[] {
+            feet,
+            feet.north(),
+            feet.south(),
+            feet.east(),
+            feet.west(),
+            feet.north().east(),
+            feet.north().west(),
+            feet.south().east(),
+            feet.south().west()
+        };
+        for (var candidate : candidates) {
+            if (!level.getBlockState(candidate.below()).isSolid()) {
+                continue;
+            }
+            if (!level.getBlockState(candidate).getCollisionShape(level, candidate).isEmpty()) {
+                continue;
+            }
+            var center = Vec3.atBottomCenterOf(candidate);
+            if (!isSpotTaken(xenomorph, center)) {
+                return center;
+            }
+        }
+        return Vec3.atBottomCenterOf(feet);
     }
 
     private static boolean isCarryingOvomorph(Xenomorph xenomorph) {

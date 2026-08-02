@@ -85,12 +85,19 @@ public class EggLayingSensors {
                 chambers++;
             }
         }
-        int cap = QUEEN_RING_EGG_CAP + HiveChamberSlots.EGG_BEDS_PER_CHAMBER * chambers;
+        int cap = location.isEndStyleHive()
+            // END-STYLE: a flat physical limit - [stated] "the aliens though would place the eggs around her we
+            // should set the physical limit to 20." No egg chambers exist to extend it.
+            ? com.alien.common.gameplay.hive.dimension.EndStyleHiveRules.STANDING_EGG_CAP
+            : QUEEN_RING_EGG_CAP + HiveChamberSlots.EGG_BEDS_PER_CHAMBER * chambers;
         return countSameVariantOvomorphs(eggLayer.asEntity().level(), location, eggLayer.getVariant()) < cap;
     }
 
     /** Whether the reserve egg bank is below {@link #RESERVE_EGG_CAP}. */
     public static boolean hasReserveOvomorphCapacity(EggLayer eggLayer, HiveLocation location) {
+        if (location.isEndStyleHive()) {
+            return false; // END-STYLE: no eggs in the reserve - [stated] "no eggs only adults in the end."
+        }
         var variant = location.lineageVariantOrNull();
         if (variant == null) {
             variant = eggLayer.getVariant();

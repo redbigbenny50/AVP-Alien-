@@ -65,6 +65,10 @@ public final class QueenlessMaturationTask {
             }
 
             for (var location : new java.util.ArrayList<>(lineage.locationsById().values())) {
+                if (com.alien.common.gameplay.hive.dimension.EndStyleHiveRules.isEndStyle(server, location)) {
+                    continue; // END-STYLE: maturation is the firewall economy - the End's succession is the regent
+                              // praetorian
+                }
                 if (!location.isAlive()) {
                     continue;
                 }
@@ -88,6 +92,10 @@ public final class QueenlessMaturationTask {
         }
         var advanced = 0;
         for (var location : new java.util.ArrayList<>(lineage.locationsById().values())) {
+            if (com.alien.common.gameplay.hive.dimension.EndStyleHiveRules.isEndStyle(server, location)) {
+                continue; // END-STYLE: maturation is the firewall economy - the End's succession is the regent
+                          // praetorian
+            }
             if (!location.isAlive()) {
                 continue;
             }

@@ -47,6 +47,9 @@ public final class EmpressRescueService {
         LineageFactionData lineage,
         HiveConfig config
     ) {
+        if (com.alien.common.gameplay.hive.dimension.EndStyleHiveRules.forbidsApexEconomy(level)) {
+            return false; // END-STYLE: no rescue transfers - End banks are the player's hand-fed property
+        }
         var empressId = lineage.empressId();
         if (empressId == null || location.isExiled()) {
             return false;
@@ -168,7 +171,7 @@ public final class EmpressRescueService {
 
         // She does not run - she calls everything in. The levy is the same trade as the rescue above: she cannot
         // create strength, only move it, so the network is left thinner for having defended her.
-        EmpressLastStand.fortify(seat, empressId);
+        EmpressLastStand.fortify(level, seat, empressId);
     }
 
     private static @Nullable HiveLocation seatOf(UUID empressId) {

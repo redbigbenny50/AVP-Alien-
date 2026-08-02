@@ -108,6 +108,10 @@ public final class HiveBalanceTask {
                 continue;
             }
             for (var location : new ArrayList<>(lineage.locationsById().values())) {
+                if (com.alien.common.gameplay.hive.dimension.EndStyleHiveRules.isEndStyle(server, location)) {
+                    continue; // END-STYLE: no simulated growth and no purchasing - the bank only holds what the player
+                              // supplied
+                }
                 if (!location.isAlive() || location.isInhibited()) {
                     continue; // inhibited locations run no economy — no biomass spend, no jelly, no purchases.
                 }

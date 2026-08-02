@@ -112,6 +112,7 @@ public class Empress extends Xenomorph implements GOAPUser<Empress>, EggLayer, c
         super.tick();
         empressOvipositorManager.tick();
         empressData.tick();
+        tickEndAdoption();
     }
 
     @Override
@@ -314,6 +315,7 @@ public class Empress extends Xenomorph implements GOAPUser<Empress>, EggLayer, c
     @Override
     public void readAdditionalSaveData(@NotNull CompoundTag compoundTag) {
         super.readAdditionalSaveData(compoundTag);
+        this.crownedAtGameTime = compoundTag.getLong("CrownedAtGameTime");
         empressOvipositorManager.load(compoundTag);
         empressData.load(compoundTag);
     }
@@ -321,6 +323,7 @@ public class Empress extends Xenomorph implements GOAPUser<Empress>, EggLayer, c
     @Override
     public void addAdditionalSaveData(@NotNull CompoundTag compoundTag) {
         super.addAdditionalSaveData(compoundTag);
+        compoundTag.putLong("CrownedAtGameTime", crownedAtGameTime);
         empressOvipositorManager.save(compoundTag);
         empressData.save(compoundTag);
     }
@@ -332,6 +335,56 @@ public class Empress extends Xenomorph implements GOAPUser<Empress>, EggLayer, c
             case ABERRANT -> AlienEntityTypes.ABERRANT_EMPRESS.get();
             case IRRADIATED -> AlienEntityTypes.IRRADIATED_EMPRESS.get();
         };
+    }
+
+    /**
+     * END-STYLE TAKEOVER + duel seniority. [stated] a summoned/spawn-egged empress adopts the lineage the way a
+     * summoned queen takes over ("i would say yes") - if the lineage she belongs to (finalizeSpawn auto-joined her on
+     * placement) has NO empress, she becomes it; the 4-hive election remains the earned route. CROWN TIME is recorded
+     * whenever she first holds a crown - the dual-empress duel uses it for seniority ([stated] "the second empress goes
+     * into exile"): larger crownedAtGameTime = the junior.
+     */
+    private long crownedAtGameTime;
+
+    public long crownedAtGameTime() {
+        return crownedAtGameTime;
+    }
+
+    private void tickEndAdoption() {
+        if (!(level() instanceof net.minecraft.server.level.ServerLevel serverLevel) || tickCount % 40 != 0) {
+            return;
+        }
+        var alreadyCrowned = false;
+        for (var factionId : com.alien.Alien.MOD.factions().getFactionIds(getUUID())) {
+            var faction = com.alien.Alien.MOD.factions().get(factionId);
+            if (
+                faction != null
+                    && faction.data() instanceof com.alien.common.gameplay.hive.faction.LineageFactionData lineage
+            ) {
+                if (getUUID().equals(lineage.empressId())) {
+                    alreadyCrowned = true;
+                    break;
+                }
+                if (
+                    com.alien.common.gameplay.hive.dimension.EndStyleHiveRules.isEndStyle(serverLevel)
+                        && lineage.empressId() == null
+                        && !isExiled()
+                ) {
+                    lineage.setEmpressId(getUUID());
+                    lineage.markDirty();
+                    alreadyCrowned = true;
+                    com.alien.Alien.LOGGER.info(
+                        "End: summoned empress {} adopted lineage {} - the crown is hers.",
+                        getUUID(),
+                        factionId
+                    );
+                    break;
+                }
+            }
+        }
+        if (alreadyCrowned && crownedAtGameTime == 0L) {
+            this.crownedAtGameTime = serverLevel.getGameTime();
+        }
     }
 
     @Override

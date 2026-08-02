@@ -129,6 +129,29 @@ public final class LocationMoveActions {
             return Action.Signal.CONTINUE;
         }
 
+        // ---- AIR MEANS DROP. ---------------------------------------------------------------------------------
+        // The travel line to the anchor is a straight diagonal, and over a valley or gorge that diagonal leaves
+        // the ground entirely - she glided through open sky along it, reading as casual flight ([stated] "digging
+        // queen flying through air casually... shes supposed to drop in air when she hits it. then continue 'drop'
+        // but not actually using gravity"). So: whenever she is UNSUPPORTED (her feet and the cell below are both
+        // open air) and still above her floor, the horizontal component is surrendered for the tick and she drops
+        // STRAIGHT DOWN at air speed - same noclip, same controlled velocity, no real gravity - until she is back
+        // against terrain. The diagonal resumes from wherever she lands, digging through whatever now stands
+        // between her and the anchor. Crossing a gap that sits AT her floor Y (a cave mouth, a ravine bottom at
+        // anchor depth) is the one place she still travels level through air - there is nothing below to drop to.
+        var feet = BlockPos.containing(current.x, current.y, current.z);
+        var floorGuardY = anchor.getY();
+        if (
+            current.y > floorGuardY + ARRIVAL_EPSILON
+                && actor.level().getBlockState(feet).isAir()
+                && actor.level().getBlockState(feet.below()).isAir()
+        ) {
+            var dropStep = Math.min(AIR_DESCENT_SPEED, current.y - floorGuardY);
+            actor.setDeltaMovement(0.0, -dropStep, 0.0);
+            spawnDigParticles(actor, DESCENT_PARTICLE_COUNT);
+            return Action.Signal.CONTINUE;
+        }
+
         // Gate the dig to diggable terrain: if the block one step ahead is undiggable (xenomorph-immune, unbreakable,
         // or a block entity — not resin-replaceable or alien-breakable, and not air), she can't pass. Settle here.
         var direction = delta.scale(1.0 / distance);
