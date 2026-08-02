@@ -214,12 +214,12 @@ public final class HiveStructurePlacer {
     }
 
     /**
-     * Empties water/lava from EXACTLY the piece's authored air cells. filterBlocks resolves the template's AIR
-     * entries through the same settings the stamp used, so this list IS the interior - rotated, offset, and minus
-     * the structure_void margins. A fluid cell outside this list belongs to the world, not the hive, and stays.
-     * The old chunk-sweeping drain (and its unused per-chunk re-drain entry) are gone; mid-carve leaks are already
-     * plugged face-by-face by CarveSiteWork.sealLiquidNeighbours, and upkeep re-stamps route through placeWorld and
-     * inherit this drain.
+     * Empties water/lava from EXACTLY the piece's authored air cells. filterBlocks resolves the template's AIR entries
+     * through the same settings the stamp used, so this list IS the interior - rotated, offset, and minus the
+     * structure_void margins. A fluid cell outside this list belongs to the world, not the hive, and stays. The old
+     * chunk-sweeping drain (and its unused per-chunk re-drain entry) are gone; mid-carve leaks are already plugged
+     * face-by-face by CarveSiteWork.sealLiquidNeighbours, and upkeep re-stamps route through placeWorld and inherit
+     * this drain.
      */
     private static void drainStructureAir(ServerLevel level, ResolvedPlacement resolved) {
         var airCells = resolved.template()

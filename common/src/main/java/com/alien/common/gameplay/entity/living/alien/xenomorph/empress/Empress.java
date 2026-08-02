@@ -32,8 +32,7 @@ import org.jetbrains.annotations.Nullable;
 
 import java.util.Objects;
 
-public class Empress extends Xenomorph
-    implements GOAPUser<Empress>, EggLayer, com.alien.common.gameplay.entity.CrawlPostureTransitionListener {
+public class Empress extends Xenomorph implements GOAPUser<Empress>, EggLayer, com.alien.common.gameplay.entity.CrawlPostureTransitionListener {
 
     @Override
     public int crawlPostureTransitionTicks(boolean enteringCrawl) {
@@ -340,10 +339,10 @@ public class Empress extends Xenomorph
 
     /**
      * END-STYLE TAKEOVER + duel seniority. [stated] a summoned/spawn-egged empress adopts the lineage the way a
-     * summoned queen takes over ("i would say yes") - if the lineage she belongs to (finalizeSpawn auto-joined her
-     * on placement) has NO empress, she becomes it; the 4-hive election remains the earned route. CROWN TIME is
-     * recorded whenever she first holds a crown - the dual-empress duel uses it for seniority ([stated] "the
-     * second empress goes into exile"): larger crownedAtGameTime = the junior.
+     * summoned queen takes over ("i would say yes") - if the lineage she belongs to (finalizeSpawn auto-joined her on
+     * placement) has NO empress, she becomes it; the 4-hive election remains the earned route. CROWN TIME is recorded
+     * whenever she first holds a crown - the dual-empress duel uses it for seniority ([stated] "the second empress goes
+     * into exile"): larger crownedAtGameTime = the junior.
      */
     private long crownedAtGameTime;
 
@@ -352,13 +351,13 @@ public class Empress extends Xenomorph
     }
 
     /**
-     * A summoned empress claims an EMPTY crown wherever she stands - End or overworld alike. [stated] option 2,
-     * Aug 1: "people will want to rush it and then be like why no work" - a player who kills the queen and
-     * force-summons an empress inside the hive's territory gets a working ruler, not an uncrowned squatter. She
-     * only ever takes a crown that is VACANT (empressId null), so the emergence ritual's legitimate empresses and
-     * reigning adoptees are never usurped; exiles can never re-crown. Queen presence is irrelevant either way -
-     * empresses rule ABOVE queens, and a queenless lineage still heals through QueenlessMaturationTask underneath
-     * her. Membership comes from finalizeSpawn's auto-join, so she must be summoned INSIDE claimed territory.
+     * A summoned empress claims an EMPTY crown wherever she stands - End or overworld alike. [stated] option 2, Aug 1:
+     * "people will want to rush it and then be like why no work" - a player who kills the queen and force-summons an
+     * empress inside the hive's territory gets a working ruler, not an uncrowned squatter. She only ever takes a crown
+     * that is VACANT (empressId null), so the emergence ritual's legitimate empresses and reigning adoptees are never
+     * usurped; exiles can never re-crown. Queen presence is irrelevant either way - empresses rule ABOVE queens, and a
+     * queenless lineage still heals through QueenlessMaturationTask underneath her. Membership comes from
+     * finalizeSpawn's auto-join, so she must be summoned INSIDE claimed territory.
      */
     private void tickCrownAdoption() {
         if (!(level() instanceof net.minecraft.server.level.ServerLevel serverLevel) || tickCount % 40 != 0) {

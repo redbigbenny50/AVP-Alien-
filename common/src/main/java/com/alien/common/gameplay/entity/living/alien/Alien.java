@@ -1041,10 +1041,10 @@ public abstract class Alien extends Monster implements DataUser {
     }
 
     /**
-     * Clears the reserve-return mark. Used by the crawl-retreat rule when its conditions stop holding (the
-     * xenomorph found headroom to stand, so its standing attacks are back and it should fight, not be quietly
-     * banked the next time it idles). A disband-marked carve worker that briefly entered and left retreat loses
-     * its disband mark too - it then simply lives on as an ordinary member, which is harmless.
+     * Clears the reserve-return mark. Used by the crawl-retreat rule when its conditions stop holding (the xenomorph
+     * found headroom to stand, so its standing attacks are back and it should fight, not be quietly banked the next
+     * time it idles). A disband-marked carve worker that briefly entered and left retreat loses its disband mark too -
+     * it then simply lives on as an ordinary member, which is harmless.
      */
     public void clearReserveReturnMark() {
         this.reserveReturnMarkedAtTick = 0L;
@@ -1216,9 +1216,9 @@ public abstract class Alien extends Monster implements DataUser {
 
     /**
      * OBSERVE, DON'T INTERFERE - [stated] "the other aliens dont join in the fight they will observe but not
-     * interfere." While a leadership duel runs, no xenomorph may attack either duelist - only the rival empress
-     * herself may. Vanilla consults canAttack before committing to a target, so this one gate covers every AI
-     * route. Players are not bound by the ritual.
+     * interfere." While a leadership duel runs, no xenomorph may attack either duelist - only the rival empress herself
+     * may. Vanilla consults canAttack before committing to a target, so this one gate covers every AI route. Players
+     * are not bound by the ritual.
      */
     @Override
     public boolean canAttack(@NotNull LivingEntity target) {

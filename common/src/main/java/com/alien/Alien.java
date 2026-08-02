@@ -5,7 +5,6 @@ import com.alien.common.data.fixer.migration.AlienDataMigrations;
 import com.alien.common.gameplay.advancement.AlienAdvancementEvents;
 import com.alien.common.gameplay.entity.dismemberment.AlienLimbDefinitions;
 import com.alien.common.gameplay.entity.dismemberment.AlienLimbDrops;
-import com.alien.common.gameplay.hive.growth.ResinDecorator;
 import com.alien.common.gameplay.hive.lifecycle.QueenSettlementDetector;
 import com.alien.common.gameplay.hive.location.HiveLocationRegistry;
 import com.alien.common.gameplay.level.saveddata.QueenSpawnChunkData;

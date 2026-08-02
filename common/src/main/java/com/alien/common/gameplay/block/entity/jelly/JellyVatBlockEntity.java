@@ -152,20 +152,20 @@ public class JellyVatBlockEntity extends BlockEntity {
     }
 
     /**
-     * THE WIRING THAT WAS NEVER CONNECTED: the strain field, the sync, and the renderer's four shells all existed,
-     * but nothing ever CALLED {@link #adoptHiveStrain()}, so every vat stayed NORMAL and every hive's vats rendered
-     * the normal shell until its first FILL committed a jelly type (commitType is the one caller) - so freshly
-     * grown, still-empty vats sat in nether/aberrant/irradiated rooms wearing the normal skin ([stated] "nether
-     * hive vats dont use the nether texture when spawning in the rooms"). Adopting when the block entity joins a
-     * level covers every path at once: freshly grown vats, player-placed vats inside a hive, AND every
-     * already-placed vat in existing worlds - they self-heal the next time their chunk loads. Outside any hive the
-     * lookup resolves NORMAL, the correct fallback; adoptHiveStrain early-outs when nothing changed; and a hive
-     * CONVERTED to another strain (nuke) re-adopts on its next chunk load the same way.
+     * THE WIRING THAT WAS NEVER CONNECTED: the strain field, the sync, and the renderer's four shells all existed, but
+     * nothing ever CALLED {@link #adoptHiveStrain()}, so every vat stayed NORMAL and every hive's vats rendered the
+     * normal shell until its first FILL committed a jelly type (commitType is the one caller) - so freshly grown,
+     * still-empty vats sat in nether/aberrant/irradiated rooms wearing the normal skin ([stated] "nether hive vats dont
+     * use the nether texture when spawning in the rooms"). Adopting when the block entity joins a level covers every
+     * path at once: freshly grown vats, player-placed vats inside a hive, AND every already-placed vat in existing
+     * worlds - they self-heal the next time their chunk loads. Outside any hive the lookup resolves NORMAL, the correct
+     * fallback; adoptHiveStrain early-outs when nothing changed; and a hive CONVERTED to another strain (nuke)
+     * re-adopts on its next chunk load the same way.
      * <p>
      * setLevel rather than onLoad: onLoad is a NeoForge patch and does not exist in the multiloader common module.
-     * setLevel is vanilla, runs on the main thread as the block entity joins the level (fresh placement and chunk
-     * load alike), and the position is already set - everything adoptHiveStrain needs. The client-side call falls
-     * out of adoptHiveStrain's own ServerLevel guard.
+     * setLevel is vanilla, runs on the main thread as the block entity joins the level (fresh placement and chunk load
+     * alike), and the position is already set - everything adoptHiveStrain needs. The client-side call falls out of
+     * adoptHiveStrain's own ServerLevel guard.
      */
     @Override
     public void setLevel(net.minecraft.world.level.Level level) {
