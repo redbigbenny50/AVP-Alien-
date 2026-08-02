@@ -49,6 +49,17 @@ public final class HostCaptureTask {
         return null;
     }
 
+    /**
+     * Is this entity currently the recorded cargo of an alien captor - i.e. mid-haul between grab and handoff? The ONE
+     * definition of "being carried home": vehicle is an Alien AND that captor's carry bookkeeping names this exact
+     * entity. Both host protections key on it (no suffocation, no fighting back), so merely riding an alien never
+     * grants either.
+     */
+    public static boolean isBeingCarriedHome(LivingEntity host) {
+        return host.getVehicle() instanceof com.alien.common.gameplay.entity.living.alien.Alien captor
+            && carriedHost(captor) == host;
+    }
+
     /** Grab a host: it rides the captor and (if a mob) stops fighting back. */
     public static void capture(com.alien.common.gameplay.entity.living.alien.Alien captor, LivingEntity host) {
         host.startRiding(captor, true);

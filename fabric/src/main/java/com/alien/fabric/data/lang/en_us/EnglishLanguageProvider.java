@@ -56,6 +56,14 @@ public class EnglishLanguageProvider extends FabricLanguageProvider {
         builder.add(AlienMobEffects.getMetamorphosisHolder().value(), "Metamorphosis");
         builder.add(AlienMobEffects.getScourgeHolder().value(), "Scourge");
         builder.add(AlienMobEffects.getMarkedForDeathHolder().value(), "Marked for Death");
+        // The six that were missing - tooltips showed raw keys ([stated] "the effects listed on the potion seems
+        // to have long form not the normal name").
+        builder.add(AlienMobEffects.getRadiationResistanceHolder().value(), "Radiation Resistance");
+        builder.add(AlienMobEffects.getGlowingTalonsHolder().value(), "Glowing Talons");
+        builder.add(AlienMobEffects.getRadiationSicknessHolder().value(), "Radiation Sickness");
+        builder.add(AlienMobEffects.getChitinousAuraHolder().value(), "Chitinous Aura");
+        builder.add(AlienMobEffects.getHivesBaneHolder().value(), "Hive's Bane");
+        builder.add(AlienMobEffects.getImmovableHolder().value(), "Immovable");
 
         // Potions
         builder.add("item.minecraft.potion.effect.metamorphosis", "Potion of Metamorphosis");

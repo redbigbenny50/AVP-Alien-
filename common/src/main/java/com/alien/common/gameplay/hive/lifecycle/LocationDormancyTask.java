@@ -55,6 +55,16 @@ public final class LocationDormancyTask {
     private static final java.util.Map<HiveLocation, Long> ZERO_POP_SINCE_TICK =
         java.util.Collections.synchronizedMap(new java.util.WeakHashMap<>());
 
+    /**
+     * Drops a dead location's zero-population entry. Without this, a location that was momentarily at zero population
+     * and then died via a path OTHER than natural decay (player kill, contest loss, admin removal, End cull) left its
+     * map entry behind for the server lifetime - the micro-leak flagged by the Aug-1 TPS scan. Called from
+     * LocationDeathHandler.kill, the funnel every removal path runs through.
+     */
+    public static void forgetLocation(HiveLocation location) {
+        ZERO_POP_SINCE_TICK.remove(location);
+    }
+
     private LocationDormancyTask() {}
 
     /**

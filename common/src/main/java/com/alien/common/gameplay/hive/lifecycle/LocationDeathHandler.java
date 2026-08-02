@@ -81,6 +81,7 @@ public final class LocationDeathHandler {
 
         // 2. Release every claimed chunk via BLib + reset local indexes (LocationRemovalHelper handles BLib release).
         LocationRemovalHelper.remove(level, location, lineage, reason);
+        com.alien.common.gameplay.hive.lifecycle.LocationDormancyTask.forgetLocation(location);
 
         // 3. Drop the per-location BLib faction. Members of this faction lose location-tier membership but stay in
         // the parent lineage (no eviction-on-load — loading state should not affect lineage membership).

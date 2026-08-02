@@ -17,9 +17,15 @@ import net.minecraft.world.effect.MobEffectCategory;
 public class GlowingTalonsStatusEffect extends MobEffect {
 
     /** The sickly glow of something that has been in the hot zone too long. */
-    private static final int IRRADIATED_GREEN = 0x7FD41C;
+    /**
+     * The irradiated jelly's own ice blue, sampled from raw_irradiated_jelly.png (body tone #2ADBFE). The potion line
+     * must read as the jelly it is brewed from ([stated] "the irradiated potions are green they should be that ice blue
+     * color the jelly is"); both irradiation-potion effects share the color, so the blended bottle color IS this color.
+     * Radiation SICKNESS stays toxic green on purpose - it is the harm, not the potion.
+     */
+    private static final int JELLY_ICE_BLUE = 0x2ADBFE;
 
     public GlowingTalonsStatusEffect() {
-        super(MobEffectCategory.BENEFICIAL, IRRADIATED_GREEN);
+        super(MobEffectCategory.BENEFICIAL, JELLY_ICE_BLUE);
     }
 }
