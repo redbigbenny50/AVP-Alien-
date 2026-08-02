@@ -59,6 +59,25 @@ public final class HiveVents {
 
     /** Whether this vent sits in the surface band (at/above terrain height minus {@code band}) - a surface vent. */
     public static boolean isNearSurface(Level level, BlockPos vent, int band) {
+        // Ceiled dimensions have no sky surface - the heightmap reports the bedrock ROOF, so the old test asked
+        // whether a nether vent sat within a few blocks of Y ~127 and branded every shelf vent FRONTIER. And
+        // classification is write-once, so the wrong answer was then PERSISTED ([stated] "none of the vents they
+        // have placed are registering as surface vents"). In shelf dimensions "the surface" is the open shelf the
+        // vent stands on: resolve the nearest shelf floor through the dimension profile (sturdy footing plus the
+        // profile's air clearance above - a tight rock pocket has no shelf and correctly stays FRONTIER) and
+        // measure against THAT.
+        if (level.dimensionType().hasCeiling() && level instanceof net.minecraft.server.level.ServerLevel serverLevel) {
+            var profile = com.alien.common.gameplay.hive.dimension.DimensionHiveProfiles.get(serverLevel);
+            int shelfY = com.alien.common.gameplay.hive.dimension.DimensionHiveProfiles.surfaceY(
+                serverLevel,
+                profile,
+                vent.getX(),
+                vent.getZ(),
+                vent.getY()
+            );
+            return shelfY != com.alien.common.gameplay.hive.dimension.DimensionHiveProfiles.NO_SURFACE
+                && Math.abs(vent.getY() - shelfY) <= band;
+        }
         int surfaceY = level.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, vent.getX(), vent.getZ());
         return vent.getY() >= surfaceY - band;
     }
