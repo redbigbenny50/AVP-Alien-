@@ -133,11 +133,16 @@ public final class HiveStructurePlacer {
             return false;
         }
 
-        // Drain any liquid left inside the stamped footprint. placeInWorld + IGNORE_WATERLOGGING stops resin from
-        // waterlogging, but it does NOT empty water sitting in the piece's structure_void cells or that seeped back
-        // during placement - so an ocean/aquifer hive ends up with pooled interiors. Clear it now: the hive is DRY on
-        // build. (Flow-back through still-open doorways/vents over time is the separate submerged-membrane item.)
-        drainLiquids(level, match.occupiedChunks(), location.hiveFloorY(), resolved.template().getSize().getY());
+        // Drain any liquid left inside the piece's AUTHORED AIR CELLS - and nothing else. placeInWorld +
+        // IGNORE_WATERLOGGING stops resin from waterlogging, but it does not empty fluid that seeped into the
+        // interior during construction. The old drain swept ENTIRE OCCUPIED CHUNKS floor-to-ceiling, deleting every
+        // fluid regardless of whether the cell had anything to do with the piece - and upkeep re-stamps re-ran it -
+        // so a nether hive built at lava-ocean level vacuumed ragged, ever-growing holes into the sea around it
+        // ([stated] "lava being drained in the nether for building. it seems we are creating gaps... constrain the
+        // lava removal to only the air and blocks in the structure only"). The authored air list is exactly that
+        // constraint: interior cells only, structure_void margins and everything outside the shell untouched, so the
+        // ocean laps against the resin instead of disappearing around it.
+        drainStructureAir(level, resolved);
         return true;
     }
 
@@ -209,47 +214,36 @@ public final class HiveStructurePlacer {
     }
 
     /**
-     * Public entry for the upkeep pass: re-drain a BUILT piece's chunk. The build-time drain is a one-shot, so a lava
-     * pocket opened next door - or a flow through a doorway or vent that is still open - seeps straight back into a
-     * finished interior and stays there. Re-running the same sweep on a cadence keeps draining until the source is
-     * actually sealed off.
+     * Empties water/lava from EXACTLY the piece's authored air cells. filterBlocks resolves the template's AIR
+     * entries through the same settings the stamp used, so this list IS the interior - rotated, offset, and minus
+     * the structure_void margins. A fluid cell outside this list belongs to the world, not the hive, and stays.
+     * The old chunk-sweeping drain (and its unused per-chunk re-drain entry) are gone; mid-carve leaks are already
+     * plugged face-by-face by CarveSiteWork.sealLiquidNeighbours, and upkeep re-stamps route through placeWorld and
+     * inherit this drain.
      */
-    public static void drainPieceLiquids(ServerLevel level, ChunkPos chunk, int floorY, int height) {
-        drainLiquids(level, java.util.List.of(chunk), floorY, height);
-    }
-
-    /** Empties water/lava from the stamped volume so hive interiors are dry even when built into a body of liquid. */
-    private static void drainLiquids(ServerLevel level, Iterable<ChunkPos> chunks, int floorY, int height) {
-        var pos = new BlockPos.MutableBlockPos();
-        int maxY = floorY + height - 1;
-        for (ChunkPos chunk : chunks) {
-            int minX = chunk.getMinBlockX();
-            int minZ = chunk.getMinBlockZ();
-            for (int x = minX; x < minX + 16; x++) {
-                for (int z = minZ; z < minZ + 16; z++) {
-                    for (int y = floorY; y <= maxY; y++) {
-                        pos.set(x, y, z);
-                        var state = level.getBlockState(pos);
-                        if (state.getFluidState().isEmpty()) {
-                            continue;
-                        }
-                        if (
-                            state.hasProperty(net.minecraft.world.level.block.state.properties.BlockStateProperties.WATERLOGGED)
-                                && state.getValue(net.minecraft.world.level.block.state.properties.BlockStateProperties.WATERLOGGED)
-                        ) {
-                            level.setBlock(
-                                pos,
-                                state.setValue(
-                                    net.minecraft.world.level.block.state.properties.BlockStateProperties.WATERLOGGED,
-                                    Boolean.FALSE
-                                ),
-                                2
-                            );
-                        } else {
-                            level.setBlock(pos, net.minecraft.world.level.block.Blocks.AIR.defaultBlockState(), 2);
-                        }
-                    }
-                }
+    private static void drainStructureAir(ServerLevel level, ResolvedPlacement resolved) {
+        var airCells = resolved.template()
+            .filterBlocks(resolved.placeAt(), resolved.settings(), net.minecraft.world.level.block.Blocks.AIR);
+        for (var cell : airCells) {
+            var pos = cell.pos();
+            var state = level.getBlockState(pos);
+            if (state.getFluidState().isEmpty()) {
+                continue;
+            }
+            if (
+                state.hasProperty(net.minecraft.world.level.block.state.properties.BlockStateProperties.WATERLOGGED)
+                    && state.getValue(net.minecraft.world.level.block.state.properties.BlockStateProperties.WATERLOGGED)
+            ) {
+                level.setBlock(
+                    pos,
+                    state.setValue(
+                        net.minecraft.world.level.block.state.properties.BlockStateProperties.WATERLOGGED,
+                        Boolean.FALSE
+                    ),
+                    2
+                );
+            } else {
+                level.setBlock(pos, net.minecraft.world.level.block.Blocks.AIR.defaultBlockState(), 2);
             }
         }
     }

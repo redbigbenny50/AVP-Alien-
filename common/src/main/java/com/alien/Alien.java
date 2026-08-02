@@ -176,11 +176,13 @@ public class Alien {
         // HiveManager.ensureVariantFactionMembership.
         MOD.events().onEntityLoad().register(Alien::onAlienEntityLoaded);
 
-        // Hive: chunk-load decoration + on-demand catch-up. Fires for every loaded chunk; the decorator
-        // exits early for chunks not owned by any location.
-        MOD.events()
-            .onChunkLoad()
-            .register((level, chunk) -> ResinDecorator.onChunkLoad(level, chunk.getPos()));
+        // DO NOT REGISTER A CHUNK_LOAD LISTENER - the registration itself arms a server-killing crash.
+        // BLib's MixinChunkMap_ChunkLoadEvent calls level.getChunk(x, z) synchronously BEFORE dispatching to
+        // listeners, inside onFullChunkStatusChange, which runs inside DistanceManager.runAllUpdates' iteration -
+        // reentrancy -> ConcurrentModificationException -> "Exception ticking world" (tester: entering the nether).
+        // The handler early-outs while its listener list is EMPTY, so an empty list is the kill switch. Resin
+        // decoration now polls from HiveLocationLoadedTickTask via ResinDecorator.sweepLoaded. If BLib ships the
+        // real fix (non-blocking getChunkNow + deferred dispatch), event-driven decoration may return.
     }
 
     private static void onAlienEntityLoaded(net.minecraft.world.entity.Entity entity) {

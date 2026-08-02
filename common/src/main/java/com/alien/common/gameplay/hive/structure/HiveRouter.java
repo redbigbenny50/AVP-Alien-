@@ -735,6 +735,12 @@ public final class HiveRouter {
             var vats = HiveChamberSlots.vatSlots(level, location, match.originChunk());
             for (BlockPos slot : vats) {
                 level.setBlock(slot, AlienBlocks.JELLY_VAT.get().defaultBlockState(), 3);
+                // Strain shell: onLoad already adopts, but the ordering of block-entity registration differs
+                // between loaders - the explicit call is idempotent and guarantees the vat wears the hive's
+                // shell the tick it grows rather than the next chunk load.
+                if (level.getBlockEntity(slot) instanceof com.alien.common.gameplay.block.entity.jelly.JellyVatBlockEntity vat) {
+                    vat.adoptHiveStrain();
+                }
             }
             Alien.LOGGER.info("Hive: jelly chamber at {} grew {} vats.", match.originChunk(), vats.size());
         }

@@ -494,12 +494,20 @@ public final class CarveSiteWork {
         }
     }
 
-    /** A sealing block that blends with the surrounding rock: the block below the leak, else plain stone. */
+    /**
+     * A sealing block that blends with the surrounding rock: the block below the leak where it can be copied, else
+     * a dimension-appropriate fallback - BASALT in the nether ([stated] "block up lava pouring in with basalt
+     * instead of stone"; a lava-ocean leak usually has more lava below it, so the fallback is what shows), plain
+     * stone everywhere else.
+     */
     private static BlockState plugFor(ServerLevel level, BlockPos leak) {
         var belowPos = leak.below();
         var below = level.getBlockState(belowPos);
         if (below.isSolidRender(level, belowPos) && level.getFluidState(belowPos).isEmpty()) {
             return below;
+        }
+        if (level.dimension() == net.minecraft.world.level.Level.NETHER) {
+            return Blocks.BASALT.defaultBlockState();
         }
         return Blocks.STONE.defaultBlockState();
     }

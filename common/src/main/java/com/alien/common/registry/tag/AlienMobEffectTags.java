@@ -10,6 +10,13 @@ public class AlienMobEffectTags {
     public static final TagKey<MobEffect> DOES_NOT_AFFECT_ALIENS = create("does_not_affect_aliens");
 
     /**
+     * Radiation-class effects. Refused by every alien EXCEPT the aberrant strain (the species is radiation-immune
+     * by decree; aberrants are the weak line and burn instead) - which is why this cannot live in
+     * DOES_NOT_AFFECT_ALIENS. Cross-mod ids (avp_human's) sit in the json as OPTIONAL entries.
+     */
+    public static final TagKey<MobEffect> RADIATION = create("radiation");
+
+    /**
      * Effects a chestburster does NOT inherit from the host it came out of.
      * <p>
      * The birth copies the host's active effects onto the newborn at {@code Integer.MAX_VALUE} duration, deliberately:

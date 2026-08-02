@@ -134,6 +134,10 @@ public final class HiveLocationLoadedTickTask {
             // at 23x23 within a second, and the periodic sweep is the real guarantee anyway.
             com.alien.common.gameplay.hive.empress.EmpressInfluenceSync.sync(location, lineage);
             CatchUpEngine.catchUpTo(serverLevel, location, lineage, currentTick);
+            // Decoration bookkeeping, polled here instead of the BLib chunk-load event - registering that event
+            // arms a chunk-system reentrancy crash (see ResinDecorator's class doc). Runs right after catch-up so
+            // freshly caught-up claims are visible to the sweep, same ordering the old event path had.
+            com.alien.common.gameplay.hive.growth.ResinDecorator.sweepLoaded(serverLevel, location);
             // A watched hive raises its own founding queen instead of teleporting the outcome. This stamps the
             // shared spread cooldown on success, so the abstract attempt below is already blocked for this hive.
             com.alien.common.gameplay.hive.growth.QueenPromotionService.tryPromote(
