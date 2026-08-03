@@ -61,12 +61,35 @@ public final class DeliverHostAction {
      */
     private static final Map<Entity, Set<BlockPos>> UNREACHABLE_VENTS = new WeakHashMap<>();
 
+    /**
+     * LAST-RESORT WARP ([stated] "if the alien grabs a host and they cant navigate back just let them warp back to the
+     * host chamber directly as a fallback... let it take maybe 60s or so when a clear path isnt visible"): a carrier
+     * that has made no real progress TOWARD ITS HIVE for a full minute - pushed onto a ventless nether tier, cliffed
+     * off from every vent, whatever - ducts the host straight into the chamber (the exact handoff a vent arrival
+     * performs) and steps through after it. Progress is measured as closing distance on the hive centre, the one number
+     * that is honest across both the outside-to-vent leg and the inside-to-chamber leg; vent write-off churn and
+     * MOVING-at-a-wall never reset it.
+     */
+    private static final Map<Entity, DeliveryProgress> DELIVERY_PROGRESS = new WeakHashMap<>();
+
+    /** A minute without closing on home = no clear path is visible. */
+    private static final long WARP_FALLBACK_TICKS = 1200L;
+
+    /** Must get >=~3 blocks closer to home to count as progress - pacing never resets the clock. */
+    private static final double DELIVERY_PROGRESS_EPSILON_SQUARED = 9.0D;
+
+    private record DeliveryProgress(
+        double bestDistSquared,
+        long lastProgressGameTime
+    ) {}
+
     public static Action.Signal perform(Action.Context<? extends Xenomorph> context) {
         var xenomorph = context.getActor();
 
         var carried = HostCaptureTask.carriedHost(xenomorph);
         if (carried == null) {
-            return Action.Signal.ABORT; // lost it (rescued, killed, escaped)
+            DELIVERY_PROGRESS.remove(xenomorph);
+            return Action.Signal.ABORT; // lost it (rescued, killed, escaped) - or the warp delivered it
         }
         if (!carried.isAlive()) {
             carried.stopRiding();
@@ -85,6 +108,39 @@ public final class DeliverHostAction {
             return Action.Signal.CONTINUE;
         }
 
+        // The warp clock guards BOTH legs below (outside-to-vent and inside-to-chamber).
+        var centerPos = location.centerPos();
+        var homeDistSquared = xenomorph.distanceToSqr(centerPos.getX() + 0.5, centerPos.getY(), centerPos.getZ() + 0.5);
+        var gameTime = serverLevel.getGameTime();
+        var progress = DELIVERY_PROGRESS.get(xenomorph);
+        if (progress == null || homeDistSquared <= progress.bestDistSquared() - DELIVERY_PROGRESS_EPSILON_SQUARED) {
+            DELIVERY_PROGRESS.put(xenomorph, new DeliveryProgress(homeDistSquared, gameTime));
+        } else if (gameTime - progress.lastProgressGameTime() >= WARP_FALLBACK_TICKS) {
+            HostCaptureTask.deliverToHostChamber(xenomorph, carried, serverLevel, location);
+            if (HostCaptureTask.carriedHost(xenomorph) == null) {
+                // Delivered. Step through the duct after it: the carrier re-appears at the hive centre instead of
+                // staying stranded wherever it was stuck.
+                var centerChunk = new net.minecraft.world.level.ChunkPos(centerPos);
+                xenomorph.teleportTo(
+                    centerChunk.getMiddleBlockX() + 0.5,
+                    location.hiveFloorY() + 1,
+                    centerChunk.getMiddleBlockZ() + 0.5
+                );
+                NeoMoveToPosAction.onFinish(context);
+                DELIVERY_PROGRESS.remove(xenomorph);
+                UNREACHABLE_VENTS.remove(xenomorph);
+                com.alien.Alien.LOGGER.info(
+                    "Host delivery: carrier stranded {}s without progress - WARPED host into the chamber at {}",
+                    WARP_FALLBACK_TICKS / 20L,
+                    location.id()
+                );
+            } else {
+                // No free chamber spot yet - keep holding, and give the world another minute before retrying.
+                DELIVERY_PROGRESS.put(xenomorph, new DeliveryProgress(homeDistSquared, gameTime));
+                stall(xenomorph, "stranded with the host and no free chamber spot - holding until one opens");
+            }
+            return Action.Signal.CONTINUE;
+        }
         // ALREADY INSIDE THE HIVE? Then walk it straight to the chamber. A drone that picked a cow up in a corridor
         // must not carry it OUT of the hive to a surface vent just to duct it back in again.
         if (InteriorSweepDuty.isInsideHive(location, xenomorph)) {

@@ -387,7 +387,10 @@ public final class AbstractSpreadAttempt {
         long currentTick
     ) {
         var locationId = HiveLocationIds.create();
-        var centerPos = candidate.getMiddleBlockPosition(64); // Y is approximate; chunk-load corrects later
+        var centerPos = com.alien.common.gameplay.hive.dimension.DimensionHiveProfiles.roofSafeAnchor(
+            level,
+            candidate.getMiddleBlockPosition(64) // Y is approximate; chunk-load corrects later
+        );
         var location = new HiveLocation(
             locationId,
             lineageId,

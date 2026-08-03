@@ -46,6 +46,15 @@ public class PickUpEggAction {
             eggCarrier.getEggPickupManager().setTargetOvomorph(null);
             return Action.Signal.ABORT;
         }
+        // ONE egg per hauler. The guards above test the EGG's state, but nothing tested the HAULER's - after a
+        // grab the manager clears its slot, the sensor hands out a fresh target, and this action would mount a
+        // SECOND ovomorph (xenomorphs allow multiple passengers for the host-carry system, so vanilla's single
+        // -rider default does not save us; tester screenshot: aberrant drone hauling two eggs). Already loaded ->
+        // this plan is done; drop-off owns the turn.
+        if (isCarryingAnEgg(xenomorph)) {
+            eggCarrier.getEggPickupManager().setTargetOvomorph(null);
+            return Action.Signal.ABORT;
+        }
 
         var blackboard = context.getBlackboard(Blackboard.Scope.ACTION);
 
@@ -92,7 +101,7 @@ public class PickUpEggAction {
 
         return switch (result) {
             case MOVING -> {
-                if (arrived) {
+                if (arrived && !isCarryingAnEgg(xenomorph)) {
                     targetOvomorph.startRiding(xenomorph);
                     // Egg duty: a loaded carrier must not vanilla-despawn mid-haul (the egg would drop).
                     xenomorph.setPersistenceRequired();
@@ -101,7 +110,7 @@ public class PickUpEggAction {
                 yield Action.Signal.CONTINUE;
             }
             case FINISHED -> {
-                if (arrived) {
+                if (arrived && !isCarryingAnEgg(xenomorph)) {
                     targetOvomorph.startRiding(xenomorph);
                     // Egg duty: a loaded carrier must not vanilla-despawn mid-haul (the egg would drop).
                     xenomorph.setPersistenceRequired();
@@ -156,5 +165,15 @@ public class PickUpEggAction {
 
     private PickUpEggAction() {
         throw new UnsupportedOperationException();
+    }
+
+    /** True when any current passenger is an ovomorph - the hauler's hands are full. */
+    private static boolean isCarryingAnEgg(Xenomorph xenomorph) {
+        for (var passenger : xenomorph.getPassengers()) {
+            if (passenger instanceof com.alien.common.gameplay.entity.living.alien.ovomorph.Ovomorph) {
+                return true;
+            }
+        }
+        return false;
     }
 }

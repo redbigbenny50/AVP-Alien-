@@ -20,6 +20,14 @@ import java.util.List;
 
 public class OvipositorManager implements NBTSerializable {
 
+    /**
+     * The eggsack model sits visually skewed when given the royal's exact body yaw ([stated] "the eggsack seems off
+     * center for the queen and empress. it attaches fine to her but its not rotated correctly it needs to rotate more
+     * to the right") - a fixed authoring-orientation offset between the two models. Positive = clockwise (to her right)
+     * in Minecraft yaw. ONE dial, used by queen and empress managers alike; tune here if the sack still sits off.
+     */
+    public static final float OVIPOSITOR_YAW_OFFSET_DEGREES = 25.0F;
+
     private final Cooldown ovipositorCreationCooldown;
 
     private final Queen queen;
@@ -92,12 +100,14 @@ public class OvipositorManager implements NBTSerializable {
                 }
             }
             getOvipositor().ifSome(ovipositor -> {
-                ovipositor.setYRot(queen.getYRot());
+                // Per-tick rotation glue - MUST carry the same model offset as the attach sites, or this line
+                // overwrites the creation-time offset one tick after attach and the sack snaps back off-center.
+                ovipositor.setYRot(queen.getYRot() + OVIPOSITOR_YAW_OFFSET_DEGREES);
                 ovipositor.setXRot(queen.getXRot());
                 // Body rotation.
-                ovipositor.yBodyRot = queen.yBodyRot;
+                ovipositor.yBodyRot = queen.yBodyRot + OVIPOSITOR_YAW_OFFSET_DEGREES;
                 // Head rotation.
-                ovipositor.yHeadRot = queen.yHeadRot;
+                ovipositor.yHeadRot = queen.yHeadRot + OVIPOSITOR_YAW_OFFSET_DEGREES;
             });
             return;
         }
@@ -285,11 +295,11 @@ public class OvipositorManager implements NBTSerializable {
         var ovipositor = AlienEntityTypes.OVIPOSITOR.get().create(queen.level());
 
         if (ovipositor != null) {
-            ovipositor.moveTo(queen.position(), queen.getYRot(), queen.getXRot());
+            ovipositor.moveTo(queen.position(), queen.getYRot() + OVIPOSITOR_YAW_OFFSET_DEGREES, queen.getXRot());
             ovipositor.startRiding(queen, true);
 
-            // Body rotation.
-            ovipositor.yBodyRot = queen.yBodyRot;
+            // Body rotation - offset so the sack model sits centered on her (see OVIPOSITOR_YAW_OFFSET_DEGREES).
+            ovipositor.yBodyRot = queen.yBodyRot + OVIPOSITOR_YAW_OFFSET_DEGREES;
             // Head rotation.
             ovipositor.yHeadRot = queen.yHeadRot;
 
@@ -410,9 +420,9 @@ public class OvipositorManager implements NBTSerializable {
             queen.yBodyRot = settledYaw;
             queen.yHeadRot = settledYaw;
 
-            ovipositor.moveTo(queen.position(), settledYaw, queen.getXRot());
+            ovipositor.moveTo(queen.position(), settledYaw + OVIPOSITOR_YAW_OFFSET_DEGREES, queen.getXRot());
             ovipositor.startRiding(queen, true);
-            ovipositor.yBodyRot = settledYaw;
+            ovipositor.yBodyRot = settledYaw + OVIPOSITOR_YAW_OFFSET_DEGREES;
             ovipositor.yHeadRot = settledYaw;
             // A captive breeder's eggsack must not vanish to far-away despawn while she's contained; the teardown above
             // is the only thing that removes it.

@@ -647,6 +647,17 @@ public class Queen extends Xenomorph implements GOAPUser<Queen>, EggLayer, com.a
         // While DOWN, damage eats the incapacitation bar instead of her health - that bar IS the finisher. She
         // only truly dies when it is drained to zero.
         if (!level().isClientSide && isIncapacitated()) {
+            // ONLY players and rival xenomorphs can work the finisher bar. The bar opens at 1, and in the nether a
+            // downed queen is instantly mobbed by piglins - ambient mobs drained it the same tick she fell, so the
+            // downed state was over before anyone saw it ([stated] "nether queens dont get incapacitated" - they
+            // did, for a frame). Kin mercy already shields her from her own strain; vanilla wildlife chewing on a
+            // downed queen wounds her pride, not the bar. Execution stays with players and rival strains.
+            var downedAttacker = damageSource.getEntity();
+            var canWorkTheBar = downedAttacker instanceof net.minecraft.world.entity.player.Player
+                || downedAttacker instanceof com.alien.common.gameplay.entity.living.alien.Alien;
+            if (!canWorkTheBar) {
+                return true; // shrugged off - chitin holds, the bar does not move
+            }
             if (incapacitationManager.onDamageWhileDown(amount)) {
                 setIncapacitated(false);
                 setNoAi(false);

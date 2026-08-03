@@ -95,8 +95,14 @@ public class MiscellaneousRecipeProvider {
             .pattern("BBB")
             .into(8, AlienItems.ANCHOR);
 
+        // Tracker + tracking PDA are HUMAN TECH - locked behind the human module like the rest of the
+        // AVPHuman-gated content ([stated] "lock the pda and tracker behind the human module like the other
+        // things that get unlocked when avp human is installed but hidden without it"). Same conditioned-builder
+        // mechanism as the irradiated recipes: emits fabric:load_conditions + neoforge:conditions on avp_human.
+        var humanTech = builder.withCondition(AVPHumanFabric.IS_LOADED);
+
         // Tracker tag: redstone + amethyst shard + glowstone dust + iron ingot.
-        builder.shapeless()
+        humanTech.shapeless()
             .withCategory(RecipeCategory.TOOLS)
             .requires(1, Items.REDSTONE)
             .requires(1, Items.AMETHYST_SHARD)
@@ -105,7 +111,7 @@ public class MiscellaneousRecipeProvider {
             .into(1, AlienItems.TRACKER);
 
         // Tracking PDA: redstone, amethyst shard, observer stacked in a column.
-        builder.shaped()
+        humanTech.shaped()
             .withCategory(RecipeCategory.TOOLS)
             .define('R', Items.REDSTONE)
             .define('A', Items.AMETHYST_SHARD)

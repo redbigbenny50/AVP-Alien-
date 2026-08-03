@@ -210,6 +210,11 @@ public final class HiveLocationFoundingService {
         boolean buildStructure
     ) {
         var locationId = HiveLocationIds.create();
+        // Ceiled dimensions: pull a too-high anchor down so the full 16-block slab fits under the bedrock roof -
+        // the queen may have wandered above the spawn band before founding, and stamping eats bedrock.
+        if (queen.level() instanceof net.minecraft.server.level.ServerLevel foundingLevel) {
+            position = com.alien.common.gameplay.hive.dimension.DimensionHiveProfiles.roofSafeAnchor(foundingLevel, position);
+        }
         var centerChunk = new ChunkPos(position);
         var location = new HiveLocation(
             locationId,

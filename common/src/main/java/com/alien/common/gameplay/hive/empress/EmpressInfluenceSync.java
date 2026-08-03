@@ -55,7 +55,15 @@ public final class EmpressInfluenceSync {
      */
     public static void sync(HiveLocation location, LineageFactionData lineage) {
         var shouldBeInfluenced = lineage.empressId() != null && !location.isExiled();
-        if (location.isEmpressInfluenced() != shouldBeInfluenced) {
+        // Reconcile against BOTH stores, not just the persisted mirror. The router's set is memory-only and starts
+        // EMPTY after a restart while the mirror comes back true - the old mirror-only comparison then skipped the
+        // write, and an influenced hive silently ran at BASE extent (no expansion, no second raid chamber) until
+        // something flipped the mirror. The router's contract line - "that system must re-assert influence on
+        // world load" - is exactly this call doing its job.
+        if (
+            location.isEmpressInfluenced() != shouldBeInfluenced
+                || HiveRouter.isEmpressInfluenced(location) != shouldBeInfluenced
+        ) {
             HiveRouter.setEmpressInfluence(location, shouldBeInfluenced);
             location.setEmpressInfluenced(shouldBeInfluenced);
         }

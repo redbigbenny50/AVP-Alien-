@@ -29,6 +29,18 @@ import org.jetbrains.annotations.Nullable;
  */
 public final class HiveStructurePlacer {
 
+    /**
+     * Special doorways whose twin jigsaw socket must be consumed along with a placement. [stated] "every doorway has
+     * two jigsaws and always have" - each of these doorway types invites exactly ONE room, so the leftover twin is
+     * never a second invitation: royal halls doubled off the queen chamber's doors, and [stated] "the two scourge
+     * sockets were connected" - a raid chamber's one scourge doorway grew two scourge chambers. Plain hive_door twins
+     * stay untouched: corridors are governed by routing, and merging adjacent plain doors could eat a genuine second
+     * doorway on a long wall.
+     */
+    private static boolean isTwinnedSpecialDoor(String doorType) {
+        return doorType.contains("royal") || doorType.contains("scourge") || doorType.contains("jelly");
+    }
+
     private HiveStructurePlacer() {}
 
     /**
@@ -143,6 +155,10 @@ public final class HiveStructurePlacer {
         // constraint: interior cells only, structure_void margins and everything outside the shell untouched, so the
         // ocean laps against the resin instead of disappearing around it.
         drainStructureAir(level, resolved);
+        // Ceiled dimensions: fortress-style 4x4 ribbed-resin piers under every occupied chunk, so pieces stamped
+        // over open air or the lava ocean stand on something instead of floating. Runs on the completion stamp and
+        // on upkeep re-stamps alike; idempotent (see HiveSupportPillars).
+        HiveSupportPillars.build(level, location, match);
         return true;
     }
 
@@ -200,8 +216,44 @@ public final class HiveStructurePlacer {
                 straightRun
             );
 
+        // ROYAL HALLS DO NOT CHAIN: every royal-hallway template ends in a second royal door, and registering it
+        // verbatim let the router's royal priority build hall after hall off each new far door - the hive grew
+        // ONLY royal corridors and starved its tunnels and rooms ([stated] "the exits out of each hall that
+        // usually lead to a tunnel or jelly/egg room? it just makes a new royal hall"). A placed royal hallway's
+        // remaining doors register DOWNGRADED to ordinary hive doors, so its far end grows tunnels, hubs and
+        // rooms like any corridor. Royal doors therefore only ever exist on the queen chamber itself - the four
+        // grand connections - which is the design.
+        if (match.piece().id().getPath().contains("hallway_royal")) {
+            newSockets = newSockets.stream()
+                .map(
+                    socket -> socket.doorType() != null && socket.doorType().contains("royal")
+                        ? new FrontierSocket(
+                            socket.chunk(),
+                            socket.facing(),
+                            socket.doorType().replace("_royal_door", "_door"),
+                            socket.cornerRun(),
+                            socket.straightRun()
+                        )
+                        : socket
+                )
+                .collect(java.util.stream.Collectors.toList());
+        }
         // The frontier we just consumed is no longer open; remove it and add the piece's remaining doorways.
         location.frontierSockets().remove(connectedTo);
+        // [stated] "every doorway has two jigsaws and always have" - one socket registers PER JIGSAW, so every
+        // doorway carries a twin entry (same chunk, same facing; the doorway never crosses the chunk border).
+        // Placing a royal hall consumes the DOORWAY, not the jigsaw: every remaining royal socket on this
+        // doorway - same facing, same chunk or the immediate neighbour - goes with it, or the leftover twin
+        // invites a second hall beside the first.
+        if (connectedTo != null && connectedTo.doorType() != null && isTwinnedSpecialDoor(connectedTo.doorType())) {
+            var consumedType = connectedTo.doorType();
+            location.frontierSockets()
+                .removeIf(
+                    other -> consumedType.equals(other.doorType())
+                        && other.facing() == connectedTo.facing()
+                        && other.chunk().getChessboardDistance(connectedTo.chunk()) <= 1
+                );
+        }
         location.frontierSockets().addAll(newSockets);
 
         Alien.LOGGER.info(

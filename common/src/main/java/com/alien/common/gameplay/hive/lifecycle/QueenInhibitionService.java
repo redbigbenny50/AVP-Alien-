@@ -181,7 +181,11 @@ public final class QueenInhibitionService {
             }
         }
         // Her chunk becomes the new anchor, which frees the old center for release.
-        location.setCenterPos(queen.blockPosition());
+        location.setCenterPos(
+            queen.level() instanceof net.minecraft.server.level.ServerLevel severLevel
+                ? com.alien.common.gameplay.hive.dimension.DimensionHiveProfiles.roofSafeAnchor(severLevel, queen.blockPosition())
+                : queen.blockPosition()
+        );
         for (var chunk : new ArrayList<>(location.claimedChunks())) {
             if (!chunk.equals(herChunk)) {
                 HiveLocationClaims.release(level, location, chunk);

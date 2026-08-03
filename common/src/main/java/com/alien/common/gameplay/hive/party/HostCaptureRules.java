@@ -60,6 +60,13 @@ public final class HostCaptureRules {
         if (!living.getType().is(AlienEntityTypeTags.HOSTS)) {
             return false; // only host-list creatures are ever captured
         }
+        if (living.isBaby()) {
+            // Babies are permanently un-huggable cargo, never prey ([stated] "baby piglins are getting kidnapped
+            // but not hugged... baby piglins dont grow up according to the wiki"): implantation requires an adult,
+            // parked hosts run under noAi so a webbed calf never ages either, and piglin babies never grow at all.
+            // A captured baby is dead weight webbed to a wall forever - so the hive does not take them.
+            return false;
+        }
         if (living.isPassenger() || !living.getPassengers().isEmpty()) {
             return false; // already being carried, or already wearing a facehugger
         }

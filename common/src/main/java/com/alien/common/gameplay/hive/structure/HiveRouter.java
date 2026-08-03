@@ -198,6 +198,15 @@ public final class HiveRouter {
             // Rank-based completion: the Nth goal of a type is built only once N rooms of that type exist. Proximity
             // checks let one relocated room silently satisfy two neighbouring same-type goals (the missing 5th egg).
             int rank = goalRank.merge(goal.roomType(), 1, Integer::sum) - 1;
+            // [stated] raid rule 1: "max two raid chambers per hive - 1 normally and 2 only under empress." A
+            // hard cap independent of how many goals the blueprint carries, so count drift or legacy blueprints
+            // can never overshoot the doctrine.
+            if (
+                goal.roomType().contains("chamber_raid")
+                    && countRoomsOfType(location, "chamber_raid") >= raidChamberCap(location)
+            ) {
+                continue;
+            }
             if (countRoomsOfType(location, goal.roomType()) > rank) {
                 continue;
             }
@@ -540,6 +549,7 @@ public final class HiveRouter {
                 if (
                     matchesType(match, roomType) && withinExtent(match, center)
                         && !occupiesReserved(match, forbidden)
+                        && !(roomType.contains("chamber_raid") && tooCloseToRaidChamber(location, match))
                         && place(level, location, match, socket, currentTick)
                 ) {
                     return true;
@@ -682,17 +692,51 @@ public final class HiveRouter {
         net.minecraft.util.RandomSource random,
         long currentTick
     ) {
+        // [stated] "theres only a max of 4 royal hallways allowed" - the hard ceiling, whatever the sockets say.
+        // The core authors 4 royal DOORWAYS as 8 jigsaw blocks (two per doorway, straddling the chunk seam), so
+        // socket bookkeeping alone can invite up to 8 halls; the cap is the rule the doors serve.
+        if (countRoomsOfType(location, "hallway_royal") >= MAX_ROYAL_HALLWAYS) {
+            return false;
+        }
         var built = location.structurePieceByChunk().keySet();
         Predicate<ChunkPos> chunkIsFree = c -> !built.contains(c);
         for (FrontierSocket socket : new ArrayList<>(location.frontierSockets())) {
             if (!isRoyalDoor(socket.doorType())) {
                 continue;
             }
+            // Royal halls attach ONLY to the queen chamber's own doors. A royal socket hosted by any other piece
+            // is a leftover from the pre-fix chain bug (worlds saved mid-runaway persist them) - HEAL it into an
+            // ordinary hive door in place, so the runaway hall's far end finally grows the tunnels and rooms it
+            // was supposed to, instead of the next royal hall.
+            var hostPieceId = location.structurePieceByChunk().get(socket.chunk());
+            if (hostPieceId == null || !hostPieceId.contains("core")) {
+                location.frontierSockets().remove(socket);
+                location.frontierSockets()
+                    .add(
+                        new FrontierSocket(
+                            socket.chunk(),
+                            socket.facing(),
+                            socket.doorType().replace("_royal_door", "_door"),
+                            socket.cornerRun(),
+                            socket.straightRun()
+                        )
+                    );
+                continue;
+            }
             var matches = HivePieceMatcher.matchesFromRegistry(socket, registry, chunkIsFree, location.lineageVariantOrNull());
-            if (matches.isEmpty()) {
+            // [stated] rule 2: "royal hallways cannot be built next to eachother" - drop every candidate whose
+            // chunks touch an existing royal hall's chunks (chebyshev <= 1, diagonals included). Holds whatever
+            // the socket bookkeeping does: two halls can never stand side by side.
+            var standaloneMatches = new ArrayList<PieceMatch>(matches.size());
+            for (PieceMatch candidate : matches) {
+                if (!touchesRoyalHall(location, candidate)) {
+                    standaloneMatches.add(candidate);
+                }
+            }
+            if (standaloneMatches.isEmpty()) {
                 continue; // soft priority: no fit this cycle - ordinary growth proceeds, this door retries next cycle
             }
-            var match = matches.get(random.nextInt(matches.size()));
+            var match = standaloneMatches.get(random.nextInt(standaloneMatches.size()));
             if (place(level, location, match, socket, currentTick)) {
                 return true;
             }
@@ -701,6 +745,47 @@ public final class HiveRouter {
     }
 
     /** A royal door: the grand connections off the queen chamber, buildable only with royal-hallway pieces. */
+    /** [stated] raid rule 1: one raid chamber normally, a second only under empress influence. */
+    private static int raidChamberCap(HiveLocation location) {
+        return location.isEmpressInfluenced() ? 2 : 1;
+    }
+
+    /**
+     * [stated] raid rule 2: "raid chambers can not be within 2 chunks of eachother." True when any chunk of this
+     * candidate sits within chebyshev 2 of an existing raid chamber's chunks.
+     */
+    private static boolean tooCloseToRaidChamber(HiveLocation location, PieceMatch match) {
+        for (var entry : location.structurePieceByChunk().entrySet()) {
+            if (!entry.getValue().contains("chamber_raid")) {
+                continue;
+            }
+            for (ChunkPos candidate : match.occupiedChunks()) {
+                if (candidate.getChessboardDistance(entry.getKey()) <= 2) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    /** True when any chunk of this candidate touches (chebyshev <= 1) a chunk of an already-placed royal hall. */
+    private static boolean touchesRoyalHall(HiveLocation location, PieceMatch match) {
+        for (var entry : location.structurePieceByChunk().entrySet()) {
+            if (!entry.getValue().contains("hallway_royal")) {
+                continue;
+            }
+            for (ChunkPos candidate : match.occupiedChunks()) {
+                if (candidate.getChessboardDistance(entry.getKey()) <= 1) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    /** [stated] hard limit on royal hallways per hive. */
+    private static final int MAX_ROYAL_HALLWAYS = 4;
+
     private static boolean isRoyalDoor(String doorType) {
         return doorType != null && doorType.contains("royal");
     }
@@ -886,17 +971,20 @@ public final class HiveRouter {
     /** How many rooms of this type stand in the hive (chunk count over the type's footprint). */
     /** Public so the purchase-condition system can ask "how many raid chambers does this hive have?". */
     public static int countRoomsOfType(HiveLocation location, String roomType) {
-        int chunks = 0;
-        for (String id : location.structurePieceByChunk().values()) {
+        // Counted from builtPlacements - ONE ENTRY PER PLACED PIECE - not from per-chunk bookkeeping divided by
+        // footprint. The old chunks/4 math undercounted whenever a single chunk of a 2x2 failed to record, and an
+        // undercounted goal re-fires: the plausible root of a hive building a SECOND raid chamber seconds after
+        // its first completed. A placement either exists or it does not.
+        int rooms = 0;
+        for (var placement : location.builtPlacements().values()) {
+            var id = placement.pieceId();
             // The "chamber_jelly" goal means jelly VAULTS; royal-jelly chambers (special-door attachments) share the
             // substring and must not satisfy vault goals, or shortfalls go invisible.
             if (id.contains(roomType) && !(roomType.equals("chamber_jelly") && id.contains("jelly_royal"))) {
-                chunks++;
+                rooms++;
             }
         }
-        boolean twoByTwo = roomType.contains("chamber_host") || roomType.contains("chamber_raid")
-            || roomType.contains("hub") || roomType.contains("chamber_harvest");
-        return twoByTwo ? chunks / 4 : chunks;
+        return rooms;
     }
 
     /**
@@ -1271,7 +1359,31 @@ public final class HiveRouter {
         long currentTick
     ) {
         for (FrontierSocket socket : new ArrayList<>(location.frontierSockets())) {
-            if (isSpecialDoor(socket.doorType()) && attachAt(level, registry, location, socket, center, currentTick)) {
+            if (!isSpecialDoor(socket.doorType())) {
+                continue;
+            }
+            // [stated] raid rule 3: each raid chamber gets ITS scourge jelly chamber - exactly one. A scourge
+            // socket whose doorway already has a scourge chamber standing beside it is the leftover TWIN jigsaw
+            // (persisted from before twin consumption existed; "the two scourge sockets were connected") - remove
+            // it instead of growing a second room. Same-doorway test: a scourge chamber within chebyshev 2.
+            if (
+                socket.doorType() != null && socket.doorType().contains("scourge")
+                    && hasRoomOfTypeNear(location, socket.chunk(), "chamber_scourge", 2)
+            ) {
+                location.frontierSockets().remove(socket);
+                continue;
+            }
+            if (attachAt(level, registry, location, socket, center, currentTick)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /** True when a placed piece of this room type stands within {@code range} chunks (chebyshev) of {@code near}. */
+    private static boolean hasRoomOfTypeNear(HiveLocation location, ChunkPos near, String roomType, int range) {
+        for (var entry : location.structurePieceByChunk().entrySet()) {
+            if (entry.getValue().contains(roomType) && near.getChessboardDistance(entry.getKey()) <= range) {
                 return true;
             }
         }

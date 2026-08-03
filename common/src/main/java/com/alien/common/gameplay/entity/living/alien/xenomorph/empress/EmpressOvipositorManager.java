@@ -64,12 +64,23 @@ public class EmpressOvipositorManager implements NBTSerializable {
 
         if (hasOvipositor) {
             getOvipositor().ifSome(ovipositor -> {
-                ovipositor.setYRot(empress.getYRot());
+                ovipositor.setYRot(
+                    empress.getYRot()
+                        + com.alien.common.gameplay.entity.living.alien.xenomorph.queen.OvipositorManager.OVIPOSITOR_YAW_OFFSET_DEGREES
+                ); // keep the model offset every tick
                 ovipositor.setXRot(empress.getXRot());
                 // Body rotation.
-                ovipositor.yBodyRot = empress.yBodyRot;
+                ovipositor.yBodyRot = empress.yBodyRot
+                    + com.alien.common.gameplay.entity.living.alien.xenomorph.queen.OvipositorManager.OVIPOSITOR_YAW_OFFSET_DEGREES; // sack
+                                                                                                                                     // model
+                                                                                                                                     // offset
+                                                                                                                                     // -
+                                                                                                                                     // one
+                                                                                                                                     // shared
+                                                                                                                                     // dial
                 // Head rotation.
-                ovipositor.yHeadRot = empress.yHeadRot;
+                ovipositor.yHeadRot = empress.yHeadRot
+                    + com.alien.common.gameplay.entity.living.alien.xenomorph.queen.OvipositorManager.OVIPOSITOR_YAW_OFFSET_DEGREES;
             });
             return;
         }
@@ -156,11 +167,23 @@ public class EmpressOvipositorManager implements NBTSerializable {
         var ovipositor = AlienEntityTypes.EMPRESS_OVIPOSITOR.get().create(empress.level());
 
         if (ovipositor != null) {
-            ovipositor.moveTo(empress.position(), empress.getYRot(), empress.getXRot());
+            ovipositor.moveTo(
+                empress.position(),
+                empress.getYRot()
+                    + com.alien.common.gameplay.entity.living.alien.xenomorph.queen.OvipositorManager.OVIPOSITOR_YAW_OFFSET_DEGREES,
+                empress.getXRot()
+            );
             ovipositor.startRiding(empress, true);
 
             // Body rotation.
-            ovipositor.yBodyRot = empress.yBodyRot;
+            ovipositor.yBodyRot = empress.yBodyRot
+                + com.alien.common.gameplay.entity.living.alien.xenomorph.queen.OvipositorManager.OVIPOSITOR_YAW_OFFSET_DEGREES; // sack
+                                                                                                                                 // model
+                                                                                                                                 // offset
+                                                                                                                                 // -
+                                                                                                                                 // one
+                                                                                                                                 // shared
+                                                                                                                                 // dial
             // Head rotation.
             ovipositor.yHeadRot = empress.yHeadRot;
 

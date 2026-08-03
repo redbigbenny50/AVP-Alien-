@@ -51,6 +51,47 @@ public final class CaptureHostAction {
     /** Consecutive failed pathfinds per captor. */
     private static final Map<Xenomorph, Integer> FAILED_PATH_TICKS = new WeakHashMap<>();
 
+    /**
+     * The stall detector's second, DISTANCE-BASED net. The NO_PATH counter above only catches a navigator that admits
+     * defeat - but a quarry on an unreachable shelf produces MOVING almost every tick: the navigator happily paths TO
+     * THE CLIFF EDGE, reports success, and re-paths there forever, resetting the counter each time (tester log
+     * latest-3: 71 minutes of drones pacing above a piglin pack 20 blocks below, distSq pinned ~1500, move=MOVING
+     * navDone=true - and zero hosts gathered). Motion is not progress; CLOSING is. Per captor we track the best
+     * distance achieved on the current quarry and the last time it meaningfully improved; a chase that has not closed
+     * in {@link #STALL_TIMEOUT_TICKS} is written off exactly like an admitted NO_PATH, and the sensor hands the drone a
+     * different host next tick.
+     */
+    private static final Map<Xenomorph, ChaseProgress> CHASE_PROGRESS = new WeakHashMap<>();
+
+    /** A chase that has not gotten closer in this long is pinned at an obstacle, whatever the navigator claims. */
+    private static final long STALL_TIMEOUT_TICKS = 600L;
+
+    /** "Meaningfully improved": at least ~3 blocks closer, so a wandering quarry's jitter never counts as progress. */
+    private static final double PROGRESS_EPSILON_SQUARED = 9.0D;
+
+    /** Best distance achieved toward one specific quarry, and when it last improved. */
+    private record ChaseProgress(
+        java.util.UUID targetId,
+        double bestDistSquared,
+        long lastProgressGameTime
+    ) {}
+
+    /**
+     * VENT DESCENT ([stated] "the host party would spawn in and detect hosts on the level below them and then use the
+     * vent to go down to that level and grab those hosts"): before a stalled hunter writes a quarry off as unreachable,
+     * it checks the duct network - a hive vent within {@link #DUCT_TO_QUARRY_RANGE_SQUARED} of the quarry, while the
+     * hunter itself stands in its hive's territory or near any vent, means the prey IS reachable: through the walls.
+     * The hunter ducts to that vent's emergence spot and the chase restarts from there. One duct per quarry - a second
+     * stall on the same prey means the vent didn't help, and the ordinary write-off proceeds.
+     */
+    private static final Map<Xenomorph, java.util.UUID> DUCTED_FOR_QUARRY = new WeakHashMap<>();
+
+    /** A vent this close to the quarry counts as "on its shelf". */
+    private static final double DUCT_TO_QUARRY_RANGE_SQUARED = 16.0 * 16.0;
+
+    /** The hunter must be plausibly on the network: within territory, or this close to any of its hive's vents. */
+    private static final double DUCT_ENTRY_RANGE_SQUARED = 32.0 * 32.0;
+
     public static Action.Signal perform(Action.Context<? extends Xenomorph> context) {
         var xenomorph = context.getActor();
 
@@ -68,6 +109,9 @@ public final class CaptureHostAction {
 
         if (xenomorph.distanceToSqr(target) <= GRAB_RANGE_SQUARED) {
             HostClaims.release(target); // it is on our back now; the passenger check guards it from here
+            CHASE_PROGRESS.remove(xenomorph);
+            FAILED_PATH_TICKS.remove(xenomorph);
+            DUCTED_FOR_QUARRY.remove(xenomorph);
             HostCaptureTask.capture(xenomorph, target);
             // Action.Signal has no FINISHED: the IS_CARRYING_HOST effect flips and the planner moves on.
             return Action.Signal.CONTINUE;
@@ -109,19 +153,106 @@ public final class CaptureHostAction {
             default -> {
                 var failed = FAILED_PATH_TICKS.merge(xenomorph, 1, Integer::sum);
                 if (failed >= NO_PATH_PATIENCE_TICKS) {
-                    FAILED_PATH_TICKS.remove(xenomorph);
-                    HostClaims.writeOffUnreachable(target, xenomorph);
-                    NeoMoveToPosAction.onFinish(context);
-                    com.alien.Alien.LOGGER.info(
-                        "[hostdbg] gave up on unreachable quarry {} at {} - looking for another",
-                        target.getType().getDescriptionId(),
-                        target.blockPosition()
-                    );
+                    if (!tryDuctToQuarry(xenomorph, target)) {
+                        giveUpOnQuarry(context, xenomorph, target);
+                    } else {
+                        FAILED_PATH_TICKS.remove(xenomorph);
+                        CHASE_PROGRESS.remove(xenomorph);
+                    }
+                    return Action.Signal.CONTINUE;
                 }
+            }
+        }
+        // Distance-based stall net: MOVING at a cliff edge is not progress. See CHASE_PROGRESS.
+        var distanceSquared = xenomorph.distanceToSqr(target);
+        var gameTime = xenomorph.level().getGameTime();
+        var progress = CHASE_PROGRESS.get(xenomorph);
+        if (
+            progress == null
+                || !progress.targetId().equals(target.getUUID())
+                || distanceSquared <= progress.bestDistSquared() - PROGRESS_EPSILON_SQUARED
+        ) {
+            CHASE_PROGRESS.put(xenomorph, new ChaseProgress(target.getUUID(), distanceSquared, gameTime));
+        } else if (gameTime - progress.lastProgressGameTime() >= STALL_TIMEOUT_TICKS) {
+            if (!tryDuctToQuarry(xenomorph, target)) {
+                giveUpOnQuarry(context, xenomorph, target);
+            } else {
+                FAILED_PATH_TICKS.remove(xenomorph);
+                CHASE_PROGRESS.remove(xenomorph);
             }
         }
 
         return Action.Signal.CONTINUE;
+    }
+
+    /**
+     * Try the duct network before giving up: teleport to the hive vent nearest the quarry if one sits on its shelf.
+     * True = ducted (chase restarts from the vent); false = the network doesn't reach, write it off.
+     */
+    private static boolean tryDuctToQuarry(Xenomorph xenomorph, LivingEntity target) {
+        if (target.getUUID().equals(DUCTED_FOR_QUARRY.get(xenomorph))) {
+            return false; // already ducted for this prey - the vent didn't help
+        }
+        if (!(xenomorph.level() instanceof net.minecraft.server.level.ServerLevel serverLevel)) {
+            return false;
+        }
+        var location = com.alien.common.gameplay.hive.location.HiveLocationRegistry.INSTANCE.findNearestInDim(
+            serverLevel.dimension(),
+            xenomorph.blockPosition()
+        );
+        if (location == null) {
+            return false;
+        }
+        var vents = com.alien.common.gameplay.hive.party.PartyVentUtil.findSurfaceVents(serverLevel, location);
+        if (vents.isEmpty()) {
+            return false;
+        }
+        net.minecraft.core.BlockPos ventNearQuarry = null;
+        var bestDist = DUCT_TO_QUARRY_RANGE_SQUARED;
+        var onNetwork = location.claimedChunks().contains(new net.minecraft.world.level.ChunkPos(xenomorph.blockPosition()));
+        for (var vent : vents) {
+            var toQuarry = target.distanceToSqr(vent.getX() + 0.5, vent.getY() + 0.5, vent.getZ() + 0.5);
+            if (toQuarry <= bestDist) {
+                bestDist = toQuarry;
+                ventNearQuarry = vent;
+            }
+            if (
+                !onNetwork
+                    && xenomorph.distanceToSqr(vent.getX() + 0.5, vent.getY() + 0.5, vent.getZ() + 0.5) <= DUCT_ENTRY_RANGE_SQUARED
+            ) {
+                onNetwork = true;
+            }
+        }
+        if (ventNearQuarry == null || !onNetwork) {
+            return false;
+        }
+        var emerge = com.alien.common.gameplay.hive.party.PartyVentUtil.surfaceEmergeSpot(serverLevel, ventNearQuarry);
+        var landing = emerge != null ? emerge : ventNearQuarry.above();
+        xenomorph.teleportTo(landing.getX() + 0.5, landing.getY(), landing.getZ() + 0.5);
+        DUCTED_FOR_QUARRY.put(xenomorph, target.getUUID());
+        com.alien.Alien.LOGGER.info(
+            "[hostdbg] ducted through vent {} to reach quarry {} at {} - chase restarting",
+            ventNearQuarry,
+            target.getType().getDescriptionId(),
+            target.blockPosition()
+        );
+        return true;
+    }
+
+    /**
+     * Write this quarry off as unreachable and clear both stall trackers - the sensor hands the drone a different host
+     * next tick. Give up on the HOST, never on hunting.
+     */
+    private static void giveUpOnQuarry(Action.Context context, Xenomorph xenomorph, LivingEntity target) {
+        FAILED_PATH_TICKS.remove(xenomorph);
+        CHASE_PROGRESS.remove(xenomorph);
+        HostClaims.writeOffUnreachable(target, xenomorph);
+        NeoMoveToPosAction.onFinish(context);
+        com.alien.Alien.LOGGER.info(
+            "[hostdbg] gave up on unreachable quarry {} at {} - looking for another",
+            target.getType().getDescriptionId(),
+            target.blockPosition()
+        );
     }
 
     /**

@@ -52,7 +52,7 @@ public final class HiveLocation {
      * TODO(phase1-config): move these to {@code HiveConfig} once config persistence lands so they are tunable in-game.
      * Hardcoded for now.
      */
-    private static final int SLAB_HEIGHT = 16;
+    public static final int SLAB_HEIGHT = 16;
 
     /** Upkeep cadence: one built piece re-drained per beat (~5s), so the whole hive cycles cheaply. */
     private static final int UPKEEP_INTERVAL_TICKS = 100;
@@ -150,6 +150,8 @@ public final class HiveLocation {
     private static final String NBT_END_PURE_BANK_SINCE_MILLIS = "EndPureBankSinceMillis";
 
     private static final String NBT_END_WORKER_VENTED_CHUNKS = "EndWorkerVentedChunks";
+
+    private static final String NBT_SUPPORT_PILLAR_CHUNKS = "SupportPillarChunks";
 
     private static final String NBT_END_STYLE_HIVE = "EndStyleHive";
 
@@ -394,8 +396,18 @@ public final class HiveLocation {
      */
     private final java.util.Set<Long> endWorkerVentedChunks = new java.util.HashSet<>();
 
+    /**
+     * Chunks (ChunkPos.toLong) that already carry a support pillar, so pillar spacing survives reloads and upkeep
+     * re-stamps never densify what was deliberately left open. See HiveSupportPillars.
+     */
+    private final java.util.Set<Long> supportPillarChunks = new java.util.HashSet<>();
+
     public java.util.Set<Long> endWorkerVentedChunks() {
         return endWorkerVentedChunks;
+    }
+
+    public java.util.Set<Long> supportPillarChunks() {
+        return supportPillarChunks;
     }
 
     /**
@@ -1229,6 +1241,14 @@ public final class HiveLocation {
      * See {@code HiveStructureUpkeep} for what is preserved rather than cleared (jelly vats, resin).
      */
     private void tickStructureUpkeep(MinecraftServer server) {
+        // Repair crews beat faster than the detector: steering, gait and progress need a 1-second cadence even
+        // though new damage is only LOOKED for every UPKEEP_INTERVAL_TICKS.
+        if (ageInTicks % com.alien.common.gameplay.hive.structure.HiveBreachRepair.TICK_INTERVAL == 0 && !builtPlacements.isEmpty()) {
+            var repairLevel = server.getLevel(dimension);
+            if (repairLevel != null) {
+                com.alien.common.gameplay.hive.structure.HiveBreachRepair.tick(repairLevel, this);
+            }
+        }
         if (ageInTicks % UPKEEP_INTERVAL_TICKS != 0) {
             return;
         }
@@ -1376,6 +1396,9 @@ public final class HiveLocation {
             tag.putLong(NBT_END_PURE_BANK_SINCE_MILLIS, endPureBankSinceMillis);
             tag.putLongArray(NBT_END_WORKER_VENTED_CHUNKS, endWorkerVentedChunks.stream().mapToLong(Long::longValue).toArray());
             tag.putBoolean(NBT_END_STYLE_HIVE, endStyleHive);
+        }
+        if (!supportPillarChunks.isEmpty()) {
+            tag.putLongArray(NBT_SUPPORT_PILLAR_CHUNKS, supportPillarChunks.stream().mapToLong(Long::longValue).toArray());
         }
         if (siegeCombatTicks > 0L) {
             tag.putLong(NBT_SIEGE_COMBAT_TICKS, siegeCombatTicks);
@@ -1610,6 +1633,9 @@ public final class HiveLocation {
             location.endWorkerVentedChunks.add(packed);
         }
         location.endStyleHive = tag.getBoolean(NBT_END_STYLE_HIVE);
+        for (var packed : tag.getLongArray(NBT_SUPPORT_PILLAR_CHUNKS)) {
+            location.supportPillarChunks.add(packed);
+        }
         location.siegeCombatTicks = Math.max(0L, tag.getLong(NBT_SIEGE_COMBAT_TICKS));
 
         if (tag.contains(NBT_CLAIMED_CHUNKS)) {

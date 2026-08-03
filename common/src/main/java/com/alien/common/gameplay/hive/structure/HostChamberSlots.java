@@ -64,15 +64,16 @@ public final class HostChamberSlots {
         }
         var origins = new ArrayList<ChunkPos>();
         for (var chunk : hostChunks) {
+            // EVERY full 2x2 square of host chunks is a group - deliberately including overlapping squares. The
+            // old min-corner exclusivity meant TWO host chambers built touching each other merged into one blob
+            // whose second half was never enumerated: its beds were invisible to firstFreeSpot and egg delivery
+            // ([stated] "the second host chamber never gets used. the main one fills up and the second one sits
+            // unused"). Overlapping origins re-list some wall cells; every consumer checks the actual world state
+            // per cell (occupancy, existing eggs), so duplicates cost a few reads and change nothing.
             if (
                 hostChunks.contains(new ChunkPos(chunk.x + 1, chunk.z))
                     && hostChunks.contains(new ChunkPos(chunk.x, chunk.z + 1))
                     && hostChunks.contains(new ChunkPos(chunk.x + 1, chunk.z + 1))
-                    // min-corner only: the chunk left/above must not also form a square containing this one
-                    && !(hostChunks.contains(new ChunkPos(chunk.x - 1, chunk.z))
-                        && hostChunks.contains(new ChunkPos(chunk.x - 1, chunk.z + 1)))
-                    && !(hostChunks.contains(new ChunkPos(chunk.x, chunk.z - 1))
-                        && hostChunks.contains(new ChunkPos(chunk.x + 1, chunk.z - 1)))
             ) {
                 origins.add(chunk);
             }

@@ -85,15 +85,49 @@ public final class HiveStructureUpkeep {
         if (resolved == null) {
             return;
         }
-        if (!isBreached(level, resolved)) {
+        if (HiveBreachRepair.hasJob(location, originChunk)) {
+            return; // crew already dispatched - the detector's work is done until they finish
+        }
+        // Damage is no longer healed on the spot: the pass COLLECTS the wounded cells and files a repair job, and
+        // drones travel there and visibly work before the re-stamp runs ([stated] "sends a drone or drones to the
+        // site to do the dig animation as if they are fixing the breach"). See HiveBreachRepair.
+        var breachCells = collectBreachCells(level, resolved);
+        if (breachCells.isEmpty()) {
             return;
         }
+        HiveBreachRepair.noteBreach(location, originChunk, breachCells);
+    }
 
+    /**
+     * The actual masonry, invoked by {@link HiveBreachRepair} once a crew has finished working the wound. Same
+     * reconstruction and snapshot-stamp-restore dance the instant path used.
+     */
+    public static boolean restamp(ServerLevel level, HiveLocation location, ChunkPos originChunk, HiveLocation.BuiltPlacement placement) {
+        var registry = HivePieceRegistry.get(level.getServer());
+        if (registry == null) {
+            return false;
+        }
+        var pieceId = ResourceLocation.tryParse(placement.pieceId());
+        if (pieceId == null) {
+            return false;
+        }
+        var piece = registry.get(pieceId);
+        if (piece == null) {
+            return false;
+        }
+        var match = new PieceMatch(piece, placement.rotation(), originChunk);
+        var chunks = match.occupiedChunks();
+        for (ChunkPos chunk : chunks) {
+            if (!level.isLoaded(chunk.getWorldPosition())) {
+                return false;
+            }
+        }
         var preserved = snapshotHiveBlocks(level, location, chunks);
         if (!HiveStructurePlacer.placeWorld(level, location, match)) {
-            return;
+            return false;
         }
         restore(level, preserved);
+        return true;
     }
 
     /**
@@ -105,15 +139,59 @@ public final class HiveStructureUpkeep {
      * breach.
      */
     private static boolean isBreached(ServerLevel level, HiveStructurePlacer.ResolvedPlacement resolved) {
+        return !collectBreachCells(level, resolved).isEmpty();
+    }
+
+    /** Enough cells to aim a crew and prove the wound; collection stops here. */
+    private static final int MAX_BREACH_CELLS = 8;
+
+    /**
+     * Every damaged cell the hive can see, two kinds: INTRUSIONS (something solid or liquid in an authored air cell -
+     * the original detector) and HOLES (an authored SOLID on the interior boundary that is now air or fluid). Broken
+     * walls and floors were invisible before: the old scan only read the air cells, so a removed block never registered
+     * and player damage stood forever. The boundary is derived from the air cells - each neighbor of an authored air
+     * cell that is not itself authored air is an authored solid (wall, floor, ceiling). Neighbors on the template's
+     * outermost shell are skipped, so doorway mouths that run to the edge (where structure_void margins begin) can
+     * never read as false damage.
+     */
+    private static List<BlockPos> collectBreachCells(ServerLevel level, HiveStructurePlacer.ResolvedPlacement resolved) {
+        var breached = new ArrayList<BlockPos>();
         var airCells = resolved.template().filterBlocks(resolved.placeAt(), resolved.settings(), Blocks.AIR);
+        var airSet = new java.util.HashSet<BlockPos>(Math.max(16, airCells.size() * 2));
+        for (var cell : airCells) {
+            airSet.add(cell.pos());
+        }
+        var bounds = resolved.template().getBoundingBox(resolved.settings(), resolved.placeAt());
         for (var cell : airCells) {
             var state = level.getBlockState(cell.pos());
-            if (state.isAir() || isPreserved(state)) {
-                continue;
+            if (!state.isAir() && !isPreserved(state)) {
+                breached.add(cell.pos()); // intrusion
+                if (breached.size() >= MAX_BREACH_CELLS) {
+                    return breached;
+                }
             }
-            return true;
+            for (var direction : net.minecraft.core.Direction.values()) {
+                var neighbor = cell.pos().relative(direction);
+                if (airSet.contains(neighbor)) {
+                    continue; // interior air, not boundary
+                }
+                if (
+                    neighbor.getX() <= bounds.minX() || neighbor.getX() >= bounds.maxX()
+                        || neighbor.getY() <= bounds.minY() || neighbor.getY() >= bounds.maxY()
+                        || neighbor.getZ() <= bounds.minZ() || neighbor.getZ() >= bounds.maxZ()
+                ) {
+                    continue; // outermost shell - structure_void territory
+                }
+                var neighborState = level.getBlockState(neighbor);
+                if (neighborState.isAir() || !neighborState.getFluidState().isEmpty()) {
+                    breached.add(neighbor); // hole: authored solid missing (or flooded)
+                    if (breached.size() >= MAX_BREACH_CELLS) {
+                        return breached;
+                    }
+                }
+            }
         }
-        return false;
+        return breached;
     }
 
     /** Collects the hive's own blocks inside the piece so the stamp can't eat them. */
