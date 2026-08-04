@@ -578,6 +578,9 @@ public final class HiveLocationRegistry {
 
         if (server.overworld().getGameTime() % Math.max(1L, config.contestTickWindow()) == 0L) {
             com.alien.common.gameplay.hive.war.AlienTerritoryWarSystem.scanAndApply(server);
+            // Open wars are resolved on the same cadence, off the registry rather than a loaded tick: a war between
+            // two hives nobody is standing near still has to reach a victor.
+            com.alien.common.gameplay.hive.war.AlienTerritoryWarSystem.tickWars(server);
         }
 
         ticksSinceLastScan++;

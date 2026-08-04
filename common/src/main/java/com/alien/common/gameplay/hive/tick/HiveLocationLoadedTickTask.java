@@ -85,6 +85,11 @@ public final class HiveLocationLoadedTickTask {
         if (com.alien.common.gameplay.hive.defense.VentDefenseTask.shouldFire(currentTick)) {
             com.alien.common.gameplay.hive.defense.VentDefenseTask.run(serverLevel, location);
         }
+        // A dormant rival-strain queen inside our claims is sensed and executed. Sits with defense, ABOVE the
+        // end-style branch: an End fortress that somehow owns ground with a sleeper in it still answers for it.
+        if (com.alien.common.gameplay.hive.defense.DormantQueenPurge.shouldFire(currentTick)) {
+            com.alien.common.gameplay.hive.defense.DormantQueenPurge.run(serverLevel, location);
+        }
 
         // ---- END-STYLE HIVES branch off here and run NOTHING below this block. ---------------------------------
         // The End hive is a player-built fortress, not a self-growing empire: no construction, no expansion, no
@@ -117,7 +122,12 @@ public final class HiveLocationLoadedTickTask {
         // on its own game-time timers until worker dispatch lands at step 5. Called every loaded tick; a hive with no
         // active site returns immediately, so this is free almost always. Sits below the inhibited gate on purpose:
         // building is autonomy, so an inhibited hive's build FREEZES (the site persists - never lost, only paused).
-        com.alien.common.gameplay.hive.structure.carve.CarveSiteWork.tickActive(server, serverLevel, location);
+        // [stated] the weaker side of a slab-intersection grace "stops building... to make the war more fair": the
+        // active carve freezes exactly like an inhibited hive's does - the site persists, it simply does not advance.
+        // Everything else (economy, defence, egg-laying, population growth) runs on, which is the whole point.
+        if (!location.isBuildFrozenForWarPrep()) {
+            com.alien.common.gameplay.hive.structure.carve.CarveSiteWork.tickActive(server, serverLevel, location);
+        }
 
         // Loaded biomass income — only for player-nearby locations (proxy: boss bar is showing). Cheap to call,
         // so we check every tick and let LoadedBiomassTicker decide whether this is its second.
@@ -164,7 +174,9 @@ public final class HiveLocationLoadedTickTask {
         // so the hive expands gradually and visibly rather than all at once. Bounded and event-driven off the frontier
         // set; does nothing when there are no open sockets.
         if (currentTick % 200L == 0L) {
-            if (com.alien.common.gameplay.hive.structure.HiveRouter.ENABLED) {
+            if (location.isBuildFrozenForWarPrep()) {
+                // No new pieces commissioned during the preparation truce.
+            } else if (com.alien.common.gameplay.hive.structure.HiveRouter.ENABLED) {
                 com.alien.common.gameplay.hive.structure.HiveRouter.route(server, serverLevel, location);
             } else {
                 com.alien.common.gameplay.hive.structure.HiveStructurePlanner.tryGrow(server, serverLevel, location);

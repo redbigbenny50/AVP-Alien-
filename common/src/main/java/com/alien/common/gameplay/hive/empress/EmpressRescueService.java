@@ -54,6 +54,17 @@ public final class EmpressRescueService {
         if (empressId == null || location.isExiled()) {
             return false;
         }
+        // [stated] a hive lost in a war between two empires is a LOSS, not a candidate for rejuvenation. Refilling
+        // its fund from a sibling here would quietly undo the one thing the war is fought to achieve, and the end
+        // condition ("all members are dead") would never land while she kept crowning successors into the wreck.
+        if (com.alien.common.gameplay.hive.war.AlienTerritoryWarSystem.isExcludedFromQueenReplacement(location)) {
+            Alien.LOGGER.info(
+                "Empress rescue refused for {} — {}; the hive is written off as a loss.",
+                location.id(),
+                location.hasLostAWar() ? "it was beaten in a war" : "it is at war"
+            );
+            return false;
+        }
         if (location.empressRescuesReceived() >= config.empressRescuesPerHive()) {
             // Third death. She writes it off; it dies like any other hive.
             return false;

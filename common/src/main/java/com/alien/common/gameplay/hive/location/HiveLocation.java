@@ -24,6 +24,7 @@ import org.jetbrains.annotations.Nullable;
 
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.Map;
 import java.util.Set;
@@ -156,6 +157,24 @@ public final class HiveLocation {
     private static final String NBT_END_STYLE_HIVE = "EndStyleHive";
 
     private static final String NBT_SIEGE_COMBAT_TICKS = "SiegeCombatTicks";
+
+    private static final String NBT_WAR_ENEMIES = "WarEnemies";
+
+    private static final String NBT_WAR_STARTED_TICK = "WarStartedTick";
+
+    private static final String NBT_PENDING_WARS = "PendingWars";
+
+    private static final String NBT_PENDING_WAR_ENEMY = "Enemy";
+
+    private static final String NBT_PENDING_WAR_SINCE = "Since";
+
+    private static final String NBT_PENDING_WAR_SLABS_MEET = "SlabsMeet";
+
+    private static final String NBT_PENDING_WAR_EXTENSIONS = "Extensions";
+
+    private static final String NBT_BUILD_FROZEN_FOR_WAR_PREP = "BuildFrozenForWarPrep";
+
+    private static final String NBT_LOST_A_WAR = "LostAWar";
 
     private static final String NBT_CHUNK_CLAIM_TICKS = "ChunkClaimTicks";
 
@@ -426,6 +445,38 @@ public final class HiveLocation {
 
     /** Accumulated active-combat time (ticks) - the siege clock territory attrition keys on. */
     private long siegeCombatTicks;
+
+    /**
+     * The hive locations this one is AT WAR with, by faction id. [stated] "the contested chunks would become warzones
+     * between the two and the hives would be locked into combat. they would attack until one side has no more
+     * members." Persisted, because a war outlives a restart; symmetric, because both sides record each other.
+     */
+    private final LinkedHashSet<ResourceLocation> warEnemies = new LinkedHashSet<>();
+
+    /** Game time the CURRENT war opened (its first enemy). Zero when at peace. */
+    private long warStartedTick;
+
+    /**
+     * Rivals this hive is HEADED for war with but not yet fighting, and the terms of the wait. [stated] slabs that
+     * intersect get three Minecraft days of grace; territory that overlaps at different levels waits until both sides
+     * can field fifty. Persisted - the clock and the truce both have to survive a restart.
+     */
+    private final LinkedHashMap<ResourceLocation, PendingWar> pendingWars = new LinkedHashMap<>();
+
+    /**
+     * [stated] "building stops for the hive with the lowest population and they will focus on increasing population to
+     * make the war more fair." Set on the weaker side of a slab-intersection grace period; cleared when the grace ends
+     * or the pairing dissolves.
+     */
+    private boolean buildFrozenForWarPrep;
+
+    /**
+     * This hive was the side that ran out of members. [stated] "if a hive loses a war then it would exclude it as
+     * well otherwise the new smaller hive would die and waste a slot" - a beaten hive is not crowned and is not
+     * rescued, because a successor seated in the wreckage burns a lineage slot and an empress charge on something
+     * that dies anyway. Permanent: dormancy finishes what the war started.
+     */
+    private boolean lostAWar;
 
     private final Map<ChunkPos, Long> chunkClaimTicks;
 
@@ -968,6 +1019,79 @@ public final class HiveLocation {
         return lastCombatDamageTick;
     }
 
+    /**
+     * A war that has been decided on but has not started. {@code slabsMeet} picks which rule governs the wait: the
+     * three-day grace when the two hives build into the same band, or the fifty-member threshold when they merely
+     * share ground at different levels. {@code extensions} counts the three-day reprieves a levelled pact has already
+     * been granted while waiting for both sides to reach fifty - [stated] after two, the war starts regardless.
+     */
+    public record PendingWar(long sinceTick, boolean slabsMeet, int extensions) {}
+
+    /** Rivals this hive is headed for war with, and the terms of each wait. */
+    public Map<ResourceLocation, PendingWar> pendingWars() {
+        return pendingWars;
+    }
+
+    /** True once this hive has been beaten in a war: no crowning, no empress rescue, it is left to die. */
+    public boolean hasLostAWar() {
+        return lostAWar;
+    }
+
+    /** Marks the defeat. One-way - a hive does not un-lose a war. */
+    public void markLostAWar() {
+        this.lostAWar = true;
+    }
+
+    /** True while construction is halted so this hive can rebuild its numbers before a war it is losing on paper. */
+    public boolean isBuildFrozenForWarPrep() {
+        return buildFrozenForWarPrep;
+    }
+
+    public void setBuildFrozenForWarPrep(boolean frozen) {
+        this.buildFrozenForWarPrep = frozen;
+    }
+
+    /** Every hive location this one is at war with, by faction id. Mutating this directly skips the announcements. */
+    public java.util.Set<ResourceLocation> warEnemies() {
+        return warEnemies;
+    }
+
+    /** True while at least one war is open. Suppresses banking, despawns and contest flips for the duration. */
+    public boolean isAtWar() {
+        return !warEnemies.isEmpty();
+    }
+
+    public boolean isAtWarWith(ResourceLocation enemyLocationId) {
+        return warEnemies.contains(enemyLocationId);
+    }
+
+    /** Game time the current war opened; zero at peace. */
+    public long warStartedTick() {
+        return warStartedTick;
+    }
+
+    /** Records a new enemy. Returns true only the FIRST time this enemy is added, so callers announce once. */
+    public boolean addWarEnemy(ResourceLocation enemyLocationId, long gameTime) {
+        if (!warEnemies.add(enemyLocationId)) {
+            return false;
+        }
+        if (warStartedTick == 0L) {
+            warStartedTick = gameTime;
+        }
+        return true;
+    }
+
+    /** Drops an enemy. Returns true if this hive was actually at war with them; clears the clock at peace. */
+    public boolean removeWarEnemy(ResourceLocation enemyLocationId) {
+        if (!warEnemies.remove(enemyLocationId)) {
+            return false;
+        }
+        if (warEnemies.isEmpty()) {
+            warStartedTick = 0L;
+        }
+        return true;
+    }
+
     public void recordCombatDamage(long gameTime) {
         this.lastCombatDamageTick = Math.max(this.lastCombatDamageTick, gameTime);
     }
@@ -1403,6 +1527,32 @@ public final class HiveLocation {
         if (siegeCombatTicks > 0L) {
             tag.putLong(NBT_SIEGE_COMBAT_TICKS, siegeCombatTicks);
         }
+        if (buildFrozenForWarPrep) {
+            tag.putBoolean(NBT_BUILD_FROZEN_FOR_WAR_PREP, true);
+        }
+        if (lostAWar) {
+            tag.putBoolean(NBT_LOST_A_WAR, true);
+        }
+        if (!pendingWars.isEmpty()) {
+            var pendingTag = new ListTag();
+            for (var entry : pendingWars.entrySet()) {
+                var pendingEntry = new CompoundTag();
+                pendingEntry.putString(NBT_PENDING_WAR_ENEMY, entry.getKey().toString());
+                pendingEntry.putLong(NBT_PENDING_WAR_SINCE, entry.getValue().sinceTick());
+                pendingEntry.putBoolean(NBT_PENDING_WAR_SLABS_MEET, entry.getValue().slabsMeet());
+                pendingEntry.putInt(NBT_PENDING_WAR_EXTENSIONS, entry.getValue().extensions());
+                pendingTag.add(pendingEntry);
+            }
+            tag.put(NBT_PENDING_WARS, pendingTag);
+        }
+        if (!warEnemies.isEmpty()) {
+            var warTag = new ListTag();
+            for (var enemy : warEnemies) {
+                warTag.add(net.minecraft.nbt.StringTag.valueOf(enemy.toString()));
+            }
+            tag.put(NBT_WAR_ENEMIES, warTag);
+            tag.putLong(NBT_WAR_STARTED_TICK, warStartedTick);
+        }
 
         var claimedTag = new ListTag();
         var claimTicksTag = new ListTag();
@@ -1637,6 +1787,35 @@ public final class HiveLocation {
             location.supportPillarChunks.add(packed);
         }
         location.siegeCombatTicks = Math.max(0L, tag.getLong(NBT_SIEGE_COMBAT_TICKS));
+        location.buildFrozenForWarPrep = tag.getBoolean(NBT_BUILD_FROZEN_FOR_WAR_PREP);
+        location.lostAWar = tag.getBoolean(NBT_LOST_A_WAR);
+        if (tag.contains(NBT_PENDING_WARS)) {
+            var pendingTag = tag.getList(NBT_PENDING_WARS, Tag.TAG_COMPOUND);
+            for (var i = 0; i < pendingTag.size(); i++) {
+                var pendingEntry = pendingTag.getCompound(i);
+                var enemy = ResourceLocation.tryParse(pendingEntry.getString(NBT_PENDING_WAR_ENEMY));
+                if (enemy != null) {
+                    location.pendingWars.put(
+                        enemy,
+                        new PendingWar(
+                            pendingEntry.getLong(NBT_PENDING_WAR_SINCE),
+                            pendingEntry.getBoolean(NBT_PENDING_WAR_SLABS_MEET),
+                            pendingEntry.getInt(NBT_PENDING_WAR_EXTENSIONS)
+                        )
+                    );
+                }
+            }
+        }
+        if (tag.contains(NBT_WAR_ENEMIES)) {
+            var warTag = tag.getList(NBT_WAR_ENEMIES, Tag.TAG_STRING);
+            for (var i = 0; i < warTag.size(); i++) {
+                var enemy = ResourceLocation.tryParse(warTag.getString(i));
+                if (enemy != null) {
+                    location.warEnemies.add(enemy);
+                }
+            }
+            location.warStartedTick = Math.max(0L, tag.getLong(NBT_WAR_STARTED_TICK));
+        }
 
         if (tag.contains(NBT_CLAIMED_CHUNKS)) {
             var claimedTag = tag.getList(NBT_CLAIMED_CHUNKS, Tag.TAG_COMPOUND);

@@ -53,6 +53,12 @@ public final class BroodBankTask {
 
     /** Runs on the hive's 200-tick loaded cadence - absorption is a chore, not a reaction. */
     public static void run(ServerLevel level, HiveLocation location) {
+        // [stated] "they wont despawn or go back into reserves until the war is over." A hive at war keeps every
+        // body it has in the field - banking is how members LEAVE the fight, so the whole task stands down. The bank
+        // still exists and still spends; it just stops swallowing the army mid-battle.
+        if (location.isAtWar()) {
+            return;
+        }
         // END-STYLE: there is no structure - banking is VENT-ONLY across the whole claimed territory, and it is the
         // End's entire population model, so the scan box is the claimed footprint at full height (islands scatter
         // vertically). No vent standing means nothing banks - the End absorb below requires vent contact and never

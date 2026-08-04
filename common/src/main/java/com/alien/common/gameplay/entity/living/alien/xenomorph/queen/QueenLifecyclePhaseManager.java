@@ -138,6 +138,25 @@ public class QueenLifecyclePhaseManager implements NBTSerializable {
     /** Players within this range hear the awakening broadcast when a wild queen's sleep runs out. */
     private static final double WILD_AWAKENING_BROADCAST_RANGE = 256.0;
 
+    /**
+     * [stated] "if it is full and its the same strain she should have the chance to wake up and relocate then found."
+     * A sleeping wild queen whose only same-strain neighbours are at their hive cap does not lie there forever - she
+     * wakes and moves out of that lineage's reach to found her own. She must clear the SAME range that would have let
+     * them adopt her, or she would simply re-qualify for a lineage that still cannot take her.
+     */
+    private static final int CAPPED_LINEAGE_FLEE_CLEARANCE_CHUNKS = WILD_ADOPTION_RANGE_CHUNKS;
+
+    /**
+     * [stated] "a force spawning queen should follow the same rules causing the sleeping queen to awaken and then
+     * leave... this would apply to summoned or spawn egg queens." The reaction lives on HER, not on the spawner, so
+     * it covers every arrival the same way: the first-queen guarantee, a spawn egg, a summon, a queen walking past.
+     * Blocks, not chunks - an entity scan wants a box.
+     */
+    private static final double RIVAL_QUEEN_WAKE_RANGE_BLOCKS = 128.0;
+
+    /** How far she puts between herself and the queen that woke her (chebyshev chunks). */
+    private static final int RIVAL_QUEEN_FLEE_CLEARANCE_CHUNKS = 16;
+
     private final Queen queen;
 
     private QueenLifecyclePhase phase;
@@ -156,6 +175,15 @@ public class QueenLifecyclePhaseManager implements NBTSerializable {
 
     /** Ticks she has been threat-free while DEFENDING; at {@link #HIBERNATION_CALM_TICKS} she heads back. Transient. */
     private int disturbanceCalmTicks;
+
+    /**
+     * Set for exactly one anchor pick when something drove her off this spot (a capped lineage, a rival queen): the
+     * chunk she is fleeing and how far she must get from it. Consumed and cleared by {@link #pickAnchorChunk()}, so it
+     * is deliberately transient - a reload mid-flight simply leaves her digging to the anchor she already committed.
+     */
+    private @Nullable ChunkPos fleeFromChunk;
+
+    private int fleeClearanceChunks;
 
     /** The committed hive anchor (chunk-center XZ + target Y) chosen in LOCATION. Null until then; never re-chosen. */
     private @Nullable BlockPos anchor;
@@ -558,8 +586,11 @@ public class QueenLifecyclePhaseManager implements NBTSerializable {
     private void tickHibernationAsleep() {
         queen.isHibernating.set(true);
 
-        if (wildSpawned && queen.tickCount % WILD_ADOPTION_CHECK_INTERVAL_TICKS == 0 && tryWildAdoption()) {
-            return;
+        if (wildSpawned && queen.tickCount % WILD_ADOPTION_CHECK_INTERVAL_TICKS == 0) {
+            // Adoption first: joining a lineage that has room always beats picking up and moving.
+            if (tryWildAdoption() || tryFleeRivalQueen()) {
+                return;
+            }
         }
 
         if (hibernationTicksRemaining > 0) {
@@ -593,6 +624,7 @@ public class QueenLifecyclePhaseManager implements NBTSerializable {
         }
 
         var queenChunk = queen.chunkPosition();
+        HiveLocation cappedNeighbour = null;
 
         for (var location : HiveLocationRegistry.INSTANCE.all()) {
             if (!location.dimension().equals(serverLevel.dimension())) {
@@ -619,8 +651,13 @@ public class QueenLifecyclePhaseManager implements NBTSerializable {
             if (
                 faction == null
                     || !(faction.data() instanceof com.alien.common.gameplay.hive.faction.LineageFactionData lineage)
-                    || lineage.locationsById().size() >= WILD_ADOPTION_LINEAGE_CAP
             ) {
+                continue;
+            }
+            if (lineage.locationsById().size() >= WILD_ADOPTION_LINEAGE_CAP) {
+                // Her own strain, in reach, with no room for her. Remember it and keep looking - another lineage of
+                // the same strain may still have a seat, and being adopted always beats moving.
+                cappedNeighbour = location;
                 continue;
             }
 
@@ -635,7 +672,67 @@ public class QueenLifecyclePhaseManager implements NBTSerializable {
             return true;
         }
 
+        if (cappedNeighbour != null) {
+            wakeAndFlee(
+                new ChunkPos(cappedNeighbour.centerPos()),
+                CAPPED_LINEAGE_FLEE_CLEARANCE_CHUNKS,
+                "her own strain's lineage " + cappedNeighbour.lineageFactionId() + " is at its hive cap"
+            );
+            return true;
+        }
+
         return false;
+    }
+
+    /**
+     * [stated] the rival-queen half of the same rule: a queen arriving near her - forced by the first-queen guarantee,
+     * dropped from a spawn egg, summoned, or simply passing through - wakes her and she leaves. Strain does not matter
+     * here: two queens do not share ground, and a queen with no hive behind her has nobody to send after a sleeper, so
+     * moving away IS the resolution. An established hive that grows a claim over her is the other case entirely - that
+     * one is an execution, and it lives in DormantQueenPurge.
+     */
+    private boolean tryFleeRivalQueen() {
+        if (!(queen.level() instanceof ServerLevel serverLevel)) {
+            return false;
+        }
+
+        var box = queen.getBoundingBox().inflate(RIVAL_QUEEN_WAKE_RANGE_BLOCKS);
+        for (var other : serverLevel.getEntitiesOfClass(Queen.class, box)) {
+            if (other == queen || !other.isAlive()) {
+                continue;
+            }
+            // Two sleepers side by side is a spawn-spacing question, not a threat - neither of them is doing
+            // anything. It is the WAKING queen, the one about to claim this ground, that moves her.
+            if (Boolean.TRUE.equals(other.isHibernating.get())) {
+                continue;
+            }
+            wakeAndFlee(
+                other.chunkPosition(),
+                RIVAL_QUEEN_FLEE_CLEARANCE_CHUNKS,
+                "another queen (" + other.getUUID() + ") took this ground"
+            );
+            return true;
+        }
+
+        return false;
+    }
+
+    /**
+     * Wakes her out of hibernation and sends her through the ordinary relocation machinery with a no-go zone attached:
+     * she re-picks an anchor that clears {@code clearanceChunks} of {@code fleeFrom} as well as the usual hive spacing,
+     * clip-digs there, and re-hibernates before founding. If nothing legal exists inside the search radius she settles
+     * where she can, exactly as a boxed-in daughter queen does.
+     */
+    private void wakeAndFlee(ChunkPos fleeFrom, int clearanceChunks, String reason) {
+        this.fleeFromChunk = fleeFrom;
+        this.fleeClearanceChunks = clearanceChunks;
+        Alien.LOGGER.info(
+            "Queen lifecycle: wild queen {} woke and is relocating away from {} — {}",
+            queen.getUUID(),
+            fleeFrom,
+            reason
+        );
+        beginFreedRelocation();
     }
 
     /** "You have awakened a slumbering nightmare" — sent to every player whose activity accumulated her sleep clock. */
@@ -940,9 +1037,10 @@ public class QueenLifecyclePhaseManager implements NBTSerializable {
         var minimum = HiveLocationRegistry.INSTANCE.config().minimumHiveLocationDistanceChunks();
         var current = queen.chunkPosition();
 
-        // If she can already found where she stands, she does - no need to relocate at all.
-        if (SpreadZoneCheck.wouldAllow(queen, current)) {
-            return current;
+        // If she can already found where she stands, she does - no need to relocate at all. A queen who was DRIVEN
+        // off this spot is the exception: staying put is the one answer she is not allowed to give.
+        if (SpreadZoneCheck.wouldAllow(queen, current) && clearsFleeZone(current)) {
+            return clearFleeZone(current);
         }
 
         // She can't found here (too close to a hive). Rather than crawl outward from HERSELF (which lands her at
@@ -953,8 +1051,8 @@ public class QueenLifecyclePhaseManager implements NBTSerializable {
         var nearest = nearestLocation(dimension, current);
         if (nearest != null) {
             var ringPick = nearestFoundableOnSpacingRing(nearest, current, minimum);
-            if (ringPick != null) {
-                return ringPick;
+            if (ringPick != null && clearsFleeZone(ringPick)) {
+                return clearFleeZone(ringPick);
             }
         }
 
@@ -963,12 +1061,28 @@ public class QueenLifecyclePhaseManager implements NBTSerializable {
         var random = queen.getRandom();
         for (var radius = 1; radius <= MAX_ANCHOR_SEARCH_RADIUS_CHUNKS; radius++) {
             var ring = farEnoughChunksInRing(current, radius, dimension, minimum);
+            ring.removeIf(candidate -> !clearsFleeZone(candidate));
             if (!ring.isEmpty()) {
-                return ring.get(random.nextInt(ring.size()));
+                return clearFleeZone(ring.get(random.nextInt(ring.size())));
             }
         }
 
-        return current;
+        // Boxed in even counting the no-go zone: she settles for what she can get, same as any daughter queen.
+        return clearFleeZone(current);
+    }
+
+    /** True when no flight is pending, or when this chunk is far enough from whatever drove her off. */
+    private boolean clearsFleeZone(ChunkPos candidate) {
+        return fleeFromChunk == null
+            || Math.max(Math.abs(candidate.x - fleeFromChunk.x), Math.abs(candidate.z - fleeFromChunk.z))
+                >= fleeClearanceChunks;
+    }
+
+    /** One anchor pick per flight: the no-go zone is consumed here so a later re-pick is an ordinary one. */
+    private ChunkPos clearFleeZone(ChunkPos picked) {
+        fleeFromChunk = null;
+        fleeClearanceChunks = 0;
+        return picked;
     }
 
     /** Nearest hive-location centre (Chebyshev, same-dimension) to {@code from}, or null if there are none. */
