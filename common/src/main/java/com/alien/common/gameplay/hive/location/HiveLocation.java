@@ -176,6 +176,8 @@ public final class HiveLocation {
 
     private static final String NBT_LOST_A_WAR = "LostAWar";
 
+    private static final String NBT_LAST_STAND = "LastStand";
+
     private static final String NBT_CHUNK_CLAIM_TICKS = "ChunkClaimTicks";
 
     private static final String NBT_DECORATED_CHUNKS = "DecoratedChunks";
@@ -448,8 +450,8 @@ public final class HiveLocation {
 
     /**
      * The hive locations this one is AT WAR with, by faction id. [stated] "the contested chunks would become warzones
-     * between the two and the hives would be locked into combat. they would attack until one side has no more
-     * members." Persisted, because a war outlives a restart; symmetric, because both sides record each other.
+     * between the two and the hives would be locked into combat. they would attack until one side has no more members."
+     * Persisted, because a war outlives a restart; symmetric, because both sides record each other.
      */
     private final LinkedHashSet<ResourceLocation> warEnemies = new LinkedHashSet<>();
 
@@ -471,12 +473,19 @@ public final class HiveLocation {
     private boolean buildFrozenForWarPrep;
 
     /**
-     * This hive was the side that ran out of members. [stated] "if a hive loses a war then it would exclude it as
-     * well otherwise the new smaller hive would die and waste a slot" - a beaten hive is not crowned and is not
-     * rescued, because a successor seated in the wreckage burns a lineage slot and an empress charge on something
-     * that dies anyway. Permanent: dormancy finishes what the war started.
+     * This hive was the side that ran out of members. [stated] "if a hive loses a war then it would exclude it as well
+     * otherwise the new smaller hive would die and waste a slot" - a beaten hive is not crowned and is not rescued,
+     * because a successor seated in the wreckage burns a lineage slot and an empress charge on something that dies
+     * anyway. Permanent: dormancy finishes what the war started.
      */
     private boolean lostAWar;
+
+    /**
+     * [stated] "When the queen dies the hive gets a boost 'last stand' this increases their stats by 25% its the hives
+     * last push." Set when a hive at war is found queenless; it also unlocks the queen's own reserve floor once there
+     * is nobody else left to send.
+     */
+    private boolean lastStand;
 
     private final Map<ChunkPos, Long> chunkClaimTicks;
 
@@ -1021,11 +1030,15 @@ public final class HiveLocation {
 
     /**
      * A war that has been decided on but has not started. {@code slabsMeet} picks which rule governs the wait: the
-     * three-day grace when the two hives build into the same band, or the fifty-member threshold when they merely
-     * share ground at different levels. {@code extensions} counts the three-day reprieves a levelled pact has already
-     * been granted while waiting for both sides to reach fifty - [stated] after two, the war starts regardless.
+     * three-day grace when the two hives build into the same band, or the fifty-member threshold when they merely share
+     * ground at different levels. {@code extensions} counts the three-day reprieves a levelled pact has already been
+     * granted while waiting for both sides to reach fifty - [stated] after two, the war starts regardless.
      */
-    public record PendingWar(long sinceTick, boolean slabsMeet, int extensions) {}
+    public record PendingWar(
+        long sinceTick,
+        boolean slabsMeet,
+        int extensions
+    ) {}
 
     /** Rivals this hive is headed for war with, and the terms of each wait. */
     public Map<ResourceLocation, PendingWar> pendingWars() {
@@ -1035,6 +1048,16 @@ public final class HiveLocation {
     /** True once this hive has been beaten in a war: no crowning, no empress rescue, it is left to die. */
     public boolean hasLostAWar() {
         return lostAWar;
+    }
+
+    /** True once the queen has fallen mid-war: everyone fights at +25% and the queen's bank is on the table. */
+    public boolean isInLastStand() {
+        return lastStand;
+    }
+
+    /** Raises or clears the last stand. Cleared when the war ends, so a surviving hive is not permanently buffed. */
+    public void setLastStand(boolean lastStand) {
+        this.lastStand = lastStand;
     }
 
     /** Marks the defeat. One-way - a hive does not un-lose a war. */
@@ -1533,6 +1556,9 @@ public final class HiveLocation {
         if (lostAWar) {
             tag.putBoolean(NBT_LOST_A_WAR, true);
         }
+        if (lastStand) {
+            tag.putBoolean(NBT_LAST_STAND, true);
+        }
         if (!pendingWars.isEmpty()) {
             var pendingTag = new ListTag();
             for (var entry : pendingWars.entrySet()) {
@@ -1789,6 +1815,7 @@ public final class HiveLocation {
         location.siegeCombatTicks = Math.max(0L, tag.getLong(NBT_SIEGE_COMBAT_TICKS));
         location.buildFrozenForWarPrep = tag.getBoolean(NBT_BUILD_FROZEN_FOR_WAR_PREP);
         location.lostAWar = tag.getBoolean(NBT_LOST_A_WAR);
+        location.lastStand = tag.getBoolean(NBT_LAST_STAND);
         if (tag.contains(NBT_PENDING_WARS)) {
             var pendingTag = tag.getList(NBT_PENDING_WARS, Tag.TAG_COMPOUND);
             for (var i = 0; i < pendingTag.size(); i++) {

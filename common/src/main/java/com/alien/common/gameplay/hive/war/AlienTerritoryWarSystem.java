@@ -2,12 +2,12 @@ package com.alien.common.gameplay.hive.war;
 
 import com.alien.Alien;
 import com.alien.AlienResources;
+import com.alien.common.gameplay.hive.economy.CastePopulation;
 import com.alien.common.gameplay.hive.faction.LineageFactionData;
 import com.alien.common.gameplay.hive.growth.HiveLocationClaims;
 import com.alien.common.gameplay.hive.id.HiveLocationId;
 import com.alien.common.gameplay.hive.id.HiveLocationIds;
 import com.alien.common.gameplay.hive.id.LineageIds;
-import com.alien.common.gameplay.hive.economy.CastePopulation;
 import com.alien.common.gameplay.hive.location.HiveLocation;
 import com.alien.common.gameplay.hive.location.HiveLocationRegistry;
 import com.alien.common.gameplay.hive.tick.HiveLocationLoadedTickTask;
@@ -347,13 +347,17 @@ public final class AlienTerritoryWarSystem implements TerritoryContestListener {
     }
 
     /**
-     * Resolves open wars. [stated] "The war ends when all members are dead excluding banked eggs those just vanish
-     * when the hive has no more members." A side is SPENT when it holds no loaded members and its reserves are empty;
-     * a side whose location has died is spent by definition. Runs on the registry scan, so a war between two hives
-     * nobody is watching still concludes.
+     * Resolves open wars. [stated] "The war ends when all members are dead excluding banked eggs those just vanish when
+     * the hive has no more members." A side is SPENT when it holds no loaded members and its reserves are empty; a side
+     * whose location has died is spent by definition. Runs on the registry scan, so a war between two hives nobody is
+     * watching still concludes.
      */
     public static void tickWars(MinecraftServer server) {
         tickPendingWars(server);
+
+        // One simulated round per sweep at most, claimed here rather than tested per pair - otherwise the first
+        // pair would consume the round and every other war would sit still.
+        boolean simulationRoundDue = WarSimulation.claimRound(server.overworld().getGameTime());
 
         for (var location : new ArrayList<>(HiveLocationRegistry.INSTANCE.all())) {
             if (!location.isAtWar()) {
@@ -371,8 +375,26 @@ public final class AlienTerritoryWarSystem implements TerritoryContestListener {
                     concludeWar(level, location, enemyId, location.id().value());
                     continue;
                 }
+                // [stated] the queen falling is the trigger for the last push, not the end of the war.
+                raiseLastStandIfQueenless(server, location);
+                raiseLastStandIfQueenless(server, enemy);
+
                 boolean weAreSpent = isSpent(server, location);
                 boolean theyAreSpent = isSpent(server, enemy);
+
+                // [stated] "when the chunks unload the war continues simulated until a victor is decided." If either
+                // side is not loaded the fight cannot play out in the world, so it plays out on paper instead - and
+                // only THEN can an unloaded hive be judged spent.
+                if (!weAreSpent && !theyAreSpent && !bothLoaded(server, location, enemy)) {
+                    if (
+                        simulationRoundDue
+                            && WarSimulation.fightRound(server.overworld().getRandom(), location, enemy)
+                    ) {
+                        weAreSpent = isSimulationSpent(location);
+                        theyAreSpent = isSimulationSpent(enemy);
+                    }
+                }
+
                 if (!weAreSpent && !theyAreSpent) {
                     continue;
                 }
@@ -397,6 +419,40 @@ public final class AlienTerritoryWarSystem implements TerritoryContestListener {
      * A hive with nothing left to send. Loaded members and the reserve bank both count - banked EGGS deliberately do
      * not, per [stated] "excluding banked eggs those just vanish when the hive has no more members".
      */
+    /** Both sides actually present in the world - the only case the loaded end condition may judge. */
+    private static boolean bothLoaded(MinecraftServer server, HiveLocation first, HiveLocation second) {
+        return isLoaded(server, first) && isLoaded(server, second);
+    }
+
+    private static boolean isLoaded(MinecraftServer server, HiveLocation location) {
+        var level = server.getLevel(location.dimension());
+        return level != null && HiveLocationLoadedTickTask.hasLoadedClaimedChunk(level, location);
+    }
+
+    /** The paper version of spent: nothing tracked and nothing banked. Used only after a simulated round. */
+    private static boolean isSimulationSpent(HiveLocation location) {
+        return !location.isAlive()
+            || (CastePopulation.totalTrackedPopulation(location) <= 0
+                && location.localReserves().getReliableCount() <= 0);
+    }
+
+    /**
+     * [stated] "When the queen dies the hive gets a boost 'last stand'... its the hives last push." Raised the first
+     * time a hive at war is seen queenless, and only while it is loaded enough to know - a hive nobody can see is not
+     * declared queenless on the strength of an empty entity list.
+     */
+    private static void raiseLastStandIfQueenless(MinecraftServer server, HiveLocation location) {
+        if (location.isInLastStand() || !isLoaded(server, location)) {
+            return;
+        }
+        if (CastePopulation.countCaste(location, AlienEntityTypeTags.QUEENS) > 0) {
+            return;
+        }
+        location.setLastStand(true);
+        markLineageDirty(location);
+        Alien.LOGGER.info("War: hive {} has lost its queen — LAST STAND.", location.id());
+    }
+
     private static boolean isSpent(MinecraftServer server, HiveLocation location) {
         if (!location.isAlive()) {
             return true;
@@ -426,11 +482,25 @@ public final class AlienTerritoryWarSystem implements TerritoryContestListener {
         @org.jetbrains.annotations.Nullable ResourceLocation victorId
     ) {
         location.removeWarEnemy(enemyId);
+        // A survivor does not stay buffed once the fighting stops.
+        if (!location.isAtWar()) {
+            location.setLastStand(false);
+        }
         markLineageDirty(location);
         var enemy = HiveLocationRegistry.INSTANCE.get(HiveLocationId.of(enemyId));
         if (enemy != null) {
             enemy.removeWarEnemy(location.id().value());
             markLineageDirty(enemy);
+        }
+
+        // [stated] nobody is left standing in a hive that no longer has a war to fight - both sides pull their
+        // survivors out of the other's ground before the pairing is forgotten. Done HERE because this is the last
+        // moment either side still knows who the enemy was.
+        if (level != null) {
+            WarOffensive.recallFrom(level, location, enemy);
+            if (enemy != null) {
+                WarOffensive.recallFrom(level, enemy, location);
+            }
         }
 
         if (level != null) {
@@ -561,18 +631,18 @@ public final class AlienTerritoryWarSystem implements TerritoryContestListener {
      * [stated] "If the war is between two different empress hive territories... They also will not do the usual hive
      * queen replacement if the hive dies", clarified as: "the empress can rejuvenate a hive with no pending queen
      * twice... just want to make sure in the case the firewall hive dies the empress will count it as a loss and not
-     * try to replace." The rescue transfer is that rejuvenation, and it is exactly what would otherwise undo a war
-     * loss - so in an empire war a dead hive stays dead and counts against her.
+     * try to replace." The rescue transfer is that rejuvenation, and it is exactly what would otherwise undo a war loss
+     * - so in an empire war a dead hive stays dead and counts against her.
      */
     /**
      * No hive crowns a queen while a war is on, and none crowns one after losing it.
      * <p>
      * [stated] "crowning a new queen during the war wouldn't make much sense and costs resources so dont let it", and
      * [stated] "if a hive loses a war then it would exclude it as well otherwise the new smaller hive would die and
-     * waste a slot." Both halves apply to ORDINARY queen-vs-queen wars, not only empire ones: the firewall fund and
-     * the jelly are needed for the fighting, and a successor seated mid-war only inherits a war already going badly.
-     * A PENDING pact is deliberately NOT covered - the grace period is exactly when a hive should be putting itself
-     * back together.
+     * waste a slot." Both halves apply to ORDINARY queen-vs-queen wars, not only empire ones: the firewall fund and the
+     * jelly are needed for the fighting, and a successor seated mid-war only inherits a war already going badly. A
+     * PENDING pact is deliberately NOT covered - the grace period is exactly when a hive should be putting itself back
+     * together.
      */
     public static boolean isExcludedFromQueenReplacement(HiveLocation location) {
         return location.hasLostAWar() || location.isAtWar();

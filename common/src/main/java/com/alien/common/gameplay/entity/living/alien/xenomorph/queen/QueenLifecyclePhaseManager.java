@@ -139,8 +139,8 @@ public class QueenLifecyclePhaseManager implements NBTSerializable {
     private static final double WILD_AWAKENING_BROADCAST_RANGE = 256.0;
 
     /**
-     * [stated] "if it is full and its the same strain she should have the chance to wake up and relocate then found."
-     * A sleeping wild queen whose only same-strain neighbours are at their hive cap does not lie there forever - she
+     * [stated] "if it is full and its the same strain she should have the chance to wake up and relocate then found." A
+     * sleeping wild queen whose only same-strain neighbours are at their hive cap does not lie there forever - she
      * wakes and moves out of that lineage's reach to found her own. She must clear the SAME range that would have let
      * them adopt her, or she would simply re-qualify for a lineage that still cannot take her.
      */
@@ -148,8 +148,8 @@ public class QueenLifecyclePhaseManager implements NBTSerializable {
 
     /**
      * [stated] "a force spawning queen should follow the same rules causing the sleeping queen to awaken and then
-     * leave... this would apply to summoned or spawn egg queens." The reaction lives on HER, not on the spawner, so
-     * it covers every arrival the same way: the first-queen guarantee, a spawn egg, a summon, a queen walking past.
+     * leave... this would apply to summoned or spawn egg queens." The reaction lives on HER, not on the spawner, so it
+     * covers every arrival the same way: the first-queen guarantee, a spawn egg, a summon, a queen walking past.
      * Blocks, not chunks - an entity scan wants a box.
      */
     private static final double RIVAL_QUEEN_WAKE_RANGE_BLOCKS = 128.0;
@@ -1074,8 +1074,7 @@ public class QueenLifecyclePhaseManager implements NBTSerializable {
     /** True when no flight is pending, or when this chunk is far enough from whatever drove her off. */
     private boolean clearsFleeZone(ChunkPos candidate) {
         return fleeFromChunk == null
-            || Math.max(Math.abs(candidate.x - fleeFromChunk.x), Math.abs(candidate.z - fleeFromChunk.z))
-                >= fleeClearanceChunks;
+            || Math.max(Math.abs(candidate.x - fleeFromChunk.x), Math.abs(candidate.z - fleeFromChunk.z)) >= fleeClearanceChunks;
     }
 
     /** One anchor pick per flight: the no-go zone is consumed here so a later re-pick is an ordinary one. */

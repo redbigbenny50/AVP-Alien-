@@ -90,6 +90,20 @@ public final class HiveLocationLoadedTickTask {
         if (com.alien.common.gameplay.hive.defense.DormantQueenPurge.shouldFire(currentTick)) {
             com.alien.common.gameplay.hive.defense.DormantQueenPurge.run(serverLevel, location);
         }
+        // A hive at war keeps a garrison standing, topped up one wave at a time. Defence tier, above the end-style
+        // branch: a war is fought wherever the hives are.
+        if (com.alien.common.gameplay.hive.war.WarMobilization.shouldFire(currentTick)) {
+            com.alien.common.gameplay.hive.war.WarMobilization.run(serverLevel, location);
+        }
+        // ...and sends waves of it at the enemy hive. Ordered AFTER mobilization so a wave that just left is
+        // replaced on the same tick it departs.
+        if (com.alien.common.gameplay.hive.war.WarOffensive.shouldFire(currentTick)) {
+            com.alien.common.gameplay.hive.war.WarOffensive.run(serverLevel, location);
+        }
+        // The throne holds its own watch, and its harbinger answers anyone who reaches the last two rooms.
+        if (com.alien.common.gameplay.hive.war.ThroneDefense.shouldFire(currentTick)) {
+            com.alien.common.gameplay.hive.war.ThroneDefense.run(serverLevel, location);
+        }
 
         // ---- END-STYLE HIVES branch off here and run NOTHING below this block. ---------------------------------
         // The End hive is a player-built fortress, not a self-growing empire: no construction, no expansion, no

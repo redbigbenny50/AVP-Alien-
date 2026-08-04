@@ -786,9 +786,9 @@ public final class HiveRouter {
     /**
      * The ONE chamber a special doorway may grow, by door type. Returns null for ordinary doors (no restriction).
      * <p>
-     * Door types are shared by more than their companion chamber - a royal hallway carries a jelly door so its
-     * jelly chamber can hang off it, a raid chamber carries a scourge door for its scourge room - so matching on
-     * the door type alone lets a special socket regrow the very piece that authored it.
+     * Door types are shared by more than their companion chamber - a royal hallway carries a jelly door so its jelly
+     * chamber can hang off it, a raid chamber carries a scourge door for its scourge room - so matching on the door
+     * type alone lets a special socket regrow the very piece that authored it.
      */
     private static @Nullable String companionRoomFor(@Nullable String doorType) {
         if (doorType == null) {
@@ -808,8 +808,8 @@ public final class HiveRouter {
      * advance, the royal hallway routine, the gap-filling bridge and the special-door attach - funnels through
      * {@link #place}, so a rule enforced here cannot be walked around by a path that never heard of it.
      * <p>
-     * That is exactly how the caps were beaten before: the royal ceiling lived inside placeRoyalHallways and the
-     * raid cap inside the pending-goal filter, while attachAt called place() directly with neither in scope.
+     * That is exactly how the caps were beaten before: the royal ceiling lived inside placeRoyalHallways and the raid
+     * cap inside the pending-goal filter, while attachAt called place() directly with neither in scope.
      */
     private static boolean allowedByPieceClassRules(
         HiveLocation location,
@@ -858,10 +858,10 @@ public final class HiveRouter {
     }
 
     /**
-     * Rooms of this type the hive has COMMITTED to: placed pieces plus the one currently being carved. A
-     * commissioned site is not in builtPlacements until its carve completes, so counting only finished rooms
-     * would let a cap be judged against a hive that is missing its newest one. Routing is gated on
-     * hasActiveCarveSite today, which closes that window by accident - the cap should not depend on it.
+     * Rooms of this type the hive has COMMITTED to: placed pieces plus the one currently being carved. A commissioned
+     * site is not in builtPlacements until its carve completes, so counting only finished rooms would let a cap be
+     * judged against a hive that is missing its newest one. Routing is gated on hasActiveCarveSite today, which closes
+     * that window by accident - the cap should not depend on it.
      */
     private static int committedRoomsOfType(HiveLocation location, String roomType) {
         int rooms = countRoomsOfType(location, roomType);

@@ -2,8 +2,8 @@ package com.alien.common.gameplay.hive.war;
 
 import com.alien.Alien;
 import com.alien.common.gameplay.hive.dimension.EndStyleHiveRules;
-import com.alien.common.gameplay.hive.economy.CasteResolver;
 import com.alien.common.gameplay.hive.economy.CastePopulation;
+import com.alien.common.gameplay.hive.economy.CasteResolver;
 import com.alien.common.gameplay.hive.location.HiveLocation;
 import com.alien.common.gameplay.hive.location.HiveLocationRegistry;
 import com.alien.common.registry.tag.AlienEntityTypeTags;
@@ -22,8 +22,8 @@ import java.util.List;
  * empires. That symmetry is deliberate: this is the empress tier showing up, not an advantage handed to whoever
  * contested first.
  * <p>
- * The bolster lands in the RESERVE BANK rather than on the ground - the war's own mobilisation decides when bodies
- * come out of the vents, and dumping fifty xenomorphs into a chamber at once is exactly the lag spike he ruled out.
+ * The bolster lands in the RESERVE BANK rather than on the ground - the war's own mobilisation decides when bodies come
+ * out of the vents, and dumping fifty xenomorphs into a chamber at once is exactly the lag spike he ruled out.
  */
 public final class EmpressWarBolster {
 

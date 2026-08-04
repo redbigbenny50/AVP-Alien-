@@ -25,10 +25,10 @@ import net.minecraft.world.level.block.state.BlockState;
  * first layer, places nothing, and costs one 10x10 read. Only genuinely open ground grows a pier, wherever it is.
  * <p>
  * END-STYLE DIMENSIONS ARE EXEMPT ([stated] "lets exclude them from the end if possible though with building disabled
- * in the end that might not be needed"): the exemption is phrased as {@link EndStyleHiveRules#forbidsConstruction},
- * the same switch that already forbids carving and chambers there, so it also covers any modded dimension opted into
- * the end-style tag. He is right that it should be unreachable today - nothing places a piece in the End - but a pier
- * over island void is precisely the wrong thing to grow if some future path ever does.
+ * in the end that might not be needed"): the exemption is phrased as {@link EndStyleHiveRules#forbidsConstruction}, the
+ * same switch that already forbids carving and chambers there, so it also covers any modded dimension opted into the
+ * end-style tag. He is right that it should be unreachable today - nothing places a piece in the End - but a pier over
+ * island void is precisely the wrong thing to grow if some future path ever does.
  * <p>
  * SPACING ([stated] "i dont want a pillar in every chunk though... i would only want one under a hallway if there are
  * no other pillars close. i dont want a 19x19 of pillars"): CHAMBER pieces keep his stated per-chunk counts - the 3x3
@@ -64,10 +64,10 @@ public final class HiveSupportPillars {
     private static final int HALLWAY_CLEARANCE_CHUNKS = 1;
 
     /**
-     * How far a pier may descend before giving up. A pillar normally stops the moment it seats, so this only bites
-     * over a genuine void (the End's islands, a modded sky dimension) where there is no floor at all - without it,
-     * such a piece would grow a shaft all the way to the world bottom. Far deeper than any real seating distance,
-     * including a nether shelf standing over the lava sea.
+     * How far a pier may descend before giving up. A pillar normally stops the moment it seats, so this only bites over
+     * a genuine void (the End's islands, a modded sky dimension) where there is no floor at all - without it, such a
+     * piece would grow a shaft all the way to the world bottom. Far deeper than any real seating distance, including a
+     * nether shelf standing over the lava sea.
      */
     private static final int MAX_PILLAR_DEPTH_BLOCKS = 128;
 

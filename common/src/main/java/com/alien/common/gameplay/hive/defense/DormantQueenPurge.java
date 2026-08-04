@@ -34,9 +34,9 @@ import java.util.WeakHashMap;
  * kill her and dig back to the hive/vent." The claim IS the sense organ: the moment a chunk the hive owns contains a
  * dormant queen of another strain, a kill squad is dispatched, and when she is dead the survivors duct home.
  * <p>
- * SAME-STRAIN SLEEPERS ARE NEVER TOUCHED. Her own strain either adopts her as a daughter queen or - when the lineage
- * is at its hive cap - wakes her to relocate; both of those live on her side in {@code QueenLifecyclePhaseManager}.
- * Only a foreign strain kills.
+ * SAME-STRAIN SLEEPERS ARE NEVER TOUCHED. Her own strain either adopts her as a daughter queen or - when the lineage is
+ * at its hive cap - wakes her to relocate; both of those live on her side in {@code QueenLifecyclePhaseManager}. Only a
+ * foreign strain kills.
  * <p>
  * THE SQUAD TRAVELS BY DUCT, NOT BY PICKAXE. A dormant queen has sealed herself into a carved pocket with no opening -
  * there is no path to walk, so a walking squad would grind against stone until it timed out. The teleport is the "dig
@@ -44,8 +44,19 @@ import java.util.WeakHashMap;
  */
 public final class DormantQueenPurge {
 
-    /** Check cadence while the hive ticks. Ten seconds is plenty for something that resolves over minutes. */
-    private static final long INTERVAL_TICKS = 200L;
+    /**
+     * Check cadence while the hive ticks. Thirty seconds, not ten: the scan below is the expensive part of this class
+     * and a sleeping queen is not going anywhere. Nothing about the outcome changes at this resolution.
+     */
+    private static final long INTERVAL_TICKS = 600L;
+
+    /**
+     * How far above and below the hive floor the sweep looks. Full world height turned this into a scan of every
+     * section over the whole claimed footprint - a few hundred chunk columns times twenty-four sections, every ten
+     * seconds, per hive, almost always finding nothing. Both parties here are underground hives in the same dig band,
+     * so a window around our own floor covers every case that can realistically occur.
+     */
+    private static final int SWEEP_HALF_HEIGHT = 96;
 
     /** How many killers go. She is asleep and alone; this is an execution, not a siege. */
     private static final int SQUAD_SIZE = 3;
@@ -57,9 +68,9 @@ public final class DormantQueenPurge {
     private static final double ARRIVAL_SPREAD = 2.0;
 
     /**
-     * Who the hive sends, heaviest first. The queen's guard leads because this is exactly the work they exist for -
-     * and unlike a vent-defense incident there is no cap on the guard here: a rival queen asleep in your ground is
-     * worth the praetorian.
+     * Who the hive sends, heaviest first. The queen's guard leads because this is exactly the work they exist for - and
+     * unlike a vent-defense incident there is no cap on the guard here: a rival queen asleep in your ground is worth
+     * the praetorian.
      */
     private static final List<net.minecraft.tags.TagKey<EntityType<?>>> DRAW_ORDER = List.of(
         AlienEntityTypeTags.PRAETORIANS,
@@ -163,10 +174,10 @@ public final class DormantQueenPurge {
         double span = (reach + 1) * 16.0;
         var box = new AABB(
             centre.getMiddleBlockX() - span,
-            level.getMinBuildHeight(),
+            Math.max(level.getMinBuildHeight(), location.hiveFloorY() - SWEEP_HALF_HEIGHT),
             centre.getMiddleBlockZ() - span,
             centre.getMiddleBlockX() + span,
-            level.getMaxBuildHeight(),
+            Math.min(level.getMaxBuildHeight(), location.hiveFloorY() + SWEEP_HALF_HEIGHT),
             centre.getMiddleBlockZ() + span
         );
 
@@ -288,5 +299,9 @@ public final class DormantQueenPurge {
     }
 
     /** One hive's running execution: who they are after, who went, and when they left. */
-    private record Job(UUID quarryId, List<UUID> squad, long startedTick) {}
+    private record Job(
+        UUID quarryId,
+        List<UUID> squad,
+        long startedTick
+    ) {}
 }
