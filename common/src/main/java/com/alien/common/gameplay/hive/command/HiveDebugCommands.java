@@ -171,6 +171,11 @@ public final class HiveDebugCommands {
                     .executes(HiveDebugCommands::inspectQueen)
             )
             .then(
+                Commands.literal("inspect_targeting")
+                    .requires(CommandSourceStack::isPlayer)
+                    .executes(HiveDebugCommands::inspectTargeting)
+            )
+            .then(
                 Commands.literal("inspect_empress")
                     .requires(CommandSourceStack::isPlayer)
                     .executes(HiveDebugCommands::inspectEmpress)
@@ -1392,6 +1397,38 @@ public final class HiveDebugCommands {
             com.alien.common.gameplay.entity.living.alien.xenomorph.queen.Queen.class,
             player.getBoundingBox().inflate(64.0)
         ).stream().min(java.util.Comparator.comparingDouble(q -> q.distanceToSqr(player))).orElse(null);
+    }
+
+    /**
+     * TARGETING DIAG. Walks the real predicate chain for the nearest xenomorph against everything around it and
+     * reports which gate refuses, in BOTH directions. Written for the empress/marine mutual-ignore, which survived
+     * every static check - tags, attackable/isAlliedTo overrides, GOAP packages, attack config, follow range - so
+     * the missing information is runtime state.
+     * <p>
+     * Goes to chat AND to the log, so a report can be pasted from latest.log rather than retyped from screenshots.
+     */
+    private static int inspectTargeting(com.mojang.brigadier.context.CommandContext<CommandSourceStack> ctx) {
+        var player = Objects.requireNonNull(ctx.getSource().getPlayer());
+        var level = ctx.getSource().getLevel();
+        var subject = level.getEntitiesOfClass(
+            com.alien.common.gameplay.entity.living.alien.xenomorph.Xenomorph.class,
+            player.getBoundingBox().inflate(64.0)
+        ).stream().min(java.util.Comparator.comparingDouble(x -> x.distanceToSqr(player))).orElse(null);
+
+        if (subject == null) {
+            ctx.getSource().sendFailure(Component.literal("No xenomorph within 64 blocks."));
+            return 0;
+        }
+
+        var lines = com.alien.common.gameplay.entity.living.alien.xenomorph.ai.combat
+            .XenomorphTargetingDiagnostics.report(subject);
+
+        for (var line : lines) {
+            ctx.getSource().sendSuccess(() -> Component.literal(line), false);
+            com.alien.Alien.LOGGER.info("[targetdiag] {}", line);
+        }
+
+        return 1;
     }
 
     private static com.alien.common.gameplay.entity.living.alien.xenomorph.empress.Empress nearestEmpress(
