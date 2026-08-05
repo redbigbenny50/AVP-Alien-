@@ -50,6 +50,8 @@ public class EnUsEntityProvider {
         addEntity(builder, AlienEntityTypes.IRRADIATED_CARRIER, "Irradiated Carrier");
         addEntity(builder, AlienEntityTypes.IRRADIATED_CHRYSALIS, "Irradiated Chrysalis");
         addEntity(builder, AlienEntityTypes.IRRADIATED_CRUSHER, "Irradiated Crusher");
+        addEntity(builder, AlienEntityTypes.IRRADIATED_OVOMORPH, "Irradiated Ovomorph");
+        addEntity(builder, AlienEntityTypes.IRRADIATED_FACEHUGGER, "Irradiated Facehugger");
         addEntity(builder, AlienEntityTypes.IRRADIATED_DRONE, "Irradiated Drone");
         addEntity(builder, AlienEntityTypes.IRRADIATED_PRAETORIAN, "Irradiated Praetorian");
         addEntity(builder, AlienEntityTypes.IRRADIATED_PREDALIEN, "Irradiated Predalien");
@@ -84,9 +86,11 @@ public class EnUsEntityProvider {
         addEntity(builder, AlienEntityTypes.NETHER_BURSTER, "Nether Burster");
         addEntity(builder, AlienEntityTypes.NETHER_RUNNER, "Nether Runner");
         addEntity(builder, AlienEntityTypes.NETHER_SPITTER, "Nether Spitter");
+        addEntity(builder, AlienEntityTypes.IRRADIATED_SPITTER, "Irradiated Spitter");
         addEntity(builder, AlienEntityTypes.NETHER_WARRIOR, "Nether Warrior");
         addEntity(builder, AlienEntityTypes.OVOMORPH, "Ovomorph");
         addEntity(builder, AlienEntityTypes.OVIPOSITOR, "Ovipositor");
+        addEntity(builder, AlienEntityTypes.EMPRESS_OVIPOSITOR, "Empress Ovipositor");
         addEntity(builder, AlienEntityTypes.ROYAL_COCOON, "Royal Cocoon");
         addEntity(builder, AlienEntityTypes.ABERRANT_ROYAL_COCOON, "Aberrant Royal Cocoon");
         addEntity(builder, AlienEntityTypes.NETHER_ROYAL_COCOON, "Nether Royal Cocoon");

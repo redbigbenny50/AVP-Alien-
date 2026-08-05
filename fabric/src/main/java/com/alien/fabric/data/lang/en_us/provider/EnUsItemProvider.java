@@ -67,6 +67,7 @@ public class EnUsItemProvider {
         addItem(builder, AlienItems.PLATED_NETHER_CHITIN, "Plated Nether Chitin");
         addItem(builder, AlienItems.RAW_ROYAL_JELLY, "Raw Royal Jelly");
         addItem(builder, AlienItems.RAW_SCOURGE_JELLY, "Raw Scourge Jelly");
+        addItem(builder, AlienItems.RAW_IRRADIATED_JELLY, "Raw Irradiated Jelly");
         addItem(builder, AlienItems.POISON_JELLY, "Poison Jelly");
         addItem(builder, AlienItems.RESIN_BALL, "Resin Ball");
         addItem(builder, AlienItems.VECTOR_POTTERY_SHERD, "Vector Pottery Sherd");
@@ -133,6 +134,7 @@ public class EnUsItemProvider {
         addItem(builder, AlienSpawnEggItems.NETHER_BURSTER_SPAWN_EGG, "Nether Burster Spawn Egg");
         addItem(builder, AlienSpawnEggItems.NETHER_RUNNER_SPAWN_EGG, "Nether Runner Spawn Egg");
         addItem(builder, AlienSpawnEggItems.NETHER_SPITTER_SPAWN_EGG, "Nether Spitter Spawn Egg");
+        addItem(builder, AlienSpawnEggItems.IRRADIATED_SPITTER_SPAWN_EGG, "Irradiated Spitter Spawn Egg");
         addItem(builder, AlienSpawnEggItems.NETHER_WARRIOR_SPAWN_EGG, "Nether Warrior Spawn Egg");
         addItem(builder, AlienSpawnEggItems.NETHER_RAZOR_CLAW_SPAWN_EGG, "Nether Razor Claw Spawn Egg");
         addItem(builder, AlienSpawnEggItems.NETHER_RAVAGER_SPAWN_EGG, "Nether Ravager Spawn Egg");
@@ -141,6 +143,8 @@ public class EnUsItemProvider {
         addItem(builder, AlienSpawnEggItems.IRRADIATED_CARRIER_SPAWN_EGG, "Irradiated Carrier Spawn Egg");
         addItem(builder, AlienSpawnEggItems.IRRADIATED_CHRYSALIS_SPAWN_EGG, "Irradiated Chrysalis Spawn Egg");
         addItem(builder, AlienSpawnEggItems.IRRADIATED_CRUSHER_SPAWN_EGG, "Irradiated Crusher Spawn Egg");
+        addItem(builder, AlienSpawnEggItems.IRRADIATED_OVOMORPH_SPAWN_EGG, "Irradiated Ovomorph Spawn Egg");
+        addItem(builder, AlienSpawnEggItems.IRRADIATED_FACEHUGGER_SPAWN_EGG, "Irradiated Facehugger Spawn Egg");
         addItem(builder, AlienSpawnEggItems.IRRADIATED_DRONE_SPAWN_EGG, "Irradiated Drone Spawn Egg");
         addItem(builder, AlienSpawnEggItems.IRRADIATED_PRAETORIAN_SPAWN_EGG, "Irradiated Praetorian Spawn Egg");
         addItem(builder, AlienSpawnEggItems.IRRADIATED_PREDALIEN_SPAWN_EGG, "Irradiated Predalien Spawn Egg");

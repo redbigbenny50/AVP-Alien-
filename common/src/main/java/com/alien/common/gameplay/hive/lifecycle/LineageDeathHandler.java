@@ -30,11 +30,43 @@ public final class LineageDeathHandler {
     private LineageDeathHandler() {}
 
     /** Per-tick scan: kill locations of empty lineages, then kill empty+locationless lineages. */
+    /**
+     * Lineages are processed in buckets: each one is evaluated once per this many ticks, chosen by its own id hash so
+     * the empire spreads evenly across ticks instead of spiking on one. Nothing here needs per-tick resolution - it
+     * only needs to happen about once a second.
+     */
+    private static final int LINEAGE_BUCKET_TICKS = 20;
+
+    /**
+     * Offset within the bucket window, distinct per scan, so one lineage's economy tasks land on DIFFERENT ticks.
+     * Without it every scan would pick the same lineage on the same tick and the saving would be a smaller spike rather
+     * than no spike.
+     */
+    private static final int BUCKET_PHASE = 13;
+
+    /**
+     * Reused snapshot buffer for the per-tick faction scan. The scan runs only on the single server thread, so one
+     * static scratch list per scan is safe; clear+addAll keeps the same iterate-a-snapshot semantics (the loop body may
+     * mutate the live faction registry) while allocating nothing once the backing array has grown - this scan used to
+     * build a fresh ArrayList of every faction id EVERY TICK just to run its bucket filter.
+     */
+    private static final java.util.List<net.minecraft.resources.ResourceLocation> SCAN_SCRATCH =
+        new java.util.ArrayList<>();
+
     public static void scanAndKill(MinecraftServer server) {
         var deathQueue = new ArrayList<ResourceLocation>();
+        var currentTick = server.overworld().getGameTime();
 
-        for (var factionId : new ArrayList<>(Alien.MOD.factions().getAllIds())) {
+        SCAN_SCRATCH.clear();
+        SCAN_SCRATCH.addAll(Alien.MOD.factions().getAllIds());
+        for (var factionId : SCAN_SCRATCH) {
             if (!LineageIds.isLineageId(factionId)) {
+                continue;
+            }
+            // An empty lineage stays dead; noticing it a second later changes nothing. The ordering note in
+            // HiveLocationRegistry still holds - dormancy runs first, this just picks the result up on its own
+            // bucket rather than the very next tick.
+            if (Math.floorMod(currentTick - factionId.hashCode(), LINEAGE_BUCKET_TICKS) != BUCKET_PHASE) {
                 continue;
             }
             var faction = Alien.MOD.factions().get(factionId);

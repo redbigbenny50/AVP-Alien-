@@ -1,6 +1,8 @@
 package com.alien.common.gameplay.entity.living.alien.xenomorph.queen;
 
 import com.alien.common.gameplay.entity.living.alien.xenomorph.Xenomorph;
+import com.alien.common.gameplay.hive.lifecycle.QueenInhibitionService;
+import com.alien.common.registry.init.item.AlienItems;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.InteractionHand;
@@ -185,6 +187,16 @@ public final class QueenRescueManager {
      * </ul>
      */
     private void resolveFreedom(ServerLevel serverLevel) {
+        // Freedom means ALL of it. Breaking her chains or waking her while she still wore the inhibitor left her
+        // standing, autonomous in name only - the device was only ever removed by a player prying it off with a
+        // blade. Her kin tear it off the same way they tore the anchors out, and it drops where she stood so it stays
+        // recoverable, exactly as the pry-off does.
+        if (queen.isInhibited()) {
+            queen.setInhibited(false);
+            QueenInhibitionService.onReleased(serverLevel, queen);
+            queen.spawnAtLocation(AlienItems.INHIBITOR.get());
+        }
+
         var survivors = new ArrayList<Xenomorph>();
         for (var id : rescuers) {
             if (serverLevel.getEntity(id) instanceof Xenomorph xenomorph && xenomorph.isAlive()) {

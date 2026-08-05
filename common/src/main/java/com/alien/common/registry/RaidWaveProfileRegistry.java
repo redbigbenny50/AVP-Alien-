@@ -17,6 +17,8 @@ public final class RaidWaveProfileRegistry {
 
     public static final ResourceLocation REVENGE_ID = AlienResources.location("revenge");
 
+    public static final ResourceLocation REVENGE_EMPRESS_ID = AlienResources.location("revenge_empress");
+
     public static final ResourceLocation RESCUE_ID = AlienResources.location("rescue");
 
     private static final Map<ResourceLocation, RaidWaveProfile> PROFILES = new LinkedHashMap<>();
@@ -58,6 +60,18 @@ public final class RaidWaveProfileRegistry {
             return profile;
         }
         return RaidWaveProfile.revengeFallback();
+    }
+
+    /**
+     * The revenge profile for a lineage that HAS an empress: the same strike with the scourge tier allowed in,
+     * harbinger excluded. Datapack {@code revenge_empress} if present, else the built-in fallback.
+     */
+    public static RaidWaveProfile revengeEmpress() {
+        var profile = PROFILES.get(REVENGE_EMPRESS_ID);
+        if (profile != null) {
+            return profile;
+        }
+        return RaidWaveProfile.revengeEmpressFallback();
     }
 
     /**

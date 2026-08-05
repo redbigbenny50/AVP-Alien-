@@ -2,7 +2,6 @@ package com.alien.common.gameplay.hive.structure;
 
 import com.alien.common.gameplay.hive.location.HiveLocation;
 import com.alien.common.registry.init.block.AlienBlocks;
-import com.alien.common.registry.init.block.AlienResinBlocks;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.util.RandomSource;
@@ -57,19 +56,21 @@ public final class HiveChamberSlots {
     /** Air, or the hive's own resin growth (veins/webs) - neither blocks an egg bed or a jelly vat. */
     private static boolean isEmptyForSlot(net.minecraft.world.level.block.state.BlockState state) {
         return state.isAir()
-            || state.is(AlienResinBlocks.RESIN_VEIN.get())
-            || state.is(AlienResinBlocks.RESIN_WEB.get());
+            || state.is(com.alien.common.registry.tag.AlienBlockTags.RESIN_VEINS)
+            || state.is(com.alien.common.registry.tag.AlienBlockTags.RESIN_WEBS);
     }
 
     private static List<BlockPos> slots(ServerLevel level, HiveLocation location, ChunkPos chamber, int count, int floorSpacing) {
         int floorY = location.hiveFloorY();
-        var tendril = AlienResinBlocks.RESIN_TENDRIL.get();
         var candidates = new ArrayList<BlockPos>();
         var pos = new BlockPos.MutableBlockPos();
         for (int x = chamber.getMinBlockX() + WALL_MARGIN; x <= chamber.getMaxBlockX() - WALL_MARGIN; x++) {
             for (int z = chamber.getMinBlockZ() + WALL_MARGIN; z <= chamber.getMaxBlockZ() - WALL_MARGIN; z++) {
                 pos.set(x, floorY, z);
-                if (!level.getBlockState(pos).is(tendril)) {
+                // TAG, not the NORMAL strain's block. This tested only AlienResinBlocks.RESIN_TENDRIL, so a nether
+                // hive - whose floors are nether tendril - produced ZERO candidates: no vat slots and no egg
+                // beds. That is both reported symptoms from one line, and it hit aberrant and irradiated too.
+                if (!level.getBlockState(pos).is(com.alien.common.registry.tag.AlienBlockTags.RESIN_TENDRILS)) {
                     continue;
                 }
                 // A spot already holding a vat IS a slot - without this, every placed vat erased its own candidacy

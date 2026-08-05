@@ -114,7 +114,7 @@ public class Spitter extends Xenomorph implements GOAPUser<Spitter> {
             case NORMAL -> AlienEntityTypes.SPITTER.get();
             case NETHER -> AlienEntityTypes.NETHER_SPITTER.get();
             case ABERRANT -> AlienEntityTypes.ABERRANT_SPITTER.get();
-            case IRRADIATED -> null;
+            case IRRADIATED -> AlienEntityTypes.IRRADIATED_SPITTER.get();
         };
     }
 }

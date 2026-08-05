@@ -39,6 +39,7 @@ public class GrowthManager implements NBTSerializable {
         set.add(MoltingManager.MOLT_TARGET_SCALE_REACHED_TICKS_TAG);
         set.add(com.alien.common.gameplay.entity.living.alien.xenomorph.CocoonManager.COCOON_STATE_TAG);
         set.add(com.alien.common.gameplay.entity.living.alien.xenomorph.CocoonManager.COCOON_TARGET_TYPE_TAG);
+        set.add(com.alien.common.gameplay.entity.living.alien.xenomorph.CocoonManager.COCOON_ALTERNATE_TYPE_TAG);
         set.add(com.alien.common.gameplay.entity.living.alien.xenomorph.CocoonManager.COCOON_SOURCE_TIME_TAG);
         set.add(com.alien.common.gameplay.entity.living.alien.xenomorph.CocoonManager.COCOON_DESTINATION_TIME_TAG);
         set.add(com.alien.common.gameplay.entity.living.alien.xenomorph.CocoonManager.COCOON_ELAPSED_TICKS_TAG);
@@ -219,7 +220,7 @@ public class GrowthManager implements NBTSerializable {
         removeRequirementEffects(growthStage);
 
         if (entity instanceof com.alien.common.gameplay.entity.living.alien.xenomorph.Xenomorph xenomorph) {
-            xenomorph.getCocoonManager().prepare(nextFormType, growthStage.cocooning());
+            xenomorph.getCocoonManager().prepare(nextFormType, growthStage.alternate().orElse(null), growthStage.cocooning());
             return GrowthResult.CocoonStarted.INSTANCE;
         }
 

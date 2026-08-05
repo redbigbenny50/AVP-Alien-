@@ -134,10 +134,14 @@ public class AlienEntityTypeTagProvider extends FabricTagProvider.EntityTypeTagP
             .addTag(AlienEntityTypeTags.ROYAL_ALIENS);
     }
 
+    // Who answers a xenomorph's cry for help. BURSTERS were dropped July 26/27: they are SCOURGE, and a cry is
+    // a defence call, not a scourge sortie - answering it spent scourge stock on ordinary skirmishes and was the
+    // only scourge caste in the roster (razor claws, chrysalises, carriers and ravagers were never in it).
+    // PRAETORIANS were added the same day so a developed hive answers with something heavier than a young one.
     private void addAnswersXenomorphCriesForHelp() {
         getOrCreateTagBuilder(AlienEntityTypeTags.ANSWERS_XENOMORPH_CRIES_FOR_HELP)
-            .addTag(AlienEntityTypeTags.BURSTERS)
             .addTag(AlienEntityTypeTags.DRONES)
+            .addTag(AlienEntityTypeTags.PRAETORIANS)
             .addTag(AlienEntityTypeTags.PROWLERS)
             .addTag(AlienEntityTypeTags.RUNNERS)
             .addTag(AlienEntityTypeTags.SPITTERS)
@@ -200,6 +204,7 @@ public class AlienEntityTypeTagProvider extends FabricTagProvider.EntityTypeTagP
     private void addFacehuggers() {
         getOrCreateTagBuilder(AlienEntityTypeTags.FACEHUGGERS)
             .add(
+                AlienEntityTypes.IRRADIATED_FACEHUGGER.get(),
                 AlienEntityTypes.ABERRANT_FACEHUGGER.get(),
                 AlienEntityTypes.FACEHUGGER.get(),
                 AlienEntityTypes.NETHER_FACEHUGGER.get(),
@@ -375,6 +380,9 @@ public class AlienEntityTypeTagProvider extends FabricTagProvider.EntityTypeTagP
     private void addIrradiatedAliens() {
         getOrCreateTagBuilder(AlienEntityTypeTags.IRRADIATED_ALIENS)
             .add(
+                AlienEntityTypes.IRRADIATED_SPITTER.get(),
+                AlienEntityTypes.IRRADIATED_FACEHUGGER.get(),
+                AlienEntityTypes.IRRADIATED_OVOMORPH.get(),
                 AlienEntityTypes.IRRADIATED_CARRIER.get(),
                 AlienEntityTypes.IRRADIATED_CHRYSALIS.get(),
                 AlienEntityTypes.IRRADIATED_CRUSHER.get(),
@@ -395,6 +403,9 @@ public class AlienEntityTypeTagProvider extends FabricTagProvider.EntityTypeTagP
 
     private void addNetherAliens() {
         getOrCreateTagBuilder(AlienEntityTypeTags.NETHER_ALIENS)
+            // Was missing entirely. Besides fire immunity this tag also gates nether-resin spawn validity, so the
+            // cocoon was excluded from both.
+            .add(AlienEntityTypes.NETHER_ROYAL_COCOON.get())
             .add(
                 AlienEntityTypes.NETHER_ADOLESCENT.get(),
                 AlienEntityTypes.NETHER_BOILER.get(),
@@ -462,6 +473,7 @@ public class AlienEntityTypeTagProvider extends FabricTagProvider.EntityTypeTagP
     private void addOvomorphs() {
         getOrCreateTagBuilder(AlienEntityTypeTags.OVOMORPHS)
             .add(
+                AlienEntityTypes.IRRADIATED_OVOMORPH.get(),
                 AlienEntityTypes.ABERRANT_OVOMORPH.get(),
                 AlienEntityTypes.NETHER_OVOMORPH.get(),
                 AlienEntityTypes.OVOMORPH.get(),
@@ -652,6 +664,7 @@ public class AlienEntityTypeTagProvider extends FabricTagProvider.EntityTypeTagP
     private void addSpitters() {
         getOrCreateTagBuilder(AlienEntityTypeTags.SPITTERS)
             .add(
+                AlienEntityTypes.IRRADIATED_SPITTER.get(),
                 AlienEntityTypes.ABERRANT_SPITTER.get(),
                 AlienEntityTypes.NETHER_SPITTER.get(),
                 AlienEntityTypes.SPITTER.get()
@@ -700,13 +713,40 @@ public class AlienEntityTypeTagProvider extends FabricTagProvider.EntityTypeTagP
         getOrCreateTagBuilder(GigTags.FACEHUGGER_BLACKLIST)
             .addTag(AlienEntityTypeTags.ALIENS);
 
+        // Nothing in the species breathes. The ALIENS tag covers every entity that extends Alien; the rest are
+        // listed by hand because they are plain Mobs and no strain tag will ever hold them - the same blind spot
+        // that left nether cocoons flammable. The ovipositors were remembered here and the royal cocoons were not,
+        // so a royal molting in vacuum suffocated inside her own shell.
+        //
+        // Acid and acid spit are deliberately absent: neither is a LivingEntity, so suffocation cannot apply.
         getOrCreateTagBuilder(StellarisEntityTypeTags.NO_OXYGEN_NEEDED)
             .addTag(AlienEntityTypeTags.ALIENS)
-            .add(AlienEntityTypes.OVIPOSITOR.get());
+            .add(
+                AlienEntityTypes.OVIPOSITOR.get(),
+                AlienEntityTypes.EMPRESS_OVIPOSITOR.get(),
+                AlienEntityTypes.ROYAL_COCOON.get(),
+                AlienEntityTypes.ABERRANT_ROYAL_COCOON.get(),
+                AlienEntityTypes.NETHER_ROYAL_COCOON.get()
+            );
     }
 
+    /**
+     * Who AVP: Human's radiation cannot touch. The rule is "every alien EXCEPT the aberrant strain".
+     * <p>
+     * Aberrants are the weak line, and their vulnerability to radiation is exactly why they cannot convert to
+     * irradiated the way normal and nether do - a nuke or a splash of Irradiation kills them outright instead of
+     * transmuting them. This used to add XENOMORPHS wholesale, which covered aberrant ones too.
+     * <p>
+     * The three strain tags partition the species perfectly: together they hold all 69 non-aberrant aliens and nothing
+     * else, so this stays a RULE rather than a list and any alien added to a strain later inherits immunity for free.
+     * Do NOT rewrite it as ALIENS plus exceptions - tags cannot subtract, and an attempt that reached for
+     * ROYAL_XENOMORPHS and the predalien tags leaked six aberrants straight back in, because those are CASTE tags that
+     * span every strain.
+     */
     private void addRadiationResistant() {
         getOrCreateTagBuilder(HumanEntityTypeTags.RADIATION_RESISTANT)
-            .addTag(AlienEntityTypeTags.XENOMORPHS);
+            .addTag(AlienEntityTypeTags.NORMAL_ALIENS)
+            .addTag(AlienEntityTypeTags.NETHER_ALIENS)
+            .addTag(AlienEntityTypeTags.IRRADIATED_ALIENS);
     }
 }

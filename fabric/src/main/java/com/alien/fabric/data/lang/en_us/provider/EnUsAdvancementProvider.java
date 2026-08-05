@@ -57,6 +57,13 @@ public class EnUsAdvancementProvider {
 
         addAdvancement(
             builder,
+            AlienAdvancements.WITHSTAND_ATTACK_PARTY,
+            "Here to stay",
+            "Outlast a queen's attack party"
+        );
+
+        addAdvancement(
+            builder,
             AlienAdvancements.KILL_A_HARBINGER,
             "Dread Silenced",
             "Kill a harbinger"
@@ -127,6 +134,13 @@ public class EnUsAdvancementProvider {
 
         addAdvancement(
             builder,
+            AlienAdvancements.BROKEN_THRONE,
+            "Broken Throne",
+            "Kill an exiled empress on the ruin her own empire left her"
+        );
+
+        addAdvancement(
+            builder,
             AlienAdvancements.WEAR_CHITIN_ARMOR,
             "Cover Me with... Uh...",
             "Equip a full set of chitin armor"
@@ -151,6 +165,41 @@ public class EnUsAdvancementProvider {
             AlienAdvancements.REMOVE_EMBRYO_WITH_CHORUS_FRUIT,
             "Eviction",
             "Remove an alien from your chest by eating chorus fruit"
+        );
+
+        addAdvancement(
+            builder,
+            AlienAdvancements.EAT_RAW_ROYAL_JELLY,
+            "Peanut Butter... Jelly... Time?",
+            "Eat raw royal jelly. Do not make a habit of it"
+        );
+
+        addAdvancement(
+            builder,
+            AlienAdvancements.EAT_RAW_SCOURGE_JELLY,
+            "I Like When the Red Water Comes Out",
+            "Eat raw scourge jelly"
+        );
+
+        addAdvancement(
+            builder,
+            AlienAdvancements.EAT_RAW_IRRADIATED_JELLY,
+            "All That Glitters and Glows",
+            "Eat raw irradiated jelly. It bites back hardest"
+        );
+
+        addAdvancement(
+            builder,
+            AlienAdvancements.EAT_POISON_JELLY,
+            "Toxicity only Reddit could love",
+            "Eat raw poison jelly. There was never an upside"
+        );
+
+        addAdvancement(
+            builder,
+            AlienAdvancements.EAT_EVERY_JELLY,
+            "Spreading it thick",
+            "Eat every kind of jelly the hive makes"
         );
     }
 

@@ -137,15 +137,14 @@ public final class CarveSiteWork {
         // the ACTIVE staffing, which sets the pace. The world mutation below fires whenever its track is staffed -
         // it does NOT wait for a drone to physically arrive at the front (a stuck drone must never wedge the build;
         // the drones sell the show, the site guarantees the work).
-        var digFrontKey = nextColumn(site, false);
+        // One front per digger so the crew spreads across the face instead of stacking on a single column. Purely
+        // where they STAND - excavation still consumes the work order in order, so throughput is the cadence below.
+        var digFronts = pendingDigFronts(site, CarveWorkers.MAX_DIGGERS + 1);
         var fillFrontKey = nextColumn(site, true);
-        var digFront = digFrontKey == null
-            ? null
-            : new BlockPos(digFrontKey.x(), site.floorY() + 1, digFrontKey.z());
         var fillFront = fillFrontKey == null
             ? null
             : new BlockPos(fillFrontKey.x(), site.floorY() + 1, fillFrontKey.z());
-        var crew = CarveWorkers.tick(level, location, site, digFront, fillFront);
+        var crew = CarveWorkers.tick(level, location, site, digFronts, fillFront);
 
         // Zero workers = zero progress (confirmed design call §8.1/§8.2 taken to its limit): no free drones and an
         // empty reserve means the hive is in collapse; the build waits, routing waits behind it (§8.4), and the
@@ -178,7 +177,7 @@ public final class CarveSiteWork {
             if (now >= site.nextDigTick) {
                 digStep(level, site);
                 site.nextDigTick = now
-                    + (site.isFoundingCore() ? QUEEN_DIG_INTERVAL_TICKS : digIntervalTicks(crew.diggers()));
+                    + (site.isFoundingCore() ? coreDigIntervalTicks(crew.diggers()) : digIntervalTicks(crew.diggers()));
             }
         }
 
@@ -390,6 +389,35 @@ public final class CarveSiteWork {
      * diggers on a 1x1 piece) onto the step interval: the 1-digger interval is exactly the step-3 ghost cadence, so one
      * drone digs at the pace the ghost carve was tuned to.
      */
+    /**
+     * The founding core's dig cadence. The QUEEN is always a digger there and is not on the crew roster, so she is the
+     * implicit first pair of claws and every drone that joins her divides the interval further. Capped at the same crew
+     * ceiling the growth pieces use, so the core tops out at queen + {@link CarveWorkers#MAX_DIGGERS}.
+     * <p>
+     * At her old solo pace that is 100 ticks; with a full crew it is 25. Her stand-dig sequence is unchanged - she
+     * still visibly excavates, the crew just stops watching her do it.
+     */
+    private static int coreDigIntervalTicks(int helperDiggers) {
+        var claws = 1 + Math.min(helperDiggers, CarveWorkers.MAX_DIGGERS);
+        return Math.max(1, QUEEN_DIG_INTERVAL_TICKS / claws);
+    }
+
+    /** Up to {@code limit} columns still needing excavation, in work order - one standing spot per digger. */
+    private static java.util.List<BlockPos> pendingDigFronts(CarveSite site, int limit) {
+        var fronts = new java.util.ArrayList<BlockPos>(limit);
+        for (CarveSite.ColumnKey key : site.workOrder) {
+            var column = site.columns().get(key);
+            if (column == null || column.isExcavated()) {
+                continue;
+            }
+            fronts.add(new BlockPos(key.x(), site.floorY() + 1, key.z()));
+            if (fronts.size() >= limit) {
+                break;
+            }
+        }
+        return fronts;
+    }
+
     private static int digIntervalTicks(int diggers) {
         var d = Math.min(diggers, CarveWorkers.MAX_DIGGERS);
         return (int) Math.round(DIG_INTERVAL_TICKS * (90.0 - 30.0 * (d - 1)) / 90.0);
@@ -466,12 +494,20 @@ public final class CarveSiteWork {
         }
     }
 
-    /** A sealing block that blends with the surrounding rock: the block below the leak, else plain stone. */
+    /**
+     * A sealing block that blends with the surrounding rock: the block below the leak where it can be copied, else a
+     * dimension-appropriate fallback - BASALT in the nether ([stated] "block up lava pouring in with basalt instead of
+     * stone"; a lava-ocean leak usually has more lava below it, so the fallback is what shows), plain stone everywhere
+     * else.
+     */
     private static BlockState plugFor(ServerLevel level, BlockPos leak) {
         var belowPos = leak.below();
         var below = level.getBlockState(belowPos);
         if (below.isSolidRender(level, belowPos) && level.getFluidState(belowPos).isEmpty()) {
             return below;
+        }
+        if (level.dimension() == net.minecraft.world.level.Level.NETHER) {
+            return Blocks.BASALT.defaultBlockState();
         }
         return Blocks.STONE.defaultBlockState();
     }

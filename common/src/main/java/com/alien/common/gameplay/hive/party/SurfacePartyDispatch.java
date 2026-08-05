@@ -54,9 +54,7 @@ public final class SurfacePartyDispatch {
         }
 
         // Size scales with claims but is CAPPED - unbounded scaling put 20+ runners on a large hive.
-        var surfaceCap = com.alien.common.gameplay.hive.structure.HiveRouter.isEmpressInfluenced(location)
-            ? config.surfacePartyMaxSizeEmpress()
-            : config.surfacePartyMaxSize();
+        var surfaceCap = com.alien.common.gameplay.hive.empress.EmpressCaps.scale(location, config.surfacePartyMaxSize());
         var desiredSize = Math.min(
             surfaceCap,
             Math.max(
@@ -155,6 +153,23 @@ public final class SurfacePartyDispatch {
         // valid spot is the fallback - a preference, never a hard filter.
         var profile = com.alien.common.gameplay.hive.dimension.DimensionHiveProfiles.get(level);
         var nearY = location.centerPos().getY();
+        // MULTI-TIER SEEDING ([stated]): in a ceiled dimension a third of dispatches seed the shelf search from a
+        // RANDOM tier of the hive's own column instead of the hive's level, so surface parties (and the vents and
+        // claims they leave behind) spread across the nether's stacked shelves rather than clinging to one.
+        if (
+            profile.surfaceMode() == com.alien.common.gameplay.hive.dimension.DimensionHiveProfiles.SurfaceMode.OPEN_SHELF
+                && level.random.nextInt(3) == 0
+        ) {
+            var tiers = com.alien.common.gameplay.hive.dimension.DimensionHiveProfiles.shelfTiers(
+                level,
+                profile,
+                originBlock.getX(),
+                originBlock.getZ()
+            );
+            if (!tiers.isEmpty()) {
+                nearY = tiers.get(level.random.nextInt(tiers.size()));
+            }
+        }
         BlockPos fallback = null;
 
         for (var radius = 0; radius <= SPAWN_SEARCH_RADIUS_CHUNKS; radius++) {

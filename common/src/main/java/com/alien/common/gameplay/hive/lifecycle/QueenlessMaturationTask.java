@@ -65,6 +65,10 @@ public final class QueenlessMaturationTask {
             }
 
             for (var location : new java.util.ArrayList<>(lineage.locationsById().values())) {
+                if (com.alien.common.gameplay.hive.dimension.EndStyleHiveRules.isEndStyle(server, location)) {
+                    continue; // END-STYLE: maturation is the firewall economy - the End's succession is the regent
+                              // praetorian
+                }
                 if (!location.isAlive()) {
                     continue;
                 }
@@ -88,6 +92,10 @@ public final class QueenlessMaturationTask {
         }
         var advanced = 0;
         for (var location : new java.util.ArrayList<>(lineage.locationsById().values())) {
+            if (com.alien.common.gameplay.hive.dimension.EndStyleHiveRules.isEndStyle(server, location)) {
+                continue; // END-STYLE: maturation is the firewall economy - the End's succession is the regent
+                          // praetorian
+            }
             if (!location.isAlive()) {
                 continue;
             }
@@ -174,6 +182,21 @@ public final class QueenlessMaturationTask {
             // Rescue hold: while this location has an unresolved rescue campaign for its captured queen, the hive
             // holds out hope and won't crown a replacement. RescueCampaignTask clears the campaign on success, on
             // conversion (queen died), or on exhaustion (3 failed attempts) — only then does crowning proceed.
+            // [stated] no ordinary queen replacement while two empires are at war: the hive that loses its queen has
+            // lost, and the crown counts it. Sits ABOVE the fund and rescue checks so it holds whether or not the
+            // firewall still has anything in it.
+            if (com.alien.common.gameplay.hive.war.AlienTerritoryWarSystem.isExcludedFromQueenReplacement(location)) {
+                Alien.LOGGER.info(
+                    "Hive: crowning denied for leader {} (lineage {}) — {}",
+                    leaderId,
+                    lineageId,
+                    location.hasLostAWar()
+                        ? "the hive lost its war and is left to die rather than waste a slot"
+                        : "the hive is at war - the fund and the jelly are needed for the fighting"
+                );
+                return;
+            }
+
             if (location.rescueCampaign() != null) {
                 Alien.LOGGER.info(
                     "Hive: crowning held for leader {} (lineage {}) — rescue campaign still active for the lost queen",
@@ -181,6 +204,18 @@ public final class QueenlessMaturationTask {
                     lineageId
                 );
                 return;
+            }
+
+            // An empress will refill a spent fund from a healthy sibling's rather than let the hive be written off.
+            // Reallocation, not immunity: the donor surrenders its own safety net. Bounded per hive and
+            // network-wide, and the second rescue into one hive gives her position away.
+            if (!location.firewallFundAvailable()) {
+                com.alien.common.gameplay.hive.empress.EmpressRescueService.tryRescue(
+                    serverLevel,
+                    location,
+                    lineage,
+                    config
+                );
             }
 
             if (!location.firewallFundAvailable()) {

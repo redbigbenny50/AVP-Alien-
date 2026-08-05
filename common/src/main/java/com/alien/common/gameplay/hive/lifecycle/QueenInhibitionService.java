@@ -35,6 +35,16 @@ public final class QueenInhibitionService {
      * minted the same claim. Idempotent — a queen who already carries her personal claim is left alone.
      */
     public static void onInhibited(ServerLevel level, Queen queen) {
+        // THE INHIBITOR DOES NOTHING TO AN IRRADIATED QUEEN. [stated] "not anymore - it most likely would get taken
+        // off by the hive, otherwise its just decorative."
+        //
+        // Both halves of this service are no-ops for her anyway: there is no claim to sever, because her strain's
+        // territory belongs to the LOCATION rather than to her, and no personal claim worth minting, because she
+        // cannot found. Refusing here says that plainly instead of letting it fall out of two separate failures.
+        if (com.alien.common.gameplay.hive.economy.IrradiatedHiveRules.isIrradiated(queen)) {
+            return;
+        }
+
         if (findInhibitedLocation(queen) != null) {
             return; // already carries her personal claim
         }
@@ -96,7 +106,7 @@ public final class QueenInhibitionService {
     private static void mintPersonalClaim(ServerLevel level, Queen queen) {
         var herChunk = new ChunkPos(queen.blockPosition());
         var locationId = HiveLocationFoundingService.foundNewLineage(queen, queen.blockPosition(), false);
-        var location = HiveLocationRegistry.INSTANCE.get(locationId);
+        var location = locationId == null ? null : HiveLocationRegistry.INSTANCE.get(locationId);
         if (location == null) {
             Alien.LOGGER.warn(
                 "Inhibition: minted location {} for queen {} vanished immediately",
@@ -171,7 +181,11 @@ public final class QueenInhibitionService {
             }
         }
         // Her chunk becomes the new anchor, which frees the old center for release.
-        location.setCenterPos(queen.blockPosition());
+        location.setCenterPos(
+            queen.level() instanceof net.minecraft.server.level.ServerLevel severLevel
+                ? com.alien.common.gameplay.hive.dimension.DimensionHiveProfiles.roofSafeAnchor(severLevel, queen.blockPosition())
+                : queen.blockPosition()
+        );
         for (var chunk : new ArrayList<>(location.claimedChunks())) {
             if (!chunk.equals(herChunk)) {
                 HiveLocationClaims.release(level, location, chunk);

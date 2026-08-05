@@ -1,6 +1,7 @@
 package com.alien.common.gameplay.entity.living.alien.xenomorph.carrier;
 
 import com.alien.common.gameplay.entity.living.alien.Alien;
+import com.alien.common.gameplay.entity.living.alien.ovomorph.Ovomorph;
 import com.alien.common.gameplay.entity.living.alien.parasite.facehugger.Facehugger;
 import com.alien.common.gameplay.entity.living.alien.xenomorph.AttackType;
 import com.alien.common.gameplay.entity.living.alien.xenomorph.Xenomorph;
@@ -183,6 +184,22 @@ public class Carrier extends Xenomorph implements GOAPUser<Carrier> {
         carrierData.setReserveFacehuggerPayloadPending(true);
     }
 
+    /**
+     * The reserve to debit an egg from, or null when this carrier arms for free.
+     * <p>
+     * Only an irradiated carrier pays: its eggs are finite ordnance rather than a renewable nursery stock, so the bank
+     * has to actually shrink. Returns null - meaning "arm for free" - for every other strain, and also when the carrier
+     * has no hive to draw from, since a stray should not be left permanently unarmed.
+     */
+    private @Nullable com.alien.common.gameplay.hive.location.HiveLocationReserves irradiatedEggBankOrNull() {
+        if (getVariant() != com.alien.common.model.alien.variant.AlienVariant.IRRADIATED) {
+            return null;
+        }
+
+        var location = com.alien.common.gameplay.hive.faction.HiveMemberLocationResolver.reserveReturnLocation(this);
+        return location == null ? null : location.localReserves();
+    }
+
     private void fillReserveFacehuggerPayloadIfPending() {
         if (!carrierData.isReserveFacehuggerPayloadPending()) {
             return;
@@ -194,14 +211,32 @@ public class Carrier extends Xenomorph implements GOAPUser<Carrier> {
             return;
         }
 
+        // An IRRADIATED carrier arms itself from the hive's leftover egg bank, one egg per hugger, and that bank
+        // never restocks. [stated] "partial uses whatevers left - if theres only 4 then it empties the bank." The
+        // loop below already handles that: it simply stops early. Released huggers never return to the spine, so a
+        // raid permanently spends up to six eggs.
+        //
+        // Every other strain keeps the free top-up it always had - their nurseries refill.
+        var eggBank = irradiatedEggBankOrNull();
+
         while (getRidingFacehuggerCount() < CarrierSpine.COUNT) {
+            if (eggBank != null && !eggBank.trySpawn(Ovomorph.getType(getVariant(), false))) {
+                break;
+            }
+
             var facehugger = facehuggerType.create(level());
             if (facehugger == null) {
                 return;
             }
 
             facehugger.moveTo(getX(), getY(), getZ(), getYRot(), getXRot());
-            facehugger.setPersistenceRequired();
+            // NO setPersistenceRequired - deliberately removed (Aug 1). While riding the spine a hugger is already
+            // despawn-proof (vanilla Mob.requiresCustomPersistence() is literally isPassenger()), and one attached
+            // to a host is protected by Facehugger.isPersistenceRequired's own override. The flag's only real
+            // effect was on RELEASED huggers, which it made immortal - every scatter permanently added up to six
+            // never-despawning facehuggers, the accumulation behind the tester-reported overpop. Released strays
+            // are now ordinary mobs: they hunt while a player is near and despawn like anything else once the
+            // fight moves on. "Released huggers are gone for good" still holds - they never return to the spine.
             level().addFreshEntity(facehugger);
 
             if (!facehugger.startRiding(this, true)) {

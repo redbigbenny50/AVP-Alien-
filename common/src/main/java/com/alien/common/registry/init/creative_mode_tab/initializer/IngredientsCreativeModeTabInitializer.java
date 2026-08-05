@@ -20,6 +20,11 @@ public class IngredientsCreativeModeTabInitializer {
 
         CreativeModeTabUtil.accept(output, AlienItems.RAW_ROYAL_JELLY);
         CreativeModeTabUtil.accept(output, AlienItems.RAW_SCOURGE_JELLY);
+
+        // Irradiated jelly is AVP: Human content like every other irradiated group.
+        if (AVPHuman.MOD.isLoaded()) {
+            CreativeModeTabUtil.accept(output, AlienItems.RAW_IRRADIATED_JELLY);
+        }
         CreativeModeTabUtil.accept(output, AlienItems.POISON_JELLY);
 
         // Decorative materials

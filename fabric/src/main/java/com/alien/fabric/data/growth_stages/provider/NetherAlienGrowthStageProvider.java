@@ -144,17 +144,19 @@ public class NetherAlienGrowthStageProvider {
         List<GrowthRequirement> scourge = List.of(
             new GrowthRequirement.MobEffectRequirement(AlienMobEffects.getScourgeHolder(), 0)
         );
-        List<GrowthRequirement> scourgeII = List.of(
-            new GrowthRequirement.MobEffectRequirement(AlienMobEffects.getScourgeHolder(), 1)
-        );
 
-        biConsumer.accept(
-            "nether_drone_to_nether_razor_claw",
-            new GrowthStage(AlienEntityTypes.NETHER_DRONE.get(), AlienEntityTypes.NETHER_RAZOR_CLAW.get(), scourgeII)
-        );
+        // The drone is the one caste with two scourge futures. ONE stage names both: carrier by default, razor claw
+        // if the molt is redirected by a second dose. This was two competing stages split by a Scourge II amplifier
+        // gate, which made a stronger potion permanently mandatory and left the default at the mercy of resource-scan
+        // order - see GrowthStage and ScourgeStatusEffect.
         biConsumer.accept(
             "nether_drone_to_nether_carrier",
-            new GrowthStage(AlienEntityTypes.NETHER_DRONE.get(), AlienEntityTypes.NETHER_CARRIER.get(), scourge)
+            new GrowthStage(
+                AlienEntityTypes.NETHER_DRONE.get(),
+                AlienEntityTypes.NETHER_CARRIER.get(),
+                AlienEntityTypes.NETHER_RAZOR_CLAW.get(),
+                scourge
+            )
         );
         biConsumer.accept(
             "nether_runner_to_nether_burster",

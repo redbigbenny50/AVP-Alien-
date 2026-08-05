@@ -52,6 +52,13 @@ public final class HiveLoadedSpawner {
             if (!location.isAlive() || location.isInhibited()) {
                 continue; // inhibited (severed contained-breeder) locations spawn no castes.
             }
+            if (com.alien.common.gameplay.hive.dimension.EndStyleHiveRules.isEndStyle(server, location)) {
+                // END-STYLE: no ambient materialization. The bank holds player choices and pays them out through
+                // exactly two doors - the worker deployment (EndHiveTickTask, 10 active) and vent defense. Idle
+                // ambience would drain the player's bank into scenery, the precise "30+ xenos standing around"
+                // this dimension's design forbids.
+                continue;
+            }
             // Founding lockout: a queen-founded hive that has not yet established its egg sack spawns NOTHING. The
             // queen must fill her biomass tank and commit (resin floor + ovipositor) before the territory comes alive.
             // Stops random xenomorphs appearing before there are any eggs. Queenless hives are unaffected.
@@ -300,9 +307,16 @@ public final class HiveLoadedSpawner {
         ) {
             return 8;
         }
+        // CARRIERS NEVER MATERIALIZE IN-HIVE - [stated] "have carriers only in Raids." Every reserve-spawned
+        // carrier arms a 6-facehugger spine payload (ReserveSpawnUtil), so each in-hive materialization dumped up
+        // to six huggers around the queen - the tester-reported facehugger overpop, which appeared exactly when
+        // hives unlocked carrier production. Zero weight removes them from every in-hive spawn path this class
+        // serves, raid room included; RaidDispatch fields them from the same reserves unaffected.
+        if (type.is(AlienEntityTypeTags.CARRIERS)) {
+            return 0;
+        }
         if (
-            type.is(AlienEntityTypeTags.CARRIERS)
-                || type.is(AlienEntityTypeTags.RAVAGERS)
+            type.is(AlienEntityTypeTags.RAVAGERS)
                 || type.is(AlienEntityTypeTags.RAZOR_CLAWS)
                 || type.is(AlienEntityTypeTags.PREDALIENS)
                 || type.is(AlienEntityTypeTags.CHRYSALISES)

@@ -5,7 +5,6 @@ import com.alien.common.data.fixer.migration.AlienDataMigrations;
 import com.alien.common.gameplay.advancement.AlienAdvancementEvents;
 import com.alien.common.gameplay.entity.dismemberment.AlienLimbDefinitions;
 import com.alien.common.gameplay.entity.dismemberment.AlienLimbDrops;
-import com.alien.common.gameplay.hive.growth.ResinDecorator;
 import com.alien.common.gameplay.hive.lifecycle.QueenSettlementDetector;
 import com.alien.common.gameplay.hive.location.HiveLocationRegistry;
 import com.alien.common.gameplay.level.saveddata.QueenSpawnChunkData;
@@ -176,11 +175,13 @@ public class Alien {
         // HiveManager.ensureVariantFactionMembership.
         MOD.events().onEntityLoad().register(Alien::onAlienEntityLoaded);
 
-        // Hive: chunk-load decoration + on-demand catch-up. Fires for every loaded chunk; the decorator
-        // exits early for chunks not owned by any location.
-        MOD.events()
-            .onChunkLoad()
-            .register((level, chunk) -> ResinDecorator.onChunkLoad(level, chunk.getPos()));
+        // DO NOT REGISTER A CHUNK_LOAD LISTENER - the registration itself arms a server-killing crash.
+        // BLib's MixinChunkMap_ChunkLoadEvent calls level.getChunk(x, z) synchronously BEFORE dispatching to
+        // listeners, inside onFullChunkStatusChange, which runs inside DistanceManager.runAllUpdates' iteration -
+        // reentrancy -> ConcurrentModificationException -> "Exception ticking world" (tester: entering the nether).
+        // The handler early-outs while its listener list is EMPTY, so an empty list is the kill switch. Resin
+        // decoration now polls from HiveLocationLoadedTickTask via ResinDecorator.sweepLoaded. If BLib ships the
+        // real fix (non-blocking getChunkNow + deferred dispatch), event-driven decoration may return.
     }
 
     private static void onAlienEntityLoaded(net.minecraft.world.entity.Entity entity) {
@@ -197,8 +198,13 @@ public class Alien {
         com.alien.common.gameplay.hive.migration.OldHiveMigrator.run(server);
         com.alien.common.gameplay.claim.LegacyPlayerClaimMigration.migrateToBLib(server);
         HiveLocationRegistry.INSTANCE.rebuildFromFactions();
-        com.alien.common.gameplay.hive.migration.LegacyHiveRecovery.detectAndRecover(server);
-        HiveLocationRegistry.INSTANCE.rebuildFromFactions();
+        // The recovery pass needs a populated registry to inspect, hence the rebuild ABOVE it; the rebuild BELOW
+        // only exists to pick up factions the recovery just created, so it is skipped when the recovery repaired
+        // nothing. On a clean world that second pass was byte-identical to the first - the "registry rebuild runs
+        // twice" every load in the tester logs.
+        if (com.alien.common.gameplay.hive.migration.LegacyHiveRecovery.detectAndRecover(server)) {
+            HiveLocationRegistry.INSTANCE.rebuildFromFactions();
+        }
         HiveLocationRegistry.INSTANCE.repairTerritoryClaims(server);
     }
 

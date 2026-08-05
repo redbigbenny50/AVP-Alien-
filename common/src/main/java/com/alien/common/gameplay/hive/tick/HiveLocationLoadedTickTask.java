@@ -68,6 +68,12 @@ public final class HiveLocationLoadedTickTask {
             return;
         }
 
+        // An empress elected while this hive was unloaded gets her body the moment it comes back. The crown was
+        // already hers - this is only the molt catching up with it.
+        if (location.id().equals(lineage.pendingEmpressSeatId())) {
+            com.alien.common.gameplay.hive.empress.EmpressEmergenceRitual.tryMaterialize(serverLevel, location, lineage);
+        }
+
         var currentTick = serverLevel.getGameTime();
         if (!hasLoadedClaimedChunk(serverLevel, location)) {
             return;
@@ -78,6 +84,46 @@ public final class HiveLocationLoadedTickTask {
         }
         if (com.alien.common.gameplay.hive.defense.VentDefenseTask.shouldFire(currentTick)) {
             com.alien.common.gameplay.hive.defense.VentDefenseTask.run(serverLevel, location);
+        }
+        // A dormant rival-strain queen inside our claims is sensed and executed. Sits with defense, ABOVE the
+        // end-style branch: an End fortress that somehow owns ground with a sleeper in it still answers for it.
+        if (com.alien.common.gameplay.hive.defense.DormantQueenPurge.shouldFire(currentTick)) {
+            com.alien.common.gameplay.hive.defense.DormantQueenPurge.run(serverLevel, location);
+        }
+        // A hive at war keeps a garrison standing, topped up one wave at a time. Defence tier, above the end-style
+        // branch: a war is fought wherever the hives are.
+        if (com.alien.common.gameplay.hive.war.WarMobilization.shouldFire(currentTick)) {
+            com.alien.common.gameplay.hive.war.WarMobilization.run(serverLevel, location);
+        }
+        // ...and sends waves of it at the enemy hive. Ordered AFTER mobilization so a wave that just left is
+        // replaced on the same tick it departs.
+        if (com.alien.common.gameplay.hive.war.WarOffensive.shouldFire(currentTick)) {
+            com.alien.common.gameplay.hive.war.WarOffensive.run(serverLevel, location);
+        }
+        // The throne holds its own watch, and its harbinger answers anyone who reaches the last two rooms.
+        if (com.alien.common.gameplay.hive.war.ThroneDefense.shouldFire(currentTick)) {
+            com.alien.common.gameplay.hive.war.ThroneDefense.run(serverLevel, location);
+        }
+
+        // ---- END-STYLE HIVES branch off here and run NOTHING below this block. ---------------------------------
+        // The End hive is a player-built fortress, not a self-growing empire: no construction, no expansion, no
+        // parties, no economy, no simulated growth. What it keeps from above: defense (aggro + vent defense), and
+        // what it adds lives in EndHiveTickTask (worker deployment, egg placement around the queen, the regent
+        // check, the seven-day cull clock). Attack parties still run - they are the hive's teeth - and the brood
+        // bank still runs because vent-only banking IS the End's population model. Everything else on this driver
+        // is autonomy an End hive does not have. See EndStyleHiveRules for the full ruleset.
+        if (com.alien.common.gameplay.hive.dimension.EndStyleHiveRules.isEndStyle(serverLevel)) {
+            if (currentTick % 20L == 0L) {
+                com.alien.common.gameplay.hive.empress.EmpressInfluenceSync.sync(location, lineage);
+                var endConfig = HiveLocationRegistry.INSTANCE.config();
+                AttackPartyDispatch.tryRun(server, location, endConfig);
+                AttackPartyLifecycleTask.run(server, location, endConfig);
+            }
+            if (currentTick % 200L == 0L) {
+                com.alien.common.gameplay.hive.economy.BroodBankTask.run(serverLevel, location);
+            }
+            com.alien.common.gameplay.hive.tick.EndHiveTickTask.run(server, serverLevel, location, lineage, currentTick);
+            return;
         }
 
         // Inhibited (severed contained-breeder) locations run no autonomy below this line — no biomass income, no
@@ -90,7 +136,12 @@ public final class HiveLocationLoadedTickTask {
         // on its own game-time timers until worker dispatch lands at step 5. Called every loaded tick; a hive with no
         // active site returns immediately, so this is free almost always. Sits below the inhibited gate on purpose:
         // building is autonomy, so an inhibited hive's build FREEZES (the site persists - never lost, only paused).
-        com.alien.common.gameplay.hive.structure.carve.CarveSiteWork.tickActive(server, serverLevel, location);
+        // [stated] the weaker side of a slab-intersection grace "stops building... to make the war more fair": the
+        // active carve freezes exactly like an inhibited hive's does - the site persists, it simply does not advance.
+        // Everything else (economy, defence, egg-laying, population growth) runs on, which is the whole point.
+        if (!location.isBuildFrozenForWarPrep()) {
+            com.alien.common.gameplay.hive.structure.carve.CarveSiteWork.tickActive(server, serverLevel, location);
+        }
 
         // Loaded biomass income — only for player-nearby locations (proxy: boss bar is showing). Cheap to call,
         // so we check every tick and let LoadedBiomassTicker decide whether this is its second.
@@ -103,7 +154,23 @@ public final class HiveLocationLoadedTickTask {
         // limit; gate to a coarse cadence. Abstract spread follows this loaded-location cadence; unloaded locations
         // use HiveLocationSlowTickTask's bounded randomized fallback.
         if (currentTick % 20L == 0L) {
+            // Reconcile on the coarse cadence rather than every tick: a hive that just loaded still starts building
+            // at 23x23 within a second, and the periodic sweep is the real guarantee anyway.
+            com.alien.common.gameplay.hive.empress.EmpressInfluenceSync.sync(location, lineage);
             CatchUpEngine.catchUpTo(serverLevel, location, lineage, currentTick);
+            // Decoration bookkeeping, polled here instead of the BLib chunk-load event - registering that event
+            // arms a chunk-system reentrancy crash (see ResinDecorator's class doc). Runs right after catch-up so
+            // freshly caught-up claims are visible to the sweep, same ordering the old event path had.
+            com.alien.common.gameplay.hive.growth.ResinDecorator.sweepLoaded(serverLevel, location);
+            // A watched hive raises its own founding queen instead of teleporting the outcome. This stamps the
+            // shared spread cooldown on success, so the abstract attempt below is already blocked for this hive.
+            com.alien.common.gameplay.hive.growth.QueenPromotionService.tryPromote(
+                serverLevel,
+                location,
+                lineage,
+                HiveLocationRegistry.INSTANCE.config(),
+                currentTick
+            );
             AbstractSpreadAttempt.tryRun(server, location.lineageFactionId(), lineage, location, currentTick);
 
             var config = HiveLocationRegistry.INSTANCE.config();
@@ -121,7 +188,9 @@ public final class HiveLocationLoadedTickTask {
         // so the hive expands gradually and visibly rather than all at once. Bounded and event-driven off the frontier
         // set; does nothing when there are no open sockets.
         if (currentTick % 200L == 0L) {
-            if (com.alien.common.gameplay.hive.structure.HiveRouter.ENABLED) {
+            if (location.isBuildFrozenForWarPrep()) {
+                // No new pieces commissioned during the preparation truce.
+            } else if (com.alien.common.gameplay.hive.structure.HiveRouter.ENABLED) {
                 com.alien.common.gameplay.hive.structure.HiveRouter.route(server, serverLevel, location);
             } else {
                 com.alien.common.gameplay.hive.structure.HiveStructurePlanner.tryGrow(server, serverLevel, location);

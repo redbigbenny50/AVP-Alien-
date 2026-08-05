@@ -101,6 +101,9 @@ public class QueenNaturalSpawnTask {
     private static boolean diagPeacefulWarned;
 
     public static void tick(ServerLevel serverLevel) {
+        if (com.alien.common.gameplay.hive.dimension.EndStyleHiveRules.isEndStyle(serverLevel)) {
+            return; // END-STYLE: wild queens never take root here - hives are brought, not born
+        }
         if (serverLevel.getGameTime() % RUN_INTERVAL_TICKS != 0 || serverLevel.players().isEmpty()) {
             return;
         }
@@ -248,7 +251,8 @@ public class QueenNaturalSpawnTask {
             // THE FIRST queen of a world (natural inside the guarantee window or forced at its deadline) founds
             // RIGHT AWAY and announces herself - the world's opening act. Every later wild queen takes root
             // sleeping and is discovered, not announced.
-            var isFirstQueen = serverLevel.dimension() == Level.OVERWORLD && !data.isFirstQueenSpawned();
+            var isFirstQueen = (serverLevel.dimension() == Level.OVERWORLD
+                || serverLevel.dimension() == Level.NETHER) && !data.isFirstQueenSpawned();
             if (isFirstQueen) {
                 queen.getLifecyclePhaseManager().beginWildImmediateFounding();
             } else {
@@ -257,7 +261,7 @@ public class QueenNaturalSpawnTask {
 
             data.addWildQueenChunk(chunkPos);
             data.getSpawnCooldown().reset();
-            if (serverLevel.dimension() == Level.OVERWORLD) {
+            if (isFirstQueen) {
                 data.markFirstQueenSpawned();
             }
 
@@ -285,11 +289,27 @@ public class QueenNaturalSpawnTask {
      * legal spot - deep, dark, unclaimed - so it retries every cycle until the terrain cooperates.
      */
     private static void handleFirstQueenGuarantee(ServerLevel serverLevel, QueenSpawnChunkData data) {
-        if (serverLevel.dimension() != Level.OVERWORLD || data.isFirstQueenSpawned()) {
+        // The first-queen opener runs PER DIMENSION ([stated] "they should share the same pattern as the
+        // overworld spawns but just be nether strain"): the overworld's first wild queen and the nether's first
+        // wild queen each get the guarantee clock, the forced spawn, and the awake founding-and-announcing
+        // arrival; every later queen in either dimension takes root sleeping. QueenSpawnChunkData is per-level
+        // SavedData, so isFirstQueenSpawned already tracks each dimension separately.
+        var isGuaranteeDimension = serverLevel.dimension() == Level.OVERWORLD
+            || serverLevel.dimension() == Level.NETHER;
+        if (!isGuaranteeDimension || data.isFirstQueenSpawned()) {
             return;
         }
 
         if (data.getFirstQueenDeadlineGameTime() < 0L) {
+            // The nether's clock arms AT GATE-UNLOCK, not at first nether tick ([stated] "the 5 minute timer and
+            // the first queen should both begin when that gates unlocked by the achievement... its meant to give
+            // the players a bit of a head start"): finding the fortress starts a 5-minute grace period, after
+            // which the strain's first queen is forced. Arming at first tick instead would leave the deadline
+            // long expired by the time the advancement lands, and the force would fire on the very next scan -
+            // no head start at all.
+            if (serverLevel.dimension() == Level.NETHER && !fortressAdvancementEarned(serverLevel)) {
+                return;
+            }
             data.setFirstQueenDeadlineGameTime(serverLevel.getGameTime() + FIRST_QUEEN_DEADLINE_TICKS);
             Alien.LOGGER.info(
                 "Queen spawning: first-queen clock ARMED — forced spawn begins in {} ticks (difficulty={})",
@@ -310,6 +330,17 @@ public class QueenNaturalSpawnTask {
                     "Queen spawning: difficulty is PEACEFUL — queens are monsters and CANNOT spawn (guarantee and natural spawning both blocked by vanilla monster rules)."
                 );
             }
+            return;
+        }
+
+        // The nether's clock may be past its deadline long before the strain is allowed to exist - nether queens
+        // are leak-driven and fortress-gated, and the guarantee must not become a bypass for either rule. The
+        // forced spawn simply WAITS: the first scan after a nether leak is recorded AND someone has earned
+        // nether/find_fortress, it fires. The overworld holds on nothing.
+        if (
+            serverLevel.dimension() == Level.NETHER
+                && (!netherStrainLeakRecorded(serverLevel) || !fortressAdvancementEarned(serverLevel))
+        ) {
             return;
         }
 
@@ -334,7 +365,7 @@ public class QueenNaturalSpawnTask {
                 continue;
             }
 
-            if (spawnQueenInChunk(serverLevel, data, chunkPos, AlienVariantTypes.NORMAL.variant())) {
+            if (spawnQueenInChunk(serverLevel, data, chunkPos, forcedVariantFor(serverLevel))) {
                 data.addChunkToBlacklist(chunkPos);
                 Alien.LOGGER.info(
                     "Queen spawning: first-queen guarantee forced a wild queen near player {} in chunk {}",
@@ -357,7 +388,10 @@ public class QueenNaturalSpawnTask {
             return;
         }
         if (diagLastLogGameTime >= 0L) {
-            Alien.LOGGER.info(
+            // DEBUG, not INFO: this repeats every interval for as long as the guarantee stays unfulfilled, so at
+            // INFO it floods the server console indefinitely whenever a world cannot place its first queen. The
+            // method javadoc already says the intent is for a debug.log to name the blocker - this puts it there.
+            Alien.LOGGER.debug(
                 "Queen spawning: first-queen guarantee still unfulfilled — last {}t: chunkTries={} (unloaded={}), samples failed: noFloor/sky={}, playerNear={}, rules(claimed/peaceful)={}, typeNull={} (difficulty={})",
                 now - diagLastLogGameTime,
                 diagChunkTries,
@@ -416,6 +450,14 @@ public class QueenNaturalSpawnTask {
                 if (isNetherStrain && !isNether) {
                     continue;
                 }
+                // Natural nether queens wait for the world to have found a fortress first ([stated] "we want the
+                // natural spawning of nether queens to wait until the player has unlocked the fortress
+                // achievement") - the strain arrives once nether exploration is genuinely underway, not the moment
+                // someone lights a portal. Server-wide: ANY player having earned it unlocks the strain for the
+                // world, which is the sane multiplayer reading of "the player".
+                if (isNetherStrain && !fortressAdvancementEarned(serverLevel)) {
+                    continue;
+                }
                 candidates.add(variant);
             }
         }
@@ -429,6 +471,48 @@ public class QueenNaturalSpawnTask {
         }
 
         return candidates.isEmpty() ? null : candidates.get(serverLevel.random.nextInt(candidates.size()));
+    }
+
+    /** The strain a dimension's forced first queen wears: the overworld's opener is normal, the nether's is nether. */
+    private static AlienVariant forcedVariantFor(ServerLevel serverLevel) {
+        return serverLevel.dimension() == Level.NETHER
+            ? AlienVariantTypes.NETHER.variant()
+            : AlienVariantTypes.NORMAL.variant();
+    }
+
+    /** Natural nether queens are leak-driven; the forced first queen honors the same requirement. */
+    private static boolean netherStrainLeakRecorded(ServerLevel serverLevel) {
+        var strainLeakDataOption = StrainLeakData.getOrCreate(serverLevel);
+        if (!strainLeakDataOption.isSome()) {
+            return false;
+        }
+        for (var variant : strainLeakDataOption.unwrap().getVariants()) {
+            if (AlienVariantTypes.getFor(variant) == AlienVariantTypes.NETHER) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Has anyone on this server earned minecraft:nether/find_fortress? A datapack that removes the advancement resolves
+     * null and the gate opens rather than deadlocking the strain forever. Checked against ONLINE players - vanilla
+     * advancement progress lives per-player and offline progress is not cheaply queryable; the gate re-opens the moment
+     * the earner logs back in, and a hive already founded is never retroactively affected.
+     */
+    private static boolean fortressAdvancementEarned(ServerLevel serverLevel) {
+        var holder = serverLevel.getServer()
+            .getAdvancements()
+            .get(net.minecraft.resources.ResourceLocation.withDefaultNamespace("nether/find_fortress"));
+        if (holder == null) {
+            return true;
+        }
+        for (var player : serverLevel.getServer().getPlayerList().getPlayers()) {
+            if (player.getAdvancements().getOrStartProgress(holder).isDone()) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /** The strain's QUEEN entity type - direct and deterministic, immune to tag ordering. */

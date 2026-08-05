@@ -5,6 +5,9 @@
     },
     "jelly_type=scourge": {
       "model": "avp_alien:block/jelly_vat"
+    },
+    "jelly_type=irradiated": {
+      "model": "avp_alien:block/jelly_vat"
     }
   }
 }

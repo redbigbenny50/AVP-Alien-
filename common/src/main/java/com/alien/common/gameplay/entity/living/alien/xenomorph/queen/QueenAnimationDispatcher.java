@@ -228,6 +228,30 @@ public class QueenAnimationDispatcher {
             .dispatchForEntity(queen);
     }
 
+    public void crawlAttack() {
+        playAttack(QueenAnimationRefs.CRAWL_ATTACK_ANIMATION_NAME);
+    }
+
+    public void crawlAttack(float speed) {
+        playAttack(QueenAnimationRefs.CRAWL_ATTACK_ANIMATION_NAME, speed);
+    }
+
+    /** Crawl posture transitions - one-shots on the crawl edge; speed 2 on a leg-loss collapse. */
+    public void crawlDrop(float speed) {
+        AzCommand.<Queen>replay()
+            .play(AzAlienAnimationUtil.BODY, QueenAnimationRefs.CRAWL_DROP_ANIMATION_NAME, AzPlayBehaviors.PLAY_ONCE)
+            .setSpeed(AzAlienAnimationUtil.BODY, speed)
+            .build()
+            .dispatchForEntity(queen);
+    }
+
+    public void crawlRise() {
+        AzCommand.<Queen>replay()
+            .play(AzAlienAnimationUtil.BODY, QueenAnimationRefs.CRAWL_RISE_ANIMATION_NAME, AzPlayBehaviors.PLAY_ONCE)
+            .build()
+            .dispatchForEntity(queen);
+    }
+
     private void playAttack(String animationName, float speed) {
         AzCommand.<Queen>replay()
             .play(AzAlienAnimationUtil.BODY, animationName, AzPlayBehaviors.PLAY_ONCE)

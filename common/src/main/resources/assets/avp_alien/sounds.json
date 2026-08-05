@@ -125,6 +125,12 @@
     ],
     "subtitle": "subtitles.entity.facehugger.escape"
   },
+  "entity.harbinger.roar3": {
+    "sounds": [
+      "avp_alien:entity/harbinger/roar3"
+    ],
+    "subtitle": "subtitles.entity.harbinger.roar3"
+  },
   "entity.ovomorph.hatch": {
     "sounds": [
       "avp_alien:entity/ovomorph/hatch/hatch"

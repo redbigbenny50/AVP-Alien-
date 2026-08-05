@@ -61,6 +61,10 @@ public final class AbstractSpreadAttempt {
 
     private static final String RESULT_INSUFFICIENT_FOUNDER_POPULATION = "insufficient_founder_population";
 
+    private static final String RESULT_DAUGHTER_LIMIT = "daughter_limit";
+
+    private static final String RESULT_INSUFFICIENT_JELLY = "insufficient_jelly";
+
     private static final String RESULT_OCCUPIED = "occupied";
 
     private static final String RESULT_CORE_OVERLAP = "core_overlap";
@@ -102,7 +106,7 @@ public final class AbstractSpreadAttempt {
         }
 
         // Max locations cap.
-        if (lineage.locationsById().size() >= config.maxLocationsPerLineage()) {
+        if (lineage.activeLocationCount() >= config.maxLocationsPerLineage()) {
             record(
                 sourceLocation,
                 lineage,
@@ -118,7 +122,7 @@ public final class AbstractSpreadAttempt {
         // Empress hive-count cap. An empress can only control up to maxLocationsUnderEmpress hives (including her
         // own origin hive) — a stricter, empress-specific ceiling below the general per-lineage cap above. Once she's
         // present, growth stops well short of maxLocationsPerLineage unless that config is tightened to match.
-        if (lineage.empressId() != null && lineage.locationsById().size() >= config.maxLocationsUnderEmpress()) {
+        if (lineage.empressId() != null && lineage.activeLocationCount() >= config.maxLocationsUnderEmpress()) {
             record(
                 sourceLocation,
                 lineage,
@@ -164,6 +168,45 @@ public final class AbstractSpreadAttempt {
                 null,
                 null,
                 "Source population is " + sourcePopulation + "/" + config.minimumPopulationForHiveSpread() + "."
+            );
+            return null;
+        }
+
+        // A hive seeds exactly two daughters in its lifetime and then stops forever, whatever else it has.
+        if (sourceLocation.daughterHivesFounded() >= config.maxDaughterHivesPerLocation()) {
+            record(
+                sourceLocation,
+                lineage,
+                currentTick,
+                RESULT_DAUGHTER_LIMIT,
+                null,
+                null,
+                "Source has seeded "
+                    + sourceLocation.daughterHivesFounded()
+                    + "/"
+                    + config.maxDaughterHivesPerLocation()
+                    + " daughter hives."
+            );
+            return null;
+        }
+
+        // The founding queen is MADE, not found: a praetorian (or failing that a crusher) is raised into one, and
+        // that costs royal jelly. This is why the old founder party could never assemble - it wanted a queen sitting
+        // in reserves, and queens are explicitly excluded from reserves as unique identity entities, so nothing
+        // could ever put one there.
+        if (sourceLocation.royalJelly() < config.queenPromotionJellyCost()) {
+            record(
+                sourceLocation,
+                lineage,
+                currentTick,
+                RESULT_INSUFFICIENT_JELLY,
+                null,
+                null,
+                "Royal jelly is "
+                    + sourceLocation.royalJelly()
+                    + "/"
+                    + config.queenPromotionJellyCost()
+                    + " for the queen promotion."
             );
             return null;
         }
@@ -229,6 +272,8 @@ public final class AbstractSpreadAttempt {
         var locationId = location.id();
 
         sourceLocation.setLastAbstractSpreadTick(currentTick);
+        sourceLocation.setRoyalJelly(sourceLocation.royalJelly() - config.queenPromotionJellyCost());
+        sourceLocation.setDaughterHivesFounded(sourceLocation.daughterHivesFounded() + 1);
         record(
             sourceLocation,
             lineage,
@@ -342,7 +387,10 @@ public final class AbstractSpreadAttempt {
         long currentTick
     ) {
         var locationId = HiveLocationIds.create();
-        var centerPos = candidate.getMiddleBlockPosition(64); // Y is approximate; chunk-load corrects later
+        var centerPos = com.alien.common.gameplay.hive.dimension.DimensionHiveProfiles.roofSafeAnchor(
+            level,
+            candidate.getMiddleBlockPosition(64) // Y is approximate; chunk-load corrects later
+        );
         var location = new HiveLocation(
             locationId,
             lineageId,
@@ -447,6 +495,8 @@ public final class AbstractSpreadAttempt {
 
     private record FounderParty(
         EntityType<?> queenType,
+        EntityType<?> praetorianType,
+        EntityType<?> crusherType,
         EntityType<?> droneType,
         EntityType<?> runnerType,
         int minSize,
@@ -464,6 +514,10 @@ public final class AbstractSpreadAttempt {
             var maxSize = Math.max(minSize, config.abstractSpreadMaxFounderGroupSize());
             return new FounderParty(
                 (EntityType<?>) queenType,
+                (EntityType<?>) com.alien.common.gameplay.entity.living.alien.xenomorph.praetorian.Praetorian
+                    .getType(lineage.variant()),
+                (EntityType<?>) com.alien.common.gameplay.entity.living.alien.xenomorph.crusher.Crusher
+                    .getType(lineage.variant()),
                 (EntityType<?>) droneType,
                 (EntityType<?>) runnerType,
                 minSize,
@@ -472,17 +526,36 @@ public final class AbstractSpreadAttempt {
         }
 
         private boolean availableIn(HiveLocation location) {
-            return location.localReserves().getCount(queenType) >= 1
+            return promotableIn(location) != null
                 && location.localReserves().getCount(droneType) >= 1
                 && location.localReserves().getCount(runnerType) >= 1
                 && eligibleReserveCount(location) >= minSize;
+        }
+
+        /** The heavy this hive will raise into its founding queen. PRAETORIAN FIRST, crusher only if there is none. */
+        private @Nullable EntityType<?> promotableIn(HiveLocation location) {
+            if (praetorianType != null && location.localReserves().getCount(praetorianType) >= 1) {
+                return praetorianType;
+            }
+            if (crusherType != null && location.localReserves().getCount(crusherType) >= 1) {
+                return crusherType;
+            }
+            return null;
         }
 
         private FounderGroup drainFrom(HiveLocation location) {
             var targetSize = Math.min(maxSize, eligibleReserveCount(location));
             var composition = new EntityReserves();
 
-            drainOne(location, composition, queenType);
+            // The heavy is SPENT and does not travel; what boards the convoy is the queen she was raised into, so
+            // the queen is added to the composition rather than drained from reserves (nothing could drain her -
+            // she did not exist a moment ago).
+            var promotable = promotableIn(location);
+            if (promotable != null) {
+                location.localReserves().underlying().add(promotable, -1);
+            }
+            composition.add(queenType, 1);
+
             drainOne(location, composition, droneType);
             drainOne(location, composition, runnerType);
             drainFillers(location, composition, targetSize - composition.getCount());
@@ -491,8 +564,8 @@ public final class AbstractSpreadAttempt {
         }
 
         private String missingDetail(HiveLocation location) {
-            return "Source reserves need queen/drone/runner founder party; have "
-                + location.localReserves().getCount(queenType)
+            return "Source reserves need promotable-heavy/drone/runner founder party; have "
+                + (promotableIn(location) == null ? 0 : 1)
                 + "/"
                 + location.localReserves().getCount(droneType)
                 + "/"
@@ -505,7 +578,7 @@ public final class AbstractSpreadAttempt {
         }
 
         private int eligibleReserveCount(HiveLocation location) {
-            var count = location.localReserves().getCount(queenType) > 0 ? 1 : 0;
+            var count = promotableIn(location) != null ? 1 : 0;
             for (var type : location.localReserves().getAvailableEntityTypes()) {
                 if (isFounderFillerEligible(type)) {
                     count += location.localReserves().getCount(type);

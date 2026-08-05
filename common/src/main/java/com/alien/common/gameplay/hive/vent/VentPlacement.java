@@ -50,6 +50,7 @@ public final class VentPlacement {
         // Record what this vent is for, so nothing downstream ever has to infer it from geometry.
         if (level.getBlockEntity(ventPos) instanceof ResinVentBlockEntity vent) {
             vent.setKind(kind);
+            vent.markKindCurrent();
             // Bind to the owning hive at birth, so a surface vent on unclaimed frontier ground keeps its owner
             // across reloads instead of relying on getByChunk (which only knows claimed chunks).
             if (location != null) {

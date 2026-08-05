@@ -445,8 +445,52 @@ public final class HiveLocationRegistry {
                 continue;
             }
 
+            // Load-time healing: re-claim any built-structure chunk whose claim was lost (the old disconnection
+            // pruner amputated room claims in existing worlds - this repairs those saves on their next load). Runs
+            // BEFORE the sync loop below so the reclaimed chunks are in claimedChunks() when it iterates, and so
+            // reclaim's own additions never mutate the set mid-iteration.
+            com.alien.common.gameplay.hive.growth.HiveLocationClaims.reclaimStructureChunks(
+                level,
+                location,
+                level.getGameTime()
+            );
+
             for (var chunk : location.claimedChunks()) {
+                // DIAGNOSTIC (queen bug 2 - "relog makes the claim contested"). syncTerritoryClaim strips only
+                // LINEAGE- and VARIANT-tier claims before adding this location's own, so any OTHER location-tier
+                // claimant already sitting on the chunk survives and the chunk ends up with two -> contested.
+                // This names both ids at the moment it happens. Remove once the culprit is identified.
+                var priorClaimants = Alien.MOD.territory().getClaimants(level, chunk);
+                if (
+                    priorClaimants.size() > 1
+                        || (priorClaimants.size() == 1 && !priorClaimants.contains(location.id().value()))
+                ) {
+                    Alien.LOGGER.warn(
+                        "CLAIM-DIAG repair {} chunk {} incoming={} priorClaimants={} (foreign={})",
+                        level.dimension().location(),
+                        chunk,
+                        location.id().value(),
+                        priorClaimants,
+                        priorClaimants.stream()
+                            .filter(id -> !id.equals(location.id().value()))
+                            .map(ResourceLocation::toString)
+                            .toList()
+                    );
+                }
+
                 HiveLocationClaims.syncTerritoryClaim(level, location, chunk);
+
+                var afterClaimants = Alien.MOD.territory().getClaimants(level, chunk);
+                if (afterClaimants.size() > 1) {
+                    Alien.LOGGER.warn(
+                        "CLAIM-DIAG repair LEFT {} CLAIMANTS on {} chunk {}: {} - this chunk is now CONTESTED",
+                        afterClaimants.size(),
+                        level.dimension().location(),
+                        chunk,
+                        afterClaimants
+                    );
+                }
+
                 reconciledChunks++;
             }
         }
@@ -488,7 +532,23 @@ public final class HiveLocationRegistry {
         // Order matters: location dormancy first so per-location rules fire before lineage-empty cleanup picks up
         // newly-zero-location lineages this tick.
         com.alien.common.gameplay.hive.lifecycle.LocationDormancyTask.scanAll(server);
+        // END-STYLE: the leadership duel sweep - rare-event cheap, per end-style level only.
+        for (var duelLevel : server.getAllLevels()) {
+            com.alien.common.gameplay.hive.empress.EndEmpressDuel.tick(duelLevel);
+        }
         com.alien.common.gameplay.hive.lifecycle.LineageDeathHandler.scanAndKill(server);
+
+        // An empress collecting on a hive lost to a nuke. Cheap when nothing is pending, which is almost always.
+        com.alien.common.gameplay.hive.lifecycle.NukeRetribution.tick(server);
+
+        // Irradiated ground, walls and cargo leaking into whoever is near them. Throttled to once a second inside.
+        com.alien.common.gameplay.radiation.IrradiatedExposureTask.tick(server);
+
+        // A converted hive turning its own walls irradiated, a budget of blocks at a time.
+        com.alien.common.gameplay.hive.lifecycle.IrradiatedConversionSweep.tick(server);
+
+        // A newborn irradiated hive coming for everyone who made it, two days on.
+        com.alien.common.gameplay.hive.lifecycle.IrradiatedBirthRaid.tick(server);
 
         // § 13 economy: jelly production then balance buys. Per-tick, no throttling.
         com.alien.common.gameplay.hive.economy.JellyProduction.scanAndProduce(server);
@@ -507,10 +567,20 @@ public final class HiveLocationRegistry {
             com.alien.common.gameplay.hive.convoy.MigrationDispatch.scanAndDispatch(server);
             com.alien.common.gameplay.hive.convoy.RaidDispatch.scanAndDispatch(server);
             com.alien.common.gameplay.hive.empress.EmpressEmergenceTask.scanAndStart(server);
+            // Corridor membership BEFORE influence: the network decides which lineages carry her empressId, and
+            // influence is derived from that id. Reversed, a lineage severed this sweep would keep her buffs for
+            // one more pass.
+            com.alien.common.gameplay.hive.empress.EmpressNetworkSync.syncAll(server);
+            // Re-assert the router's memory-only empress-influence set. Reconciled rather than pushed, so it
+            // survives restarts and needs no hook on every event that could change the answer.
+            com.alien.common.gameplay.hive.empress.EmpressInfluenceSync.syncAll(server);
         }
 
         if (server.overworld().getGameTime() % Math.max(1L, config.contestTickWindow()) == 0L) {
             com.alien.common.gameplay.hive.war.AlienTerritoryWarSystem.scanAndApply(server);
+            // Open wars are resolved on the same cadence, off the registry rather than a loaded tick: a war between
+            // two hives nobody is standing near still has to reach a victor.
+            com.alien.common.gameplay.hive.war.AlienTerritoryWarSystem.tickWars(server);
         }
 
         ticksSinceLastScan++;

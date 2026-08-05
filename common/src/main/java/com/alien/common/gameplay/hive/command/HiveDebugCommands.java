@@ -665,6 +665,15 @@ public final class HiveDebugCommands {
                                     + " dim=" + lineage.dimension().location()
                                     + " locations=" + lineage.locationsById().size()
                                     + " empress=" + (lineage.empressId() == null ? "none" : lineage.empressId().toString())
+                                    + (lineage.pendingEmpressSeatId() == null
+                                        ? ""
+                                        : " (ELECTED, awaiting molt at " + lineage.pendingEmpressSeatId() + ")")
+                                    + (lineage.empressCooldownUntilTick() <= ctx.getSource().getServer().overworld().getGameTime()
+                                        ? ""
+                                        : " (crowning locked for "
+                                            + ((lineage.empressCooldownUntilTick()
+                                                - ctx.getSource().getServer().overworld().getGameTime()) / 24000L)
+                                            + " more MC days)")
                             )
                         ),
                     false

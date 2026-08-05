@@ -66,9 +66,7 @@ public final class BiomassHuntingPartyDispatch {
         var spawnPos = surfaceVents.get(serverLevel.random.nextInt(surfaceVents.size()));
 
         // Size scales with claims but is CAPPED (bonus spitters ride on top of this budget).
-        var biomassCap = com.alien.common.gameplay.hive.structure.HiveRouter.isEmpressInfluenced(location)
-            ? config.biomassHuntingPartyMaxSizeEmpress()
-            : config.biomassHuntingPartyMaxSize();
+        var biomassCap = com.alien.common.gameplay.hive.empress.EmpressCaps.scale(location, config.biomassHuntingPartyMaxSize());
         var desiredSize = Math.min(
             biomassCap,
             Math.max(

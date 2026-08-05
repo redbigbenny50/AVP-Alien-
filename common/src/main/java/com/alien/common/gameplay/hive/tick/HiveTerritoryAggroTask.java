@@ -40,6 +40,7 @@ public final class HiveTerritoryAggroTask {
     public static void run(ServerLevel level, HiveLocation location) {
         var intruders = intrudersInTerritory(level, location);
 
+        recordVisitors(level, location, intruders);
         trackIntrusionDwell(level, location, intruders);
 
         if (intruders.isEmpty()) {
@@ -52,6 +53,24 @@ public final class HiveTerritoryAggroTask {
             }
 
             aggroMembers(level, entry.getValue(), intruders);
+        }
+    }
+
+    /**
+     * Notes everyone who turns up, hostile or not.
+     * <p>
+     * Separate from dwell tracking below, which deliberately ignores a player who has not attacked anything - that map
+     * answers "who has been fighting us". This one answers "who has been here", and it is the only record that catches
+     * someone who walked in quietly, did something drastic and left without throwing a punch. Only the FIRST sighting
+     * is kept, so the ledger reads as an order of arrival rather than a last-seen list.
+     */
+    private static void recordVisitors(ServerLevel level, HiveLocation location, List<LivingEntity> intruders) {
+        var currentTick = level.getGameTime();
+
+        for (var intruder : intruders) {
+            if (intruder instanceof net.minecraft.server.level.ServerPlayer player) {
+                location.recordTerritoryVisit(player.getUUID(), currentTick);
+            }
         }
     }
 
@@ -115,8 +134,16 @@ public final class HiveTerritoryAggroTask {
     public static List<LivingEntity> intrudersInTerritory(ServerLevel level, HiveLocation location) {
         var intruders = new ArrayList<LivingEntity>();
 
-        // Players first (cheap — scan the level player list directly).
+        // Players first (cheap — scan the level player list directly). CREATIVE AND SPECTATOR PLAYERS ARE NOT
+        // INTRUDERS — [stated] "people in creative and spectator modes are triggering this ... exclude people in
+        // creative and spectator triggering its timer for intrusions." This is the single choke point every
+        // intrusion consumer reads (the visit ledger, dwell/campaign accrual, and the vent-defense dispatcher via
+        // the public reuse below), so filtering here silences all of them at once: a builder flying through in
+        // creative, or an observer in spectator, accrues nothing and triggers no wave.
         for (var player : level.players()) {
+            if (player.isCreative() || player.isSpectator()) {
+                continue;
+            }
             if (location.claimedChunks().contains(new ChunkPos(player.blockPosition()))) {
                 intruders.add(player);
             }

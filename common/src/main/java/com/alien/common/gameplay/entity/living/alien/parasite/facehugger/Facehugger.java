@@ -160,7 +160,7 @@ public class Facehugger extends Parasite implements EntitySenseCacheUser, GOAPUs
             case NORMAL -> AlienEntityTypes.FACEHUGGER.get();
             case NETHER -> AlienEntityTypes.NETHER_FACEHUGGER.get();
             case ABERRANT -> AlienEntityTypes.ABERRANT_FACEHUGGER.get();
-            case IRRADIATED -> null;
+            case IRRADIATED -> AlienEntityTypes.IRRADIATED_FACEHUGGER.get();
         };
     }
 }

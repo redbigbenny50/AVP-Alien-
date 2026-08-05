@@ -30,7 +30,13 @@ final class AlienXenomorphLimbGroups {
             AlienEntityTypes.IRRADIATED_RUNNER,
             AlienEntityTypes.NETHER_RUNNER
         ),
-        group("spitter", AlienEntityTypes.SPITTER, AlienEntityTypes.ABERRANT_SPITTER, AlienEntityTypes.NETHER_SPITTER),
+        group(
+            "spitter",
+            AlienEntityTypes.SPITTER,
+            AlienEntityTypes.ABERRANT_SPITTER,
+            AlienEntityTypes.NETHER_SPITTER,
+            AlienEntityTypes.IRRADIATED_SPITTER
+        ),
         group(
             "praetorian",
             AlienEntityTypes.PRAETORIAN,

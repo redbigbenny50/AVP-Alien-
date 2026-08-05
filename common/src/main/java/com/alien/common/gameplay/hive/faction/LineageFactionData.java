@@ -62,6 +62,12 @@ public class LineageFactionData extends FactionData {
 
     private static final String NBT_PENDING_EMPRESS_EMERGENCE = "PendingEmpressEmergence";
 
+    private static final String NBT_PENDING_EMPRESS_SEAT = "PendingEmpressSeat";
+
+    private static final String NBT_EMPRESS_COOLDOWN_UNTIL = "EmpressCooldownUntil";
+
+    private static final String NBT_EMPRESS_REVEALED = "EmpressRevealed";
+
     private static final String NBT_LINEAGE_NUMBER = "LineageNumber";
 
     private static final String NBT_NEXT_LOCATION_NUMBER = "NextLocationNumber";
@@ -99,6 +105,33 @@ public class LineageFactionData extends FactionData {
 
     private boolean pendingEmpressEmergence;
 
+    /**
+     * The location whose seated queen has been ELECTED empress but has not physically molted yet.
+     * <p>
+     * Emergence is decided abstractly, the same way growth and claims are: the seat is chosen from persisted location
+     * data with nothing loaded, {@code empressId} is assigned immediately, and the lineage starts behaving as an
+     * empress lineage right away. This field is what remembers WHERE the body still has to appear. Non-null means
+     * "elected, not yet materialized"; it is cleared the moment she molts, and also cleared if the seat dies or loses
+     * its queen first (which releases {@code empressId} so a new seat can be elected).
+     */
+    private @Nullable HiveLocationId pendingEmpressSeatId;
+
+    /**
+     * Game tick before which this lineage may not crown another empress. Set when an empress DIES; 0 = no cooldown.
+     * <p>
+     * Without it, killing her only starts the race for her successor - the lineage still holds 4+ hives, so the very
+     * next scan elects again and the players get nothing for the kill.
+     */
+    private long empressCooldownUntilTick;
+
+    /**
+     * Her position has been given away by a second rescue into the same hive. One-way for this empress.
+     * <p>
+     * She does not relocate afterwards - the player earned the coordinates. This flag is what her dig-in response
+     * reads, and it stops the reveal message repeating on every subsequent transfer.
+     */
+    private boolean empressRevealed;
+
     /** Per-variant lineage index assigned at mint (used in {@link FactionNaming} paths). -1 = unassigned. */
     private long lineageNumber;
 
@@ -131,6 +164,9 @@ public class LineageFactionData extends FactionData {
         this.empressId = null;
         this.ageInTicks = 0L;
         this.pendingEmpressEmergence = false;
+        this.pendingEmpressSeatId = null;
+        this.empressCooldownUntilTick = 0L;
+        this.empressRevealed = false;
         this.lineageNumber = -1L;
         this.nextLocationNumber = 0L;
         this.locationsById = new LinkedHashMap<>();
@@ -361,6 +397,53 @@ public class LineageFactionData extends FactionData {
         markDirty();
     }
 
+    /** The elected-but-not-yet-molted empress seat, or null. See the field javadoc. */
+    public @Nullable HiveLocationId pendingEmpressSeatId() {
+        return pendingEmpressSeatId;
+    }
+
+    public void setPendingEmpressSeatId(@Nullable HiveLocationId pendingEmpressSeatId) {
+        this.pendingEmpressSeatId = pendingEmpressSeatId;
+        markDirty();
+    }
+
+    /**
+     * Locations that still COUNT as hives of this lineage - everything except exiled empress remnants.
+     * <p>
+     * A remnant is alive and fightable but the empire has written it off, so it must not satisfy the emergence
+     * threshold, occupy a slot against the spread caps, or make a lone lineage look like it has a sister to evacuate
+     * to. Use this anywhere a count drives a DECISION; raw locationsById() is still right for display.
+     */
+    public int activeLocationCount() {
+        var count = 0;
+        for (var location : locationsById().values()) {
+            if (!location.isExiled()) {
+                count++;
+            }
+        }
+        return count;
+    }
+
+    /** True once a second rescue has given her position away. See the field javadoc. */
+    public boolean empressRevealed() {
+        return empressRevealed;
+    }
+
+    public void setEmpressRevealed(boolean empressRevealed) {
+        this.empressRevealed = empressRevealed;
+        markDirty();
+    }
+
+    /** Game tick before which no new empress may be crowned. 0 = none. See the field javadoc. */
+    public long empressCooldownUntilTick() {
+        return empressCooldownUntilTick;
+    }
+
+    public void setEmpressCooldownUntilTick(long empressCooldownUntilTick) {
+        this.empressCooldownUntilTick = empressCooldownUntilTick;
+        markDirty();
+    }
+
     public Map<HiveLocationId, HiveLocation> locationsById() {
         return locationsById;
     }
@@ -486,6 +569,16 @@ public class LineageFactionData extends FactionData {
 
         this.ageInTicks = tag.getLong(NBT_AGE_IN_TICKS);
         this.pendingEmpressEmergence = tag.getBoolean(NBT_PENDING_EMPRESS_EMERGENCE);
+
+        if (tag.contains(NBT_PENDING_EMPRESS_SEAT)) {
+            var seat = ResourceLocation.tryParse(tag.getString(NBT_PENDING_EMPRESS_SEAT));
+            this.pendingEmpressSeatId = seat == null ? null : HiveLocationId.of(seat);
+        } else {
+            this.pendingEmpressSeatId = null;
+        }
+
+        this.empressCooldownUntilTick = tag.getLong(NBT_EMPRESS_COOLDOWN_UNTIL);
+        this.empressRevealed = tag.getBoolean(NBT_EMPRESS_REVEALED);
         this.lineageNumber = tag.contains(NBT_LINEAGE_NUMBER) ? tag.getLong(NBT_LINEAGE_NUMBER) : -1L;
         this.nextLocationNumber = tag.getLong(NBT_NEXT_LOCATION_NUMBER);
 
@@ -584,6 +677,13 @@ public class LineageFactionData extends FactionData {
 
         tag.putLong(NBT_AGE_IN_TICKS, ageInTicks);
         tag.putBoolean(NBT_PENDING_EMPRESS_EMERGENCE, pendingEmpressEmergence);
+        if (pendingEmpressSeatId != null) {
+            tag.putString(NBT_PENDING_EMPRESS_SEAT, pendingEmpressSeatId.value().toString());
+        }
+        tag.putLong(NBT_EMPRESS_COOLDOWN_UNTIL, empressCooldownUntilTick);
+        if (empressRevealed) {
+            tag.putBoolean(NBT_EMPRESS_REVEALED, true);
+        }
         if (lineageNumber >= 0) {
             tag.putLong(NBT_LINEAGE_NUMBER, lineageNumber);
         }

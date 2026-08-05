@@ -84,7 +84,35 @@ public class LayEggAction {
             return Action.Signal.ABORT;
         }
 
-        ovomorph.setPos(eggLayer.getEggLayingPosition());
+        // SNAP TO THE BLOCK CENTRE. The lay position is a free Vec3 offset from the royal's facing, so it lands
+        // wherever the maths puts it - which is almost never a block centre, and an egg is a block-sized thing
+        // that reads as misplaced the moment it straddles a seam. Centring on X/Z costs nothing, makes the offset
+        // constants only need to be right to within half a block, and applies to every royal rather than being
+        // tuned per-model. Y is left exactly as computed so she still lays at the height she was going to.
+        var layPosition = eggLayer.getEggLayingPosition();
+        // END-STYLE PLACEMENT - [stated] "the aliens though would place the eggs around her": the egg lands on the
+        // nearest FREE spot of the hive's own resin around the royal (radius 8), reading as the workers carrying it
+        // out onto the creep. No resin nearby yet (a young fortress) falls back to the normal exit spot - resin
+        // spread catches up.
+        var endLocation = com.alien.common.gameplay.hive.location.HiveLocationRegistry.INSTANCE.getByChunk(
+            level.dimension(),
+            eggLayer.asEntity().chunkPosition()
+        );
+        if (endLocation != null && endLocation.isEndStyleHive()) {
+            var resinSpot = findFreeResinSpotNear(level, eggLayer.asEntity().blockPosition(), eggLayer.getVariant());
+            if (resinSpot != null) {
+                layPosition = new net.minecraft.world.phys.Vec3(
+                    resinSpot.getX() + 0.5,
+                    resinSpot.getY(),
+                    resinSpot.getZ() + 0.5
+                );
+            }
+        }
+        ovomorph.setPos(
+            Math.floor(layPosition.x) + 0.5,
+            layPosition.y,
+            Math.floor(layPosition.z) + 0.5
+        );
         ovomorph.setPersistenceRequired();
         ovomorph.isRooted.set(false);
 
@@ -131,5 +159,39 @@ public class LayEggAction {
 
     private LayEggAction() {
         throw new UnsupportedOperationException();
+    }
+
+    /** Nearest open, standable cell whose floor is the hive's own resin, spiralling out to radius 8. */
+    private static net.minecraft.core.BlockPos findFreeResinSpotNear(
+        net.minecraft.world.level.Level level,
+        net.minecraft.core.BlockPos center,
+        com.alien.common.model.alien.variant.AlienVariant variant
+    ) {
+        var resinTag = switch (variant) {
+            case NORMAL -> com.alien.common.registry.tag.AlienBlockTags.NORMAL_RESIN;
+            case NETHER -> com.alien.common.registry.tag.AlienBlockTags.NETHER_RESIN;
+            case ABERRANT -> com.alien.common.registry.tag.AlienBlockTags.ABERRANT_RESIN;
+            case IRRADIATED -> com.alien.common.registry.tag.AlienBlockTags.IRRADIATED_RESIN;
+        };
+        for (int r = 1; r <= 8; r++) {
+            for (int dx = -r; dx <= r; dx++) {
+                for (int dz = -r; dz <= r; dz++) {
+                    if (Math.max(Math.abs(dx), Math.abs(dz)) != r) {
+                        continue; // ring only - nearest first
+                    }
+                    for (int dy = -2; dy <= 2; dy++) {
+                        var pos = center.offset(dx, dy, dz);
+                        if (
+                            level.getBlockState(pos.below()).is(resinTag)
+                                && level.getBlockState(pos).isAir()
+                                && level.getBlockState(pos.above()).isAir()
+                        ) {
+                            return pos;
+                        }
+                    }
+                }
+            }
+        }
+        return null;
     }
 }

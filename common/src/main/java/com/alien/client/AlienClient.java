@@ -28,6 +28,7 @@ import com.alien.client.render.entity.ChestbursterRenderer;
 import com.alien.client.render.entity.ChrysalisRenderer;
 import com.alien.client.render.entity.CrusherRenderer;
 import com.alien.client.render.entity.DroneRenderer;
+import com.alien.client.render.entity.EmpressOvipositorRenderer;
 import com.alien.client.render.entity.EmpressRenderer;
 import com.alien.client.render.entity.HarbingerRenderer;
 import com.alien.client.render.entity.OvipositorRenderer;
@@ -45,6 +46,9 @@ import com.alien.client.render.entity.RunnerRenderer;
 import com.alien.client.render.entity.SpitterRenderer;
 import com.alien.client.render.entity.WarriorRenderer;
 import com.alien.client.render.entity.parasite.facehugger.FacehuggerRenderer;
+import com.alien.client.render.item.AnchorItemRenderer;
+import com.alien.client.render.item.InhibitorItemRenderer;
+import com.alien.client.render.item.TrackerItemRenderer;
 import com.alien.common.registry.init.AlienBlockEntityTypes;
 import com.alien.common.registry.init.AlienEntityTypes;
 import com.alien.common.registry.init.AlienParticleTypes;
@@ -183,6 +187,7 @@ public class AlienClient {
 
         MOD.registries().registerBlockRenderLayer(AlienBlocks.ROYAL_JELLY_BLOCK, RenderType.translucent());
         MOD.registries().registerBlockRenderLayer(AlienBlocks.SCOURGE_JELLY_BLOCK, RenderType.translucent());
+        MOD.registries().registerBlockRenderLayer(AlienBlocks.IRRADIATED_JELLY_BLOCK, RenderType.translucent());
     }
 
     private static void registerEntityRenderers() {
@@ -251,6 +256,8 @@ public class AlienClient {
         MOD.registries().registerEntityRenderer(AlienEntityTypes.NETHER_CHRYSALIS, ChrysalisRenderer::new);
         MOD.registries().registerEntityRenderer(AlienEntityTypes.NETHER_CRUSHER, CrusherRenderer::new);
         MOD.registries().registerEntityRenderer(AlienEntityTypes.NETHER_DRONE, DroneRenderer::new);
+        MOD.registries().registerEntityRenderer(AlienEntityTypes.IRRADIATED_FACEHUGGER, FacehuggerRenderer::new);
+        MOD.registries().registerEntityRenderer(AlienEntityTypes.IRRADIATED_OVOMORPH, OvomorphRenderer::new);
         MOD.registries().registerEntityRenderer(AlienEntityTypes.NETHER_FACEHUGGER, FacehuggerRenderer::new);
         MOD.registries().registerEntityRenderer(AlienEntityTypes.NETHER_HARBINGER, HarbingerRenderer::new);
         MOD.registries().registerEntityRenderer(AlienEntityTypes.NETHER_OVOMORPH, OvomorphRenderer::new);
@@ -270,8 +277,10 @@ public class AlienClient {
         MOD.registries().registerEntityRenderer(AlienEntityTypes.NETHER_BURSTER, BursterRenderer::new);
         MOD.registries().registerEntityRenderer(AlienEntityTypes.NETHER_RUNNER, RunnerRenderer::new);
         MOD.registries().registerEntityRenderer(AlienEntityTypes.NETHER_SPITTER, SpitterRenderer::new);
+        MOD.registries().registerEntityRenderer(AlienEntityTypes.IRRADIATED_SPITTER, SpitterRenderer::new);
         MOD.registries().registerEntityRenderer(AlienEntityTypes.NETHER_WARRIOR, WarriorRenderer::new);
         MOD.registries().registerEntityRenderer(AlienEntityTypes.OVIPOSITOR, OvipositorRenderer::new);
+        MOD.registries().registerEntityRenderer(AlienEntityTypes.EMPRESS_OVIPOSITOR, EmpressOvipositorRenderer::new);
         MOD.registries().registerEntityRenderer(AlienEntityTypes.ROYAL_COCOON, RoyalCocoonRenderer::new);
         MOD.registries().registerEntityRenderer(AlienEntityTypes.ABERRANT_ROYAL_COCOON, RoyalCocoonRenderer::new);
         MOD.registries().registerEntityRenderer(AlienEntityTypes.NETHER_ROYAL_COCOON, RoyalCocoonRenderer::new);
@@ -307,10 +316,16 @@ public class AlienClient {
             registerAsset(entry.head(), entry.itemPath());
             registerAsset(entry.headShield(), entry.shieldItemPath());
         });
-        registerAsset(AlienItems.ANCHOR, "anchor");
         registerAsset(AlienItems.JELLY_VAT, "jelly_vat");
-        registerAsset(AlienItems.INHIBITOR, "inhibitor");
-        registerAsset(AlienItems.TRACKER, "tracker");
+
+        // ANCHOR, INHIBITOR AND TRACKER USE AzItemRenderer INSTEAD, not the geo-bone/template path above.
+        // The template renderer replaces vanilla display handling with BLib's own transform system - block
+        // units instead of sixteenths, no implicit centring - so every Blockbench value has to be re-derived by
+        // hand, per item, per context. AzItemRenderer leaves vanilla's display block alone, so models/item/*.json
+        // is the raw Blockbench export and behaves as previewed. Animation still works through it.
+        MOD.registries().registerItemRenderer(AlienItems.ANCHOR, name -> AnchorItemRenderer::new);
+        MOD.registries().registerItemRenderer(AlienItems.INHIBITOR, name -> InhibitorItemRenderer::new);
+        MOD.registries().registerItemRenderer(AlienItems.TRACKER, name -> TrackerItemRenderer::new);
     }
 
     private static void registerAsset(BLibHolder<Item> holder, String configPath) {

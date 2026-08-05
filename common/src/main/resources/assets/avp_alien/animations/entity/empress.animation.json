@@ -10044,7 +10044,7 @@
 			"animation_length": 2,
 			"bones": {
 				"gTail1": {
-					"rotation": ["-67.5+Math.cos(query.anim_time*180)*1", "Math.cos(query.anim_time*180)*-1", 0]
+					"rotation": ["-67.5+Math.cos(query.anim_time*180-)*1", "Math.cos(query.anim_time*180)*-1", 0]
 				},
 				"gTail2": {
 					"rotation": [0, "Math.cos(query.anim_time*180)*-1", 0]
@@ -10235,7 +10235,7 @@
 				}
 			}
 		},
-		"crawlstand": {
+		"crawlrise": {
 			"loop": "hold_on_last_frame",
 			"animation_length": 1,
 			"bones": {
@@ -10600,7 +10600,7 @@
 				}
 			}
 		},
-		"standcrawl": {
+		"crawldrop": {
 			"loop": "hold_on_last_frame",
 			"animation_length": 1,
 			"bones": {

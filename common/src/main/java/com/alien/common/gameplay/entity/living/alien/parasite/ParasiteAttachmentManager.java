@@ -1,7 +1,9 @@
 package com.alien.common.gameplay.entity.living.alien.parasite;
 
+import com.alien.common.gameplay.entity.living.alien.IrradiatedDetonation;
 import com.alien.common.model.alien.FreeMob;
 import com.alien.common.model.alien.Host;
+import com.alien.common.model.alien.variant.AlienVariant;
 import com.alien.common.registry.init.AlienDataSyncKeys;
 import com.alien.common.registry.key.AlienDamageTypeKeys;
 import com.alien.common.registry.tag.AlienEntityTypeTags;
@@ -122,6 +124,15 @@ public class ParasiteAttachmentManager {
             if (ticksAttachedToHost() >= 20 * 20) {
 
                 if (parasite.isFertile.get()) {
+                    // An irradiated hugger carries no embryo to give. The irradiated line has no chestburster and no
+                    // adolescent - it does not breed through hosts at all - so reaching a face is the end of its job
+                    // rather than the start of one. It detonates on the host it worked so hard to reach.
+                    if (parasite.getVariant() == AlienVariant.IRRADIATED) {
+                        IrradiatedDetonation.detonate(parasite);
+                        parasite.discard();
+                        return;
+                    }
+
                     ((Host) host).implantEmbryo(parasite);
                     parasite.isFertile.set(false);
                     // TODO: Play nasty toob sound

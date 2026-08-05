@@ -39,6 +39,12 @@ public class AlienBlocks {
         () -> new JellyBlock(AlienBlockProperties.JELLY.build().speedFactor(0.4F).jumpFactor(0.5F))
     );
 
+    /** The irradiated strain's jelly. Gated at the tab and the recipe, not the registry - see AlienModGates. */
+    public static final BLibHolder<Block> IRRADIATED_JELLY_BLOCK = create(
+        "irradiated_jelly_block",
+        () -> new JellyBlock(AlienBlockProperties.JELLY.build().speedFactor(0.4F).jumpFactor(0.5F))
+    );
+
     public static final BLibHolder<AnchorBlock> ANCHOR = create(
         "anchor",
         () -> new AnchorBlock(anchorProperties())

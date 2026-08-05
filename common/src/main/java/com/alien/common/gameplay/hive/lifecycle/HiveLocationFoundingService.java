@@ -2,6 +2,7 @@ package com.alien.common.gameplay.hive.lifecycle;
 
 import com.alien.Alien;
 import com.alien.common.gameplay.entity.living.alien.xenomorph.queen.Queen;
+import com.alien.common.gameplay.hive.economy.IrradiatedHiveRules;
 import com.alien.common.gameplay.hive.faction.FactionAesthetics;
 import com.alien.common.gameplay.hive.faction.FactionNaming;
 import com.alien.common.gameplay.hive.faction.HiveLocationFactionProvisioner;
@@ -46,13 +47,32 @@ public final class HiveLocationFoundingService {
      * Mints a new {@link LineageFactionData} (parented to the queen's variant faction) and her first
      * {@link HiveLocation} at {@code position}. Returns the new location id.
      */
-    public static HiveLocationId foundNewLineage(Queen queen, BlockPos position) {
+    public static @org.jetbrains.annotations.Nullable HiveLocationId foundNewLineage(Queen queen, BlockPos position) {
         // Default: a founding queen raises her physical chamber. The inhibited-claim path passes false - a captive
         // queen still gets a lineage + claim (for her chained eggsack and the autonomy gate) but NO built hive.
         return foundNewLineage(queen, position, true);
     }
 
-    public static HiveLocationId foundNewLineage(Queen queen, BlockPos position, boolean buildStructure) {
+    public static @org.jetbrains.annotations.Nullable HiveLocationId foundNewLineage(
+        Queen queen,
+        BlockPos position,
+        boolean buildStructure
+    ) {
+        // AN IRRADIATED QUEEN NEVER FOUNDS. [stated] "she doesnt try to build a hive like how normal queens do, she
+        // just exists... shes just a roaming weapon of radioactive teeth and claws." Her strain's territory belongs to
+        // the LOCATION, not to her, so a homeless irradiated queen has nothing to found WITH and nothing to found FOR.
+        //
+        // [stated] she may still JOIN an existing irradiated hive if she finds one - that is ordinary membership, not
+        // founding, and goes nowhere near this method.
+        if (IrradiatedHiveRules.isIrradiated(queen)) {
+            // DEBUG, not INFO: this is a PERMANENT property of the strain, not an event, and her lifecycle keeps
+            // re-attempting to found for as long as she is alive - a live log showed 63 identical lines in ten
+            // minutes from a single queen. The reason is documented directly above; it does not need repeating
+            // into the server console every attempt.
+            Alien.LOGGER.debug("Founding refused for irradiated queen {} - the strain does not found", queen.getUUID());
+            return null;
+        }
+
         var level = queen.level();
         var dimension = level.dimension();
         var variant = queen.getVariant();
@@ -129,7 +149,7 @@ public final class HiveLocationFoundingService {
         // Adds the queen to both the lineage faction (idempotent) and the new location faction.
         LocationMembership.join(location, queen);
 
-        if (lineageData.locationsById().size() >= 4 && lineageData.empressId() == null) {
+        if (lineageData.activeLocationCount() >= 4 && lineageData.empressId() == null) {
             // Arm the empress-emergence hint at the SAME threshold EmpressEmergenceTask actually fires at (4+
             // locations, per the updated leadership design). This flag also pauses QueenlessMaturationTask for the
             // lineage; arming it at the old 2+ suppressed queenless maturation two hives before an empress could
@@ -190,6 +210,11 @@ public final class HiveLocationFoundingService {
         boolean buildStructure
     ) {
         var locationId = HiveLocationIds.create();
+        // Ceiled dimensions: pull a too-high anchor down so the full 16-block slab fits under the bedrock roof -
+        // the queen may have wandered above the spawn band before founding, and stamping eats bedrock.
+        if (queen.level() instanceof net.minecraft.server.level.ServerLevel foundingLevel) {
+            position = com.alien.common.gameplay.hive.dimension.DimensionHiveProfiles.roofSafeAnchor(foundingLevel, position);
+        }
         var centerChunk = new ChunkPos(position);
         var location = new HiveLocation(
             locationId,
@@ -214,6 +239,9 @@ public final class HiveLocationFoundingService {
         // registry byChunk index, BLib territory map) stay synchronized. Direct claimedChunks().add(...)
         // would miss the BLib territory addClaim and leave the core chunks unclaimed in the UI.
         if (queen.level() instanceof net.minecraft.server.level.ServerLevel serverLevel) {
+            if (com.alien.common.gameplay.hive.dimension.EndStyleHiveRules.isEndStyle(serverLevel)) {
+                location.markEndStyleHive();
+            }
             claimInitialCore(serverLevel, location, centerChunk, currentGameTime, buildStructure);
         } else {
             addInitialCoreOffline(location, centerChunk, currentGameTime);
@@ -229,7 +257,14 @@ public final class HiveLocationFoundingService {
         long currentGameTime,
         boolean buildStructure
     ) {
-        var radius = HiveLocationRegistry.INSTANCE.config().initialHiveLocationClaimRadiusChunks();
+        // END-STYLE: the FULL footprint is claimed at placement ([stated] "it might be best to have the hive area
+        // stay the same 19x19") - there are no surface parties to grow it and no decay to shrink it, so the
+        // territory the fortress will ever hold is granted whole on founding day. Other lineages' chunks are still
+        // respected. No structure is stamped: an End hive builds nothing but its worker vents.
+        var endStyle = location.isEndStyleHive();
+        var radius = endStyle
+            ? com.alien.common.gameplay.hive.structure.HiveRouter.BASE_EXTENT
+            : HiveLocationRegistry.INSTANCE.config().initialHiveLocationClaimRadiusChunks();
         for (var dx = -radius; dx <= radius; dx++) {
             for (var dz = -radius; dz <= radius; dz++) {
                 var chunk = new ChunkPos(centerChunk.x + dx, centerChunk.z + dz);
@@ -246,8 +281,9 @@ public final class HiveLocationFoundingService {
         }
 
         // Structure system: stamp queen-chamber roles onto the claimed core and register royal exits as frontier
-        // sockets for the planner. Skipped for logical-only claims (an inhibited captive queen never builds a hive).
-        if (buildStructure) {
+        // sockets for the planner. Skipped for logical-only claims (an inhibited captive queen never builds a hive)
+        // and for END-STYLE hives (no construction of any kind).
+        if (buildStructure && !endStyle) {
             com.alien.common.gameplay.hive.structure.HiveStructureFounding.establishQueenChamber(
                 level.getServer(),
                 location,

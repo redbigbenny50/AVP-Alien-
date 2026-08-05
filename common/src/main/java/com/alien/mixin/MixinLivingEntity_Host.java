@@ -107,10 +107,35 @@ public abstract class MixinLivingEntity_Host extends Entity implements Host {
         float amount,
         CallbackInfoReturnable<Boolean> callbackInfo
     ) {
+        var self = LivingEntity.class.cast(this);
+        // A carried host cannot HARM anyone: the serverAiStep suspension in MixinMob_IncapacitateHost stops it
+        // acting, and this victim-side guard voids whatever slips past that - an arrow it loosed just before the
+        // grab, or an AI that deals damage outside the suspended tick ([stated] "i just watched a piglin kill a
+        // drone while being carried"). getEntity() is the CAUSING entity (the shooter for a projectile), so ranged
+        // and melee both resolve to the carried host.
+        if (
+            source.getEntity() instanceof LivingEntity attacker
+                && attacker != self
+                && com.alien.common.gameplay.hive.party.HostCaptureTask.isBeingCarriedHome(attacker)
+        ) {
+            callbackInfo.setReturnValue(false); // no damage dealt
+            return;
+        }
         if (!source.is(DamageTypes.IN_WALL)) {
             return;
         }
-        if (HostParking.isParked(LivingEntity.class.cast(this))) {
+        if (HostParking.isParked(self)) {
+            callbackInfo.setReturnValue(false); // no damage dealt
+            return;
+        }
+        // THE CARRY LEG OF THE SAME RULE ([stated] "carried hosts dont suffocate. large hosts are suffocating in
+        // walls if the xeno walks them around"): a xenomorph hauling a captive home drags it through corridors and
+        // web gaps sized for the xeno, not the cargo - a villager clears them, an iron golem clips the wall the
+        // whole way and arrives dead. While the hive's own carry bookkeeping says this entity IS the captor's
+        // recorded cargo, wall damage is waived. Same anti-abuse scoping as the parked case: merely riding an alien
+        // is not enough - HostCaptureTask.carriedHost must name this exact entity - and the exemption ends the
+        // moment it is dropped or parked (parking then takes over above).
+        if (com.alien.common.gameplay.hive.party.HostCaptureTask.isBeingCarriedHome(self)) {
             callbackInfo.setReturnValue(false); // no damage dealt
         }
     }

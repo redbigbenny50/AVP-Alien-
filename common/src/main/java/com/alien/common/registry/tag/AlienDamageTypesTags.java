@@ -11,6 +11,9 @@ public class AlienDamageTypesTags {
 
     public static final TagKey<DamageType> DOES_NOT_HURT_ALIENS = create("does_not_hurt_aliens");
 
+    /** Radiation-class damage. Ignored by every alien except the aberrant strain - see AlienMobEffectTags.RADIATION. */
+    public static final TagKey<DamageType> RADIATION = create("radiation");
+
     private static TagKey<DamageType> create(String path) {
         return Alien.MOD.resources().createTagKey(Registries.DAMAGE_TYPE, path);
     }

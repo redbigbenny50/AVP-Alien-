@@ -6,6 +6,7 @@ import com.alien.common.model.alien.variant.AlienVariant;
 import com.alien.common.registry.init.AlienEntityTypes;
 import com.alien.common.registry.init.block.AlienResinBlocks;
 import com.alien.common.registry.tag.AlienDamageTypesTags;
+import com.alien.common.registry.tag.AlienEntityTypeTags;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.damagesource.DamageSource;
 import net.minecraft.world.entity.Entity;
@@ -26,6 +27,19 @@ import org.jetbrains.annotations.NotNull;
  * (regular / aberrant / nether) is encoded by the entity type, which also selects the texture in the renderer.
  */
 public class RoyalCocoon extends Mob {
+
+    /**
+     * A nether cocoon does not burn.
+     * <p>
+     * {@code Alien.fireImmune()} grants this to every nether xenomorph, but a cocoon is a {@link Mob} rather than an
+     * {@code Alien}, so it inherited nothing and a nether royal molting in her own biome cooked inside her shell.
+     * Driven off the NETHER_ALIENS tag rather than a type comparison, so any nether type added later is covered by the
+     * data alone.
+     */
+    @Override
+    public boolean fireImmune() {
+        return getType().is(AlienEntityTypeTags.NETHER_ALIENS) || super.fireImmune();
+    }
 
     public static AttributeSupplier.Builder createRoyalCocoonAttributes() {
         return createMobAttributes()

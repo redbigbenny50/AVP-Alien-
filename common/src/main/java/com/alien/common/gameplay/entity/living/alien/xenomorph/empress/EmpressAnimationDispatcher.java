@@ -31,12 +31,13 @@ public class EmpressAnimationDispatcher {
         .play(AzAlienAnimationUtil.BODY, EmpressAnimationRefs.BACKHAND_ANIMATION_NAME, AzPlayBehaviors.PLAY_ONCE)
         .build();
 
+    // Previously played SWIM as a stand-in; her crawl clips exist (crawl, crawlidle) and are wired now.
     private static final AzCommand<Empress> CRAWL = AzCommand.<Empress>idempotent()
-        .play(AzAlienAnimationUtil.BODY, EmpressAnimationRefs.SWIM_ANIMATION_NAME, AzPlayBehaviors.LOOP)
+        .play(AzAlienAnimationUtil.BODY, EmpressAnimationRefs.CRAWL_ANIMATION_NAME, AzPlayBehaviors.LOOP)
         .build();
 
     private static final AzCommand<Empress> CRAWL_HOLD = AzCommand.<Empress>idempotent()
-        .play(AzAlienAnimationUtil.BODY, EmpressAnimationRefs.SWIM_ANIMATION_NAME, AzPlayBehaviors.HOLD_ON_LAST_FRAME)
+        .play(AzAlienAnimationUtil.BODY, EmpressAnimationRefs.CRAWL_IDLE_ANIMATION_NAME, AzPlayBehaviors.HOLD_ON_LAST_FRAME)
         .build();
 
     private static final AzCommand<Empress> SWIPEDOWN = AzCommand.<Empress>replay()
@@ -81,6 +82,22 @@ public class EmpressAnimationDispatcher {
             AzDispatchMode.PLAY_IF_NOT_PLAYING,
             speed
         ).dispatchForEntity(empress);
+    }
+
+    /** Crawl posture transitions - one-shots on the crawl edge; speed 2 on a leg-loss collapse. */
+    public void crawlDrop(float speed) {
+        AzCommand.<Empress>replay()
+            .play(AzAlienAnimationUtil.BODY, EmpressAnimationRefs.CRAWL_DROP_ANIMATION_NAME, AzPlayBehaviors.PLAY_ONCE)
+            .setSpeed(AzAlienAnimationUtil.BODY, speed)
+            .build()
+            .dispatchForEntity(empress);
+    }
+
+    public void crawlRise() {
+        AzCommand.<Empress>replay()
+            .play(AzAlienAnimationUtil.BODY, EmpressAnimationRefs.CRAWL_RISE_ANIMATION_NAME, AzPlayBehaviors.PLAY_ONCE)
+            .build()
+            .dispatchForEntity(empress);
     }
 
     public void crawlHold() {

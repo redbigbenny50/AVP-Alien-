@@ -43,9 +43,20 @@ public abstract class MixinPersistentEntitySectionManager_ConvoyUnload<T extends
                 }
             });
 
+        // ONLY discard when the convoy actually banked her - exactly what the hive branch below already does.
+        //
+        // returnToReserves refuses in three cases: the convoy no longer exists, the alien is not in its
+        // materializedMembers map, or there is no membership at all. It clears the stale membership and returns
+        // false. Discarding anyway destroyed the entity with NOTHING saved - and a founding queen who arrived with a
+        // retinue keeps a stale membership after that convoy finishes, so a chunk unload mid-carve deleted her
+        // outright. She vanished halfway through digging her claustral cell and did not come back on relog.
+        //
+        // If the convoy will not take her, she is not a convoy member any more; let her serialize like any other
+        // entity.
         for (var alien : convoyMembers) {
-            ConvoyMemberTracker.returnUnloaded(alien);
-            alien.discard();
+            if (ConvoyMemberTracker.returnUnloaded(alien)) {
+                alien.discard();
+            }
         }
         for (var alien : hiveMembers) {
             if (HiveIdentityReserveUnloadHandler.returnUnloaded(alien)) {

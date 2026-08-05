@@ -49,6 +49,9 @@ public final class RescueCampaignTask {
                 continue;
             }
             for (var location : new ArrayList<>(lineage.locationsById().values())) {
+                if (com.alien.common.gameplay.hive.dimension.EndStyleHiveRules.isEndStyle(server, location)) {
+                    continue; // END-STYLE: no rescue campaigns - convoys of every type are off
+                }
                 var campaign = location.rescueCampaign();
                 if (campaign != null) {
                     process(server, serverLevel, lineage, factionId, location, campaign);

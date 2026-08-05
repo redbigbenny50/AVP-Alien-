@@ -33,6 +33,27 @@ public class ResinVentBlockEntity extends BlockEntity implements GameEventListen
 
     private static final String KIND_TAG = "avp_vent_kind";
 
+    private static final String KIND_CLASSIFIER_VERSION_TAG = "avp_vent_kind_classifier_version";
+
+    /**
+     * Bump when the kind-classification rule changes in a way that already-persisted answers must be corrected. Version
+     * 2 = the shelf-aware surface test: before it, every nether vent that went through classification was measured
+     * against the bedrock ROOF heightmap and persisted as FRONTIER - which is why tester worlds had working, placed,
+     * webbed vents that the party system refused to count as surface. The heal below re-runs classification ONCE per
+     * vent in CEILED dimensions only; sky dimensions were classified correctly all along and their persisted (including
+     * deliberately placed) kinds are never touched.
+     */
+    private static final int KIND_CLASSIFIER_VERSION = 2;
+
+    private int kindClassifierVersion = 0;
+
+    /**
+     * Deliberate placements carry an authoritative kind - stamp them current so the heal pass never re-derives them.
+     */
+    public void markKindCurrent() {
+        kindClassifierVersion = KIND_CLASSIFIER_VERSION;
+    }
+
     private static final String BOUND_TAG = "BoundLocationId";
 
     /** Extra chunks past a hive's territory radius that a legacy orphan vent may be adopted from. */
@@ -55,11 +76,12 @@ public class ResinVentBlockEntity extends BlockEntity implements GameEventListen
 
         var positionSource = new BlockPositionSource(blockPos);
 
-        // 10s per vent (was 3s): the cry-for-help event fires on EVERY hit a hive member takes, and every vent
-        // within earshot answers independently — at 3 seconds, vent-dense rooms (hubs run 40+ vents) filled with
-        // defenders the moment a player opened fire. Vent density stays the difficulty dial; this just caps how
-        // fast each individual vent can pump.
-        this.alienSpawnCooldown = Cooldown.withCooldownTime("spawnAlienCooldown", Duration.ofSeconds(10));
+        // 5s per vent. History: 3s originally, raised to 10s because the cry-for-help event fires on EVERY hit a
+        // hive member takes and every vent within earshot answers independently, so vent-dense rooms (hubs run 40+
+        // vents) filled with defenders the moment a player opened fire. 10s overcorrected — playtesters reported
+        // too few aliens coming to the aid — so this sits at the midpoint. Vent density stays the difficulty dial;
+        // this only caps how fast each individual vent can pump.
+        this.alienSpawnCooldown = Cooldown.withCooldownTime("spawnAlienCooldown", Duration.ofSeconds(5));
         this.cryForHelpListener = new CryForHelpListener(positionSource);
     }
 
@@ -93,6 +115,9 @@ public class ResinVentBlockEntity extends BlockEntity implements GameEventListen
         if (kind != null) {
             compoundTag.putString(KIND_TAG, kind.name());
         }
+        if (kindClassifierVersion > 0) {
+            compoundTag.putInt(KIND_CLASSIFIER_VERSION_TAG, kindClassifierVersion);
+        }
         // Persist the owning hive. Without this the binding was lost on every reload, forcing serverTick to
         // re-derive ownership from getByChunk - which only knows CLAIMED chunks, so a surface vent dropped on
         // open frontier ground could never be re-owned and never re-registered (host hunts saw no surface vent).
@@ -105,6 +130,9 @@ public class ResinVentBlockEntity extends BlockEntity implements GameEventListen
     protected void loadAdditional(@NotNull CompoundTag compoundTag, @NotNull HolderLookup.Provider provider) {
         super.loadAdditional(compoundTag, provider);
         kind = compoundTag.contains(KIND_TAG) ? VentKind.byName(compoundTag.getString(KIND_TAG)) : null;
+        kindClassifierVersion = compoundTag.contains(KIND_CLASSIFIER_VERSION_TAG)
+            ? compoundTag.getInt(KIND_CLASSIFIER_VERSION_TAG)
+            : 0;
         boundLocationId = compoundTag.contains(BOUND_TAG)
             ? HiveLocationId.of(net.minecraft.resources.ResourceLocation.parse(compoundTag.getString(BOUND_TAG)))
             : null;
@@ -192,6 +220,27 @@ public class ResinVentBlockEntity extends BlockEntity implements GameEventListen
             vent.setKind(
                 HiveVents.classifyUntagged(level, owningLocation, ventPos, config.surfacePartySurfaceBandBlocks())
             );
+            vent.kindClassifierVersion = KIND_CLASSIFIER_VERSION;
+        } else if (
+            vent.kindClassifierVersion < KIND_CLASSIFIER_VERSION
+                && level != null
+                && level.dimensionType().hasCeiling()
+        ) {
+            // THE ONE-TIME HEAL for kinds poisoned by the roof-heightmap bug (see KIND_CLASSIFIER_VERSION): in a
+            // ceiled dimension, re-derive the kind under the fixed shelf-aware rule and write it down again. A shelf
+            // vent flips FRONTIER -> SURFACE right where it stands; structure and pocket vents re-derive to what
+            // they already were. Runs once per vent, then the version stamp retires it forever.
+            var config = HiveLocationRegistry.INSTANCE.config();
+            vent.setKind(
+                HiveVents.classifyUntagged(level, owningLocation, ventPos, config.surfacePartySurfaceBandBlocks())
+            );
+            vent.kindClassifierVersion = KIND_CLASSIFIER_VERSION;
+            vent.setChanged();
+        }
+        if (vent.kindClassifierVersion < KIND_CLASSIFIER_VERSION) {
+            // Sky dimension: the old rule was already correct there - just retire the heal check.
+            vent.kindClassifierVersion = KIND_CLASSIFIER_VERSION;
+            vent.setChanged();
         }
 
         owningLocation.ventManager().addVent(ventPos, vent.kind);

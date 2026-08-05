@@ -50,16 +50,7 @@ public class AlienPredicates {
         if (alien instanceof Queen boundQueen && boundQueen.getBindManager().isFullyBound()) {
             return false;
         }
-        // KIN MERCY: a HELPLESS queen of the attacker's OWN STRAIN - chained OR incapacitated (downed) - is never
-        // a valid target, not even for a rival lineage at war with hers. Helpless royalty transcends the hive feud:
-        // her kind break chains (QueenRescueManager), never necks. Rival STRAINS retain execution rights - a
-        // helpless rival queen is a war prize. Consequence, accepted by design: a same-strain hive war cannot
-        // finish a DOWNED queen - she must be beaten while standing.
-        if (
-            potentialTarget instanceof Queen helplessQueen
-                && (helplessQueen.getBindManager().hasAnyChain() || helplessQueen.isIncapacitated())
-                && !areAliensDifferentStrains(alien, helplessQueen)
-        ) {
+        if (isHelplessKinQueen(alien, potentialTarget) || isHelplessQueenStrikingKin(alien, potentialTarget)) {
             return false;
         }
         // A host on a drone's back is CARGO, not prey. The hive spent a whole party fetching it and is carrying it
@@ -110,6 +101,12 @@ public class AlienPredicates {
      * Deliberately routed through {@code HostCaptureTask.carriedHost}, which only ever returns a NON-alien passenger,
      * so this covers captives without also shielding an ovomorph riding an egg-hauler from a rival hive's attention.
      */
+    /**
+     * How far above a ground alien a hunting target may sit before it counts as unreachable. Roughly the height a
+     * xenomorph can close on by jumping or by walking up terrain; anything hovering higher is never caught.
+     */
+    private static final double MAX_HUNTABLE_HEIGHT_ABOVE = 4.0;
+
     private static boolean isCapturedHost(@NotNull LivingEntity potentialTarget) {
         // On a drone's back, on its way home.
         if (
@@ -124,6 +121,30 @@ public class AlienPredicates {
         // dragging home got executed in its own chamber, purely because marines are a hated faction. Killing the thing
         // you captured is the same self-sabotage as the spitter shooting the wolf a drone was carrying.
         return HostParking.isParked(potentialTarget);
+    }
+
+    /**
+     * Blocks a GROUND caste from committing to prey it can never actually reach.
+     * <p>
+     * A biomass hunting party that aggros a phantom walks under it forever: the target is legitimate, the pathing is
+     * legitimate, and the party circles beneath it until something else interrupts. Blaze, breeze and ghast do the same
+     * thing, and the catch-all at the bottom of the tier check sweeps every modded flyer into the same trap, so naming
+     * the four in a tag would only fix the four we happen to know about.
+     * <p>
+     * Height rather than pathfinding on purpose: this runs inside target selection, and building a Path per candidate
+     * per scan is far too expensive for what it buys. A hoverer sits well above its pursuer, so the gap is the cheap
+     * tell.
+     * <p>
+     * Applies ONLY to proactive HUNTING. Retaliation is checked earlier and is untouched - something that hurts this
+     * alien stays a valid target however far out of reach it is, which is what keeps a spitter shooting back at a blaze
+     * instead of ignoring it. Climbers are exempt: a xenomorph on a wall reaches things a drone on the floor cannot.
+     */
+    private static boolean isReachableForHunting(@NotNull Alien alien, @NotNull LivingEntity potentialTarget) {
+        if (alien.onClimbable() || alien.isInWater() || potentialTarget.isInWater()) {
+            return true;
+        }
+
+        return potentialTarget.getY() - alien.getY() <= MAX_HUNTABLE_HEIGHT_ABOVE;
     }
 
     private static boolean isTargetThreatAllowed(@NotNull Alien alien, @NotNull LivingEntity potentialTarget) {
@@ -169,7 +190,8 @@ public class AlienPredicates {
         }
 
         if (potentialTarget.getType().is(AlienEntityTypeTags.XENOMORPH_THREAT_2_LOW_DANGER)) {
-            return isHiveLowOnBiomass(alien) || isActiveBiomassHuntingPartyMember(alien);
+            return isReachableForHunting(alien, potentialTarget)
+                && (isHiveLowOnBiomass(alien) || isActiveBiomassHuntingPartyMember(alien));
         }
 
         if (potentialTarget.getType().is(AlienEntityTypeTags.XENOMORPH_THREAT_1_PASSIVE)) {
@@ -178,7 +200,8 @@ public class AlienPredicates {
 
         // Match the old 1.21.1 aggro baseline: anything valid and not explicitly ignored/passive/high-danger is
         // treated as low danger, so modded hostile mobs still enter the biomass-gated prey pool without a data tag.
-        return isHiveLowOnBiomass(alien) || isActiveBiomassHuntingPartyMember(alien);
+        return isReachableForHunting(alien, potentialTarget)
+            && (isHiveLowOnBiomass(alien) || isActiveBiomassHuntingPartyMember(alien));
     }
 
     /**
@@ -247,10 +270,65 @@ public class AlienPredicates {
 
     // This function is here for semantics reasons.
     public static boolean areAliensEnemies(Alien first, Alien second) {
+        // BONDED THROUGH PAIN. The irradiated strain is the one exception to hive war: every irradiated alien is
+        // allied to every other irradiated alien REGARDLESS OF LINEAGE, and hostile to everything else.
+        //
+        // This has to short-circuit BEFORE the lineage comparison, and that is the whole point. Each converted hive is
+        // minted its own lineage of one - it is an island - so by the ordinary rule two irradiated hives read as rival
+        // lineages and would fight. They do not. Note this also makes the strain's rescue behaviour work: any
+        // irradiated xenomorph will come for any other, which is the same fact seen from the other side.
+        if (isIrradiated(first) && isIrradiated(second)) {
+            return false;
+        }
+
         // Different strains always fight. Same-strain hives also fight when their lineages are not unified under the
         // same empress authority.
         return areAliensDifferentStrains(first, second)
             || AlienTerritoryWarSystem.areAlienLineagesEnemies(first, second);
+    }
+
+    private static boolean isIrradiated(Alien alien) {
+        return alien.getVariant() == com.alien.common.model.alien.variant.AlienVariant.IRRADIATED;
+    }
+
+    /**
+     * KIN MERCY: a HELPLESS queen of the attacker's OWN STRAIN - chained OR incapacitated (downed) - is never a valid
+     * target, not even for a rival lineage at war with hers. Helpless royalty transcends the hive feud: her kind break
+     * chains ({@code QueenRescueManager}), never necks. Rival STRAINS retain execution rights - a helpless rival queen
+     * is a war prize. Consequence, accepted by design: a same-strain hive war cannot finish a DOWNED queen; she must be
+     * beaten while standing.
+     * <p>
+     * Public and named because it is enforced in TWO places that cannot see each other. The targeting pipeline asks it
+     * through {@link #canContinueTargeting}, which every sensor path funnels into - but {@code Alien.setTarget} trusts
+     * its caller completely, so anything holding an entity reference can force a target past the sensors entirely.
+     * Convoy dispatch, hive aggro and the cry-for-help listener all do exactly that, and the listener's
+     * {@code retargetIfPossible} copies whatever the crier was already fighting straight onto a freshly summoned
+     * defender. One definition, enforced at both doors.
+     */
+    /**
+     * KIN MERCY, the other way round: a HELPLESS queen does not strike her own strain, whatever their lineage.
+     * <p>
+     * {@code QueenRescueManager.isEligibleRescuer} recruits on STRAIN ALONE - lineage is not consulted, because kin
+     * cross hive lines to free captive royalty. Her own hostility test does not: {@link #areAliensEnemies} counts a
+     * rival lineage as an enemy. So a rescuer from another lineage was simultaneously entitled to break her chains and
+     * a legitimate target for her while doing it, and she would maul whichever of her rescuers happened to be at war
+     * with her - intermittently, since the ones sharing her lineage were never valid targets anyway.
+     * <p>
+     * Mercy has to run both ways or it is not mercy. If her kind will cross the feud to free her, she does not get to
+     * open them up for it while they work. This lapses the moment she is free, and rival STRAINS are untouched by it -
+     * they were never coming to help.
+     */
+    public static boolean isHelplessQueenStrikingKin(@NotNull Alien alien, @NotNull LivingEntity potentialTarget) {
+        return alien instanceof Queen helplessQueen
+            && (helplessQueen.getBindManager().hasAnyChain() || helplessQueen.isIncapacitated())
+            && potentialTarget instanceof Alien kin
+            && !areAliensDifferentStrains(helplessQueen, kin);
+    }
+
+    public static boolean isHelplessKinQueen(@NotNull Alien alien, @NotNull LivingEntity potentialTarget) {
+        return potentialTarget instanceof Queen helplessQueen
+            && (helplessQueen.getBindManager().hasAnyChain() || helplessQueen.isIncapacitated())
+            && !areAliensDifferentStrains(alien, helplessQueen);
     }
 
     private static boolean areAliensDifferentStrains(Alien first, Alien second) {

@@ -24,6 +24,7 @@ public final class HiveIdentityReserveUnloadHandler {
                 || alien.getType().is(AlienEntityTypeTags.QUEENS)
                 || alien.isRemoved()
                 || alien.convoyMembership() != null
+                || isSomeonesSpecimen(alien)
         ) {
             return false;
         }
@@ -37,12 +38,38 @@ public final class HiveIdentityReserveUnloadHandler {
         var returned = alien.isPersistenceRequired()
             ? returnLocation.localReserves().addReturningIdentityMember(alien)
             : returnLocation.localReserves().addReturningMember(alien.getType(), 1);
+        // A MARKED returner (the crawl-retreat rule, or a disbanded carve worker) refused by a full reserve joins
+        // the brood bank instead - [stated] "if the reserves are full it will join the host born bank as a bonus."
+        // The brood bank is uncapped, so a retreating cripple that made it out is never turned away at the door.
+        if (!returned && alien.isMarkedForReserveReturn()) {
+            returned = returnLocation.localReserves().addBrood(alien.getType(), 1);
+        }
         if (!returned) {
             return false;
         }
 
         removeHiveOwnership(alien);
         return true;
+    }
+
+    /**
+     * Whether this xenomorph belongs to a PLAYER rather than to a hive, and so must never be virtualized.
+     * <p>
+     * Folding an alien into the reserve pool discards the entity - which is correct for a fungible drone wandering
+     * home, and catastrophic for a specimen someone captured. Losing its hive is fine and happens all the time, notably
+     * when a nuke levels the location it belonged to; QUIETLY CEASING TO EXIST inside a player's lab is not.
+     * <p>
+     * A NAME TAG is the clearest statement of ownership a player can make, and vanilla already treats it as "do not
+     * despawn this". Honouring it here means a named xeno keeps existing as a real entity through chunk unloads and
+     * through the death of whatever hive it once answered to.
+     * <p>
+     * Two further tells are planned and not built: proximity to a lot of player-placed blocks, and having stayed in one
+     * small area for a long time - between them they describe the enclosures and zoos players actually make. A frozen
+     * cryotube state will eventually be the unambiguous version of the same idea. Both need state nothing currently
+     * tracks, so the name tag is the honest first pass rather than a guess dressed as a heuristic.
+     */
+    private static boolean isSomeonesSpecimen(com.alien.common.gameplay.entity.living.alien.Alien alien) {
+        return alien.hasCustomName();
     }
 
     private static void removeHiveOwnership(com.alien.common.gameplay.entity.living.alien.Alien alien) {

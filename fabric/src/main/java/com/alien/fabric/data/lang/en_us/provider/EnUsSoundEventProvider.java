@@ -31,6 +31,7 @@ public class EnUsSoundEventProvider {
         addSound(builder, AlienSoundEvents.ENTITY_QUEEN_ARM_ATTACK, "Queen attacks");
         addSound(builder, AlienSoundEvents.ENTITY_QUEEN_BACK_HAND_ATTACK, "Queen back hand attacks");
         addSound(builder, AlienSoundEvents.ENTITY_QUEEN_RAM_ATTACK, "Queen ram attacks");
+        addSound(builder, AlienSoundEvents.ENTITY_HARBINGER_ROAR_3, "Harbinger roars");
         addSound(builder, AlienSoundEvents.ENTITY_QUEEN_SCREAM, "Queen screams");
         addSound(builder, AlienSoundEvents.ENTITY_QUEEN_TAIL_ATTACK, "Queen tail attacks");
         addSound(builder, AlienSoundEvents.ENTITY_QUEEN_DEATH, "Queen dies");

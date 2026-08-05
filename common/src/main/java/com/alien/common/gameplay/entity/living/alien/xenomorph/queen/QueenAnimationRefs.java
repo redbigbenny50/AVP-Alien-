@@ -20,6 +20,19 @@ public class QueenAnimationRefs {
 
     public static final String CRAWL_ATTACK_ANIMATION_NAME = "crawl_attack";
 
+    // Crawl posture transitions (edge-driven one-shots, mirrored by the dig triptychs below). Tick counts are the
+    // authored clip lengths x20 and are SHARED between the client animator's track hold and the server's
+    // CrawlingManager block window - one constant, two consumers, so the sides can never disagree.
+    public static final String CRAWL_DROP_ANIMATION_NAME = "crawl.drop";
+
+    public static final String CRAWL_RISE_ANIMATION_NAME = "crawl.rise";
+
+    public static final int CRAWL_DROP_TICKS = 15;
+
+    public static final int CRAWL_RISE_TICKS = 30;
+
+    public static final int CRAWL_ATTACK_DURATION_TICKS = 10;
+
     // Vertical dig (descending to her location anchor Y): one-shot down, looping dig, one-shot up.
     public static final String DIG_DOWN_ANIMATION_NAME = "digdown";
 

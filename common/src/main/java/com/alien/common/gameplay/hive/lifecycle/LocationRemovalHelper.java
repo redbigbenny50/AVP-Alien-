@@ -6,6 +6,7 @@ import com.alien.common.gameplay.hive.growth.HiveLocationClaims;
 import com.alien.common.gameplay.hive.location.HiveLocation;
 import com.alien.common.gameplay.hive.location.HiveLocationRegistry;
 import com.alien.common.gameplay.hive.location.HiveLocationRemovalReason;
+import com.alien.common.gameplay.level.saveddata.HiveRuinsData;
 import net.minecraft.server.level.ServerLevel;
 
 import java.util.HashSet;
@@ -30,6 +31,28 @@ public final class LocationRemovalHelper {
         LineageFactionData lineage,
         HiveLocationRemovalReason reason
     ) {
+        // A removed location leaves its rooms STANDING - nothing here demolishes anything. Hand every chunk the
+        // location actually BUILT in, plus its slab band, to the per-dimension ruins index BEFORE the registry
+        // forgets them. Without this the natural-spawn deny mixin loses its only handle on the site and vanilla
+        // repopulates the derelict hive; with it the deny holds over the whole room, including the bare stone the
+        // stamp never wrote and the bone-block trophy plinths. Roles are recorded for every occupied chunk of a
+        // multi-chunk piece, so that map is the superset - the piece map is unioned in purely belt-and-braces.
+        var ruins = HiveRuinsData.getOrCreate(level);
+        var builtChunks = new HashSet<>(location.structureRoleByChunk().keySet());
+        builtChunks.addAll(location.structurePieceByChunk().keySet());
+        for (var chunk : builtChunks) {
+            ruins.recordBuiltChunk(chunk, location.hiveFloorY(), location.hiveCeilingY());
+        }
+        if (!builtChunks.isEmpty()) {
+            Alien.LOGGER.info(
+                "Hive: location {} left {} built chunk(s) as a ruin (band Y {}..{}); natural spawning stays denied there.",
+                location.id(),
+                builtChunks.size(),
+                location.hiveFloorY(),
+                location.hiveCeilingY()
+            );
+        }
+
         // Snapshot the claimed chunks before iterating — release() mutates the set.
         var chunksToRelease = new HashSet<>(location.claimedChunks());
         for (var chunk : chunksToRelease) {

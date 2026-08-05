@@ -5,6 +5,7 @@ import com.alien.common.model.alien.Host;
 import com.alien.common.util.AlienEmbryoUtil;
 import net.minecraft.world.effect.MobEffect;
 import net.minecraft.world.effect.MobEffectCategory;
+import net.minecraft.world.entity.AgeableMob;
 import net.minecraft.world.entity.LivingEntity;
 import org.jetbrains.annotations.NotNull;
 
@@ -20,7 +21,14 @@ import org.jetbrains.annotations.NotNull;
  * it always has, sending a full-grown drone into its molt toward warrior, and so on up the ladder.</li>
  * <li>On a host carrying a chestburster: slams the gestation clock to the burst threshold - the chest-bursting phase
  * begins immediately. The accelerant accelerates; be careful what you drink.</li>
+ * <li>On a baby left permanently young by the Growth Suppression potion: releases it, and it grows up on the spot.
+ * Exactly what the effect already does for a suppressed xenomorph, one rung down the ladder - the accelerant undoes the
+ * suppressant, whatever it was holding back.</li>
  * </ul>
+ * <h2>Xeno vision</h2> On a PLAYER the effect also grants borrowed hive senses: every living thing within 24 blocks is
+ * outlined through walls for as long as the effect lasts. That lives entirely on the client, in
+ * {@code MixinEntity_XenoVision} - nothing is applied to the mobs and nothing is synced, so the sense belongs to the
+ * drinker alone. See that class for why.
  */
 public class MetamorphosisStatusEffect extends MobEffect {
 
@@ -50,6 +58,17 @@ public class MetamorphosisStatusEffect extends MobEffect {
 
         if (livingEntity instanceof Host host && host.getEmbryoType().isSome()) {
             host.setEmbryoGrowthTimeInTicks(AlienEmbryoUtil.BURST_TIME_IN_TICKS);
+            return;
+        }
+
+        // An arrested baby, recognised by the same threshold that pinned it. setAge(0) crosses the age boundary, so
+        // vanilla clears the baby flag and fires ageBoundaryReached for us: it grows up, it does not merely resume
+        // ageing. An ordinary baby is untouched - there is nothing being held back to release.
+        if (
+            livingEntity instanceof AgeableMob ageable
+                && ageable.getAge() <= GrowthSuppressionStatusEffect.ARRESTED_BABY_THRESHOLD
+        ) {
+            ageable.setAge(0);
         }
     }
 }

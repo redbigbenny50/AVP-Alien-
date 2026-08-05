@@ -24,6 +24,8 @@ public class CocoonManager implements NBTSerializable {
 
     public static final String COCOON_TARGET_TYPE_TAG = "cocoonTargetType";
 
+    public static final String COCOON_ALTERNATE_TYPE_TAG = "cocoonAlternateType";
+
     public static final String COCOON_SOURCE_FORM_TAG = "cocoonSourceForm";
 
     public static final String COCOON_SOURCE_TIME_TAG = "cocoonSourceTimeInTicks";
@@ -40,6 +42,9 @@ public class CocoonManager implements NBTSerializable {
 
     private @Nullable EntityType<?> targetType;
 
+    /** The other form this molt could produce, if the stage named one. Swapped with {@link #targetType} on redirect. */
+    private @Nullable EntityType<?> alternateType;
+
     private int sourceTimeInTicks;
 
     private int destinationTimeInTicks;
@@ -55,16 +60,54 @@ public class CocoonManager implements NBTSerializable {
     }
 
     public void prepare(EntityType<?> targetType, CocooningConfig config) {
+        prepare(targetType, null, config);
+    }
+
+    public void prepare(EntityType<?> targetType, @Nullable EntityType<?> alternateType, CocooningConfig config) {
         if (getState().shouldRunCocoonAction()) {
             return;
         }
 
         this.targetType = targetType;
+        this.alternateType = alternateType;
         this.sourceTimeInTicks = Math.max(config.sourceTimeInTicks(), 1);
         this.destinationTimeInTicks = Math.max(config.destinationTimeInTicks(), 1);
         this.elapsedTicks = 0;
         this.retryTicks = 0;
         setState(CocoonState.PENDING);
+    }
+
+    public @Nullable EntityType<?> getTargetType() {
+        return targetType;
+    }
+
+    /**
+     * True while this molt can still be pointed somewhere else.
+     * <p>
+     * The window closes at the END of SOURCE_COCOONING, not at emergence, because that is where
+     * {@code transitionToDestination} actually replaces the entity: from DESTINATION_COCOONING onward the xenomorph IS
+     * already its new caste and {@code targetType} has been cleared. "Redirect the molt" therefore has to mean the
+     * molt-ENTER phase - there is nothing left to redirect afterwards.
+     */
+    public boolean canRedirectTarget() {
+        return alternateType != null
+            && targetType != null
+            && (getState() == CocoonState.PENDING || getState() == CocoonState.SOURCE_COCOONING);
+    }
+
+    /**
+     * Points this molt at its alternate outcome and banks the old one as the new alternate, so a further dose inside
+     * the window simply toggles back. Extra outcomes beyond two are a later problem.
+     */
+    public boolean redirectTarget() {
+        if (!canRedirectTarget()) {
+            return false;
+        }
+
+        var previousTarget = targetType;
+        this.targetType = alternateType;
+        this.alternateType = previousTarget;
+        return true;
     }
 
     public boolean shouldRunCocoonAction() {
@@ -106,6 +149,7 @@ public class CocoonManager implements NBTSerializable {
 
     public void beginDestinationCocooning(int destinationTimeInTicks) {
         this.targetType = null;
+        this.alternateType = null;
         this.sourceTimeInTicks = 1;
         this.destinationTimeInTicks = Math.max(destinationTimeInTicks, 1);
         this.elapsedTicks = 0;
@@ -234,6 +278,7 @@ public class CocoonManager implements NBTSerializable {
         // works across the source -> destination entity swap; a no-op for non-royal metamorphoses (none nearby).
         discardNearbyRoyalCocoons();
         this.targetType = null;
+        this.alternateType = null;
         xenomorph.cocoonSourceForm.set(CocoonSourceForm.NONE);
         this.elapsedTicks = 0;
         this.retryTicks = 0;
@@ -294,6 +339,12 @@ public class CocoonManager implements NBTSerializable {
             this.targetType = BuiltInRegistries.ENTITY_TYPE.get(ResourceLocation.parse(compoundTag.getString(COCOON_TARGET_TYPE_TAG)));
         }
 
+        if (compoundTag.contains(COCOON_ALTERNATE_TYPE_TAG)) {
+            this.alternateType = BuiltInRegistries.ENTITY_TYPE.get(
+                ResourceLocation.parse(compoundTag.getString(COCOON_ALTERNATE_TYPE_TAG))
+            );
+        }
+
         if (compoundTag.contains(COCOON_SOURCE_FORM_TAG)) {
             xenomorph.cocoonSourceForm.set(CocoonSourceForm.valueOf(compoundTag.getString(COCOON_SOURCE_FORM_TAG)));
         }
@@ -323,6 +374,10 @@ public class CocoonManager implements NBTSerializable {
 
         if (targetType != null) {
             compoundTag.putString(COCOON_TARGET_TYPE_TAG, BuiltInRegistries.ENTITY_TYPE.getKey(targetType).toString());
+        }
+
+        if (alternateType != null) {
+            compoundTag.putString(COCOON_ALTERNATE_TYPE_TAG, BuiltInRegistries.ENTITY_TYPE.getKey(alternateType).toString());
         }
 
         compoundTag.putString(COCOON_SOURCE_FORM_TAG, xenomorph.cocoonSourceForm.get().name());

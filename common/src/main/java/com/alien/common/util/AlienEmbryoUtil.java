@@ -6,6 +6,7 @@ import com.alien.common.registry.init.AlienEntityTypes;
 import com.alien.common.registry.init.AlienGameRules;
 import com.alien.common.registry.init.AlienSoundEvents;
 import com.alien.common.registry.key.AlienDamageTypeKeys;
+import com.alien.common.registry.tag.AlienMobEffectTags;
 import com.alien.compatibility.avp_human.AVPHuman;
 import com.alien.compatibility.avp_human.GeneContainerProxy;
 import com.human.common.model.GeneCarrier;
@@ -225,8 +226,15 @@ public class AlienEmbryoUtil {
 
         if (embryo instanceof LivingEntity livingEmbryo) {
             // TODO: The genes are assigned once here, but if they're removed they don't appear on the embryo again.
-            // Copies effects from previous entity to the next
+            // Whatever the host was carrying when it burst becomes part of what came out, permanently. That is
+            // deliberate - EXCEPT for the host's own lifecycle state, which describes the pregnancy rather than the
+            // child and turns pathological at an endless duration. Jelly sickness alone left the newborn in a
+            // permanent wither-damage stall: never dying, bleeding acid forever.
             for (var effect : hostEntity.getActiveEffects()) {
+                if (effect.getEffect().is(AlienMobEffectTags.NOT_INHERITED_BY_EMBRYO)) {
+                    continue;
+                }
+
                 livingEmbryo.addEffect(new MobEffectInstance(effect.getEffect(), Integer.MAX_VALUE, effect.getAmplifier(), false, false));
             }
         }

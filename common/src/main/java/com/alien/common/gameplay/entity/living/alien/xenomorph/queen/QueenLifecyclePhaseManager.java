@@ -54,7 +54,19 @@ public class QueenLifecyclePhaseManager implements NBTSerializable {
     public static final int HIBERNATION_DURATION_TICKS = 3 * 24000;
 
     /** Damage at or above which a hit rouses her from hibernation; below this (a stray arrow) she sleeps through it. */
+    /** One hit this hard and she is up, no matter what she was doing. */
     public static final float HIBERNATION_DISTURBANCE_DAMAGE = 6.0F;
+
+    /**
+     * Or this much damage TOTAL inside the window below. Sustained chipping rouses her just as surely as one heavy blow
+     * - it just takes commitment.
+     */
+    public static final float SUSTAINED_DISTURBANCE_DAMAGE = 12.0F;
+
+    /** The accumulator bleeds off at this much per second, so a slow drip never adds up to anything. */
+    private static final float DISTURBANCE_DECAY_PER_SECOND = 2.0F;
+
+    private float disturbanceAccumulator;
 
     /** She must stay clear of threats this long (out of combat, no survival player in her chunk) before resettling. */
     private static final int HIBERNATION_CALM_TICKS = 10 * 20;
@@ -126,6 +138,25 @@ public class QueenLifecyclePhaseManager implements NBTSerializable {
     /** Players within this range hear the awakening broadcast when a wild queen's sleep runs out. */
     private static final double WILD_AWAKENING_BROADCAST_RANGE = 256.0;
 
+    /**
+     * [stated] "if it is full and its the same strain she should have the chance to wake up and relocate then found." A
+     * sleeping wild queen whose only same-strain neighbours are at their hive cap does not lie there forever - she
+     * wakes and moves out of that lineage's reach to found her own. She must clear the SAME range that would have let
+     * them adopt her, or she would simply re-qualify for a lineage that still cannot take her.
+     */
+    private static final int CAPPED_LINEAGE_FLEE_CLEARANCE_CHUNKS = WILD_ADOPTION_RANGE_CHUNKS;
+
+    /**
+     * [stated] "a force spawning queen should follow the same rules causing the sleeping queen to awaken and then
+     * leave... this would apply to summoned or spawn egg queens." The reaction lives on HER, not on the spawner, so it
+     * covers every arrival the same way: the first-queen guarantee, a spawn egg, a summon, a queen walking past.
+     * Blocks, not chunks - an entity scan wants a box.
+     */
+    private static final double RIVAL_QUEEN_WAKE_RANGE_BLOCKS = 128.0;
+
+    /** How far she puts between herself and the queen that woke her (chebyshev chunks). */
+    private static final int RIVAL_QUEEN_FLEE_CLEARANCE_CHUNKS = 16;
+
     private final Queen queen;
 
     private QueenLifecyclePhase phase;
@@ -144,6 +175,15 @@ public class QueenLifecyclePhaseManager implements NBTSerializable {
 
     /** Ticks she has been threat-free while DEFENDING; at {@link #HIBERNATION_CALM_TICKS} she heads back. Transient. */
     private int disturbanceCalmTicks;
+
+    /**
+     * Set for exactly one anchor pick when something drove her off this spot (a capped lineage, a rival queen): the
+     * chunk she is fleeing and how far she must get from it. Consumed and cleared by {@link #pickAnchorChunk()}, so it
+     * is deliberately transient - a reload mid-flight simply leaves her digging to the anchor she already committed.
+     */
+    private @Nullable ChunkPos fleeFromChunk;
+
+    private int fleeClearanceChunks;
 
     /** The committed hive anchor (chunk-center XZ + target Y) chosen in LOCATION. Null until then; never re-chosen. */
     private @Nullable BlockPos anchor;
@@ -202,10 +242,33 @@ public class QueenLifecyclePhaseManager implements NBTSerializable {
             return;
         }
 
+        if (queen.tickCount % 20 == 0) {
+            decayDisturbance();
+        }
+
         // Bound queens are frozen: a captured queen does not develop, locate, dig, hibernate, or hand off to founding.
         // Clear any in-progress dig so she stays physical for the bind clamp, then hold the front-end until fully
         // released. Without this she resumes the LOCATION dig on reload and soft-locks against the clamp.
         if (queen.getBindManager().hasAnyChain()) {
+            if (queen.isDigging()) {
+                queen.setDigging(false);
+            }
+            return;
+        }
+
+        // AN IRRADIATED QUEEN HAS NO FRONT-END AT ALL. [stated] "she doesnt try to build a hive like how normal
+        // queens do, she just exists... shes just a roaming weapon of radioactive teeth and claws." Developing,
+        // choosing an anchor, digging it out and sleeping in it are every one of them work toward a founding that
+        // can never happen: HiveLocationFoundingService refuses her strain at the door.
+        //
+        // Left to run she completed the whole chain, reached FOUNDING_HANDOFF, and then hammered that refusal on a
+        // ~10s loop for as long as she lived - a tester's log carried 63 identical lines from ONE queen inside ten
+        // minutes. Freezing her here means the attempt is never made rather than made and rejected, and it also
+        // spares her the pointless dig.
+        //
+        // She may still JOIN an existing irradiated hive - that is ordinary membership and never touches this
+        // front-end. Shaped after the bound-queen guard above, including clearing a dig left mid-swing.
+        if (com.alien.common.gameplay.hive.economy.IrradiatedHiveRules.isIrradiated(queen)) {
             if (queen.isDigging()) {
                 queen.setDigging(false);
             }
@@ -232,6 +295,27 @@ public class QueenLifecyclePhaseManager implements NBTSerializable {
         // that has already founded) has no front-end to run: if she owns a live location or already has an ovipositor,
         // jump straight to the inert terminal state so we never re-run developing on an established queen.
         if (isAlreadyEstablished()) {
+            // WAKE HER ON THE WAY THROUGH. A queen can acquire a location while still ASLEEP - the inhibitor is
+            // exactly that case, because QueenInhibitionService mints her a personal severed claim with her as
+            // founder the moment it is clamped on, which is what isAlreadyEstablished() looks for.
+            //
+            // The jump below is terminal and sits BEFORE the phase switch, so tickHibernation never runs again -
+            // and tickHibernation is the only thing that ever clears the sleep flag on this path. Left as it was,
+            // an inhibited hibernating queen lay there asleep FOREVER: nothing could wake her, and the
+            // hibernation-skip debug command refused her for no longer being in HIBERNATION ([stated] tester
+            // report: "inhibited queen while she was hibernating tried to wake her up", screenshot showing
+            // "Nearest queen is in phase FOUNDING_HANDOFF, not HIBERNATION").
+            //
+            // Clearing the flag here rather than in the inhibitor covers every route into this jump, not just
+            // that one. Same idiom tryAdoptIntoLineage already uses: clear the flag, then hand off.
+            if (phase == QueenLifecyclePhase.HIBERNATION) {
+                queen.isHibernating.set(false);
+                Alien.LOGGER.info(
+                    "Queen lifecycle: {} woke from HIBERNATION - she now holds a location, handing off",
+                    queen.getUUID()
+                );
+            }
+
             phase = QueenLifecyclePhase.FOUNDING_HANDOFF;
             return;
         }
@@ -369,6 +453,24 @@ public class QueenLifecyclePhaseManager implements NBTSerializable {
 
     /** Reads her situation and commits a hive anchor (chunk-center XZ + weighted target Y), then enters LOCATION. */
     private void enterLocation() {
+        // END-STYLE: no digging - there is only void below the island. She founds WHERE SHE STANDS, the same shape
+        // the world's first wild queen uses (anchor in place, straight to the handoff), skipping LOCATION and the
+        // hibernation that follows it entirely. The player placed her deliberately; siting the island IS the
+        // placement puzzle, and the fortress rises at the spot they chose.
+        if (
+            queen.level() instanceof ServerLevel endCheckLevel
+                && com.alien.common.gameplay.hive.dimension.EndStyleHiveRules.isEndStyle(endCheckLevel)
+        ) {
+            this.anchor = queen.blockPosition();
+            this.phase = QueenLifecyclePhase.FOUNDING_HANDOFF;
+            queen.isHibernating.set(false);
+            Alien.LOGGER.info(
+                "Queen lifecycle: {} entering FOUNDING_HANDOFF in place (end-style dimension, no dig) at {}",
+                queen.getUUID(),
+                anchor
+            );
+            return;
+        }
         var chunk = pickAnchorChunk();
         var targetY = pickTargetY();
         // She digs down or settles level - never rises. If she is already at or below the rolled depth
@@ -428,9 +530,50 @@ public class QueenLifecyclePhaseManager implements NBTSerializable {
     /**
      * Begins the sleep at the committed anchor. The hibernation GOAP hold pins her here and runs the sleep animation.
      */
+    /**
+     * True when a hive genuinely promoted and sent this queen. Membership ALONE is not enough - finalizeSpawn
+     * auto-joins any xenomorph spawned inside a claimed chunk, so a spawn-egged queen placed in territory was instantly
+     * a "member" and skipped her sleep ([stated] "wild queen hibernation is still ending in 1 second"; the log's
+     * "sleeping 0 ticks" was this). The player-placed flag breaks the tie: transitions never call finalizeSpawn, so a
+     * promoted daughter can never carry it, while an egg or command queen always does.
+     */
+    private boolean wasDispatchedByAHive() {
+        if (queen.isPlayerPlaced()) {
+            return false;
+        }
+        for (var factionId : com.alien.Alien.MOD.factions().getFactionIds(queen.getUUID())) {
+            if (com.alien.common.gameplay.hive.id.HiveLocationIds.isHiveLocationId(factionId)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     private void enterHibernation() {
         this.phase = QueenLifecyclePhase.HIBERNATION;
-        this.hibernationTicksRemaining = HIBERNATION_DURATION_TICKS;
+
+        // A HIVE-RAISED queen does not sleep. Hibernation is the WILD queen's bargain: she takes root alone in the
+        // open with nothing to protect her, so she waits out a long vulnerable sleep before she is strong enough to
+        // found. A daughter promoted inside a defended hive has already had that protection - she was raised in the
+        // chamber, escorted out, and dispatched with orders - so she founds on arrival.
+        //
+        // This is not only pacing. The sleep clock ONLY advances while her chunk is entity-ticking, so a dispatched
+        // daughter whose player wandered off would sleep forever and never found - and her mother hive would have
+        // already spent the jelly, the praetorian, and one of its two lifetime daughters on her. It also made a
+        // WATCHED hive spread an hour slower than an ignored one, since the unloaded path mints its daughter
+        // outright.
+        //
+        // Zero rather than a skipped phase so the existing wake-and-hand-off path runs unchanged on the next tick.
+        // NOT `wildSpawned`. That was the first attempt and it was wrong: the flag is set only on the two genuinely
+        // WILD paths, so a queen placed by egg or command is false too - and she skipped the sleep entirely,
+        // waking the same tick she entered. A live log caught it exactly: "entering HIBERNATION ... sleeping 0
+        // ticks" followed 42ms later by "woke from HIBERNATION".
+        //
+        // The real question is whether a HIVE SENT HER. A daughter promoted by QueenPromotionService carries her
+        // mother's location membership across the molt, so she already belongs to a hive; a wild or hand-spawned
+        // queen belongs to nothing. Only the dispatched one skips - she was raised in a defended chamber and left
+        // with orders, which is the whole reason she does not need to lie dormant first.
+        this.hibernationTicksRemaining = wasDispatchedByAHive() ? 0 : HIBERNATION_DURATION_TICKS;
         this.hibernationActivity = HibernationActivity.ASLEEP;
         this.disturbanceCalmTicks = 0;
         queen.isHibernating.set(true);
@@ -464,8 +607,11 @@ public class QueenLifecyclePhaseManager implements NBTSerializable {
     private void tickHibernationAsleep() {
         queen.isHibernating.set(true);
 
-        if (wildSpawned && queen.tickCount % WILD_ADOPTION_CHECK_INTERVAL_TICKS == 0 && tryWildAdoption()) {
-            return;
+        if (wildSpawned && queen.tickCount % WILD_ADOPTION_CHECK_INTERVAL_TICKS == 0) {
+            // Adoption first: joining a lineage that has room always beats picking up and moving.
+            if (tryWildAdoption() || tryFleeRivalQueen()) {
+                return;
+            }
         }
 
         if (hibernationTicksRemaining > 0) {
@@ -499,6 +645,7 @@ public class QueenLifecyclePhaseManager implements NBTSerializable {
         }
 
         var queenChunk = queen.chunkPosition();
+        HiveLocation cappedNeighbour = null;
 
         for (var location : HiveLocationRegistry.INSTANCE.all()) {
             if (!location.dimension().equals(serverLevel.dimension())) {
@@ -525,8 +672,13 @@ public class QueenLifecyclePhaseManager implements NBTSerializable {
             if (
                 faction == null
                     || !(faction.data() instanceof com.alien.common.gameplay.hive.faction.LineageFactionData lineage)
-                    || lineage.locationsById().size() >= WILD_ADOPTION_LINEAGE_CAP
             ) {
+                continue;
+            }
+            if (lineage.locationsById().size() >= WILD_ADOPTION_LINEAGE_CAP) {
+                // Her own strain, in reach, with no room for her. Remember it and keep looking - another lineage of
+                // the same strain may still have a seat, and being adopted always beats moving.
+                cappedNeighbour = location;
                 continue;
             }
 
@@ -541,7 +693,67 @@ public class QueenLifecyclePhaseManager implements NBTSerializable {
             return true;
         }
 
+        if (cappedNeighbour != null) {
+            wakeAndFlee(
+                new ChunkPos(cappedNeighbour.centerPos()),
+                CAPPED_LINEAGE_FLEE_CLEARANCE_CHUNKS,
+                "her own strain's lineage " + cappedNeighbour.lineageFactionId() + " is at its hive cap"
+            );
+            return true;
+        }
+
         return false;
+    }
+
+    /**
+     * [stated] the rival-queen half of the same rule: a queen arriving near her - forced by the first-queen guarantee,
+     * dropped from a spawn egg, summoned, or simply passing through - wakes her and she leaves. Strain does not matter
+     * here: two queens do not share ground, and a queen with no hive behind her has nobody to send after a sleeper, so
+     * moving away IS the resolution. An established hive that grows a claim over her is the other case entirely - that
+     * one is an execution, and it lives in DormantQueenPurge.
+     */
+    private boolean tryFleeRivalQueen() {
+        if (!(queen.level() instanceof ServerLevel serverLevel)) {
+            return false;
+        }
+
+        var box = queen.getBoundingBox().inflate(RIVAL_QUEEN_WAKE_RANGE_BLOCKS);
+        for (var other : serverLevel.getEntitiesOfClass(Queen.class, box)) {
+            if (other == queen || !other.isAlive()) {
+                continue;
+            }
+            // Two sleepers side by side is a spawn-spacing question, not a threat - neither of them is doing
+            // anything. It is the WAKING queen, the one about to claim this ground, that moves her.
+            if (Boolean.TRUE.equals(other.isHibernating.get())) {
+                continue;
+            }
+            wakeAndFlee(
+                other.chunkPosition(),
+                RIVAL_QUEEN_FLEE_CLEARANCE_CHUNKS,
+                "another queen (" + other.getUUID() + ") took this ground"
+            );
+            return true;
+        }
+
+        return false;
+    }
+
+    /**
+     * Wakes her out of hibernation and sends her through the ordinary relocation machinery with a no-go zone attached:
+     * she re-picks an anchor that clears {@code clearanceChunks} of {@code fleeFrom} as well as the usual hive spacing,
+     * clip-digs there, and re-hibernates before founding. If nothing legal exists inside the search radius she settles
+     * where she can, exactly as a boxed-in daughter queen does.
+     */
+    private void wakeAndFlee(ChunkPos fleeFrom, int clearanceChunks, String reason) {
+        this.fleeFromChunk = fleeFrom;
+        this.fleeClearanceChunks = clearanceChunks;
+        Alien.LOGGER.info(
+            "Queen lifecycle: wild queen {} woke and is relocating away from {} — {}",
+            queen.getUUID(),
+            fleeFrom,
+            reason
+        );
+        beginFreedRelocation();
     }
 
     /** "You have awakened a slumbering nightmare" — sent to every player whose activity accumulated her sleep clock. */
@@ -630,14 +842,46 @@ public class QueenLifecyclePhaseManager implements NBTSerializable {
      * sleeping or returning queen into the defend sub-state; weaker hits, and any damage taken when she is not
      * hibernating, are ignored.
      */
-    public void onHibernationDamage(float amount) {
-        if (phase != QueenLifecyclePhase.HIBERNATION) {
-            return;
+    /**
+     * Registers a hit against her composure and reports whether it was enough to make her abandon her post.
+     * <p>
+     * [stated] "the queen gets off her eggsack too easily when damaged... when he used a syringe on her she got up. so
+     * we need to have it be multiple sustained small hits or a hard damaging hit will get her up. so if someone hits
+     * her accidentally or uses the syringe item it wont make her abandon her duty to fight."
+     * <p>
+     * TWO WAYS UP, and only two: one blow of {@link #HIBERNATION_DISTURBANCE_DAMAGE} or more, or
+     * {@link #SUSTAINED_DISTURBANCE_DAMAGE} accumulated before the accumulator bleeds off. A syringe deals 0.01 - it
+     * would take twelve hundred of them inside the window, which is the point. The accumulator DECAYS, so chipping at
+     * her once a minute never adds up; you have to mean it.
+     *
+     * @return true if she has been roused and should be allowed to retaliate
+     */
+    public boolean registerDisturbance(float amount) {
+        if (amount >= HIBERNATION_DISTURBANCE_DAMAGE) {
+            rouse(amount, "single blow");
+            return true;
         }
-        if (amount < HIBERNATION_DISTURBANCE_DAMAGE) {
-            return;
+
+        disturbanceAccumulator += amount;
+        if (disturbanceAccumulator >= SUSTAINED_DISTURBANCE_DAMAGE) {
+            rouse(disturbanceAccumulator, "sustained");
+            return true;
         }
-        if (hibernationActivity == HibernationActivity.DEFENDING) {
+
+        return false;
+    }
+
+    /** Bleeds the accumulator off, so only sustained pressure counts. Called once a second from {@link #tick}. */
+    private void decayDisturbance() {
+        if (disturbanceAccumulator > 0.0F) {
+            disturbanceAccumulator = Math.max(0.0F, disturbanceAccumulator - DISTURBANCE_DECAY_PER_SECOND);
+        }
+    }
+
+    private void rouse(float amount, String reason) {
+        disturbanceAccumulator = 0.0F;
+
+        if (phase != QueenLifecyclePhase.HIBERNATION || hibernationActivity == HibernationActivity.DEFENDING) {
             return;
         }
 
@@ -645,9 +889,10 @@ public class QueenLifecyclePhaseManager implements NBTSerializable {
         disturbanceCalmTicks = 0;
         queen.isHibernating.set(false);
         Alien.LOGGER.info(
-            "Queen lifecycle: {} disturbed in HIBERNATION ({} dmg) — defending",
+            "Queen lifecycle: {} disturbed in HIBERNATION ({} dmg, {}) — defending",
             queen.getUUID(),
-            amount
+            amount,
+            reason
         );
     }
 
@@ -687,7 +932,7 @@ public class QueenLifecyclePhaseManager implements NBTSerializable {
     /**
      * Threat test for the defend/return loop: an attack target, a recent hit, or a survival-mode player inside her
      * chunk (a hostile lingering in her territory keeps her awake even after the hits stop). Damage itself is not
-     * tested here — that is the wake trigger ({@link #onHibernationDamage}); this only gates when she may resettle.
+     * tested here — that is the wake trigger ({@link #registerDisturbance}); this only gates when she may resettle.
      */
     private boolean isThreatPresent() {
         if (queen.getTarget() != null) {
@@ -813,9 +1058,10 @@ public class QueenLifecyclePhaseManager implements NBTSerializable {
         var minimum = HiveLocationRegistry.INSTANCE.config().minimumHiveLocationDistanceChunks();
         var current = queen.chunkPosition();
 
-        // If she can already found where she stands, she does - no need to relocate at all.
-        if (SpreadZoneCheck.wouldAllow(queen, current)) {
-            return current;
+        // If she can already found where she stands, she does - no need to relocate at all. A queen who was DRIVEN
+        // off this spot is the exception: staying put is the one answer she is not allowed to give.
+        if (SpreadZoneCheck.wouldAllow(queen, current) && clearsFleeZone(current)) {
+            return clearFleeZone(current);
         }
 
         // She can't found here (too close to a hive). Rather than crawl outward from HERSELF (which lands her at
@@ -826,8 +1072,8 @@ public class QueenLifecyclePhaseManager implements NBTSerializable {
         var nearest = nearestLocation(dimension, current);
         if (nearest != null) {
             var ringPick = nearestFoundableOnSpacingRing(nearest, current, minimum);
-            if (ringPick != null) {
-                return ringPick;
+            if (ringPick != null && clearsFleeZone(ringPick)) {
+                return clearFleeZone(ringPick);
             }
         }
 
@@ -836,12 +1082,27 @@ public class QueenLifecyclePhaseManager implements NBTSerializable {
         var random = queen.getRandom();
         for (var radius = 1; radius <= MAX_ANCHOR_SEARCH_RADIUS_CHUNKS; radius++) {
             var ring = farEnoughChunksInRing(current, radius, dimension, minimum);
+            ring.removeIf(candidate -> !clearsFleeZone(candidate));
             if (!ring.isEmpty()) {
-                return ring.get(random.nextInt(ring.size()));
+                return clearFleeZone(ring.get(random.nextInt(ring.size())));
             }
         }
 
-        return current;
+        // Boxed in even counting the no-go zone: she settles for what she can get, same as any daughter queen.
+        return clearFleeZone(current);
+    }
+
+    /** True when no flight is pending, or when this chunk is far enough from whatever drove her off. */
+    private boolean clearsFleeZone(ChunkPos candidate) {
+        return fleeFromChunk == null
+            || Math.max(Math.abs(candidate.x - fleeFromChunk.x), Math.abs(candidate.z - fleeFromChunk.z)) >= fleeClearanceChunks;
+    }
+
+    /** One anchor pick per flight: the no-go zone is consumed here so a later re-pick is an ordinary one. */
+    private ChunkPos clearFleeZone(ChunkPos picked) {
+        fleeFromChunk = null;
+        fleeClearanceChunks = 0;
+        return picked;
     }
 
     /** Nearest hive-location centre (Chebyshev, same-dimension) to {@code from}, or null if there are none. */

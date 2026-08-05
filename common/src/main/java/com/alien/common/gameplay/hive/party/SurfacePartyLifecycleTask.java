@@ -422,7 +422,8 @@ public final class SurfacePartyLifecycleTask {
      * position), not the chunk centre, and rejects any column more than {@link #MAX_VENT_Y_DROP} off the anchor's Y so
      * the vent can never land atop an unreachable spire.
      */
-    private static @org.jetbrains.annotations.Nullable BlockPos findSurfaceVentSpot(
+    static @org.jetbrains.annotations.Nullable BlockPos findSurfaceVentSpot(
+        // package: host-hunt self-vent reuses this
         ServerLevel serverLevel,
         ChunkPos chunk,
         @org.jetbrains.annotations.Nullable BlockPos anchor,
@@ -480,8 +481,8 @@ public final class SurfacePartyLifecycleTask {
                     if (
                         !state.isAir()
                             && !state.canBeReplaced()
-                            && !state.is(com.alien.common.registry.init.block.AlienResinBlocks.RESIN_VEIN.get())
-                            && !state.is(com.alien.common.registry.init.block.AlienResinBlocks.RESIN_WEB.get())
+                            && !state.is(com.alien.common.registry.tag.AlienBlockTags.RESIN_VEINS)
+                            && !state.is(com.alien.common.registry.tag.AlienBlockTags.RESIN_WEBS)
                     ) {
                         continue;
                     }

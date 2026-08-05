@@ -1,0 +1,30 @@
+{
+  "parent": "avp_alien:aliens/kill_an_empress",
+  "criteria": {
+    "broken_throne": {
+      "trigger": "minecraft:impossible"
+    }
+  },
+  "display": {
+    "description": {
+      "translate": "advancements.aliens.broken_throne.description"
+    },
+    "frame": "challenge",
+    "icon": {
+      "count": 1,
+      "id": "avp_alien:raw_royal_jelly"
+    },
+    "title": {
+      "translate": "advancements.aliens.broken_throne.title"
+    }
+  },
+  "requirements": [
+    [
+      "broken_throne"
+    ]
+  ],
+  "rewards": {
+    "experience": 100
+  },
+  "sends_telemetry_event": true
+}

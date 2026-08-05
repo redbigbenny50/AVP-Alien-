@@ -114,11 +114,23 @@ public class CreateVentAction {
                 new net.minecraft.world.level.ChunkPos(ventSpot)
             );
         }
+        // FRONTIER is the overworld answer: a dug vent is an outpost in the rock by definition there. In a CEILED
+        // dimension the open shelves ARE the surface, so a vent dug onto a shelf is a front door and must count as
+        // SURFACE for the party system - classify by where it actually sits instead of hardcoding.
+        var kind = VentKind.FRONTIER;
+        if (xenomorph.level().dimensionType().hasCeiling() && location != null) {
+            kind = com.alien.common.gameplay.hive.vent.HiveVents.classifyUntagged(
+                xenomorph.level(),
+                location,
+                ventSpot,
+                HiveLocationRegistry.INSTANCE.config().surfacePartySurfaceBandBlocks()
+            );
+        }
         VentPlacement.place(
             xenomorph.level(),
             ventSpot,
             AlienVariantTypes.getFor(xenomorph),
-            VentKind.FRONTIER,
+            kind,
             location
         );
     }

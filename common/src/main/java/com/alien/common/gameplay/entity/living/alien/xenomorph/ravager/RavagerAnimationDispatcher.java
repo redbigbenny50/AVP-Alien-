@@ -23,6 +23,10 @@ public class RavagerAnimationDispatcher {
         .play(AzAlienAnimationUtil.BODY, RavagerAnimationRefs.ATTACK_TAIL_ANIMATION_NAME, AzPlayBehaviors.PLAY_ONCE)
         .build();
 
+    private static final AzCommand<Ravager> CRAWL_ATTACK = AzCommand.<Ravager>replay()
+        .play(AzAlienAnimationUtil.BODY, RavagerAnimationRefs.CRAWL_ATTACK_ANIMATION_NAME, AzPlayBehaviors.PLAY_ONCE)
+        .build();
+
     private static final AzCommand<Ravager> SWIM_ATTACK = AzCommand.<Ravager>replay()
         .play(AzAlienAnimationUtil.BODY, RavagerAnimationRefs.SWIM_ATTACK_ANIMATION_NAME, AzPlayBehaviors.PLAY_ONCE)
         .build();
@@ -51,12 +55,14 @@ public class RavagerAnimationDispatcher {
         .play(AzAlienAnimationUtil.BODY, RavagerAnimationRefs.WALK_ANIMATION_NAME, AzPlayBehaviors.LOOP)
         .build();
 
+    // Was standing in with SWIM because the ravager model had no crawl clips. It has them now - crawl, crawlidle,
+    // crawlup, crawldown, crawlattack - so it uses its own.
     private static final AzCommand<Ravager> CRAWL = AzCommand.<Ravager>idempotent()
-        .play(AzAlienAnimationUtil.BODY, RavagerAnimationRefs.SWIM_ANIMATION_NAME, AzPlayBehaviors.LOOP)
+        .play(AzAlienAnimationUtil.BODY, RavagerAnimationRefs.CRAWL_ANIMATION_NAME, AzPlayBehaviors.LOOP)
         .build();
 
     private static final AzCommand<Ravager> CRAWL_HOLD = AzCommand.<Ravager>idempotent()
-        .play(AzAlienAnimationUtil.BODY, RavagerAnimationRefs.SWIM_ANIMATION_NAME, AzPlayBehaviors.HOLD_ON_LAST_FRAME)
+        .play(AzAlienAnimationUtil.BODY, RavagerAnimationRefs.CRAWL_IDLE_ANIMATION_NAME, AzPlayBehaviors.HOLD_ON_LAST_FRAME)
         .build();
 
     private final Ravager ravager;
@@ -88,7 +94,7 @@ public class RavagerAnimationDispatcher {
     public void crawl(float speed) {
         AzAlienAnimationUtil.singleWithSpeed(
             AzAlienAnimationUtil.BODY,
-            RavagerAnimationRefs.SWIM_ANIMATION_NAME,
+            RavagerAnimationRefs.CRAWL_ANIMATION_NAME,
             AzPlayBehaviors.LOOP,
             AzDispatchMode.PLAY_IF_NOT_PLAYING,
             speed
@@ -142,6 +148,34 @@ public class RavagerAnimationDispatcher {
     public void tailAttack(float speed) {
         AzCommand.<Ravager>replay()
             .play(AzAlienAnimationUtil.BODY, RavagerAnimationRefs.ATTACK_TAIL_ANIMATION_NAME, AzPlayBehaviors.PLAY_ONCE)
+            .setSpeed(AzAlienAnimationUtil.BODY, speed)
+            .build()
+            .dispatchForEntity(ravager);
+    }
+
+    /** Crawl posture transitions - one-shots on the crawl edge; speed 2 on a leg-loss collapse. */
+    public void crawlDown(float speed) {
+        AzCommand.<Ravager>replay()
+            .play(AzAlienAnimationUtil.BODY, RavagerAnimationRefs.CRAWL_DOWN_ANIMATION_NAME, AzPlayBehaviors.PLAY_ONCE)
+            .setSpeed(AzAlienAnimationUtil.BODY, speed)
+            .build()
+            .dispatchForEntity(ravager);
+    }
+
+    public void crawlUp() {
+        AzCommand.<Ravager>replay()
+            .play(AzAlienAnimationUtil.BODY, RavagerAnimationRefs.CRAWL_UP_ANIMATION_NAME, AzPlayBehaviors.PLAY_ONCE)
+            .build()
+            .dispatchForEntity(ravager);
+    }
+
+    public void crawlAttack() {
+        CRAWL_ATTACK.dispatchForEntity(ravager);
+    }
+
+    public void crawlAttack(float speed) {
+        AzCommand.<Ravager>replay()
+            .play(AzAlienAnimationUtil.BODY, RavagerAnimationRefs.CRAWL_ATTACK_ANIMATION_NAME, AzPlayBehaviors.PLAY_ONCE)
             .setSpeed(AzAlienAnimationUtil.BODY, speed)
             .build()
             .dispatchForEntity(ravager);

@@ -18,6 +18,15 @@ public class AlienBlockTags {
 
     public static final TagKey<Block> CHITIN = create("chitin");
 
+    /**
+     * Blocks the HARBINGER's front kick refuses to break. Her kick goes through material ordinary xenomorph digging
+     * cannot, so it needs its own - much shorter - blacklist rather than {@link #XENOMORPH_IMMUNE}. Negative-hardness
+     * blocks (bedrock, barrier, end portal frame, command blocks) are already unbreakable and need no entry; this tag
+     * is for blocks that ARE breakable in principle but should never fall to a mob, such as reinforced deepslate. Add
+     * to it by datapack - no code change needed.
+     */
+    public static final TagKey<Block> HARBINGER_UNBREAKABLE = create("harbinger_unbreakable");
+
     public static final TagKey<Block> IRRADIATED_ACID_IMMUNE = create("irradiated_acid_immune");
 
     public static final TagKey<Block> IRRADIATED_CHITIN = create("irradiated_chitin");
@@ -49,6 +58,9 @@ public class AlienBlockTags {
     public static final TagKey<Block> RESIN_REPLACEABLE = create("resin_replaceable");
 
     public static final TagKey<Block> RESIN_VEINS = create("resin_veins");
+
+    /** Every strain's floor tendril. Chamber furniture (egg beds, jelly vats) only grows on these. */
+    public static final TagKey<Block> RESIN_TENDRILS = create("resin_tendrils");
 
     public static final TagKey<Block> RESIN_VENTS = create("resin_vents");
 

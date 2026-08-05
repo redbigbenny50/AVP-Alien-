@@ -27,7 +27,12 @@ import org.jetbrains.annotations.Nullable;
 
 import java.util.Arrays;
 
-public class Ravager extends Xenomorph implements GOAPUser<Ravager> {
+public class Ravager extends Xenomorph implements GOAPUser<Ravager>, com.alien.common.gameplay.entity.CrawlPostureTransitionListener {
+
+    @Override
+    public int crawlPostureTransitionTicks(boolean enteringCrawl) {
+        return enteringCrawl ? RavagerAnimationRefs.CRAWL_DOWN_TICKS : RavagerAnimationRefs.CRAWL_UP_TICKS;
+    }
 
     public static final double FRONT_AOE_RANGE_IN_BLOCKS = 5.0;
 
@@ -74,6 +79,17 @@ public class Ravager extends Xenomorph implements GOAPUser<Ravager> {
     public static final AttackType TAIL = AttackType.builder("ravager_tail")
         .requiresTail()
         .defaultDurationInTicks(12 * ATTACK_DURATION_MULTIPLIER)
+        .sound(AlienSoundEvents.ENTITY_XENOMORPH_ATTACK)
+        .build();
+
+    /**
+     * Its prone attack. {@code requiresAnyArm} is rule 2 at the logic level - one arm is enough, and only losing BOTH
+     * disarms it, at which point it can no longer attack at all and should retreat.
+     */
+    public static final AttackType CRAWL_ATTACK = AttackType.builder("ravager_crawl_attack")
+        .crawlAttack()
+        .requiresAnyArm()
+        .defaultDurationInTicks(10 * ATTACK_DURATION_MULTIPLIER)
         .sound(AlienSoundEvents.ENTITY_XENOMORPH_ATTACK)
         .build();
 
@@ -131,6 +147,14 @@ public class Ravager extends Xenomorph implements GOAPUser<Ravager> {
     }
 
     private @Nullable AttackType selectAttack() {
+        // A CRAWLER NEVER FALLS THROUGH TO THE STANDING SET. Returning null when it has no usable crawl attack is
+        // the point: it must not stand up to swing, and having nothing left is what hands it to the retreat
+        // behaviour. The posture gate in AttackType.canUse would reject the standing attacks anyway; this makes
+        // the intent explicit at the selection site rather than relying on every branch below to be safe.
+        if (getCrawlingManager().isCrawling()) {
+            return canUseAttack(CRAWL_ATTACK) ? CRAWL_ATTACK : null;
+        }
+
         if (isUnderWater() && canUseAttack(SWIM_ATTACK)) {
             return SWIM_ATTACK;
         }

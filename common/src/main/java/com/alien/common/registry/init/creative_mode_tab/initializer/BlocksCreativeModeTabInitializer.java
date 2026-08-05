@@ -28,6 +28,11 @@ public class BlocksCreativeModeTabInitializer {
 
         CreativeModeTabUtil.accept(output, AlienBlocks.ROYAL_JELLY_BLOCK);
         CreativeModeTabUtil.accept(output, AlienBlocks.SCOURGE_JELLY_BLOCK);
+
+        // Irradiated jelly is AVP: Human content like every other irradiated group.
+        if (AVPHuman.MOD.isLoaded()) {
+            CreativeModeTabUtil.accept(output, AlienBlocks.IRRADIATED_JELLY_BLOCK);
+        }
     };
 
     private static void addBaseXenomorphBlocks(CreativeModeTab.Output output) {

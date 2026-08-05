@@ -30,6 +30,7 @@ public final class CastePopulation {
         AlienEntityTypeTags.CARRIERS,
         AlienEntityTypeTags.CHRYSALISES,
         AlienEntityTypeTags.SPITTERS,
+        AlienEntityTypeTags.PREDALIENS,
         AlienEntityTypeTags.HARBINGERS
     };
 

@@ -2,6 +2,7 @@ package com.alien.common.gameplay.hive.convoy;
 
 import com.alien.Alien;
 import com.alien.common.gameplay.hive.config.HiveConfig;
+import com.alien.common.gameplay.hive.empress.EmpressExileService;
 import com.alien.common.gameplay.hive.faction.LineageFactionData;
 import com.alien.common.gameplay.hive.id.LineageIds;
 import com.alien.common.gameplay.hive.lifecycle.LocationRemovalHelper;
@@ -51,14 +52,18 @@ public final class MigrationDispatch {
             if (lineage.empressId() == null) {
                 continue;
             }
-            if (lineage.locationsById().size() < 2) {
+            if (lineage.activeLocationCount() < 2) {
                 continue;
             }
 
             // Snapshot the location set since we'll mutate via removeLocation.
             var locations = new java.util.ArrayList<>(lineage.locationsById().values());
             for (var location : locations) {
-                if (!location.isAlive()) {
+                if (com.alien.common.gameplay.hive.dimension.EndStyleHiveRules.isEndStyle(server, location)) {
+                    continue; // END-STYLE: no migration convoys (and so no migration-triggered empress exile)
+                }
+                if (!location.isAlive() || location.isExiled()) {
+                    // A remnant has nothing left to evacuate and must never re-trigger the migration that made it.
                     continue;
                 }
                 if (HiveLocationBootstrapProtection.isProtected(location, config)) {
@@ -91,6 +96,14 @@ public final class MigrationDispatch {
         long currentTick,
         HiveConfig config
     ) {
+        // AN IRRADIATED HIVE NEVER MIGRATES. [stated] "they dont make new hives, they maintain their current slab
+        // only. once more an island among a sea of hives." It is also structurally impossible: each converted hive is
+        // minted its OWN lineage of one, so pickClosestSister could never find a sister anyway. This says why, rather
+        // than leaving it as an accident of the lineage split that a later change could undo.
+        if (com.alien.common.gameplay.hive.economy.IrradiatedHiveRules.isIrradiated(source)) {
+            return false;
+        }
+
         var destination = pickClosestSister(source, lineage);
         if (destination == null) {
             Alien.LOGGER.info(
@@ -111,9 +124,17 @@ public final class MigrationDispatch {
             return false;
         }
 
+        // If this is the empress's own seat, she does NOT evacuate with it - she is written off and exiled here.
+        // Her royal guard refuses the order and stays: praetorians, crushers and predaliens are held back from the
+        // drain below so the remnant keeps its heavies. Everything else leaves, exactly as it would from any hive.
+        var exilingEmpress = EmpressExileService.isEmpressSeat(source, lineage);
+
         // Drain the source's reserves into the convoy composition.
         var composition = new com.blib.api.common.entity.v1.EntityReserves();
         for (var type : new java.util.ArrayList<>(source.localReserves().getAvailableEntityTypes())) {
+            if (exilingEmpress && EmpressExileService.isRoyalGuard(type)) {
+                continue;
+            }
             var count = source.localReserves().getCount(type);
             composition.add(type, count);
             source.localReserves().underlying().add(type, -count);
@@ -157,8 +178,12 @@ public final class MigrationDispatch {
             carriesEmpress ? " (empress)" : ""
         );
 
-        // Source location dies on dispatch (per HIVE_REDESIGN_03_LOCATIONS § 10 + § 06 CONVOYS § 5).
-        LocationRemovalHelper.remove(serverLevel, source, lineage, new HiveLocationRemovalReason.Migrated(destination.id().value()));
+        // The empress's seat is NOT deleted - it survives as her exile, stripped of everything the convoy took and
+        // holding only her and her guard. Every other source dies on dispatch as before
+        // (per HIVE_REDESIGN_03_LOCATIONS § 10 + § 06 CONVOYS § 5).
+        if (!EmpressExileService.exile(serverLevel, source, lineage, true)) {
+            LocationRemovalHelper.remove(serverLevel, source, lineage, new HiveLocationRemovalReason.Migrated(destination.id().value()));
+        }
 
         return true;
     }
@@ -168,7 +193,8 @@ public final class MigrationDispatch {
         var bestDistSqr = Double.MAX_VALUE;
 
         for (var sister : lineage.locationsById().values()) {
-            if (sister.id().equals(source.id()) || !sister.isAlive()) {
+            if (sister.id().equals(source.id()) || !sister.isAlive() || sister.isExiled()) {
+                // Never evacuate INTO a remnant - it has no economy to receive anything.
                 continue;
             }
             var distSqr = sister.centerPos().distSqr(source.centerPos());

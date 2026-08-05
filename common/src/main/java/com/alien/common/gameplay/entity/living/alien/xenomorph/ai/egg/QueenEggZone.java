@@ -122,8 +122,8 @@ public final class QueenEggZone {
     private static boolean isEmptyForEgg(net.minecraft.world.level.block.state.BlockState state) {
         return state.isAir()
             || state.canBeReplaced()
-            || state.is(com.alien.common.registry.init.block.AlienResinBlocks.RESIN_VEIN.get())
-            || state.is(com.alien.common.registry.init.block.AlienResinBlocks.RESIN_WEB.get());
+            || state.is(com.alien.common.registry.tag.AlienBlockTags.RESIN_VEINS)
+            || state.is(com.alien.common.registry.tag.AlienBlockTags.RESIN_WEBS);
     }
 
     private static boolean isFreeEggCell(Level level, BlockPos pos) {

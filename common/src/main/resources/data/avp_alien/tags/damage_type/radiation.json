@@ -1,0 +1,7 @@
+{
+  "values": [
+    "avp_alien:radiation_sickness",
+    { "id": "avp_human:radiation_sickness", "required": false },
+    { "id": "avp_human:radiation", "required": false }
+  ]
+}

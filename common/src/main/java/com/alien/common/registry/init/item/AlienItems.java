@@ -9,6 +9,9 @@ import com.alien.common.gameplay.item.InhibitorItem;
 import com.alien.common.gameplay.item.PoisonJellyItem;
 import com.alien.common.gameplay.item.QueenHeadItem;
 import com.alien.common.gameplay.item.QueenHeadShieldItem;
+import com.alien.common.gameplay.item.RawIrradiatedJellyItem;
+import com.alien.common.gameplay.item.RawRoyalJellyItem;
+import com.alien.common.gameplay.item.RawScourgeJellyItem;
 import com.alien.common.gameplay.item.SpitterHeadShieldItem;
 import com.alien.common.gameplay.item.TrackerItem;
 import com.alien.common.gameplay.item.TrackingPdaItem;
@@ -231,9 +234,12 @@ public class AlienItems {
         () -> new CrusherHeadShieldItem(new Item.Properties().stacksTo(1).durability(512).fireResistant())
     );
 
-    public static final BLibHolder<Item> RAW_ROYAL_JELLY = create("raw_royal_jelly");
+    public static final BLibHolder<Item> RAW_ROYAL_JELLY = create("raw_royal_jelly", RawRoyalJellyItem::new);
 
-    public static final BLibHolder<Item> RAW_SCOURGE_JELLY = create("raw_scourge_jelly");
+    public static final BLibHolder<Item> RAW_SCOURGE_JELLY = create("raw_scourge_jelly", RawScourgeJellyItem::new);
+
+    public static final BLibHolder<Item> RAW_IRRADIATED_JELLY =
+        create("raw_irradiated_jelly", RawIrradiatedJellyItem::new);
 
     public static final BLibHolder<Item> RESIN_BALL = create("resin_ball");
 

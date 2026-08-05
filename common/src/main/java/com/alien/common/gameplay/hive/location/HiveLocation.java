@@ -24,6 +24,7 @@ import org.jetbrains.annotations.Nullable;
 
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.Map;
 import java.util.Set;
@@ -52,7 +53,7 @@ public final class HiveLocation {
      * TODO(phase1-config): move these to {@code HiveConfig} once config persistence lands so they are tunable in-game.
      * Hardcoded for now.
      */
-    private static final int SLAB_HEIGHT = 16;
+    public static final int SLAB_HEIGHT = 16;
 
     /** Upkeep cadence: one built piece re-drained per beat (~5s), so the whole hive cycles cheaply. */
     private static final int UPKEEP_INTERVAL_TICKS = 100;
@@ -101,6 +102,12 @@ public final class HiveLocation {
 
     private static final String NBT_NO_CONTACT_TICKS_ACCRUED = "NoContactTicksAccrued";
 
+    private static final String NBT_EXILED = "Exiled";
+
+    private static final String NBT_DAUGHTER_HIVES_FOUNDED = "DaughterHivesFounded";
+
+    private static final String NBT_EMPRESS_RESCUES_RECEIVED = "EmpressRescuesReceived";
+
     private static final String NBT_COMBAT_RESPITE_REMAINING_TICKS = "CombatRespiteRemainingTicks";
 
     private static final String NBT_COMBAT_KILLS_SINCE_LAST_RESPITE = "CombatKillsSinceLastRespite";
@@ -139,6 +146,38 @@ public final class HiveLocation {
 
     private static final String NBT_CLAIMED_CHUNKS = "ClaimedChunks";
 
+    private static final String NBT_LAST_COMBAT_DAMAGE_TICK = "LastCombatDamageTick";
+
+    private static final String NBT_END_PURE_BANK_SINCE_MILLIS = "EndPureBankSinceMillis";
+
+    private static final String NBT_END_WORKER_VENTED_CHUNKS = "EndWorkerVentedChunks";
+
+    private static final String NBT_SUPPORT_PILLAR_CHUNKS = "SupportPillarChunks";
+
+    private static final String NBT_END_STYLE_HIVE = "EndStyleHive";
+
+    private static final String NBT_SIEGE_COMBAT_TICKS = "SiegeCombatTicks";
+
+    private static final String NBT_WAR_ENEMIES = "WarEnemies";
+
+    private static final String NBT_WAR_STARTED_TICK = "WarStartedTick";
+
+    private static final String NBT_PENDING_WARS = "PendingWars";
+
+    private static final String NBT_PENDING_WAR_ENEMY = "Enemy";
+
+    private static final String NBT_PENDING_WAR_SINCE = "Since";
+
+    private static final String NBT_PENDING_WAR_SLABS_MEET = "SlabsMeet";
+
+    private static final String NBT_PENDING_WAR_EXTENSIONS = "Extensions";
+
+    private static final String NBT_BUILD_FROZEN_FOR_WAR_PREP = "BuildFrozenForWarPrep";
+
+    private static final String NBT_LOST_A_WAR = "LostAWar";
+
+    private static final String NBT_LAST_STAND = "LastStand";
+
     private static final String NBT_CHUNK_CLAIM_TICKS = "ChunkClaimTicks";
 
     private static final String NBT_DECORATED_CHUNKS = "DecoratedChunks";
@@ -157,6 +196,8 @@ public final class HiveLocation {
     private static final String NBT_PARTIES = "Parties";
 
     private static final String NBT_ATTACK_CAMPAIGNS = "AttackCampaigns";
+
+    private static final String NBT_TERRITORY_VISITS = "TerritoryVisits";
 
     private static final String NBT_GRUDGE_PLAYER_ID = "GrudgePlayerId";
 
@@ -217,6 +258,46 @@ public final class HiveLocation {
      * inside the territory. Persisted across restarts.
      */
     private long noContactTicksAccrued;
+
+    /**
+     * This location is an EXILED EMPRESS REMNANT: her seat fell, the lineage evacuated everything fungible, and she was
+     * left behind with whatever praetorians, crushers and predaliens refused to leave.
+     * <p>
+     * A remnant is still a real, alive location - it has to be, or there would be nothing to fight at - but it STOPS
+     * COUNTING as one of the lineage's hives. It cannot be elected as the next empress seat, it does not count toward
+     * the emergence threshold or the spread caps, convoys will not route to or from it, and it will not re-trigger
+     * migration. It has no economy and no future: the empress here has surrendered her ovipositor and can never lay
+     * again. It exists to be killed.
+     */
+    private boolean exiled;
+
+    /**
+     * How many daughter hives this location has seeded in its lifetime. Never decrements - losing a daughter does not
+     * buy the right to make another, or a hive under pressure would breed indefinitely.
+     */
+    private int daughterHivesFounded;
+
+    /**
+     * How many times an empress has refilled this hive's firewall fund from a sibling. Never decrements - the point is
+     * that her rescues are finite PER HIVE, so a besieged one is worth besieging to the end.
+     */
+    private int empressRescuesReceived;
+
+    /**
+     * Whether this hive is under empress influence - a READ-HOT mirror of the router's set.
+     * <p>
+     * The authority is still {@code HiveRouter}, and {@code EmpressInfluenceSync} is the only writer. This exists
+     * because the router keeps influence in a synchronized set backed by a WeakHashMap: correct, and fine while nothing
+     * called it, but every per-caste cap check, the member cap, all four party sizes, the nuke footprint and the
+     * per-alien stat buff now ask this question - several of them inside HiveBalanceTask, which scans every location
+     * every tick with no throttling. That turned a lock acquisition into a hot path. This makes the read a field access
+     * and leaves the router's set to do what only it can: notice the TRANSITION and reset DONE/STITCHING so a finished
+     * hive resumes building.
+     * <p>
+     * Deliberately NOT persisted. It is derived from {@code lineage.empressId()}, which is, so the reconcile restores
+     * it within one sweep of a world load - the same contract the router itself documents.
+     */
+    private boolean empressInfluenced;
 
     /**
      * Whether the royal-replacement "firewall" fund is currently available to cover a queen crowning in
@@ -311,6 +392,101 @@ public final class HiveLocation {
 
     private final Set<ChunkPos> claimedChunks;
 
+    /** Game time of the last qualifying combat hit on a member inside claimed territory (0 = never). */
+    private long lastCombatDamageTick;
+
+    /**
+     * END-STYLE CULL CLOCK (wall-clock millis; 0 = not running). Set when an end-style hive is reduced to PURE BANK -
+     * zero vents, zero living surface members - and cleared the moment either comes back. After seven real days
+     * latched, EndHiveTickTask culls the hive and the territory drops. See EndStyleHiveRules.CULL_GRACE_MILLIS.
+     */
+    private long endPureBankSinceMillis;
+
+    public long endPureBankSinceMillis() {
+        return endPureBankSinceMillis;
+    }
+
+    public void setEndPureBankSinceMillis(long millis) {
+        this.endPureBankSinceMillis = millis;
+    }
+
+    /**
+     * END-STYLE: chunks where a WORKER has ever placed a vent, keyed by ChunkPos.toLong(). Once ever, per chunk:
+     * [stated] "only the workers can place a vent in a chunk and if its broken thats it" - the workers never replace a
+     * broken vent, only the player can (a player-placed vent of the strain binds itself normally).
+     */
+    private final java.util.Set<Long> endWorkerVentedChunks = new java.util.HashSet<>();
+
+    /**
+     * Chunks (ChunkPos.toLong) that already carry a support pillar, so pillar spacing survives reloads and upkeep
+     * re-stamps never densify what was deliberately left open. See HiveSupportPillars.
+     */
+    private final java.util.Set<Long> supportPillarChunks = new java.util.HashSet<>();
+
+    public java.util.Set<Long> endWorkerVentedChunks() {
+        return endWorkerVentedChunks;
+    }
+
+    public java.util.Set<Long> supportPillarChunks() {
+        return supportPillarChunks;
+    }
+
+    /**
+     * Stamped TRUE at founding when the hive was founded in an end-style dimension (EndStyleHiveRules). Persisted so
+     * per-location reads (the slab band below, banking, chores) never need a level lookup.
+     */
+    private boolean endStyleHive;
+
+    public boolean isEndStyleHive() {
+        return endStyleHive;
+    }
+
+    public void markEndStyleHive() {
+        this.endStyleHive = true;
+    }
+
+    /** Accumulated active-combat time (ticks) - the siege clock territory attrition keys on. */
+    private long siegeCombatTicks;
+
+    /**
+     * The hive locations this one is AT WAR with, by faction id. [stated] "the contested chunks would become warzones
+     * between the two and the hives would be locked into combat. they would attack until one side has no more members."
+     * Persisted, because a war outlives a restart; symmetric, because both sides record each other.
+     */
+    private final LinkedHashSet<ResourceLocation> warEnemies = new LinkedHashSet<>();
+
+    /** Game time the CURRENT war opened (its first enemy). Zero when at peace. */
+    private long warStartedTick;
+
+    /**
+     * Rivals this hive is HEADED for war with but not yet fighting, and the terms of the wait. [stated] slabs that
+     * intersect get three Minecraft days of grace; territory that overlaps at different levels waits until both sides
+     * can field fifty. Persisted - the clock and the truce both have to survive a restart.
+     */
+    private final LinkedHashMap<ResourceLocation, PendingWar> pendingWars = new LinkedHashMap<>();
+
+    /**
+     * [stated] "building stops for the hive with the lowest population and they will focus on increasing population to
+     * make the war more fair." Set on the weaker side of a slab-intersection grace period; cleared when the grace ends
+     * or the pairing dissolves.
+     */
+    private boolean buildFrozenForWarPrep;
+
+    /**
+     * This hive was the side that ran out of members. [stated] "if a hive loses a war then it would exclude it as well
+     * otherwise the new smaller hive would die and waste a slot" - a beaten hive is not crowned and is not rescued,
+     * because a successor seated in the wreckage burns a lineage slot and an empress charge on something that dies
+     * anyway. Permanent: dormancy finishes what the war started.
+     */
+    private boolean lostAWar;
+
+    /**
+     * [stated] "When the queen dies the hive gets a boost 'last stand' this increases their stats by 25% its the hives
+     * last push." Set when a hive at war is found queenless; it also unlocks the queen's own reserve floor once there
+     * is nobody else left to send.
+     */
+    private boolean lastStand;
+
     private final Map<ChunkPos, Long> chunkClaimTicks;
 
     private final Set<ChunkPos> decoratedChunks;
@@ -350,6 +526,16 @@ public final class HiveLocation {
      * {@link com.alien.common.gameplay.hive.party.AttackCampaign}.
      */
     private final java.util.Map<UUID, com.alien.common.gameplay.hive.party.AttackCampaign> attackCampaigns;
+
+    /**
+     * Everyone who has set foot in this territory, and when they first did.
+     * <p>
+     * Deliberately separate from {@link #attackCampaigns}, which only ever gets an entry when a player DAMAGES a member
+     * - that map answers "who has been fighting us", which is a different and equally useful question. This one answers
+     * "who has been here at all", and it is the only record that catches someone who walked in quietly, did something
+     * drastic, and walked out without throwing a punch.
+     */
+    private final java.util.Map<UUID, Long> territoryVisits;
 
     /**
      * Post-replacement grudge: set when this location's founder queen is killed by a player; the crowned successor
@@ -436,6 +622,8 @@ public final class HiveLocation {
         this.queenScourgeAccumulator = 0L;
         this.harbingerScourgeAccumulator = 0L;
         this.claimedChunks = new LinkedHashSet<>();
+        this.lastCombatDamageTick = 0L;
+        this.siegeCombatTicks = 0L;
         this.chunkClaimTicks = new HashMap<>();
         this.decoratedChunks = new HashSet<>();
         this.structureRoleByChunk = new HashMap<>();
@@ -445,6 +633,7 @@ public final class HiveLocation {
         this.localReserves = new HiveLocationReserves(this::lineageVariantOrNull);
         this.parties = new java.util.ArrayList<>();
         this.attackCampaigns = new java.util.HashMap<>();
+        this.territoryVisits = new java.util.HashMap<>();
         this.grudgePlayerId = null;
         this.rescueCampaign = null;
         this.leadership = new HiveLocationLeadership();
@@ -497,6 +686,11 @@ public final class HiveLocation {
      * Y of the hive's floor — the elevation the hive was founded at. The slab band is measured from here.
      */
     public int hiveFloorY() {
+        // END-STYLE: the slab extends HIGHER AND LOWER from the queen ([stated]) - islands scatter vertically, so
+        // the band is centered on her rather than sitting on top of her founding Y.
+        if (endStyleHive) {
+            return centerPos.getY() - com.alien.common.gameplay.hive.dimension.EndStyleHiveRules.VERTICAL_SLAB_HALF_HEIGHT;
+        }
         return centerPos.getY();
     }
 
@@ -504,6 +698,9 @@ public final class HiveLocation {
      * Y of the top of the hive's slab band (exclusive). Floor + {@link #SLAB_HEIGHT}.
      */
     public int hiveCeilingY() {
+        if (endStyleHive) {
+            return centerPos.getY() + com.alien.common.gameplay.hive.dimension.EndStyleHiveRules.VERTICAL_SLAB_HALF_HEIGHT;
+        }
         return centerPos.getY() + SLAB_HEIGHT;
     }
 
@@ -820,6 +1017,116 @@ public final class HiveLocation {
         return claimedChunks;
     }
 
+    /**
+     * SIEGE CLOCK. [stated] territory attrition happens "during combat or post combat ... it needs to be prolonged
+     * combat for a long duration over 15 minutes or so of active combat/aggro with a player or enemy faction" - not as
+     * a background tax, and not from brief surface skirmishes. Members record qualifying hits here (see the hurt hook
+     * in the Alien entity base); PopulationPressureDecayTask turns recent hits into accumulated siege time and only
+     * shaves territory while the accumulated clock is past the threshold.
+     */
+    public long lastCombatDamageTick() {
+        return lastCombatDamageTick;
+    }
+
+    /**
+     * A war that has been decided on but has not started. {@code slabsMeet} picks which rule governs the wait: the
+     * three-day grace when the two hives build into the same band, or the fifty-member threshold when they merely share
+     * ground at different levels. {@code extensions} counts the three-day reprieves a levelled pact has already been
+     * granted while waiting for both sides to reach fifty - [stated] after two, the war starts regardless.
+     */
+    public record PendingWar(
+        long sinceTick,
+        boolean slabsMeet,
+        int extensions
+    ) {}
+
+    /** Rivals this hive is headed for war with, and the terms of each wait. */
+    public Map<ResourceLocation, PendingWar> pendingWars() {
+        return pendingWars;
+    }
+
+    /** True once this hive has been beaten in a war: no crowning, no empress rescue, it is left to die. */
+    public boolean hasLostAWar() {
+        return lostAWar;
+    }
+
+    /** True once the queen has fallen mid-war: everyone fights at +25% and the queen's bank is on the table. */
+    public boolean isInLastStand() {
+        return lastStand;
+    }
+
+    /** Raises or clears the last stand. Cleared when the war ends, so a surviving hive is not permanently buffed. */
+    public void setLastStand(boolean lastStand) {
+        this.lastStand = lastStand;
+    }
+
+    /** Marks the defeat. One-way - a hive does not un-lose a war. */
+    public void markLostAWar() {
+        this.lostAWar = true;
+    }
+
+    /** True while construction is halted so this hive can rebuild its numbers before a war it is losing on paper. */
+    public boolean isBuildFrozenForWarPrep() {
+        return buildFrozenForWarPrep;
+    }
+
+    public void setBuildFrozenForWarPrep(boolean frozen) {
+        this.buildFrozenForWarPrep = frozen;
+    }
+
+    /** Every hive location this one is at war with, by faction id. Mutating this directly skips the announcements. */
+    public java.util.Set<ResourceLocation> warEnemies() {
+        return warEnemies;
+    }
+
+    /** True while at least one war is open. Suppresses banking, despawns and contest flips for the duration. */
+    public boolean isAtWar() {
+        return !warEnemies.isEmpty();
+    }
+
+    public boolean isAtWarWith(ResourceLocation enemyLocationId) {
+        return warEnemies.contains(enemyLocationId);
+    }
+
+    /** Game time the current war opened; zero at peace. */
+    public long warStartedTick() {
+        return warStartedTick;
+    }
+
+    /** Records a new enemy. Returns true only the FIRST time this enemy is added, so callers announce once. */
+    public boolean addWarEnemy(ResourceLocation enemyLocationId, long gameTime) {
+        if (!warEnemies.add(enemyLocationId)) {
+            return false;
+        }
+        if (warStartedTick == 0L) {
+            warStartedTick = gameTime;
+        }
+        return true;
+    }
+
+    /** Drops an enemy. Returns true if this hive was actually at war with them; clears the clock at peace. */
+    public boolean removeWarEnemy(ResourceLocation enemyLocationId) {
+        if (!warEnemies.remove(enemyLocationId)) {
+            return false;
+        }
+        if (warEnemies.isEmpty()) {
+            warStartedTick = 0L;
+        }
+        return true;
+    }
+
+    public void recordCombatDamage(long gameTime) {
+        this.lastCombatDamageTick = Math.max(this.lastCombatDamageTick, gameTime);
+    }
+
+    public long siegeCombatTicks() {
+        return siegeCombatTicks;
+    }
+
+    public void setSiegeCombatTicks(long value) {
+        this.siegeCombatTicks = Math.max(0L, value);
+    }
+
     public Map<ChunkPos, Long> chunkClaimTicks() {
         return chunkClaimTicks;
     }
@@ -922,6 +1229,43 @@ public final class HiveLocation {
         return attackCampaigns;
     }
 
+    /** First-seen tick per player, oldest entry = who found this place first. */
+    public java.util.Map<UUID, Long> territoryVisits() {
+        return territoryVisits;
+    }
+
+    /** Thirty Minecraft days. Long enough to be a grudge, short enough not to be a census. */
+    private static final long TERRITORY_VISIT_MEMORY_TICKS = 24000L * 30L;
+
+    /** How often the ledger is actually swept. The memory is measured in days; the sweep need not be per-visit. */
+    private static final long TERRITORY_VISIT_PRUNE_INTERVAL_TICKS = 1200L;
+
+    private long lastVisitPruneTick = Long.MIN_VALUE;
+
+    /**
+     * Records a first visit, and forgets the ones old enough not to matter.
+     * <p>
+     * Later visits deliberately do NOT overwrite the first - the hive remembers when you first turned up, which is what
+     * makes this an order of arrival. But without the age-out it was an unbounded ledger: every player who ever stepped
+     * inside, kept forever and written to the region file on every save. On a long-running server that grows without
+     * limit for no benefit, since nothing consults a visit from months ago.
+     */
+    public void recordTerritoryVisit(UUID playerId, long tick) {
+        territoryVisits.putIfAbsent(playerId, tick);
+
+        // The sweep is O(entries) and this is called for EVERY player standing in territory on every aggro pass, so
+        // running it each time was quietly quadratic on a busy hive. Once a minute is ample for a thirty-day memory.
+        if (tick - lastVisitPruneTick < TERRITORY_VISIT_PRUNE_INTERVAL_TICKS) {
+            return;
+        }
+        lastVisitPruneTick = tick;
+
+        var cutoff = tick - TERRITORY_VISIT_MEMORY_TICKS;
+        if (cutoff > 0) {
+            territoryVisits.values().removeIf(firstSeen -> firstSeen < cutoff);
+        }
+    }
+
     public @Nullable UUID grudgePlayerId() {
         return grudgePlayerId;
     }
@@ -970,6 +1314,42 @@ public final class HiveLocation {
         this.removalReason = removalReason;
     }
 
+    /** See the {@code empressInfluenced} field javadoc. Written only by EmpressInfluenceSync. */
+    public boolean isEmpressInfluenced() {
+        return empressInfluenced;
+    }
+
+    public void setEmpressInfluenced(boolean empressInfluenced) {
+        this.empressInfluenced = empressInfluenced;
+    }
+
+    /** Times an empress has refilled this hive's firewall fund. See the field javadoc. */
+    public int empressRescuesReceived() {
+        return empressRescuesReceived;
+    }
+
+    public void setEmpressRescuesReceived(int empressRescuesReceived) {
+        this.empressRescuesReceived = Math.max(0, empressRescuesReceived);
+    }
+
+    /** Lifetime count of daughter hives seeded from here. See the field javadoc. */
+    public int daughterHivesFounded() {
+        return daughterHivesFounded;
+    }
+
+    public void setDaughterHivesFounded(int daughterHivesFounded) {
+        this.daughterHivesFounded = Math.max(0, daughterHivesFounded);
+    }
+
+    /** See the {@code exiled} field javadoc - an exiled empress remnant, alive but no longer counted. */
+    public boolean isExiled() {
+        return exiled;
+    }
+
+    public void setExiled(boolean exiled) {
+        this.exiled = exiled;
+    }
+
     public boolean isAlive() {
         return removalReason == null;
     }
@@ -1008,6 +1388,14 @@ public final class HiveLocation {
      * See {@code HiveStructureUpkeep} for what is preserved rather than cleared (jelly vats, resin).
      */
     private void tickStructureUpkeep(MinecraftServer server) {
+        // Repair crews beat faster than the detector: steering, gait and progress need a 1-second cadence even
+        // though new damage is only LOOKED for every UPKEEP_INTERVAL_TICKS.
+        if (ageInTicks % com.alien.common.gameplay.hive.structure.HiveBreachRepair.TICK_INTERVAL == 0 && !builtPlacements.isEmpty()) {
+            var repairLevel = server.getLevel(dimension);
+            if (repairLevel != null) {
+                com.alien.common.gameplay.hive.structure.HiveBreachRepair.tick(repairLevel, this);
+            }
+        }
         if (ageInTicks % UPKEEP_INTERVAL_TICKS != 0) {
             return;
         }
@@ -1084,6 +1472,15 @@ public final class HiveLocation {
         if (noContactTicksAccrued > 0L) {
             tag.putLong(NBT_NO_CONTACT_TICKS_ACCRUED, noContactTicksAccrued);
         }
+        if (exiled) {
+            tag.putBoolean(NBT_EXILED, true);
+        }
+        if (daughterHivesFounded > 0) {
+            tag.putInt(NBT_DAUGHTER_HIVES_FOUNDED, daughterHivesFounded);
+        }
+        if (empressRescuesReceived > 0) {
+            tag.putInt(NBT_EMPRESS_RESCUES_RECEIVED, empressRescuesReceived);
+        }
         // Only persist when it deviates from the fresh-location default (available, nothing accrued, no sample yet) —
         // keeps untouched locations' NBT unchanged, matching the sibling fields' save-if-nonzero convention.
         if (!firewallFundAvailable) {
@@ -1139,6 +1536,48 @@ public final class HiveLocation {
         }
         if (harbingerScourgeAccumulator > 0L) {
             tag.putLong(NBT_HARBINGER_SCOURGE_ACCUMULATOR, harbingerScourgeAccumulator);
+        }
+
+        if (lastCombatDamageTick > 0L) {
+            tag.putLong(NBT_LAST_COMBAT_DAMAGE_TICK, lastCombatDamageTick);
+            tag.putLong(NBT_END_PURE_BANK_SINCE_MILLIS, endPureBankSinceMillis);
+            tag.putLongArray(NBT_END_WORKER_VENTED_CHUNKS, endWorkerVentedChunks.stream().mapToLong(Long::longValue).toArray());
+            tag.putBoolean(NBT_END_STYLE_HIVE, endStyleHive);
+        }
+        if (!supportPillarChunks.isEmpty()) {
+            tag.putLongArray(NBT_SUPPORT_PILLAR_CHUNKS, supportPillarChunks.stream().mapToLong(Long::longValue).toArray());
+        }
+        if (siegeCombatTicks > 0L) {
+            tag.putLong(NBT_SIEGE_COMBAT_TICKS, siegeCombatTicks);
+        }
+        if (buildFrozenForWarPrep) {
+            tag.putBoolean(NBT_BUILD_FROZEN_FOR_WAR_PREP, true);
+        }
+        if (lostAWar) {
+            tag.putBoolean(NBT_LOST_A_WAR, true);
+        }
+        if (lastStand) {
+            tag.putBoolean(NBT_LAST_STAND, true);
+        }
+        if (!pendingWars.isEmpty()) {
+            var pendingTag = new ListTag();
+            for (var entry : pendingWars.entrySet()) {
+                var pendingEntry = new CompoundTag();
+                pendingEntry.putString(NBT_PENDING_WAR_ENEMY, entry.getKey().toString());
+                pendingEntry.putLong(NBT_PENDING_WAR_SINCE, entry.getValue().sinceTick());
+                pendingEntry.putBoolean(NBT_PENDING_WAR_SLABS_MEET, entry.getValue().slabsMeet());
+                pendingEntry.putInt(NBT_PENDING_WAR_EXTENSIONS, entry.getValue().extensions());
+                pendingTag.add(pendingEntry);
+            }
+            tag.put(NBT_PENDING_WARS, pendingTag);
+        }
+        if (!warEnemies.isEmpty()) {
+            var warTag = new ListTag();
+            for (var enemy : warEnemies) {
+                warTag.add(net.minecraft.nbt.StringTag.valueOf(enemy.toString()));
+            }
+            tag.put(NBT_WAR_ENEMIES, warTag);
+            tag.putLong(NBT_WAR_STARTED_TICK, warStartedTick);
         }
 
         var claimedTag = new ListTag();
@@ -1226,6 +1665,17 @@ public final class HiveLocation {
             tag.put(NBT_ATTACK_CAMPAIGNS, campaignsTag);
         }
 
+        if (!territoryVisits.isEmpty()) {
+            var visitsTag = new ListTag();
+            for (var entry : territoryVisits.entrySet()) {
+                var entryTag = new CompoundTag();
+                entryTag.putUUID("PlayerId", entry.getKey());
+                entryTag.putLong("FirstSeen", entry.getValue());
+                visitsTag.add(entryTag);
+            }
+            tag.put(NBT_TERRITORY_VISITS, visitsTag);
+        }
+
         if (grudgePlayerId != null) {
             tag.putUUID(NBT_GRUDGE_PLAYER_ID, grudgePlayerId);
         }
@@ -1310,6 +1760,9 @@ public final class HiveLocation {
         location.noContactTicksAccrued = tag.contains(NBT_NO_CONTACT_TICKS_ACCRUED)
             ? Math.max(0L, tag.getLong(NBT_NO_CONTACT_TICKS_ACCRUED))
             : 0L;
+        location.exiled = tag.getBoolean(NBT_EXILED);
+        location.daughterHivesFounded = Math.max(0, tag.getInt(NBT_DAUGHTER_HIVES_FOUNDED));
+        location.empressRescuesReceived = Math.max(0, tag.getInt(NBT_EMPRESS_RESCUES_RECEIVED));
         // Hives saved before this state existed load gracefully as a fresh location: fund available, nothing
         // accrued, no sample taken yet — exactly the private-constructor defaults, so no migration is needed.
         location.firewallFundAvailable = !tag.contains(NBT_FIREWALL_FUND_AVAILABLE) || tag.getBoolean(NBT_FIREWALL_FUND_AVAILABLE);
@@ -1349,6 +1802,47 @@ public final class HiveLocation {
         location.royalJellyAccumulator = Math.max(0L, tag.getLong(NBT_ROYAL_JELLY_ACCUMULATOR));
         location.queenScourgeAccumulator = Math.max(0L, tag.getLong(NBT_QUEEN_SCOURGE_ACCUMULATOR));
         location.harbingerScourgeAccumulator = Math.max(0L, tag.getLong(NBT_HARBINGER_SCOURGE_ACCUMULATOR));
+
+        location.lastCombatDamageTick = Math.max(0L, tag.getLong(NBT_LAST_COMBAT_DAMAGE_TICK));
+        location.endPureBankSinceMillis = Math.max(0L, tag.getLong(NBT_END_PURE_BANK_SINCE_MILLIS));
+        for (var packed : tag.getLongArray(NBT_END_WORKER_VENTED_CHUNKS)) {
+            location.endWorkerVentedChunks.add(packed);
+        }
+        location.endStyleHive = tag.getBoolean(NBT_END_STYLE_HIVE);
+        for (var packed : tag.getLongArray(NBT_SUPPORT_PILLAR_CHUNKS)) {
+            location.supportPillarChunks.add(packed);
+        }
+        location.siegeCombatTicks = Math.max(0L, tag.getLong(NBT_SIEGE_COMBAT_TICKS));
+        location.buildFrozenForWarPrep = tag.getBoolean(NBT_BUILD_FROZEN_FOR_WAR_PREP);
+        location.lostAWar = tag.getBoolean(NBT_LOST_A_WAR);
+        location.lastStand = tag.getBoolean(NBT_LAST_STAND);
+        if (tag.contains(NBT_PENDING_WARS)) {
+            var pendingTag = tag.getList(NBT_PENDING_WARS, Tag.TAG_COMPOUND);
+            for (var i = 0; i < pendingTag.size(); i++) {
+                var pendingEntry = pendingTag.getCompound(i);
+                var enemy = ResourceLocation.tryParse(pendingEntry.getString(NBT_PENDING_WAR_ENEMY));
+                if (enemy != null) {
+                    location.pendingWars.put(
+                        enemy,
+                        new PendingWar(
+                            pendingEntry.getLong(NBT_PENDING_WAR_SINCE),
+                            pendingEntry.getBoolean(NBT_PENDING_WAR_SLABS_MEET),
+                            pendingEntry.getInt(NBT_PENDING_WAR_EXTENSIONS)
+                        )
+                    );
+                }
+            }
+        }
+        if (tag.contains(NBT_WAR_ENEMIES)) {
+            var warTag = tag.getList(NBT_WAR_ENEMIES, Tag.TAG_STRING);
+            for (var i = 0; i < warTag.size(); i++) {
+                var enemy = ResourceLocation.tryParse(warTag.getString(i));
+                if (enemy != null) {
+                    location.warEnemies.add(enemy);
+                }
+            }
+            location.warStartedTick = Math.max(0L, tag.getLong(NBT_WAR_STARTED_TICK));
+        }
 
         if (tag.contains(NBT_CLAIMED_CHUNKS)) {
             var claimedTag = tag.getList(NBT_CLAIMED_CHUNKS, Tag.TAG_COMPOUND);
@@ -1438,6 +1932,15 @@ public final class HiveLocation {
         location.rescueCampaign = tag.contains(NBT_RESCUE_CAMPAIGN)
             ? com.alien.common.gameplay.hive.party.RescueCampaign.load(tag.getCompound(NBT_RESCUE_CAMPAIGN))
             : null;
+
+        location.territoryVisits.clear();
+        if (tag.contains(NBT_TERRITORY_VISITS)) {
+            var visitsTag = tag.getList(NBT_TERRITORY_VISITS, Tag.TAG_COMPOUND);
+            for (var i = 0; i < visitsTag.size(); i++) {
+                var entryTag = visitsTag.getCompound(i);
+                location.territoryVisits.put(entryTag.getUUID("PlayerId"), entryTag.getLong("FirstSeen"));
+            }
+        }
 
         location.attackCampaigns.clear();
         if (tag.contains(NBT_ATTACK_CAMPAIGNS)) {

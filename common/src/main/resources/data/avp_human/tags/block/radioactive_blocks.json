@@ -1,0 +1,32 @@
+{
+  "replace": false,
+  "values": [
+    "avp_alien:irradiated_chitin_block",
+    "avp_alien:irradiated_chitin_block_slab",
+    "avp_alien:irradiated_chitin_block_stairs",
+    "avp_alien:irradiated_chitin_block_wall",
+    "avp_alien:irradiated_chitin_brick_slab",
+    "avp_alien:irradiated_chitin_brick_stairs",
+    "avp_alien:irradiated_chitin_brick_wall",
+    "avp_alien:irradiated_chitin_bricks",
+    "avp_alien:irradiated_resin",
+    "avp_alien:irradiated_resin_bone_slab",
+    "avp_alien:irradiated_resin_bone_stairs",
+    "avp_alien:irradiated_resin_brick_slab",
+    "avp_alien:irradiated_resin_brick_stairs",
+    "avp_alien:irradiated_resin_brick_wall",
+    "avp_alien:irradiated_resin_bricks",
+    "avp_alien:irradiated_resin_etched_slab",
+    "avp_alien:irradiated_resin_etched_stairs",
+    "avp_alien:irradiated_resin_node",
+    "avp_alien:irradiated_resin_slab",
+    "avp_alien:irradiated_resin_stairs",
+    "avp_alien:irradiated_resin_stretched_slab",
+    "avp_alien:irradiated_resin_stretched_stairs",
+    "avp_alien:irradiated_resin_tendril_slab",
+    "avp_alien:irradiated_resin_tendril_stairs",
+    "avp_alien:irradiated_resin_vein",
+    "avp_alien:irradiated_resin_vent",
+    "avp_alien:irradiated_resin_web"
+  ]
+}

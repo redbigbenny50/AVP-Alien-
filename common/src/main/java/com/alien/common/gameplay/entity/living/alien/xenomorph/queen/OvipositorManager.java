@@ -20,9 +20,34 @@ import java.util.List;
 
 public class OvipositorManager implements NBTSerializable {
 
+    /**
+     * The eggsack model sits visually skewed when given the royal's exact body yaw ([stated] "the eggsack seems off
+     * center for the queen and empress. it attaches fine to her but its not rotated correctly it needs to rotate more
+     * to the right") - a fixed authoring-orientation offset between the two models. Positive = clockwise (to her right)
+     * in Minecraft yaw. ONE dial, used by queen and empress managers alike; tune here if the sack still sits off.
+     */
+    public static final float OVIPOSITOR_YAW_OFFSET_DEGREES = 25.0F;
+
     private final Cooldown ovipositorCreationCooldown;
 
     private final Queen queen;
+
+    /** The founding-floor bone block matching a queen's strain. */
+    private static net.minecraft.world.level.block.Block strainResinBone(Queen queen) {
+        var type = com.alien.common.data.AlienVariantTypes.getFor(queen.getVariant());
+
+        if (type == com.alien.common.data.AlienVariantTypes.ABERRANT) {
+            return com.alien.common.registry.init.block.AberrantAlienResinBlocks.ABERRANT_RESIN_BONE.get();
+        }
+        if (type == com.alien.common.data.AlienVariantTypes.NETHER) {
+            return com.alien.common.registry.init.block.NetherAlienResinBlocks.NETHER_RESIN_BONE.get();
+        }
+        if (type == com.alien.common.data.AlienVariantTypes.IRRADIATED) {
+            return com.alien.common.registry.init.block.IrradiatedAlienResinBlocks.IRRADIATED_RESIN_BONE.get();
+        }
+
+        return com.alien.common.registry.init.block.AlienResinBlocks.RESIN_BONE.get();
+    }
 
     private boolean hadOvipositorLastTick;
 
@@ -75,12 +100,14 @@ public class OvipositorManager implements NBTSerializable {
                 }
             }
             getOvipositor().ifSome(ovipositor -> {
-                ovipositor.setYRot(queen.getYRot());
+                // Per-tick rotation glue - MUST carry the same model offset as the attach sites, or this line
+                // overwrites the creation-time offset one tick after attach and the sack snaps back off-center.
+                ovipositor.setYRot(queen.getYRot() + OVIPOSITOR_YAW_OFFSET_DEGREES);
                 ovipositor.setXRot(queen.getXRot());
                 // Body rotation.
-                ovipositor.yBodyRot = queen.yBodyRot;
+                ovipositor.yBodyRot = queen.yBodyRot + OVIPOSITOR_YAW_OFFSET_DEGREES;
                 // Head rotation.
-                ovipositor.yHeadRot = queen.yHeadRot;
+                ovipositor.yHeadRot = queen.yHeadRot + OVIPOSITOR_YAW_OFFSET_DEGREES;
             });
             return;
         }
@@ -153,7 +180,11 @@ public class OvipositorManager implements NBTSerializable {
         var target = com.alien.common.gameplay.hive.growth.BiomassIncome.foundingBiomassTarget(
             HiveLocationRegistry.INSTANCE.config()
         );
-        if (location.biomass() < target) {
+        // END-STYLE: the biomass tank is WAIVED - biomass generation is off in end-style dimensions (anything that
+        // accumulates unused is off), so the tank would never fill and she would never grow her eggsack, which the
+        // design explicitly keeps ("her making an eggsack and eggs should still work"). The player brought her;
+        // the fortress does not farm for the privilege.
+        if (!location.isEndStyleHive() && location.biomass() < target) {
             return;
         }
 
@@ -264,11 +295,11 @@ public class OvipositorManager implements NBTSerializable {
         var ovipositor = AlienEntityTypes.OVIPOSITOR.get().create(queen.level());
 
         if (ovipositor != null) {
-            ovipositor.moveTo(queen.position(), queen.getYRot(), queen.getXRot());
+            ovipositor.moveTo(queen.position(), queen.getYRot() + OVIPOSITOR_YAW_OFFSET_DEGREES, queen.getXRot());
             ovipositor.startRiding(queen, true);
 
-            // Body rotation.
-            ovipositor.yBodyRot = queen.yBodyRot;
+            // Body rotation - offset so the sack model sits centered on her (see OVIPOSITOR_YAW_OFFSET_DEGREES).
+            ovipositor.yBodyRot = queen.yBodyRot + OVIPOSITOR_YAW_OFFSET_DEGREES;
             // Head rotation.
             ovipositor.yHeadRot = queen.yHeadRot;
 
@@ -316,9 +347,11 @@ public class OvipositorManager implements NBTSerializable {
             return;
         }
         var level = queen.level();
-        // resin_bone is in NORMAL_RESIN, so it satisfies the "on variant resin" / support-point gates and counts as
-        // spawnable resin. Used for the founding floor as a distinct, bone-like pad.
-        var floorState = com.alien.common.registry.init.block.AlienResinBlocks.RESIN_BONE.get().defaultBlockState();
+        // Resin bone is a distinct, bone-like pad for the founding floor - and it MUST be her own strain's.
+        // This was hardcoded to the NORMAL block, whose only tag is NORMAL_RESIN, so a nether/aberrant/irradiated
+        // queen laid a floor that failed her own "on variant resin" and support-point gates: she would carpet her
+        // chamber and then be unable to use it.
+        var floorState = strainResinBone(queen).defaultBlockState();
 
         // Anchor the disc to the CENTER CHUNK's middle at the slab floor Y, NOT under the queen - so the floor is
         // deterministic and aligned with the built chamber regardless of exactly where she's standing. FILL every
@@ -376,6 +409,13 @@ public class OvipositorManager implements NBTSerializable {
      * (geo + iron restraints) is a render-time choice driven by her contained+inhibited state.
      */
     private void createChainedEggsack() {
+        // FINISH HER GROWTH FIRST ([stated] "when she forms the chained eggsack have her fully grown"). Nothing in
+        // the ovipositor code scales with the queen - the ride offsets and support probes are fixed block figures
+        // - so an eggsack seated on an 0.85 queen would sit wrong and stay wrong. Now that a still-growing queen
+        // is inhibitable, that pairing is reachable in normal play, not a corner case. Maturing her here rather
+        // than at inhibit time keeps his rule intact: the growth only ends when she actually becomes a breeder.
+        queen.getMoltingManager().matureImmediately();
+
         var ovipositor = AlienEntityTypes.OVIPOSITOR.get().create(queen.level());
         if (ovipositor != null) {
             // Settle her facing authoritatively BEFORE attaching the eggsack: unify yRot / yBodyRot / yHeadRot to
@@ -387,9 +427,9 @@ public class OvipositorManager implements NBTSerializable {
             queen.yBodyRot = settledYaw;
             queen.yHeadRot = settledYaw;
 
-            ovipositor.moveTo(queen.position(), settledYaw, queen.getXRot());
+            ovipositor.moveTo(queen.position(), settledYaw + OVIPOSITOR_YAW_OFFSET_DEGREES, queen.getXRot());
             ovipositor.startRiding(queen, true);
-            ovipositor.yBodyRot = settledYaw;
+            ovipositor.yBodyRot = settledYaw + OVIPOSITOR_YAW_OFFSET_DEGREES;
             ovipositor.yHeadRot = settledYaw;
             // A captive breeder's eggsack must not vanish to far-away despawn while she's contained; the teardown above
             // is the only thing that removes it.

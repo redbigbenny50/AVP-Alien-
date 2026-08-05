@@ -7,7 +7,9 @@ import com.alien.common.gameplay.hive.id.LineageIds;
 import com.alien.common.gameplay.hive.location.HiveLocation;
 import com.alien.common.gameplay.hive.location.HiveLocationRegistry;
 import com.alien.common.registry.HiveUnitPurchaseRegistry;
+import com.alien.common.registry.init.AlienGameRules;
 import com.alien.common.registry.tag.AlienEntityTypeTags;
+import com.alien.compatibility.avp_predator.AVPPredator;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.tags.TagKey;
 import net.minecraft.world.entity.EntityType;
@@ -47,6 +49,7 @@ public final class HiveBalanceTask {
         AlienEntityTypeTags.PRAETORIANS,
         AlienEntityTypeTags.CRUSHERS,
         AlienEntityTypeTags.SPITTERS,
+        AlienEntityTypeTags.PREDALIENS,
         AlienEntityTypeTags.BURSTERS,
         AlienEntityTypeTags.CHRYSALISES,
         AlienEntityTypeTags.RAZOR_CLAWS,
@@ -58,16 +61,46 @@ public final class HiveBalanceTask {
     /** The room whose count caps the harbinger. A second one requires empress influence to build. */
     private static final String RAID_CHAMBER_ROOM_TYPE = "chamber_raid";
 
-    private static final int MEMBER_CAP = 250;
+    /** Public so the empress's last stand can measure how far short her seat is when she levies the network. */
+    public static final int MEMBER_CAP = 250;
 
-    private static final int EMPRESS_MEMBER_CAP = 400;
+    /**
+     * Lineages are processed in buckets: each one is evaluated once per this many ticks, chosen by its own id hash so
+     * the empire spreads evenly across ticks instead of spiking on one. Nothing here needs per-tick resolution - it
+     * only needs to happen about once a second.
+     */
+    private static final int LINEAGE_BUCKET_TICKS = 20;
+
+    /**
+     * Offset within the bucket window, distinct per scan, so one lineage's economy tasks land on DIFFERENT ticks.
+     * Without it every scan would pick the same lineage on the same tick and the saving would be a smaller spike rather
+     * than no spike.
+     */
+    private static final int BUCKET_PHASE = 7;
+
+    /**
+     * Reused snapshot buffer for the per-tick faction scan. The scan runs only on the single server thread, so one
+     * static scratch list per scan is safe; clear+addAll keeps the same iterate-a-snapshot semantics (the loop body may
+     * mutate the live faction registry) while allocating nothing once the backing array has grown - this scan used to
+     * build a fresh ArrayList of every faction id EVERY TICK just to run its bucket filter.
+     */
+    private static final java.util.List<net.minecraft.resources.ResourceLocation> SCAN_SCRATCH =
+        new java.util.ArrayList<>();
 
     public static void scanAll(MinecraftServer server) {
         var config = HiveLocationRegistry.INSTANCE.config();
         var populationPerChunk = config.populationPerChunk();
+        var currentTick = server.overworld().getGameTime();
 
-        for (var factionId : new ArrayList<>(Alien.MOD.factions().getAllIds())) {
+        SCAN_SCRATCH.clear();
+        SCAN_SCRATCH.addAll(Alien.MOD.factions().getAllIds());
+        for (var factionId : SCAN_SCRATCH) {
             if (!LineageIds.isLineageId(factionId)) {
+                continue;
+            }
+            // A purchase that could have happened this tick happens within a second instead. This is the heaviest
+            // per-tick scan in the hive system - it walks every purchase's conditions for every location.
+            if (Math.floorMod(currentTick - factionId.hashCode(), LINEAGE_BUCKET_TICKS) != BUCKET_PHASE) {
                 continue;
             }
             var faction = Alien.MOD.factions().get(factionId);
@@ -75,6 +108,10 @@ public final class HiveBalanceTask {
                 continue;
             }
             for (var location : new ArrayList<>(lineage.locationsById().values())) {
+                if (com.alien.common.gameplay.hive.dimension.EndStyleHiveRules.isEndStyle(server, location)) {
+                    continue; // END-STYLE: no simulated growth and no purchasing - the bank only holds what the player
+                              // supplied
+                }
                 if (!location.isAlive() || location.isInhibited()) {
                     continue; // inhibited locations run no economy — no biomass spend, no jelly, no purchases.
                 }
@@ -99,9 +136,7 @@ public final class HiveBalanceTask {
         // defense: 250, raised to 400 under empress influence. Exempt: the queen, eggs (never tracked), and
         // the queen's founding retinue (1 praetorian + 2 drones). Members from other sources currently count
         // too (origin isn't tagged); if convoy bonuses visibly eat cap space, origin tagging is the fix.
-        var memberCap = com.alien.common.gameplay.hive.structure.HiveRouter.isEmpressInfluenced(location)
-            ? EMPRESS_MEMBER_CAP
-            : MEMBER_CAP;
+        var memberCap = com.alien.common.gameplay.hive.empress.EmpressCaps.scale(location, MEMBER_CAP);
         var retinueAllowance = Math.min(1, pop.getOrDefault(AlienEntityTypeTags.PRAETORIANS, 0))
             + Math.min(2, pop.getOrDefault(AlienEntityTypeTags.DRONES, 0));
         // Carve-crew transients (design §8.5): reserve-materialized build workers don't count against the cap while
@@ -158,9 +193,10 @@ public final class HiveBalanceTask {
     ) {
         var ordered = populationFillOrder(pop, chunks);
         for (var caste : ordered) {
-            // Basic egg-born production rolls a 1-in-4 chance to yield a SPITTER instead of the drone/runner it was
-            // making; if the spitter can't commit, the intended caste still gets its normal attempt.
-            var substituted = rollSpitterSubstitution(server, caste);
+            // Basic egg-born production rolls 1-in-6 for a SPITTER and 1-in-6 for a PREDALIEN instead of the
+            // drone/runner it was making; if the substitute can't commit, the intended caste still gets its normal
+            // attempt.
+            var substituted = rollCasteSubstitution(server, caste);
             if (
                 substituted != caste
                     && tryCommitCaste(server, location, lineage, substituted, totalPop, PurchasePopulationMode.NET_GAIN)
@@ -248,15 +284,42 @@ public final class HiveBalanceTask {
         return false;
     }
 
-    /** Basic egg-born castes (drones, runners) have a 1-in-4 chance of producing a spitter instead. */
-    private static TagKey<EntityType<?>> rollSpitterSubstitution(MinecraftServer server, TagKey<EntityType<?>> caste) {
-        if (
-            (caste == AlienEntityTypeTags.DRONES || caste == AlienEntityTypeTags.RUNNERS)
-                && server.overworld().getRandom().nextInt(4) == 0
-        ) {
-            return AlienEntityTypeTags.SPITTERS;
+    /**
+     * Basic egg-born production (drones, runners) can come out as something else instead. ONE d6 decides, so the two
+     * substitutions are exactly 1-in-6 each and cannot compound: 0 is a spitter, 1 is a predalien, 2-5 leave the
+     * intended caste alone.
+     * <p>
+     * Spitters were 1-in-4 and were the ONLY caste produced by substitution - they have no entry in
+     * {@code computeDeficits}, so this roll is their entire supply, which is why they outnumbered everything else in
+     * play. Predaliens are deliberately egg-born here rather than born from a predator host, and the roll is the only
+     * place that decision is gated: with avp_predator absent the 1 lands on the intended caste, no predalien is ever
+     * requested, and their purchase files simply sit unused.
+     */
+    private static TagKey<EntityType<?>> rollCasteSubstitution(MinecraftServer server, TagKey<EntityType<?>> caste) {
+        if (caste != AlienEntityTypeTags.DRONES && caste != AlienEntityTypeTags.RUNNERS) {
+            return caste;
         }
-        return caste;
+
+        return switch (server.overworld().getRandom().nextInt(6)) {
+            case 0 -> AlienEntityTypeTags.SPITTERS;
+            case 1 -> hivesMayBreedPredaliens(server) ? AlienEntityTypeTags.PREDALIENS : caste;
+            default -> caste;
+        };
+    }
+
+    /**
+     * BOTH conditions, and the gamerule is off by default.
+     * <p>
+     * A hive growing predaliens out of simulated reserves was contentious - it makes them ordinary stock rather than
+     * what happens when a predator meets a facehugger. So it is opt-in per world AND still requires AVP: Predator,
+     * because the gamerule cannot conjure a species from a mod that is not installed.
+     * <p>
+     * This roll is the ONLY source of hive-grown predaliens: they have no computeDeficits entry, so switching it off
+     * removes them from hive production entirely rather than merely making them rarer.
+     */
+    private static boolean hivesMayBreedPredaliens(MinecraftServer server) {
+        return AVPPredator.MOD.isLoaded()
+            && server.getGameRules().getBoolean(AlienGameRules.AVP_ALIEN_HIVES_BREED_PREDALIENS);
     }
 
     private static boolean tryCommitCaste(
@@ -279,9 +342,12 @@ public final class HiveBalanceTask {
         if (outputType == null) {
             return false;
         }
+        // ONE HARBINGER PER RAID CHAMBER. This was a hardcoded 1, so an empress hive's extra raid chamber bought
+        // nothing - see IrradiatedHiveRules.harbingerCap. The away-in-raid check stands: a harbinger out on a raid
+        // still occupies its chamber.
         if (
             outputType.is(AlienEntityTypeTags.HARBINGERS)
-                && (CastePopulation.countCaste(location, AlienEntityTypeTags.HARBINGERS) >= 1
+                && (CastePopulation.countCaste(location, AlienEntityTypeTags.HARBINGERS) >= IrradiatedHiveRules.harbingerCap(location)
                     || hasHarbingerAwayInRaid(location, lineage))
         ) {
             return false;
@@ -301,15 +367,29 @@ public final class HiveBalanceTask {
             return false;
         }
 
-        // Vats are the hive's savings: tap them only when the bank alone can't cover the jelly cost.
+        var irradiated = IrradiatedHiveRules.isIrradiated(location);
+
+        // A converted hive cannot make anyone NEW - only promote somebody who already exists. See the rules class.
+        if (irradiated && !IrradiatedHiveRules.allowsPurchase(purchase)) {
+            return false;
+        }
+
+        // Vats are the hive's savings: tap them only when the bank alone can't cover the jelly cost. An irradiated
+        // hive's vats are loot rather than savings, so these are no-ops there (gated inside JellyVatDisplay).
         JellyVatDisplay.coverShortfall(server, location, purchase.royalJelly());
         JellyVatDisplay.coverScourgeShortfall(server, location, purchase.scourgeJelly());
 
-        var biomassCost = biomassCost(purchase, location);
+        // [stated] every promotion costs a flat 1 biomass + 1 jelly, whatever the caste. The merged pool lives in
+        // royalJelly for an irradiated hive - scourgeJelly is zeroed at conversion and stays zero - so one field
+        // answers the whole cost. Everything that used royal or scourge simply uses irradiated instead.
+        var biomassCost = irradiated ? IrradiatedHiveRules.PROMOTION_BIOMASS_COST : biomassCost(purchase, location);
+        var jellyCost = irradiated ? IrradiatedHiveRules.PROMOTION_JELLY_COST : purchase.royalJelly();
+        var scourgeCost = irradiated ? 0 : purchase.scourgeJelly();
+
         if (
             location.biomass() < biomassCost
-                || location.royalJelly() < purchase.royalJelly()
-                || location.scourgeJelly() < purchase.scourgeJelly()
+                || location.royalJelly() < jellyCost
+                || location.scourgeJelly() < scourgeCost
         ) {
             return false;
         }
@@ -318,8 +398,12 @@ public final class HiveBalanceTask {
         var inputTypes = new ArrayList<EntityType<?>>(purchase.inputEntities().size());
         for (var input : purchase.inputEntities()) {
             var type = input.entity();
-            // Stored nursery eggs back the ovomorph reserve: consume chamber stock when the reserve runs short.
-            EggStock.coverInputShortfall(server, location, type, input.count());
+            // Stored nursery eggs back the ovomorph reserve: consume chamber stock when the reserve runs short. An
+            // irradiated hive has no egg pipeline at all - its nurseries are dead rooms - and allowsPurchase has
+            // already refused anything with an ovomorph input, so there is nothing here to top up.
+            if (!irradiated) {
+                EggStock.coverInputShortfall(server, location, type, input.count());
+            }
             if (location.localReserves().getCount(type) < input.count()) {
                 return false;
             }
@@ -332,8 +416,8 @@ public final class HiveBalanceTask {
 
         // All gates pass — commit.
         location.setBiomass(location.biomass() - biomassCost);
-        location.setRoyalJelly(location.royalJelly() - purchase.royalJelly());
-        location.setScourgeJelly(location.scourgeJelly() - purchase.scourgeJelly());
+        location.setRoyalJelly(location.royalJelly() - jellyCost);
+        location.setScourgeJelly(location.scourgeJelly() - scourgeCost);
 
         for (var i = 0; i < purchase.inputEntities().size(); i++) {
             var count = purchase.inputEntities().get(i).count();
@@ -445,8 +529,13 @@ public final class HiveBalanceTask {
                     }
                 }
                 case HiveUnitPurchaseCondition.MaxEntityCountInLocation max -> {
+                    // EVERY per-caste ceiling in every purchase file passes through here - warriors, praetorians,
+                    // crushers, spitters, the lot - so scaling it here is what makes an empress hive half again
+                    // bigger in its whole standing army rather than just in its worker count. The harbinger is the
+                    // sole exception and needs no special-casing: it is capped by MaxPerRaidChamber below, which
+                    // she already raises by granting the hive a second raid chamber.
                     var current = CastePopulation.countEntity(location, max.entity());
-                    if (current >= max.value()) {
+                    if (current >= com.alien.common.gameplay.hive.empress.EmpressCaps.scale(location, max.value())) {
                         return false;
                     }
                 }
