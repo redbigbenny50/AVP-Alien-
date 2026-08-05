@@ -75,7 +75,7 @@ public final class HiveRouter {
      * Hives under empress influence: larger footprint, expanded blueprint. Wired by the empress system via
      * {@link #setEmpressInfluence}; memory-only, so that system must re-assert influence on world load.
      */
-    private static final java.util.Set<HiveLocation> EMPRESS_INFLUENCED =
+    private static final Set<HiveLocation> EMPRESS_INFLUENCED =
         java.util.Collections.synchronizedSet(java.util.Collections.newSetFromMap(new java.util.WeakHashMap<>()));
 
     /** The footprint radius for the hive currently being routed (set at the top of {@link #route}). */
@@ -247,7 +247,7 @@ public final class HiveRouter {
         // already cluttered with reserves and corridors, and they kept boxing out. Priority class, then distance.
         pending.sort(
             java.util.Comparator
-                .comparingInt((HiveBlueprint.Goal g) -> goalPriority(g.roomType()))
+                .comparingInt((HiveBlueprint.Goal g) -> goalPriority(location, g.roomType()))
                 .thenComparingInt(g -> cheby(g.chunk(), center))
         );
 
@@ -1063,7 +1063,27 @@ public final class HiveRouter {
         return null;
     }
 
-    private static int goalPriority(String roomType) {
+    /**
+     * Ordering for pending goals; lower routes first, ties broken by distance from centre.
+     * <p>
+     * THE FIRST EGG CHAMBER OUTRANKS EVERYTHING. A hive with no nursery is in a deadlock it cannot dig out of:
+     * eggs have nowhere to be hauled, so no new aliens hatch, so there are no drones to carve the egg chamber.
+     * Razorem's log shows exactly that - six commissions, all six "unstaffed - no free drones, nothing in
+     * reserve", and six "Egg haul STUCK ... has 0 egg chamber(s)" while the queen still had 40+ free clutch
+     * cells. Eggs used to sit in the LAST tier, tied with jelly, and lose the distance tiebreak every time
+     * because the blueprint deliberately spreads egg goals widest (EGG_SPACING). So the hive built jelly
+     * vaults and hubs while its own nursery never came up.
+     * <p>
+     * It jumps the raid chamber, which normally wants the emptiest map, and that is an accepted cost: an egg
+     * chamber is 1x1 with a zero-chunk reserve margin, so one of them early barely marks the footprint. The
+     * promotion applies ONLY while the count is zero - the second onward go back to the normal tier.
+     * <p>
+     * Jelly vaults also drop BELOW eggs generally, since they were the rooms winning that tie.
+     */
+    private static int goalPriority(HiveLocation location, String roomType) {
+        if (roomType.contains("chamber_egg") && countRoomsOfType(location, "chamber_egg") == 0) {
+            return -1; // existential - the hive cannot grow a workforce without one
+        }
         if (roomType.contains("chamber_raid")) {
             return 0; // mandatory, 2x2, needs its scourge companion beside it - gets the emptiest map
         }
@@ -1076,7 +1096,10 @@ public final class HiveRouter {
         if (roomType.contains("chamber_harvest")) {
             return 2; // conditional 2x2, routed with the junctions once spawners are pending
         }
-        return 3; // eggs, jelly - 1x1 rooms that fit almost anywhere
+        if (roomType.contains("chamber_jelly")) {
+            return 4; // demoted below eggs - jelly was winning the old shared tier on distance alone
+        }
+        return 3; // eggs and anything unlisted - 1x1 rooms that fit almost anywhere
     }
 
     /** How many rooms of this type stand in the hive (chunk count over the type's footprint). */

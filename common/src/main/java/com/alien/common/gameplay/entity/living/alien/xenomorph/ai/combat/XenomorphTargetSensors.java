@@ -5,6 +5,7 @@ import com.alien.common.gameplay.entity.living.alien.xenomorph.Xenomorph;
 import com.alien.common.gameplay.entity.living.alien.xenomorph.queen.Queen;
 import com.alien.common.gameplay.hive.location.HiveLocation;
 import com.alien.common.gameplay.hive.location.HiveLocationRegistry;
+import com.alien.common.registry.tag.AlienEntityTypeTags;
 import com.alien.common.util.AlienPredicates;
 import com.blib.api.common.goap.v1.GOAPSensors;
 import com.just.ai.goap.sensor.Sensor;
@@ -90,7 +91,20 @@ public final class XenomorphTargetSensors {
      * [Flag for teammate review: aggression/threat targeting flow.]
      */
     private static void applyHiveWorkerLeash(Xenomorph xenomorph, List<LivingEntity> targets) {
-        if (xenomorph instanceof Queen) {
+        // ROYALS ARE NOT WORKERS. Matched on the QUEENS tag rather than `instanceof Queen`, because the EMPRESS
+        // extends Xenomorph and NOT Queen - so she fell through this guard and got leashed like a drone.
+        //
+        // The symptom was baffling in the field ([stated] "the empress just ignores them and they ignore her",
+        // "they are walking around and have ai", and two empresses of DIFFERENT strains standing peacefully
+        // together): she wandered into a hive a queen had dug, and from that moment every target outside the
+        // location's STRUCTURE chunks was stripped from her list. A claim is far larger than its structure - the
+        // comment below says as much - so standing on her own hive's outer territory pacified her completely
+        // while leaving idle wander untouched. A second empress spawned away from the claim behaved perfectly,
+        // which is what proved it was per-entity position and not a caste-wide flaw.
+        //
+        // The tag ALREADY contains #avp_alien:empresses, so this needs no data change and picks up any future
+        // royal automatically. applyFoundingLeash above stays `instanceof Queen` on purpose - founding is hers.
+        if (xenomorph.getType().is(AlienEntityTypeTags.QUEENS)) {
             return;
         }
         if (xenomorph.partyMembership() != null) {
