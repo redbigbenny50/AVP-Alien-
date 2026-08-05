@@ -40,9 +40,20 @@ public class EnglishLanguageProvider extends FabricLanguageProvider {
         // Boss bar shown while a queen is DOWN. This lived only in the generated en_us.json and would have been
         // wiped by the next datagen run, leaving the raw key on screen.
         builder.add("boss.avp_alien.queen_incapacitated", "Queen \u2014 Incapacitated");
+        builder.add(
+            "message.avp_alien.inhibitor.not_subdued",
+            "The queen isn't subdued \u2014 down her, catch her hibernating, or chain her fully"
+        );
+        builder.add("message.avp_alien.inhibitor.already_attached", "This queen already has an inhibitor");
 
         builder.add("death.attack.acid", "%1$s vaporized in acid");
         builder.add("death.attack.chestbursting", "%1$s gave birth");
+        builder.add("death.attack.harbinger_backhand", "%1$s was swatted aside");
+        builder.add("death.attack.harbinger_backhand.player", "%1$s was swatted aside by %2$s");
+        builder.add("death.attack.harbinger_kick", "%1$s was punted");
+        builder.add("death.attack.harbinger_kick.player", "%1$s was punted by %2$s");
+        builder.add("death.attack.harbinger_slam", "%1$s was flattened");
+        builder.add("death.attack.harbinger_slam.player", "%1$s was flattened by %2$s");
         builder.add("death.attack.radiation_sickness", "%1$s was welcomed to the wasteland");
         builder.add("death.attack.ravager_claw", "%1$s was torn apart");
         builder.add("death.attack.ravager_claw.player", "%1$s was torn apart by %2$s");

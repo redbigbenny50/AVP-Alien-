@@ -43,6 +43,59 @@ public class HarbingerAnimationDispatcher {
         .play(AzAlienAnimationUtil.BODY, HarbingerAnimationRefs.WALK_ANIMATION_NAME, AzPlayBehaviors.LOOP)
         .build();
 
+    // ---- Back-whip layer -------------------------------------------------------------------------------
+    // These run on LEFT_WHIP / RIGHT_WHIP, not BODY, so they play in parallel with whatever the body is
+    // doing. Idempotent: the animator re-dispatches every frame and the track ignores a repeat of what it
+    // is already playing.
+
+    private static final AzCommand<Harbinger> LEFT_WHIP_IDLE = AzCommand.<Harbinger>idempotent()
+        .play(
+            AzAlienAnimationUtil.LEFT_WHIP,
+            HarbingerAnimationRefs.IDLE_LEFT_WHIP_ANIMATION_NAME,
+            AzPlayBehaviors.LOOP
+        )
+        .build();
+
+    private static final AzCommand<Harbinger> RIGHT_WHIP_IDLE = AzCommand.<Harbinger>idempotent()
+        .play(
+            AzAlienAnimationUtil.RIGHT_WHIP,
+            HarbingerAnimationRefs.IDLE_RIGHT_WHIP_ANIMATION_NAME,
+            AzPlayBehaviors.LOOP
+        )
+        .build();
+
+    private static final AzCommand<Harbinger> LEFT_WHIP_MOVEMENT = AzCommand.<Harbinger>idempotent()
+        .play(
+            AzAlienAnimationUtil.LEFT_WHIP,
+            HarbingerAnimationRefs.MOVEMENT_LEFT_WHIP_ANIMATION_NAME,
+            AzPlayBehaviors.LOOP
+        )
+        .build();
+
+    private static final AzCommand<Harbinger> RIGHT_WHIP_MOVEMENT = AzCommand.<Harbinger>idempotent()
+        .play(
+            AzAlienAnimationUtil.RIGHT_WHIP,
+            HarbingerAnimationRefs.MOVEMENT_RIGHT_WHIP_ANIMATION_NAME,
+            AzPlayBehaviors.LOOP
+        )
+        .build();
+
+    private static final AzCommand<Harbinger> LEFT_WHIP_ATTACK_IDLE = AzCommand.<Harbinger>idempotent()
+        .play(
+            AzAlienAnimationUtil.LEFT_WHIP,
+            HarbingerAnimationRefs.ATTACK_LEFT_WHIP_IDLE_ANIMATION_NAME,
+            AzPlayBehaviors.LOOP
+        )
+        .build();
+
+    private static final AzCommand<Harbinger> RIGHT_WHIP_ATTACK_IDLE = AzCommand.<Harbinger>idempotent()
+        .play(
+            AzAlienAnimationUtil.RIGHT_WHIP,
+            HarbingerAnimationRefs.ATTACK_RIGHT_WHIP_IDLE_ANIMATION_NAME,
+            AzPlayBehaviors.LOOP
+        )
+        .build();
+
     private final Harbinger harbinger;
 
     public HarbingerAnimationDispatcher(Harbinger harbinger) {
@@ -83,15 +136,44 @@ public class HarbingerAnimationDispatcher {
         WALK.dispatchForEntity(harbinger);
     }
 
-    /** The crawl BITE reuses {@link #biteAttack} - the model's only bite clip is already the crawl one. */
+    public void leftWhipIdle() {
+        LEFT_WHIP_IDLE.dispatchForEntity(harbinger);
+    }
+
+    public void rightWhipIdle() {
+        RIGHT_WHIP_IDLE.dispatchForEntity(harbinger);
+    }
+
+    public void leftWhipMovement() {
+        LEFT_WHIP_MOVEMENT.dispatchForEntity(harbinger);
+    }
+
+    public void rightWhipMovement() {
+        RIGHT_WHIP_MOVEMENT.dispatchForEntity(harbinger);
+    }
+
+    public void leftWhipAttackIdle() {
+        LEFT_WHIP_ATTACK_IDLE.dispatchForEntity(harbinger);
+    }
+
+    public void rightWhipAttackIdle() {
+        RIGHT_WHIP_ATTACK_IDLE.dispatchForEntity(harbinger);
+    }
+
+    /**
+     * The crawl BITE reuses {@link #biteAttack} - the model's only bite clip is already the crawl one.
+     * <p>
+     * The whipstab clips touch ONLY that side's whip bones, so they are dispatched to that side's whip track rather
+     * than to BODY. The body keeps crawling underneath and the opposite whip keeps its own loop.
+     */
     public void leftWhipstabAttack(float speed) {
         AzCommand.<Harbinger>replay()
             .play(
-                AzAlienAnimationUtil.BODY,
+                AzAlienAnimationUtil.LEFT_WHIP,
                 HarbingerAnimationRefs.ATTACKCRAWL_LEFT_WHIPSTAB_ANIMATION_NAME,
                 AzPlayBehaviors.PLAY_ONCE
             )
-            .setSpeed(AzAlienAnimationUtil.BODY, speed)
+            .setSpeed(AzAlienAnimationUtil.LEFT_WHIP, speed)
             .build()
             .dispatchForEntity(harbinger);
     }
@@ -99,11 +181,11 @@ public class HarbingerAnimationDispatcher {
     public void rightWhipstabAttack(float speed) {
         AzCommand.<Harbinger>replay()
             .play(
-                AzAlienAnimationUtil.BODY,
+                AzAlienAnimationUtil.RIGHT_WHIP,
                 HarbingerAnimationRefs.ATTACKCRAWL_RIGHT_WHIPSTAB_ANIMATION_NAME,
                 AzPlayBehaviors.PLAY_ONCE
             )
-            .setSpeed(AzAlienAnimationUtil.BODY, speed)
+            .setSpeed(AzAlienAnimationUtil.RIGHT_WHIP, speed)
             .build()
             .dispatchForEntity(harbinger);
     }
@@ -150,6 +232,58 @@ public class HarbingerAnimationDispatcher {
 
     public void tailAttack() {
         TAIL_ATTACK.dispatchForEntity(harbinger);
+    }
+
+    /** Regular swing that throws whatever crowded in. */
+    public void backhandAttack(float speed) {
+        AzCommand.<Harbinger>replay()
+            .play(
+                AzAlienAnimationUtil.BODY,
+                HarbingerAnimationRefs.ATTACK_BACKHAND_ANIMATION_NAME,
+                AzPlayBehaviors.PLAY_ONCE
+            )
+            .setSpeed(AzAlienAnimationUtil.BODY, speed)
+            .build()
+            .dispatchForEntity(harbinger);
+    }
+
+    /** Triggered single-target punt. */
+    public void kickAttack(float speed) {
+        AzCommand.<Harbinger>replay()
+            .play(
+                AzAlienAnimationUtil.BODY,
+                HarbingerAnimationRefs.ATTACK_KICK_ANIMATION_NAME,
+                AzPlayBehaviors.PLAY_ONCE
+            )
+            .setSpeed(AzAlienAnimationUtil.BODY, speed)
+            .build()
+            .dispatchForEntity(harbinger);
+    }
+
+    /** Triggered barrier breaker - fights masonry, not mobs. */
+    public void frontKickAttack(float speed) {
+        AzCommand.<Harbinger>replay()
+            .play(
+                AzAlienAnimationUtil.BODY,
+                HarbingerAnimationRefs.ATTACK_FRONT_KICK_ANIMATION_NAME,
+                AzPlayBehaviors.PLAY_ONCE
+            )
+            .setSpeed(AzAlienAnimationUtil.BODY, speed)
+            .build()
+            .dispatchForEntity(harbinger);
+    }
+
+    /** Triggered crowd-breaker. Body track: it moves the whole skeleton, whips included via their own tracks. */
+    public void groundSlamAttack(float speed) {
+        AzCommand.<Harbinger>replay()
+            .play(
+                AzAlienAnimationUtil.BODY,
+                HarbingerAnimationRefs.ATTACK_GROUND_SLAM_ANIMATION_NAME,
+                AzPlayBehaviors.PLAY_ONCE
+            )
+            .setSpeed(AzAlienAnimationUtil.BODY, speed)
+            .build()
+            .dispatchForEntity(harbinger);
     }
 
     public void tailAttack(float speed) {

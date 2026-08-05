@@ -83,7 +83,7 @@ public class Harbinger extends Xenomorph implements GOAPUser<Harbinger>, com.ali
         .sound(AlienSoundEvents.ENTITY_XENOMORPH_ATTACK)
         .build();
 
-    private static final XenomorphConfig CONFIG = XenomorphConfig.builder(XenomorphPathConfig.LARGE, Harbinger::getType)
+    private static final XenomorphConfig CONFIG = XenomorphConfig.builder(XenomorphPathConfig.HUGE, Harbinger::getType)
         .attackConfig(
             XenomorphAttackConfig.builder()
                 .addRegular(CLAW)
@@ -92,6 +92,10 @@ public class Harbinger extends Xenomorph implements GOAPUser<Harbinger>, com.ali
                 .addRegular(CRAWL_BITE)
                 .addRegular(CRAWL_WHIPSTAB_LEFT)
                 .addRegular(CRAWL_WHIPSTAB_RIGHT)
+                .addRegular(HarbingerBackhandAttack.ATTACK)
+                .addTriggered(HarbingerGroundSlamAttack.ATTACK)
+                .addTriggered(HarbingerKickAttack.ATTACK)
+                .addTriggered(HarbingerFrontKickAttack.ATTACK)
                 .build()
         )
         .parallelDigCount(2)

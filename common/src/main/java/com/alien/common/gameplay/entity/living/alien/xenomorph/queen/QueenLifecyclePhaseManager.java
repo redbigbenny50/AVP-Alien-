@@ -295,6 +295,27 @@ public class QueenLifecyclePhaseManager implements NBTSerializable {
         // that has already founded) has no front-end to run: if she owns a live location or already has an ovipositor,
         // jump straight to the inert terminal state so we never re-run developing on an established queen.
         if (isAlreadyEstablished()) {
+            // WAKE HER ON THE WAY THROUGH. A queen can acquire a location while still ASLEEP - the inhibitor is
+            // exactly that case, because QueenInhibitionService mints her a personal severed claim with her as
+            // founder the moment it is clamped on, which is what isAlreadyEstablished() looks for.
+            //
+            // The jump below is terminal and sits BEFORE the phase switch, so tickHibernation never runs again -
+            // and tickHibernation is the only thing that ever clears the sleep flag on this path. Left as it was,
+            // an inhibited hibernating queen lay there asleep FOREVER: nothing could wake her, and the
+            // hibernation-skip debug command refused her for no longer being in HIBERNATION ([stated] tester
+            // report: "inhibited queen while she was hibernating tried to wake her up", screenshot showing
+            // "Nearest queen is in phase FOUNDING_HANDOFF, not HIBERNATION").
+            //
+            // Clearing the flag here rather than in the inhibitor covers every route into this jump, not just
+            // that one. Same idiom tryAdoptIntoLineage already uses: clear the flag, then hand off.
+            if (phase == QueenLifecyclePhase.HIBERNATION) {
+                queen.isHibernating.set(false);
+                Alien.LOGGER.info(
+                    "Queen lifecycle: {} woke from HIBERNATION - she now holds a location, handing off",
+                    queen.getUUID()
+                );
+            }
+
             phase = QueenLifecyclePhase.FOUNDING_HANDOFF;
             return;
         }

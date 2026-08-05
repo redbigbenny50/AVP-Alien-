@@ -33,11 +33,15 @@ public class AzAlienAnimationUtil {
 
     public static final AzTrackHandle<Alien> LEFT_TITTY_ARM = AzTrackHandle.declare("lefttittyarm");
 
+    public static final AzTrackHandle<Alien> LEFT_WHIP = AzTrackHandle.declare("leftwhip");
+
     public static final AzTrackHandle<Alien> RIGHT_ARM = AzTrackHandle.declare("rightarm");
 
     public static final AzTrackHandle<Alien> RIGHT_LEG = AzTrackHandle.declare("rightleg");
 
     public static final AzTrackHandle<Alien> RIGHT_TITTY_ARM = AzTrackHandle.declare("righttittyarm");
+
+    public static final AzTrackHandle<Alien> RIGHT_WHIP = AzTrackHandle.declare("rightwhip");
 
     public static final AzTrackHandle<Alien> TAIL = AzTrackHandle.declare("tail");
 

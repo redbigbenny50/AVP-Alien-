@@ -54,6 +54,33 @@ public class MoltingManager implements NBTSerializable {
         }
     }
 
+    /**
+     * Jumps this alien straight to its profile's {@code endScale}, skipping the whole growth chain.
+     * <p>
+     * [stated] "lets make it so that any summoned xenomorph skips that growth phase and is full size immidiately. spawn
+     * eggs can stay the same as they are." A queen or empress otherwise spawns at 0.85 and needs 15 minutes of
+     * undisturbed ticking to reach 1.0 - fine for the world, useless when you are summoning one to test with.
+     * <p>
+     * Advancing {@code phaseIndex} past the last phase is what "matured" means to every other reader here
+     * ({@code isFullyMatured}), so this needs no new state and persists through the existing NBT. Setting the scale
+     * attribute directly would not work: {@link #applyScaleModifier} recomputes a transient modifier from the phase on
+     * every molt tick and would overwrite it.
+     */
+    public void matureImmediately() {
+        var data = getData();
+
+        if (data == null || data.isFullyMatured(phaseIndex)) {
+            return;
+        }
+
+        this.phaseIndex = data.phases().size();
+        this.phaseElapsedTicks = 0;
+        this.targetScaleReachedTicks = 0;
+
+        applyScaleModifier(data);
+        entity.moltAlpha.set(0F);
+    }
+
     public void tick() {
         if (entity.level().isClientSide) {
             return;

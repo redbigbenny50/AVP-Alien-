@@ -95,9 +95,12 @@ public class AlienEntityTypes {
     public static final float FACEHUGGER_HEIGHT = 0.25F;
 
     // Harbinger
-    public static final float HARBINGER_WIDTH = 0.98F;
+    // [stated] hitbox sized to the model rather than to a corridor: 2.6 x 2.6 x 5.5. Kept SQUARE on purpose -
+    // an AABB cannot rotate and the navigator takes a single integer footprint, so a non-square box would
+    // permanently disagree with pathing on one axis. Harbinger paths as XenomorphPathConfig.HUGE (3 x 6).
+    public static final float HARBINGER_WIDTH = 2.6F;
 
-    public static final float HARBINGER_HEIGHT = 3.98F;
+    public static final float HARBINGER_HEIGHT = 5.5F;
 
     // Ovipositor
     public static final float OVIPOSITOR_WIDTH = 5.0F;
@@ -129,17 +132,40 @@ public class AlienEntityTypes {
     public static final float PROWLER_HEIGHT = 0.98F;
 
     // Queen
-    public static final float QUEEN_WIDTH = 3.8F;
+    // [stated] "i want to make her hitbox smaller but keep the front of it mostly where it is. most of the back
+    // of the hitbox is tail i want the bulk to be head and body space for attacks and attaching things."
+    //
+    // No forward OFFSET was needed, and an AABB could not have carried one anyway (it cannot rotate). Measured
+    // from queen.geo.json: -Z is forward (gBottomJawBase Z -0.22, gTailBlade Z +7.93), and her torso pivots sit
+    // essentially ON the origin (gUpperBody 0.27, gLowerBody 0.17). Her head reaches only 0.90 blocks in front
+    // of it; the other ~9 blocks of model depth are all tail. So a box centred on the origin is ALREADY
+    // front-biased - 3.8 deep just wasted ~1.0 block of air in front of her face and swallowed ~1.9 of tail
+    // root behind. Shrinking to 2.6 puts the back face at the tail root and keeps the head tip (-0.90) inside.
+    //
+    // REACH, the reason this is safe ([stated] "i want the inhibitor to be placeable from an ok distance"):
+    // a player's ENTITY_INTERACTION_RANGE is 3.0 in EVERY game mode (creative only raises BLOCK reach), and it
+    // is measured to the box SURFACE, so click distance from her centre is 3.0 + half-width. Her own melee
+    // reach is getBbWidth() + 1.0, centre to centre. Shrinking therefore costs the player only half a block of
+    // click range while cutting her reach by the full amount:
+    // 3.8 wide -> click from 4.90, her reach 4.80, margin 0.10
+    // 2.6 wide -> click from 4.30, her reach 3.60, margin 0.70
+    // The old 1x1 box felt like standing inside her not because of range but because the box surface sat at her
+    // spine while the model is 4.2 wide. At 2.6 the surface is 1.3 out, so the player stands beside her.
+    public static final float QUEEN_WIDTH = 2.6F;
 
-    public static final float QUEEN_HEIGHT = 5.0F;
+    // 5.5 rather than 5.0 ([stated]): gHead pivots at Y 6.01, so a 5.0 box cut off above her shoulders and
+    // neither her head nor her crest was clickable at full scale - which matters when the inhibitor clamps
+    // onto exactly that crest.
+    public static final float QUEEN_HEIGHT = 5.5F;
 
-    // Empress. Split from the queen's constants rather than shared: all four empresses used to be sized with
-    // QUEEN_WIDTH/QUEEN_HEIGHT, so the two could never differ, and growing the queen would have silently grown
-    // her too. Started at the same figures so nothing regresses and she is never SMALLER than a queen - but she
-    // is the larger creature and this is the pair to raise if her hitbox should reflect that.
-    public static final float EMPRESS_WIDTH = 3.8F;
+    // Empress. Deliberately SEPARATE constants rather than shared with the queen: all four empresses used to be
+    // sized with QUEEN_WIDTH/QUEEN_HEIGHT, so the two could never differ and resizing one silently resized the
+    // other. [stated] "the empress will need this as well same sizing for the body" - so they hold the same
+    // figures today, but by choice, and either can move without dragging the other. Her model is only 2.89
+    // wide (narrower than the queen's 4.21), so 2.6 fits her at least as well.
+    public static final float EMPRESS_WIDTH = 2.6F;
 
-    public static final float EMPRESS_HEIGHT = 5.0F;
+    public static final float EMPRESS_HEIGHT = 5.5F;
 
     // Ravager
     public static final float RAVAGER_WIDTH = 0.98F;

@@ -344,6 +344,17 @@ public abstract class Alien extends Monster implements DataUser {
         // (natural, spawn egg, command). Idempotent — see HiveManager.ensureVariantFactionMembership.
         hiveManager.ensureVariantFactionMembership();
 
+        // COMMAND-SUMMONED ALIENS ARE BORN FULL SIZE ([stated]): "lets make it so that any summoned xenomorph
+        // skips that growth phase and is full size immidiately. spawn eggs can stay the same as they are."
+        //
+        // Deliberately COMMAND only. SPAWN_EGG is excluded by his call, and MOB_SUMMONED is excluded because
+        // that is the mod's OWN spawn path - carve crews, convoys, parties, reinforcements, repopulation all
+        // finalize with it, and they are supposed to grow like anything the hive produces. /summon is the
+        // testing tool, so it is the one that skips.
+        if (spawnType == MobSpawnType.COMMAND) {
+            moltingManager.matureImmediately();
+        }
+
         // Hive: if this alien spawned inside a location that has it in its reserves, decrement the reserves and
         // copy genes from the location's leader (preserves the legacy "spawned alien inherits leader's genes"
         // behavior).

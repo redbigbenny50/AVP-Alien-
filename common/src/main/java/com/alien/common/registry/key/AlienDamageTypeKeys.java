@@ -19,6 +19,12 @@ public class AlienDamageTypeKeys {
      */
     public static final ResourceKey<DamageType> RADIATION_SICKNESS = create("radiation_sickness");
 
+    public static final ResourceKey<DamageType> HARBINGER_BACKHAND = create("harbinger_backhand");
+
+    public static final ResourceKey<DamageType> HARBINGER_KICK = create("harbinger_kick");
+
+    public static final ResourceKey<DamageType> HARBINGER_SLAM = create("harbinger_slam");
+
     public static final ResourceKey<DamageType> RAVAGER_CLAW = create("ravager_claw");
 
     public static final ResourceKey<DamageType> RAVAGER_SPECIAL = create("ravager_special");

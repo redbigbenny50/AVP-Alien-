@@ -802,6 +802,27 @@ public class AlienBlockTagProvider extends FabricTagProvider.BlockTagProvider {
             .addTag(AlienBlockTags.RESIN_VENTS)
             .addTag(AlienBlockTags.RESIN_WEBS);
 
+        // THE HARBINGER BREAK BLACKLIST. Her front kick breaks material ordinary xenomorph digging cannot, so
+        // it carries its own much shorter list. Blocks with negative hardness (bedrock, barrier, end portal
+        // frame, command blocks, structure/jigsaw blocks) are already unbreakable and are NOT listed here -
+        // the kick rejects them on hardness alone. This tag is only for blocks that could be broken but must
+        // not be, and it is the place to add more.
+        getOrCreateTagBuilder(AlienBlockTags.HARBINGER_UNBREAKABLE)
+            .addOptionalTag(BLibBlockTags.SHOULD_NOT_BE_DESTROYED)
+            .addTag(AlienBlockTags.XENOMORPH_IMMUNE)
+            .add(
+                Blocks.REINFORCED_DEEPSLATE,
+                Blocks.END_PORTAL,
+                Blocks.END_PORTAL_FRAME,
+                Blocks.END_GATEWAY,
+                Blocks.BEDROCK,
+                Blocks.OBSIDIAN,
+                Blocks.CRYING_OBSIDIAN,
+                Blocks.RESPAWN_ANCHOR,
+                Blocks.ANCIENT_DEBRIS,
+                Blocks.NETHER_PORTAL
+            );
+
         var xenomorphFrenzyBreakable = getOrCreateTagBuilder(AlienBlockTags.XENOMORPH_FRENZY_BREAKABLE);
         for (var blockId : XENOMORPH_FRENZY_BREAKABLE_BLOCKS) {
             var idParts = blockId.split(":", 2);

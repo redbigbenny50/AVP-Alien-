@@ -598,8 +598,19 @@ public class Queen extends Xenomorph implements GOAPUser<Queen>, EggLayer, com.a
      * Whether the inhibitor may be applied to her right now. Per design she must be helpless in one of three ways:
      * incapacitated, in the {@link QueenLifecyclePhase#HIBERNATION} phase, or already secured with all four chains.
      */
+    /**
+     * PLAYER-PLACED QUEENS ARE EXEMPT ([stated]): "people are clearly trying to fast track and we dont want her digging
+     * or building a hive if they want her captured." A queen from a spawn egg, command, bucket or dispenser can be
+     * clamped in ANY state - the whole point of spawning one is to keep her, and forcing a fight first just means she
+     * founds a hive in the meantime. {@link #isPlayerPlaced()} already exists for the hibernation rule and is exactly
+     * the right discriminator: it is persisted, and transitions never call finalizeSpawn, so a hive-promoted daughter
+     * can never carry it.
+     * <p>
+     * Everyone else has to be unable to resist: beaten down, asleep, or fully chained.
+     */
     public boolean canBeInhibited() {
-        return isIncapacitated()
+        return isPlayerPlaced()
+            || isIncapacitated()
             || lifecyclePhaseManager.getPhase() == QueenLifecyclePhase.HIBERNATION
             || bindManager.isFullyBound();
     }
