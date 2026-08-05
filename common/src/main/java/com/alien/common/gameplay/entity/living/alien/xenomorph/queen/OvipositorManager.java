@@ -409,6 +409,13 @@ public class OvipositorManager implements NBTSerializable {
      * (geo + iron restraints) is a render-time choice driven by her contained+inhibited state.
      */
     private void createChainedEggsack() {
+        // FINISH HER GROWTH FIRST ([stated] "when she forms the chained eggsack have her fully grown"). Nothing in
+        // the ovipositor code scales with the queen - the ride offsets and support probes are fixed block figures
+        // - so an eggsack seated on an 0.85 queen would sit wrong and stay wrong. Now that a still-growing queen
+        // is inhibitable, that pairing is reachable in normal play, not a corner case. Maturing her here rather
+        // than at inhibit time keeps his rule intact: the growth only ends when she actually becomes a breeder.
+        queen.getMoltingManager().matureImmediately();
+
         var ovipositor = AlienEntityTypes.OVIPOSITOR.get().create(queen.level());
         if (ovipositor != null) {
             // Settle her facing authoritatively BEFORE attaching the eggsack: unify yRot / yBodyRot / yHeadRot to

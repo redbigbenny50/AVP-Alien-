@@ -612,7 +612,14 @@ public class Queen extends Xenomorph implements GOAPUser<Queen>, EggLayer, com.a
         return isPlayerPlaced()
             || isIncapacitated()
             || lifecyclePhaseManager.getPhase() == QueenLifecyclePhase.HIBERNATION
-            || bindManager.isFullyBound();
+            || bindManager.isFullyBound()
+            // STILL GROWING COUNTS AS HELPLESS ([stated]): "if you burst a praetorian then make her molt into a
+            // queen you should be able to inhibit her as its a vulnerable phase like the chained and
+            // incapacitated/hibernating are." A queen who came up the burst line is never isPlayerPlaced -
+            // transitions do not call finalizeSpawn - so without this the ONLY window on her was the hibernation
+            // she may skip entirely as a dispatched daughter. hasReachedTargetScale() is false from the molt
+            // until her profile tops out at endScale, which is exactly that vulnerable stretch.
+            || !getMoltingManager().hasReachedTargetScale();
     }
 
     /**
