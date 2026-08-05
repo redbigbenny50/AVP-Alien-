@@ -1,9 +1,0 @@
-{
-  "from": "avp_alien:adolescent",
-  "growthTimeInTicks": 3000,
-  "hostTypePredicate": [
-    "minecraft:llama",
-    "minecraft:trader_llama"
-  ],
-  "to": "avp_alien:spitter"
-}

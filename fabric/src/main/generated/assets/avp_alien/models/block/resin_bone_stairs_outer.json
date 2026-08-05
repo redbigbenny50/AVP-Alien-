@@ -1,8 +1,0 @@
-{
-  "parent": "minecraft:block/outer_stairs",
-  "textures": {
-    "bottom": "avp_alien:block/resin_bone",
-    "side": "avp_alien:block/resin_bone",
-    "top": "avp_alien:block/resin_bone"
-  }
-}

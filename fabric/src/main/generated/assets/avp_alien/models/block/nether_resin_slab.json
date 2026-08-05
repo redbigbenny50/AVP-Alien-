@@ -1,8 +1,0 @@
-{
-  "parent": "minecraft:block/slab",
-  "textures": {
-    "bottom": "avp_alien:block/nether_resin",
-    "side": "avp_alien:block/nether_resin",
-    "top": "avp_alien:block/nether_resin"
-  }
-}

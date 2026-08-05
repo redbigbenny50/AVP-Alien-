@@ -1,9 +1,0 @@
-{
-  "values": [
-    {
-      "id": "#minecraft:infiniburn_nether",
-      "required": false
-    },
-    "#avp_alien:acid_immune"
-  ]
-}
