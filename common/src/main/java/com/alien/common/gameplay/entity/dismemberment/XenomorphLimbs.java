@@ -27,5 +27,9 @@ public final class XenomorphLimbs {
             AlienResources.location(idPrefix + "_right_leg"),
             entity -> new Vec3(0.0, entity.getBbHeight() * 0.3, 0.0)
         );
+        SpawnFunctionRegistry.register(
+            AlienResources.location(idPrefix + "_tail"),
+            entity -> new Vec3(0.0, entity.getBbHeight() * 0.55, 0.0)
+        );
     }
 }

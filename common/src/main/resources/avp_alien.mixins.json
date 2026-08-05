@@ -10,6 +10,7 @@
     "MixinLivingEntity_BloodLoss",
     "MixinLivingEntity_HiveBiomass",
     "MixinLivingEntity_Host",
+    "MixinLivingEntity_Stunned",
     "MixinMob_IncapacitateHost",
     "MixinPersistentEntitySectionManager_ConvoyUnload",
     "MixinProjectileUtil_AllowHittingVehicle",

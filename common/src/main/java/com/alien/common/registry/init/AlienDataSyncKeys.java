@@ -153,6 +153,12 @@ public class AlienDataSyncKeys {
             .build(0)
     );
 
+    public static final BLibHolder<DataSyncKey<Integer>> XENOMORPH_ATTACK_STARTED_AT_GAME_TIME = create(
+        "xenomorph_attack_started_at_game_time",
+        builder -> builder.networkSynchronized(StreamCodecs.INT)
+            .build(0)
+    );
+
     public static final BLibHolder<DataSyncKey<Boolean>> CHRYSALIS_IS_ROLLING = create(
         "chrysalis_is_rolling",
         builder -> builder.networkSynchronized(StreamCodecs.BOOLEAN)

@@ -3,6 +3,7 @@ package com.alien.client.render.entity;
 import com.alien.client.animation.entity.HarbingerAnimator;
 import com.alien.client.render.AlienRenderResourceCache;
 import com.alien.client.render.layer.MoltLayer;
+import com.alien.client.render.layer.PraetorianRenderedLimbPickerLayer;
 import com.alien.client.render.layer.RadiationGlowLayer;
 import com.alien.common.gameplay.entity.living.alien.xenomorph.harbinger.Harbinger;
 import com.alien.common.model.alien.variant.AlienVariant;
@@ -25,6 +26,7 @@ public class HarbingerRenderer extends AzEntityRenderer<Harbinger> {
                 .setAnimatorProvider(HarbingerAnimator::new)
                 .addRenderLayer(new RadiationGlowLayer<>())
                 .addRenderLayer(new MoltLayer<>())
+                .addRenderLayer(new PraetorianRenderedLimbPickerLayer<>())
                 .setShadowRadius(0.5F)
                 .build(),
             context

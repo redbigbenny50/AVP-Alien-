@@ -3,6 +3,7 @@ package com.alien.client.render.entity;
 import com.alien.client.animation.entity.QueenAnimator;
 import com.alien.client.render.AlienRenderResourceCache;
 import com.alien.client.render.layer.MoltLayer;
+import com.alien.client.render.layer.PraetorianRenderedLimbPickerLayer;
 import com.alien.client.render.layer.RadiationGlowLayer;
 import com.alien.client.render.layer.ShackleAnchorLayer;
 import com.alien.common.gameplay.entity.living.alien.xenomorph.queen.Queen;
@@ -27,6 +28,7 @@ public class QueenRenderer extends AzEntityRenderer<Queen> {
                 .addRenderLayer(new RadiationGlowLayer<>())
                 .addRenderLayer(new MoltLayer<>())
                 .addRenderLayer(new ShackleAnchorLayer<>())
+                .addRenderLayer(new PraetorianRenderedLimbPickerLayer<>())
                 .setShadowRadius(1F)
                 .build(),
             context

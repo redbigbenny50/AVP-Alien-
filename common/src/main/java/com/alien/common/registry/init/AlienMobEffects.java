@@ -6,6 +6,7 @@ import com.alien.common.gameplay.effect.FrenzyStatusEffect;
 import com.alien.common.gameplay.effect.MarkedForDeathStatusEffect;
 import com.alien.common.gameplay.effect.MetamorphosisStatusEffect;
 import com.alien.common.gameplay.effect.ScourgeStatusEffect;
+import com.alien.common.gameplay.effect.StunnedStatusEffect;
 import com.blib.api.common.registry.v1.BLibHolder;
 import com.blib.api.common.registry.v1.BLibRegistry;
 import net.minecraft.core.Holder;
@@ -31,6 +32,8 @@ public class AlienMobEffects {
         MarkedForDeathStatusEffect::new
     );
 
+    private static final BLibHolder<MobEffect> STUNNED = create("stunned", StunnedStatusEffect::new);
+
     public static Holder<MobEffect> getBloodLossHolder() {
         return BLOOD_LOSS.getBackingHolder();
     }
@@ -49,6 +52,10 @@ public class AlienMobEffects {
 
     public static Holder<MobEffect> getMarkedForDeathHolder() {
         return MARKED_FOR_DEATH.getBackingHolder();
+    }
+
+    public static Holder<MobEffect> getStunnedHolder() {
+        return STUNNED.getBackingHolder();
     }
 
     private static <T extends MobEffect> BLibHolder<T> create(String name, Supplier<T> supplier) {

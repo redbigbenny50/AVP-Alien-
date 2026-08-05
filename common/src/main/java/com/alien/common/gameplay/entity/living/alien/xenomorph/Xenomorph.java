@@ -132,6 +132,9 @@ public abstract class Xenomorph extends Alien implements ResinProducer, EntitySe
 
     public final DataAccessor<Integer> attackId;
 
+    /** Server game time when the current attack began; used only to evaluate the matching hitbox pose. */
+    public final DataAccessor<Integer> attackStartedAtGameTime;
+
     public final DataAccessor<AttackType> attackType;
 
     public final DataAccessor<Boolean> isLunging;
@@ -194,6 +197,10 @@ public abstract class Xenomorph extends Alien implements ResinProducer, EntitySe
 
         this.attackDurationInTicks = new DataAccessor<>(this, AlienDataSyncKeys.XENOMORPH_ATTACK_DURATION_IN_TICKS.get());
         this.attackId = new DataAccessor<>(this, AlienDataSyncKeys.XENOMORPH_ATTACK_ID.get());
+        this.attackStartedAtGameTime = new DataAccessor<>(
+            this,
+            AlienDataSyncKeys.XENOMORPH_ATTACK_STARTED_AT_GAME_TIME.get()
+        );
         this.attackType = new DataAccessor<>(this, AlienDataSyncKeys.ATTACK_TYPE.get());
         this.isLunging = new DataAccessor<>(this, AlienDataSyncKeys.XENOMORPH_IS_LUNGING.get());
         this.isCrawling = new DataAccessor<>(this, AlienDataSyncKeys.XENOMORPH_IS_CRAWLING.get());
@@ -202,7 +209,7 @@ public abstract class Xenomorph extends Alien implements ResinProducer, EntitySe
         this.isHibernating = new DataAccessor<>(this, AlienDataSyncKeys.XENOMORPH_IS_HIBERNATING.get());
         this.cocoonAnimationId = new DataAccessor<>(this, AlienDataSyncKeys.XENOMORPH_COCOON_ANIMATION_ID.get());
 
-        this.crawlingManager = new CrawlingManager(this, isCrawling, config.canCrawl());
+        this.crawlingManager = new CrawlingManager(this, isCrawling, config.canCrawl(), config.canCrawlAfterLegLoss());
         this.cocoonManager = new CocoonManager(this);
         this.growthManager = new GrowthManager(this)
             .setGrowOverTime(false);
@@ -456,6 +463,7 @@ public abstract class Xenomorph extends Alien implements ResinProducer, EntitySe
     public void beginAttack(int durationInTicks) {
         attackDurationInTicks.set(durationInTicks);
         attackId.set(attackId.get() + 1);
+        attackStartedAtGameTime.set((int) level().getGameTime());
     }
 
     /**

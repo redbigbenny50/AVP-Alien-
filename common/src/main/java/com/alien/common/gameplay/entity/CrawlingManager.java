@@ -37,14 +37,26 @@ public class CrawlingManager implements NBTSerializable {
      */
     private final boolean canCrawl;
 
-    public CrawlingManager(PathfinderMob entity, DataAccessor<Boolean> isCrawling, boolean canCrawl) {
+    private final boolean canCrawlAfterLegLoss;
+
+    public CrawlingManager(
+        PathfinderMob entity,
+        DataAccessor<Boolean> isCrawling,
+        boolean canCrawl,
+        boolean canCrawlAfterLegLoss
+    ) {
         this.entity = entity;
         this.isCrawling = isCrawling;
         this.canCrawl = canCrawl;
+        this.canCrawlAfterLegLoss = canCrawlAfterLegLoss;
     }
 
     public boolean canCrawl() {
         return canCrawl;
+    }
+
+    public boolean canCrawlAfterLegLoss() {
+        return canCrawlAfterLegLoss;
     }
 
     public void tick() {
@@ -52,7 +64,7 @@ public class CrawlingManager implements NBTSerializable {
             return;
         }
 
-        if (!canCrawl) {
+        if (!canCrawl && !canCrawlAfterLegLoss) {
             removeMovementSpeedModifier();
             return;
         }
@@ -87,11 +99,12 @@ public class CrawlingManager implements NBTSerializable {
         }
 
         var path = navigation.getPath();
-        var pathRequestsCrawl = entity instanceof PathNavigatorUser navigatorUser
+        var pathRequestsCrawl = canCrawl
+            && entity instanceof PathNavigatorUser navigatorUser
             && navigatorUser.getPathNavigator().getPostureView().shouldCrawl();
-        var isTight = pathRequestsCrawl || isTightSpace(blockPosition);
+        var isTight = canCrawl && (pathRequestsCrawl || isTightSpace(blockPosition));
 
-        if (path != null && path.getNextNodeIndex() < path.getNodeCount()) {
+        if (canCrawl && path != null && path.getNextNodeIndex() < path.getNodeCount()) {
             var previousNode = path.getPreviousNode();
             isTight = isTight || previousNode != null && isTightSpace(previousNode.asBlockPos());
             var nextNode = path.getNextNode();
@@ -100,7 +113,9 @@ public class CrawlingManager implements NBTSerializable {
 
         // A dismembered leg forces the stance into crawling regardless of overhead clearance — the mob lost a leg, it
         // can't stand back up.
-        var hasLegOff = entity instanceof Dismemberable dismemberable && hasDetachedLegLimb(dismemberable);
+        var hasLegOff = canCrawlAfterLegLoss
+            && entity instanceof Dismemberable dismemberable
+            && hasDetachedLegLimb(dismemberable);
 
         isCrawling.set(isTight || hasLegOff);
     }
@@ -180,9 +195,18 @@ public class CrawlingManager implements NBTSerializable {
 
     private boolean isTightSpace(BlockPos blockPos) {
         var level = entity.level();
-        var above = blockPos.above();
-        var aboveState = level.getBlockState(above);
-        return !aboveState.isAir() && aboveState.entityCanStandOn(entity.level(), blockPos, entity);
+        // A single block-above probe is not enough for wide/tall xenomorphs: it can report clear while a shoulder or
+        // head would still intersect a low ceiling. Test the complete standing collision volume at the current/path
+        // position so crawl state cannot flicker off under an overhang.
+        var bounds = entity.getBoundingBox();
+        var targetCenterX = blockPos.getX() + 0.5D;
+        var targetCenterZ = blockPos.getZ() + 0.5D;
+        var standingBounds = bounds.move(
+            targetCenterX - entity.getX(),
+            blockPos.getY() - bounds.minY,
+            targetCenterZ - entity.getZ()
+        );
+        return !level.noCollision(entity, standingBounds);
     }
 
     @Override

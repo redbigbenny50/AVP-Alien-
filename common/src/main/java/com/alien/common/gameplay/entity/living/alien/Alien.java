@@ -577,7 +577,7 @@ public abstract class Alien extends Monster implements DataUser {
             1F
         );
 
-        var canLoseLegs = !(this instanceof Xenomorph xeno) || xeno.getCrawlingManager().canCrawl();
+        var canLoseLegs = !(this instanceof Xenomorph xeno) || xeno.getCrawlingManager().canCrawlAfterLegLoss();
         var killedByExplosion = isDeadOrDying();
 
         for (var definition : definitions) {
@@ -609,7 +609,7 @@ public abstract class Alien extends Monster implements DataUser {
      * shallow drop.
      */
     private void rollFallLegDismemberment(float damageDealt) {
-        if (!(this instanceof Xenomorph xeno) || !xeno.getCrawlingManager().canCrawl()) {
+        if (!(this instanceof Xenomorph xeno) || !xeno.getCrawlingManager().canCrawlAfterLegLoss()) {
             return;
         }
 

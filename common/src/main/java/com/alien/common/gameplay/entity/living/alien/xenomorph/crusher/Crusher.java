@@ -56,6 +56,7 @@ public class Crusher extends Xenomorph implements GOAPUser<Crusher> {
                     XenomorphAttackConfig.builder()
                         .addRegular(BITE)
                         .addRegular(TAIL)
+                        .addTriggered(CrusherChargeAttack.ATTACK)
                         .build()
                 )
                 .parallelDigCount(2)

@@ -87,6 +87,7 @@ public class Queen extends Xenomorph implements GOAPUser<Queen>, EggLayer {
         .parallelDigCount(4)
         .pushedByFluid(false)
         .canCrawl(false)
+        .canCrawlAfterLegLoss(true)
         .build();
 
     public static AttributeSupplier.Builder createQueenAttributes() {
