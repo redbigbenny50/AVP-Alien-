@@ -1,0 +1,13 @@
+{
+  "type": "minecraft:crafting_shapeless",
+  "category": "misc",
+  "ingredients": [
+    {
+      "item": "avp_alien:nether_resin"
+    }
+  ],
+  "result": {
+    "count": 4,
+    "id": "avp_alien:nether_resin_ball"
+  }
+}

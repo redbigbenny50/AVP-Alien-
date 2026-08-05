@@ -22,8 +22,12 @@ public final class AlienLimbDefinitionDataProvider extends LimbDefinitionDataPro
     private void xenomorph(AlienXenomorphLimbGroups.Group group) {
         var prefix = group.prefix();
         var parent = templateId(prefix);
-        template(parent)
-            .fatalLimb(limb(prefix, "head"), LimbCategories.HEAD)
+        var template = template(parent);
+        var head = prefix.equals("queen")
+            ? template.fatalLimb(limb(prefix, "head"), LimbCategories.HEAD)
+            // Firearm headshots are bonus damage only; Xenomorph heads are never detachable.
+            : template.limb(limb(prefix, "head"), LimbCategories.HEAD);
+        head
             .limb(limb(prefix, "left_arm"), LimbCategories.ARM)
             .limb(limb(prefix, "right_arm"), LimbCategories.ARM)
             .limb(limb(prefix, "left_leg"), LimbCategories.LEG)

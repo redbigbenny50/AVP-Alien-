@@ -1,0 +1,10 @@
+{
+  "type": "minecraft:stonecutting",
+  "ingredient": {
+    "item": "avp_alien:chitin_block"
+  },
+  "result": {
+    "count": 1,
+    "id": "avp_alien:polished_chitin_wall"
+  }
+}

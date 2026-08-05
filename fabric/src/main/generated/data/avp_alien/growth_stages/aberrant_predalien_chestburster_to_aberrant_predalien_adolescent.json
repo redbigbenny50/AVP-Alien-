@@ -1,0 +1,5 @@
+{
+  "from": "avp_alien:aberrant_predalien_chestburster",
+  "growthTimeInTicks": 6000,
+  "to": "avp_alien:aberrant_predalien_adolescent"
+}

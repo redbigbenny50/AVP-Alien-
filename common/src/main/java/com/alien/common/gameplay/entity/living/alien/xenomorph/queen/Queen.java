@@ -109,6 +109,7 @@ public class Queen extends Xenomorph implements GOAPUser<Queen>, EggLayer, com.a
         // (crawl, crawl.idle, crawl.rise, crawl.drop, crawl_attack) and wired in QueenAnimationDispatcher; only
         // this flag kept any of it from ever playing.
         .canCrawl(true)
+        .canCrawlAfterLegLoss(true)
         .build();
 
     /**

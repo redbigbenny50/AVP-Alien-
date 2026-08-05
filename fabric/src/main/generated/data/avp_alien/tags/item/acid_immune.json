@@ -1,0 +1,14 @@
+{
+  "values": [
+    "#avp_alien:chitin_armors",
+    "#avp_alien:plated_chitin_armors",
+    "avp_alien:chitin",
+    "avp_alien:nether_chitin",
+    "avp_alien:aberrant_chitin",
+    "avp_alien:irradiated_chitin",
+    "avp_alien:plated_chitin",
+    "avp_alien:plated_nether_chitin",
+    "avp_alien:plated_aberrant_chitin",
+    "avp_alien:plated_irradiated_chitin"
+  ]
+}

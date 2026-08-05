@@ -1,5 +1,6 @@
 package com.alien.neoforge.client.render;
 
+import com.alien.client.render.dismemberment.LimbHitboxRenderer;
 import com.alien.client.render.hive.HiveRenderer;
 import net.minecraft.client.Minecraft;
 import net.neoforged.bus.api.SubscribeEvent;
@@ -21,6 +22,11 @@ public final class HiveRenderHook {
         }
         var buffers = Minecraft.getInstance().renderBuffers().bufferSource();
         HiveRenderer.render(
+            event.getPoseStack(),
+            buffers,
+            event.getCamera().getPosition()
+        );
+        LimbHitboxRenderer.render(
             event.getPoseStack(),
             buffers,
             event.getCamera().getPosition()

@@ -1,0 +1,19 @@
+{
+  "endScale": 1.25,
+  "entityType": "avp_alien:predalien_chestburster",
+  "phases": [
+    {
+      "idleTicks": 800,
+      "moltTicks": 400
+    },
+    {
+      "idleTicks": 800,
+      "moltTicks": 400
+    },
+    {
+      "idleTicks": 800,
+      "moltTicks": 400
+    }
+  ],
+  "startScale": 1.0
+}

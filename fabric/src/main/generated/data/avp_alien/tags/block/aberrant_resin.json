@@ -1,0 +1,20 @@
+{
+  "values": [
+    "avp_alien:aberrant_resin",
+    "avp_alien:aberrant_resin_slab",
+    "avp_alien:aberrant_resin_stairs",
+    "avp_alien:aberrant_resin_node",
+    "avp_alien:aberrant_resin_vein",
+    "avp_alien:aberrant_resin_web",
+    "avp_alien:aberrant_resin_bricks",
+    "avp_alien:aberrant_resin_brick_slab",
+    "avp_alien:aberrant_resin_brick_stairs",
+    "avp_alien:aberrant_resin_brick_wall",
+    "avp_alien:aberrant_resin_vent",
+    "avp_alien:ribbed_aberrant_resin",
+    "avp_alien:smooth_aberrant_resin",
+    "avp_alien:smooth_aberrant_resin_slab",
+    "avp_alien:smooth_aberrant_resin_stairs",
+    "avp_alien:smooth_aberrant_resin_wall"
+  ]
+}

@@ -1,0 +1,13 @@
+{
+  "type": "minecraft:crafting_shapeless",
+  "category": "misc",
+  "ingredients": [
+    {
+      "item": "avp_alien:royal_jelly_block"
+    }
+  ],
+  "result": {
+    "count": 9,
+    "id": "avp_alien:raw_royal_jelly"
+  }
+}

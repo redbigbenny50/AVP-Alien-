@@ -1,5 +1,6 @@
 package com.alien.fabric.client.render;
 
+import com.alien.client.render.dismemberment.LimbHitboxRenderer;
 import com.alien.client.render.hive.HiveRenderer;
 import com.alien.client.render.waypoint.WaypointBeamRenderer;
 import net.fabricmc.fabric.api.client.rendering.v1.WorldRenderEvents;
@@ -21,6 +22,11 @@ public final class HiveRenderHook {
                 return;
             }
             HiveRenderer.render(
+                context.matrixStack(),
+                buffers,
+                context.camera().getPosition()
+            );
+            LimbHitboxRenderer.render(
                 context.matrixStack(),
                 buffers,
                 context.camera().getPosition()

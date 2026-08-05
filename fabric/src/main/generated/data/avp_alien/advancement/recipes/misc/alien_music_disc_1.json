@@ -1,0 +1,32 @@
+{
+  "parent": "minecraft:recipes/root",
+  "criteria": {
+    "has_alien_music_disc_1_fragment": {
+      "conditions": {
+        "items": [
+          {
+            "items": "avp_alien:alien_music_disc_1_fragment"
+          }
+        ]
+      },
+      "trigger": "minecraft:inventory_changed"
+    },
+    "has_the_recipe": {
+      "conditions": {
+        "recipe": "avp_alien:alien_music_disc_1"
+      },
+      "trigger": "minecraft:recipe_unlocked"
+    }
+  },
+  "requirements": [
+    [
+      "has_the_recipe",
+      "has_alien_music_disc_1_fragment"
+    ]
+  ],
+  "rewards": {
+    "recipes": [
+      "avp_alien:alien_music_disc_1"
+    ]
+  }
+}

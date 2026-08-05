@@ -1,0 +1,6 @@
+{
+  "parent": "minecraft:block/cube_all",
+  "textures": {
+    "all": "avp_alien:block/ribbed_nether_resin"
+  }
+}

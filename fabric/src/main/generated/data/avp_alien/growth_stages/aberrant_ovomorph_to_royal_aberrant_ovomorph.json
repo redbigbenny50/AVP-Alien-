@@ -1,0 +1,10 @@
+{
+  "from": "avp_alien:aberrant_ovomorph",
+  "requirements": [
+    {
+      "type": "mob_effect",
+      "effect": "avp_alien:metamorphosis"
+    }
+  ],
+  "to": "avp_alien:royal_aberrant_ovomorph"
+}

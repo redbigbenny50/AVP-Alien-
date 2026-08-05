@@ -1,0 +1,37 @@
+{
+  "type": "minecraft:crafting_shapeless",
+  "category": "misc",
+  "ingredients": [
+    {
+      "item": "avp_alien:alien_music_disc_1_fragment"
+    },
+    {
+      "item": "avp_alien:alien_music_disc_1_fragment"
+    },
+    {
+      "item": "avp_alien:alien_music_disc_1_fragment"
+    },
+    {
+      "item": "avp_alien:alien_music_disc_1_fragment"
+    },
+    {
+      "item": "avp_alien:alien_music_disc_1_fragment"
+    },
+    {
+      "item": "avp_alien:alien_music_disc_1_fragment"
+    },
+    {
+      "item": "avp_alien:alien_music_disc_1_fragment"
+    },
+    {
+      "item": "avp_alien:alien_music_disc_1_fragment"
+    },
+    {
+      "item": "avp_alien:alien_music_disc_1_fragment"
+    }
+  ],
+  "result": {
+    "count": 1,
+    "id": "avp_alien:alien_music_disc_1"
+  }
+}

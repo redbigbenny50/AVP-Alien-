@@ -1,0 +1,37 @@
+{
+  "parent": "avp_alien:aliens/kill_an_alien",
+  "criteria": {
+    "kill_a_royal_alien": {
+      "conditions": {
+        "entity": [
+          {
+            "condition": "minecraft:entity_properties",
+            "entity": "this",
+            "predicate": {
+              "type": "#avp_alien:royal_xenomorphs"
+            }
+          }
+        ]
+      },
+      "trigger": "minecraft:player_killed_entity"
+    }
+  },
+  "display": {
+    "description": {
+      "translate": "advancements.aliens.kill_a_royal_alien.description"
+    },
+    "icon": {
+      "count": 1,
+      "id": "avp_alien:plated_chitin"
+    },
+    "title": {
+      "translate": "advancements.aliens.kill_a_royal_alien.title"
+    }
+  },
+  "requirements": [
+    [
+      "kill_a_royal_alien"
+    ]
+  ],
+  "sends_telemetry_event": true
+}

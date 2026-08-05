@@ -1,0 +1,18 @@
+{
+  "values": [
+    "avp_alien:nether_chitin_block",
+    "avp_alien:nether_chitin_block_slab",
+    "avp_alien:nether_chitin_block_stairs",
+    "avp_alien:nether_chitin_block_wall",
+    "avp_alien:nether_chitin_bricks",
+    "avp_alien:nether_chitin_brick_slab",
+    "avp_alien:nether_chitin_brick_stairs",
+    "avp_alien:nether_chitin_brick_wall",
+    "avp_alien:chiseled_nether_chitin_bricks",
+    "avp_alien:chiseled_nether_chitin_bricks_embryo",
+    "avp_alien:polished_nether_chitin",
+    "avp_alien:polished_nether_chitin_slab",
+    "avp_alien:polished_nether_chitin_stairs",
+    "avp_alien:polished_nether_chitin_wall"
+  ]
+}

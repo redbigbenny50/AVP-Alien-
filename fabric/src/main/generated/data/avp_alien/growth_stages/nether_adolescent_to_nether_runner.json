@@ -1,0 +1,6 @@
+{
+  "from": "avp_alien:nether_adolescent",
+  "growthTimeInTicks": 3000,
+  "hostTypePredicate": "#avp_alien:runner_hosts",
+  "to": "avp_alien:nether_runner"
+}

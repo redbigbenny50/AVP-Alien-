@@ -1,0 +1,17 @@
+{
+  "values": [
+    {
+      "id": "#gigeresque:acid_resistant",
+      "required": false
+    },
+    {
+      "id": "#blib:should_not_be_destroyed",
+      "required": false
+    },
+    "#avp_alien:chitin",
+    "#avp_alien:resin",
+    "minecraft:air",
+    "minecraft:fire",
+    "minecraft:soul_fire"
+  ]
+}

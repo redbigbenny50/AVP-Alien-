@@ -1,0 +1,6 @@
+{
+  "parent": "minecraft:item/generated",
+  "textures": {
+    "layer0": "avp_alien:item/irradiated_chitin_helmet"
+  }
+}

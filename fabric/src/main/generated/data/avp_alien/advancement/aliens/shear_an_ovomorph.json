@@ -1,0 +1,40 @@
+{
+  "parent": "avp_alien:aliens/kill_an_alien",
+  "criteria": {
+    "shear_an_ovomorph": {
+      "conditions": {
+        "entity": [
+          {
+            "condition": "minecraft:entity_properties",
+            "entity": "this",
+            "predicate": {
+              "type": "#avp_alien:ovomorphs"
+            }
+          }
+        ],
+        "item": {
+          "items": "minecraft:shears"
+        }
+      },
+      "trigger": "minecraft:player_interacted_with_entity"
+    }
+  },
+  "display": {
+    "description": {
+      "translate": "advancements.aliens.shear_an_ovomorph.description"
+    },
+    "icon": {
+      "count": 1,
+      "id": "minecraft:shears"
+    },
+    "title": {
+      "translate": "advancements.aliens.shear_an_ovomorph.title"
+    }
+  },
+  "requirements": [
+    [
+      "shear_an_ovomorph"
+    ]
+  ],
+  "sends_telemetry_event": true
+}

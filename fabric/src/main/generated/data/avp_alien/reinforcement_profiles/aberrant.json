@@ -1,0 +1,50 @@
+{
+  "random": {
+    "pools": [
+      {
+        "entity": "avp_alien:aberrant_runner",
+        "weight": 3
+      },
+      {
+        "entity": "avp_alien:aberrant_drone",
+        "weight": 3
+      },
+      {
+        "entity": "avp_alien:aberrant_warrior",
+        "weight": 2
+      },
+      {
+        "entity": "avp_alien:aberrant_prowler",
+        "weight": 2
+      },
+      {
+        "entity": "avp_alien:aberrant_chrysalis",
+        "max_count": 2
+      },
+      {
+        "entity": "avp_alien:aberrant_razor_claw",
+        "max_count": 2
+      },
+      {
+        "entity": "avp_alien:aberrant_burster",
+        "max_count": 3
+      },
+      {
+        "entity": "avp_alien:aberrant_ravager",
+        "max_count": 1
+      },
+      {
+        "entity": "avp_alien:aberrant_carrier",
+        "max_count": 1
+      },
+      {
+        "entity": "avp_alien:aberrant_praetorian",
+        "max_count": 1
+      },
+      {
+        "entity": "avp_alien:aberrant_crusher",
+        "max_count": 1
+      }
+    ]
+  }
+}

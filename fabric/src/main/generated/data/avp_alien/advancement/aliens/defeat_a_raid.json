@@ -1,0 +1,30 @@
+{
+  "parent": "avp_alien:aliens/kill_a_harbinger",
+  "criteria": {
+    "defeat_a_raid": {
+      "trigger": "minecraft:impossible"
+    }
+  },
+  "display": {
+    "description": {
+      "translate": "advancements.aliens.defeat_a_raid.description"
+    },
+    "frame": "challenge",
+    "icon": {
+      "count": 1,
+      "id": "avp_alien:raw_scourge_jelly"
+    },
+    "title": {
+      "translate": "advancements.aliens.defeat_a_raid.title"
+    }
+  },
+  "requirements": [
+    [
+      "defeat_a_raid"
+    ]
+  ],
+  "rewards": {
+    "experience": 100
+  },
+  "sends_telemetry_event": true
+}

@@ -1,0 +1,10 @@
+{
+  "values": [
+    {
+      "id": "#blib:should_not_be_destroyed",
+      "required": false
+    },
+    "#avp_alien:resin_vents",
+    "#avp_alien:resin_webs"
+  ]
+}

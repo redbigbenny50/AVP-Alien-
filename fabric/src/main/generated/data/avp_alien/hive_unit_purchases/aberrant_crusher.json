@@ -1,0 +1,11 @@
+{
+  "input_entities": [
+    {
+      "count": 1,
+      "entity": "avp_alien:aberrant_prowler"
+    }
+  ],
+  "output_entity": "avp_alien:aberrant_crusher",
+  "population_biomass_cost_scale": 0.05,
+  "royal_jelly": 1
+}

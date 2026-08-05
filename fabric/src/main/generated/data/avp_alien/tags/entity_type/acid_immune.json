@@ -1,0 +1,9 @@
+{
+  "values": [
+    "#avp_alien:aliens",
+    {
+      "id": "#gigeresque:acid_resistant",
+      "required": false
+    }
+  ]
+}

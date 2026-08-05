@@ -1,0 +1,21 @@
+{
+  "variants": {
+    "": [
+      {
+        "model": "avp_alien:block/irradiated_resin"
+      },
+      {
+        "model": "avp_alien:block/irradiated_resin",
+        "y": 90
+      },
+      {
+        "model": "avp_alien:block/irradiated_resin",
+        "y": 180
+      },
+      {
+        "model": "avp_alien:block/irradiated_resin",
+        "y": 270
+      }
+    ]
+  }
+}

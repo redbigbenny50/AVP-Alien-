@@ -1,0 +1,7 @@
+{
+  "detachDelayInTicks": 1200,
+  "embryoType": "avp_alien:aberrant_chestburster",
+  "gestationTimeInTicks": 6000,
+  "impregnationDelayInTicks": 60,
+  "parasiteType": "avp_alien:aberrant_facehugger"
+}

@@ -1,0 +1,86 @@
+{
+  "parent": "avp_alien:aliens/kill_a_royal_alien",
+  "criteria": {
+    "plated_aberrant_chitin_armor": {
+      "conditions": {
+        "items": [
+          {
+            "items": "avp_alien:plated_aberrant_chitin_helmet"
+          },
+          {
+            "items": "avp_alien:plated_aberrant_chitin_chestplate"
+          },
+          {
+            "items": "avp_alien:plated_aberrant_chitin_leggings"
+          },
+          {
+            "items": "avp_alien:plated_aberrant_chitin_boots"
+          }
+        ]
+      },
+      "trigger": "minecraft:inventory_changed"
+    },
+    "plated_chitin_armor": {
+      "conditions": {
+        "items": [
+          {
+            "items": "avp_alien:plated_chitin_helmet"
+          },
+          {
+            "items": "avp_alien:plated_chitin_chestplate"
+          },
+          {
+            "items": "avp_alien:plated_chitin_leggings"
+          },
+          {
+            "items": "avp_alien:plated_chitin_boots"
+          }
+        ]
+      },
+      "trigger": "minecraft:inventory_changed"
+    },
+    "plated_nether_chitin_armor": {
+      "conditions": {
+        "items": [
+          {
+            "items": "avp_alien:plated_nether_chitin_helmet"
+          },
+          {
+            "items": "avp_alien:plated_nether_chitin_chestplate"
+          },
+          {
+            "items": "avp_alien:plated_nether_chitin_leggings"
+          },
+          {
+            "items": "avp_alien:plated_nether_chitin_boots"
+          }
+        ]
+      },
+      "trigger": "minecraft:inventory_changed"
+    }
+  },
+  "display": {
+    "description": {
+      "translate": "advancements.aliens.plated_chitin_armor.description"
+    },
+    "frame": "challenge",
+    "icon": {
+      "count": 1,
+      "id": "avp_alien:plated_chitin_helmet"
+    },
+    "title": {
+      "translate": "advancements.aliens.plated_chitin_armor.title"
+    }
+  },
+  "requirements": [
+    [
+      "plated_aberrant_chitin_armor",
+      "plated_chitin_armor",
+      "plated_nether_chitin_armor"
+    ]
+  ],
+  "rewards": {
+    "experience": 100
+  },
+  "sends_telemetry_event": true
+}

@@ -1,0 +1,16 @@
+{
+  "type": "minecraft:crafting_shapeless",
+  "category": "equipment",
+  "ingredients": [
+    {
+      "item": "avp_alien:chitin_leggings"
+    },
+    {
+      "item": "avp_alien:plated_chitin"
+    }
+  ],
+  "result": {
+    "count": 1,
+    "id": "avp_alien:plated_chitin_leggings"
+  }
+}

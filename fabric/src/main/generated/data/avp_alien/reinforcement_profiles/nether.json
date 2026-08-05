@@ -1,0 +1,50 @@
+{
+  "random": {
+    "pools": [
+      {
+        "entity": "avp_alien:nether_runner",
+        "weight": 3
+      },
+      {
+        "entity": "avp_alien:nether_drone",
+        "weight": 3
+      },
+      {
+        "entity": "avp_alien:nether_warrior",
+        "weight": 2
+      },
+      {
+        "entity": "avp_alien:nether_prowler",
+        "weight": 2
+      },
+      {
+        "entity": "avp_alien:nether_chrysalis",
+        "max_count": 2
+      },
+      {
+        "entity": "avp_alien:nether_razor_claw",
+        "max_count": 2
+      },
+      {
+        "entity": "avp_alien:nether_burster",
+        "max_count": 3
+      },
+      {
+        "entity": "avp_alien:nether_ravager",
+        "max_count": 1
+      },
+      {
+        "entity": "avp_alien:nether_carrier",
+        "max_count": 1
+      },
+      {
+        "entity": "avp_alien:nether_praetorian",
+        "max_count": 1
+      },
+      {
+        "entity": "avp_alien:nether_crusher",
+        "max_count": 1
+      }
+    ]
+  }
+}

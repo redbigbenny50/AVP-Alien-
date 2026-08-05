@@ -1,0 +1,30 @@
+{
+  "parent": "avp_alien:aliens/kill_a_hive",
+  "criteria": {
+    "kill_a_lineage": {
+      "trigger": "minecraft:impossible"
+    }
+  },
+  "display": {
+    "description": {
+      "translate": "advancements.aliens.kill_a_lineage.description"
+    },
+    "frame": "challenge",
+    "icon": {
+      "count": 1,
+      "id": "avp_alien:royal_jelly_block"
+    },
+    "title": {
+      "translate": "advancements.aliens.kill_a_lineage.title"
+    }
+  },
+  "requirements": [
+    [
+      "kill_a_lineage"
+    ]
+  ],
+  "rewards": {
+    "experience": 100
+  },
+  "sends_telemetry_event": true
+}

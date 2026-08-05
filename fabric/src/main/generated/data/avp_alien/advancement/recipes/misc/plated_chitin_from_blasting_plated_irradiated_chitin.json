@@ -1,0 +1,46 @@
+{
+  "fabric:load_conditions": [
+    {
+      "condition": "fabric:all_mods_loaded",
+      "values": [
+        "avp_human"
+      ]
+    }
+  ],
+  "parent": "minecraft:recipes/root",
+  "criteria": {
+    "has_plated_irradiated_chitin": {
+      "conditions": {
+        "items": [
+          {
+            "items": "avp_alien:plated_irradiated_chitin"
+          }
+        ]
+      },
+      "trigger": "minecraft:inventory_changed"
+    },
+    "has_the_recipe": {
+      "conditions": {
+        "recipe": "avp_alien:plated_chitin_from_blasting_plated_irradiated_chitin"
+      },
+      "trigger": "minecraft:recipe_unlocked"
+    }
+  },
+  "neoforge:conditions": [
+    {
+      "type": "neoforge:mod_loaded",
+      "modid": "avp_human"
+    }
+  ],
+  "requirements": [
+    [
+      "has_the_recipe",
+      "has_plated_irradiated_chitin"
+    ]
+  ],
+  "rewards": {
+    "recipes": [
+      "avp_alien:plated_chitin_from_blasting_plated_irradiated_chitin"
+    ]
+  }
+}

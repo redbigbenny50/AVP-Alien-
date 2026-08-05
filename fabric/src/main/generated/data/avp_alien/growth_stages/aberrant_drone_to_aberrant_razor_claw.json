@@ -1,0 +1,11 @@
+{
+  "from": "avp_alien:aberrant_drone",
+  "requirements": [
+    {
+      "type": "mob_effect",
+      "effect": "avp_alien:scourge",
+      "min_amplifier": 1
+    }
+  ],
+  "to": "avp_alien:aberrant_razor_claw"
+}

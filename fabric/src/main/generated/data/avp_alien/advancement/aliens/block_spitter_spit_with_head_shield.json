@@ -1,0 +1,26 @@
+{
+  "parent": "avp_alien:aliens/kill_an_alien",
+  "criteria": {
+    "block_spitter_spit_with_head_shield": {
+      "trigger": "minecraft:impossible"
+    }
+  },
+  "display": {
+    "description": {
+      "translate": "advancements.aliens.block_spitter_spit_with_head_shield.description"
+    },
+    "icon": {
+      "count": 1,
+      "id": "avp_alien:queen_head_shield"
+    },
+    "title": {
+      "translate": "advancements.aliens.block_spitter_spit_with_head_shield.title"
+    }
+  },
+  "requirements": [
+    [
+      "block_spitter_spit_with_head_shield"
+    ]
+  ],
+  "sends_telemetry_event": true
+}

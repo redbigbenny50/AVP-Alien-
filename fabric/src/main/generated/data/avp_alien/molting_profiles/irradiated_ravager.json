@@ -1,0 +1,19 @@
+{
+  "endScale": 1.0,
+  "entityType": "avp_alien:irradiated_ravager",
+  "phases": [
+    {
+      "idleTicks": 2800,
+      "moltTicks": 1200
+    },
+    {
+      "idleTicks": 2800,
+      "moltTicks": 1200
+    },
+    {
+      "idleTicks": 2800,
+      "moltTicks": 1200
+    }
+  ],
+  "startScale": 0.66
+}

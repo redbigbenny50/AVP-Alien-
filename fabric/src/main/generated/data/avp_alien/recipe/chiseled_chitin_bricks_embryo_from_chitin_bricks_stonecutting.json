@@ -1,0 +1,10 @@
+{
+  "type": "minecraft:stonecutting",
+  "ingredient": {
+    "item": "avp_alien:chitin_bricks"
+  },
+  "result": {
+    "count": 1,
+    "id": "avp_alien:chiseled_chitin_bricks_embryo"
+  }
+}

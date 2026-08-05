@@ -1,0 +1,30 @@
+{
+  "parent": "avp_alien:aliens/defeat_a_raid",
+  "criteria": {
+    "lead_raid_to_enemy_hive": {
+      "trigger": "minecraft:impossible"
+    }
+  },
+  "display": {
+    "description": {
+      "translate": "advancements.aliens.lead_raid_to_enemy_hive.description"
+    },
+    "frame": "challenge",
+    "icon": {
+      "count": 1,
+      "id": "avp_alien:resin"
+    },
+    "title": {
+      "translate": "advancements.aliens.lead_raid_to_enemy_hive.title"
+    }
+  },
+  "requirements": [
+    [
+      "lead_raid_to_enemy_hive"
+    ]
+  ],
+  "rewards": {
+    "experience": 100
+  },
+  "sends_telemetry_event": true
+}

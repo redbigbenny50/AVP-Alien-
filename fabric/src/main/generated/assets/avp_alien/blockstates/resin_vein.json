@@ -1,0 +1,154 @@
+{
+  "multipart": [
+    {
+      "apply": [
+        { "model": "avp_alien:block/resin_vein_1" },
+        { "model": "avp_alien:block/resin_vein_2" },
+        { "model": "avp_alien:block/resin_vein_3" },
+        { "model": "avp_alien:block/resin_vein_4" }
+      ],
+      "when": { "north": "true" }
+    },
+    {
+      "apply": [
+        { "model": "avp_alien:block/resin_vein_1" },
+        { "model": "avp_alien:block/resin_vein_2" },
+        { "model": "avp_alien:block/resin_vein_3" },
+        { "model": "avp_alien:block/resin_vein_4" }
+      ],
+      "when": {
+        "down": "false",
+        "east": "false",
+        "north": "false",
+        "south": "false",
+        "up": "false",
+        "west": "false"
+      }
+    },
+    {
+      "apply": [
+        { "model": "avp_alien:block/resin_vein_1", "uvlock": true, "y": 90 },
+        { "model": "avp_alien:block/resin_vein_2", "uvlock": true, "y": 90 },
+        { "model": "avp_alien:block/resin_vein_3", "uvlock": true, "y": 90 },
+        { "model": "avp_alien:block/resin_vein_4", "uvlock": true, "y": 90 }
+      ],
+      "when": { "east": "true" }
+    },
+    {
+      "apply": [
+        { "model": "avp_alien:block/resin_vein_1", "uvlock": true, "y": 90 },
+        { "model": "avp_alien:block/resin_vein_2", "uvlock": true, "y": 90 },
+        { "model": "avp_alien:block/resin_vein_3", "uvlock": true, "y": 90 },
+        { "model": "avp_alien:block/resin_vein_4", "uvlock": true, "y": 90 }
+      ],
+      "when": {
+        "down": "false",
+        "east": "false",
+        "north": "false",
+        "south": "false",
+        "up": "false",
+        "west": "false"
+      }
+    },
+    {
+      "apply": [
+        { "model": "avp_alien:block/resin_vein_1", "uvlock": true, "y": 180 },
+        { "model": "avp_alien:block/resin_vein_2", "uvlock": true, "y": 180 },
+        { "model": "avp_alien:block/resin_vein_3", "uvlock": true, "y": 180 },
+        { "model": "avp_alien:block/resin_vein_4", "uvlock": true, "y": 180 }
+      ],
+      "when": { "south": "true" }
+    },
+    {
+      "apply": [
+        { "model": "avp_alien:block/resin_vein_1", "uvlock": true, "y": 180 },
+        { "model": "avp_alien:block/resin_vein_2", "uvlock": true, "y": 180 },
+        { "model": "avp_alien:block/resin_vein_3", "uvlock": true, "y": 180 },
+        { "model": "avp_alien:block/resin_vein_4", "uvlock": true, "y": 180 }
+      ],
+      "when": {
+        "down": "false",
+        "east": "false",
+        "north": "false",
+        "south": "false",
+        "up": "false",
+        "west": "false"
+      }
+    },
+    {
+      "apply": [
+        { "model": "avp_alien:block/resin_vein_1", "uvlock": true, "y": 270 },
+        { "model": "avp_alien:block/resin_vein_2", "uvlock": true, "y": 270 },
+        { "model": "avp_alien:block/resin_vein_3", "uvlock": true, "y": 270 },
+        { "model": "avp_alien:block/resin_vein_4", "uvlock": true, "y": 270 }
+      ],
+      "when": { "west": "true" }
+    },
+    {
+      "apply": [
+        { "model": "avp_alien:block/resin_vein_1", "uvlock": true, "y": 270 },
+        { "model": "avp_alien:block/resin_vein_2", "uvlock": true, "y": 270 },
+        { "model": "avp_alien:block/resin_vein_3", "uvlock": true, "y": 270 },
+        { "model": "avp_alien:block/resin_vein_4", "uvlock": true, "y": 270 }
+      ],
+      "when": {
+        "down": "false",
+        "east": "false",
+        "north": "false",
+        "south": "false",
+        "up": "false",
+        "west": "false"
+      }
+    },
+    {
+      "apply": [
+        { "model": "avp_alien:block/resin_vein_1", "uvlock": true, "x": 270 },
+        { "model": "avp_alien:block/resin_vein_2", "uvlock": true, "x": 270 },
+        { "model": "avp_alien:block/resin_vein_3", "uvlock": true, "x": 270 },
+        { "model": "avp_alien:block/resin_vein_4", "uvlock": true, "x": 270 }
+      ],
+      "when": { "up": "true" }
+    },
+    {
+      "apply": [
+        { "model": "avp_alien:block/resin_vein_1", "uvlock": true, "x": 270 },
+        { "model": "avp_alien:block/resin_vein_2", "uvlock": true, "x": 270 },
+        { "model": "avp_alien:block/resin_vein_3", "uvlock": true, "x": 270 },
+        { "model": "avp_alien:block/resin_vein_4", "uvlock": true, "x": 270 }
+      ],
+      "when": {
+        "down": "false",
+        "east": "false",
+        "north": "false",
+        "south": "false",
+        "up": "false",
+        "west": "false"
+      }
+    },
+    {
+      "apply": [
+        { "model": "avp_alien:block/resin_vein_1", "uvlock": true, "x": 90 },
+        { "model": "avp_alien:block/resin_vein_2", "uvlock": true, "x": 90 },
+        { "model": "avp_alien:block/resin_vein_3", "uvlock": true, "x": 90 },
+        { "model": "avp_alien:block/resin_vein_4", "uvlock": true, "x": 90 }
+      ],
+      "when": { "down": "true" }
+    },
+    {
+      "apply": [
+        { "model": "avp_alien:block/resin_vein_1", "uvlock": true, "x": 90 },
+        { "model": "avp_alien:block/resin_vein_2", "uvlock": true, "x": 90 },
+        { "model": "avp_alien:block/resin_vein_3", "uvlock": true, "x": 90 },
+        { "model": "avp_alien:block/resin_vein_4", "uvlock": true, "x": 90 }
+      ],
+      "when": {
+        "down": "false",
+        "east": "false",
+        "north": "false",
+        "south": "false",
+        "up": "false",
+        "west": "false"
+      }
+    }
+  ]
+}

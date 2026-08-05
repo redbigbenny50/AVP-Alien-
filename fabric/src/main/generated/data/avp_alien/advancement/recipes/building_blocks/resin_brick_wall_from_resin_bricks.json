@@ -1,0 +1,32 @@
+{
+  "parent": "minecraft:recipes/root",
+  "criteria": {
+    "has_resin_bricks": {
+      "conditions": {
+        "items": [
+          {
+            "items": "avp_alien:resin_bricks"
+          }
+        ]
+      },
+      "trigger": "minecraft:inventory_changed"
+    },
+    "has_the_recipe": {
+      "conditions": {
+        "recipe": "avp_alien:resin_brick_wall_from_resin_bricks"
+      },
+      "trigger": "minecraft:recipe_unlocked"
+    }
+  },
+  "requirements": [
+    [
+      "has_the_recipe",
+      "has_resin_bricks"
+    ]
+  ],
+  "rewards": {
+    "recipes": [
+      "avp_alien:resin_brick_wall_from_resin_bricks"
+    ]
+  }
+}

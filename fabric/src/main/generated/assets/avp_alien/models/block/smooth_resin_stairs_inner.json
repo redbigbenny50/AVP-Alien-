@@ -1,0 +1,8 @@
+{
+  "parent": "minecraft:block/inner_stairs",
+  "textures": {
+    "bottom": "avp_alien:block/smooth_resin",
+    "side": "avp_alien:block/smooth_resin",
+    "top": "avp_alien:block/smooth_resin"
+  }
+}

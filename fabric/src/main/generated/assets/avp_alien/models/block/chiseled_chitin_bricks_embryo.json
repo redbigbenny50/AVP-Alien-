@@ -1,0 +1,8 @@
+{
+  "parent": "minecraft:block/cube_bottom_top",
+  "textures": {
+    "bottom": "avp_alien:block/polished_chitin",
+    "side": "avp_alien:block/chiseled_chitin_bricks_embryo_side",
+    "top": "avp_alien:block/polished_chitin"
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "type": "minecraft:smelting",
+  "category": "misc",
+  "cookingtime": 200,
+  "experience": 0.1,
+  "ingredient": {
+    "item": "avp_alien:resin_ball"
+  },
+  "result": {
+    "id": "minecraft:slime_ball"
+  }
+}

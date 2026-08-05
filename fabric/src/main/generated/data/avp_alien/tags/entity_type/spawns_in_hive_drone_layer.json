@@ -1,0 +1,11 @@
+{
+  "values": [
+    "#avp_alien:spawns_in_hive_warrior_layer",
+    "#avp_alien:adolescents",
+    "#avp_alien:chestbursters",
+    "#avp_alien:bursters",
+    "#avp_alien:drones",
+    "#avp_alien:runners",
+    "#avp_alien:ovomorphs"
+  ]
+}

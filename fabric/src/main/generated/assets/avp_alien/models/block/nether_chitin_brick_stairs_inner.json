@@ -1,0 +1,8 @@
+{
+  "parent": "minecraft:block/inner_stairs",
+  "textures": {
+    "bottom": "avp_alien:block/nether_chitin_bricks",
+    "side": "avp_alien:block/nether_chitin_bricks",
+    "top": "avp_alien:block/nether_chitin_bricks"
+  }
+}

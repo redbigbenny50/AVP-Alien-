@@ -13,6 +13,7 @@
     "MixinLivingEntity_GlowingTalons",
     "MixinLivingEntity_HiveBiomass",
     "MixinLivingEntity_Host",
+    "MixinLivingEntity_Stunned",
     "MixinMob_IncapacitateHost",
     "MixinNaturalSpawner_HiveSlabSpawnDeny",
     "MixinNuclearExplosionUtil_HiveStrike",

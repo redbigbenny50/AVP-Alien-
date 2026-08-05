@@ -1,0 +1,10 @@
+{
+  "from": "avp_alien:prowler",
+  "requirements": [
+    {
+      "type": "mob_effect",
+      "effect": "avp_alien:scourge"
+    }
+  ],
+  "to": "avp_alien:chrysalis"
+}

@@ -1,0 +1,6 @@
+{
+  "parent": "minecraft:item/generated",
+  "textures": {
+    "layer0": "avp_alien:item/royal_aberrant_chestburster_spawn_egg"
+  }
+}

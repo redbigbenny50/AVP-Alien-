@@ -40,14 +40,27 @@ public class CrawlingManager implements NBTSerializable {
      */
     private final boolean canCrawl;
 
-    public CrawlingManager(PathfinderMob entity, DataAccessor<Boolean> isCrawling, boolean canCrawl) {
+    /** Allows a giant caste to keep its normal standing behavior but crawl after a leg is detached. */
+    private final boolean canCrawlAfterLegLoss;
+
+    public CrawlingManager(
+        PathfinderMob entity,
+        DataAccessor<Boolean> isCrawling,
+        boolean canCrawl,
+        boolean canCrawlAfterLegLoss
+    ) {
         this.entity = entity;
         this.isCrawling = isCrawling;
         this.canCrawl = canCrawl;
+        this.canCrawlAfterLegLoss = canCrawlAfterLegLoss;
     }
 
     public boolean canCrawl() {
         return canCrawl;
+    }
+
+    public boolean canCrawlAfterLegLoss() {
+        return canCrawlAfterLegLoss;
     }
 
     /**
@@ -67,7 +80,9 @@ public class CrawlingManager implements NBTSerializable {
 
     /** Whether the crawl is FORCED by a detached leg - the collapse case; also read by the client animators. */
     public boolean isLegForcedCrawl() {
-        return entity instanceof Dismemberable dismemberable && hasDetachedLegLimb(dismemberable);
+        return canCrawlAfterLegLoss
+            && entity instanceof Dismemberable dismemberable
+            && hasDetachedLegLimb(dismemberable);
     }
 
     /**
@@ -104,7 +119,7 @@ public class CrawlingManager implements NBTSerializable {
             return;
         }
 
-        if (!canCrawl) {
+        if (!canCrawl && !canCrawlAfterLegLoss) {
             removeMovementSpeedModifier();
             return;
         }
@@ -158,7 +173,9 @@ public class CrawlingManager implements NBTSerializable {
 
         // A dismembered leg forces the stance into crawling regardless of overhead clearance - the mob lost a leg, it
         // can't stand back up.
-        var hasLegOff = entity instanceof Dismemberable dismemberable && hasDetachedLegLimb(dismemberable);
+        var hasLegOff = canCrawlAfterLegLoss
+            && entity instanceof Dismemberable dismemberable
+            && hasDetachedLegLimb(dismemberable);
 
         // A CHARGE DOES NOT DUCK. [stated] "if its a small doorway they will crawl 'duck' under it. if its say a
         // hallway and they are pursueing something or if its just a few floating blocks in their way they will
@@ -172,7 +189,7 @@ public class CrawlingManager implements NBTSerializable {
         // "Running" is judged against the caste's OWN walk speed, the same way shoulderThroughObstructions judges
         // it, so a queen and a runner are each measured by their own gait. A lost leg still overrides everything -
         // she cannot stand up to charge on a missing limb.
-        isCrawling.set((isTight && !isChargingATarget()) || hasLegOff);
+        isCrawling.set((canCrawl && isTight && !isChargingATarget()) || hasLegOff);
     }
 
     /** Pursuing something and moving faster than its own walk pace - a charge, not a patrol. */
