@@ -1400,10 +1400,10 @@ public final class HiveDebugCommands {
     }
 
     /**
-     * TARGETING DIAG. Walks the real predicate chain for the nearest xenomorph against everything around it and
-     * reports which gate refuses, in BOTH directions. Written for the empress/marine mutual-ignore, which survived
-     * every static check - tags, attackable/isAlliedTo overrides, GOAP packages, attack config, follow range - so
-     * the missing information is runtime state.
+     * TARGETING DIAG. Walks the real predicate chain for the nearest xenomorph against everything around it and reports
+     * which gate refuses, in BOTH directions. Written for the empress/marine mutual-ignore, which survived every static
+     * check - tags, attackable/isAlliedTo overrides, GOAP packages, attack config, follow range - so the missing
+     * information was runtime state. Its standingInLocation line is what finally named the cause.
      * <p>
      * Goes to chat AND to the log, so a report can be pasted from latest.log rather than retyped from screenshots.
      */
@@ -1420,12 +1420,11 @@ public final class HiveDebugCommands {
             return 0;
         }
 
-        var lines = com.alien.common.gameplay.entity.living.alien.xenomorph.ai.combat
-            .XenomorphTargetingDiagnostics.report(subject);
+        var lines = com.alien.common.gameplay.entity.living.alien.xenomorph.ai.combat.XenomorphTargetingDiagnostics.report(subject);
 
         for (var line : lines) {
             ctx.getSource().sendSuccess(() -> Component.literal(line), false);
-            com.alien.Alien.LOGGER.info("[targetdiag] {}", line);
+            Alien.LOGGER.info("[targetdiag] {}", line);
         }
 
         return 1;

@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+  <modelVersion>4.0.0</modelVersion>
+  <groupId>com.blib</groupId>
+  <artifactId>blib-common-1.21.1</artifactId>
+  <version>0.3.0-alpha.419</version>
+  <dependencies>
+    <dependency>
+      <groupId>com.just</groupId>
+      <artifactId>just-codec</artifactId>
+      <version>0.1.0</version>
+      <scope>compile</scope>
+    </dependency>
+    <dependency>
+      <groupId>com.just</groupId>
+      <artifactId>just-core</artifactId>
+      <version>0.1.0</version>
+      <scope>compile</scope>
+    </dependency>
+    <dependency>
+      <groupId>com.just</groupId>
+      <artifactId>just-goap</artifactId>
+      <version>0.4.0</version>
+      <scope>compile</scope>
+    </dependency>
+  </dependencies>
+</project>

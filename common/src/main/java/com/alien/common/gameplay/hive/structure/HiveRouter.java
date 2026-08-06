@@ -75,7 +75,7 @@ public final class HiveRouter {
      * Hives under empress influence: larger footprint, expanded blueprint. Wired by the empress system via
      * {@link #setEmpressInfluence}; memory-only, so that system must re-assert influence on world load.
      */
-    private static final java.util.Set<HiveLocation> EMPRESS_INFLUENCED =
+    private static final Set<HiveLocation> EMPRESS_INFLUENCED =
         java.util.Collections.synchronizedSet(java.util.Collections.newSetFromMap(new java.util.WeakHashMap<>()));
 
     /** The footprint radius for the hive currently being routed (set at the top of {@link #route}). */
@@ -786,9 +786,9 @@ public final class HiveRouter {
     /**
      * The ONE chamber a special doorway may grow, by door type. Returns null for ordinary doors (no restriction).
      * <p>
-     * Door types are shared by more than their companion chamber - a royal hallway carries a jelly door so its
-     * jelly chamber can hang off it, a raid chamber carries a scourge door for its scourge room - so matching on
-     * the door type alone lets a special socket regrow the very piece that authored it.
+     * Door types are shared by more than their companion chamber - a royal hallway carries a jelly door so its jelly
+     * chamber can hang off it, a raid chamber carries a scourge door for its scourge room - so matching on the door
+     * type alone lets a special socket regrow the very piece that authored it.
      */
     private static @Nullable String companionRoomFor(@Nullable String doorType) {
         if (doorType == null) {
@@ -808,8 +808,8 @@ public final class HiveRouter {
      * advance, the royal hallway routine, the gap-filling bridge and the special-door attach - funnels through
      * {@link #place}, so a rule enforced here cannot be walked around by a path that never heard of it.
      * <p>
-     * That is exactly how the caps were beaten before: the royal ceiling lived inside placeRoyalHallways and the
-     * raid cap inside the pending-goal filter, while attachAt called place() directly with neither in scope.
+     * That is exactly how the caps were beaten before: the royal ceiling lived inside placeRoyalHallways and the raid
+     * cap inside the pending-goal filter, while attachAt called place() directly with neither in scope.
      */
     private static boolean allowedByPieceClassRules(
         HiveLocation location,
@@ -858,10 +858,10 @@ public final class HiveRouter {
     }
 
     /**
-     * Rooms of this type the hive has COMMITTED to: placed pieces plus the one currently being carved. A
-     * commissioned site is not in builtPlacements until its carve completes, so counting only finished rooms
-     * would let a cap be judged against a hive that is missing its newest one. Routing is gated on
-     * hasActiveCarveSite today, which closes that window by accident - the cap should not depend on it.
+     * Rooms of this type the hive has COMMITTED to: placed pieces plus the one currently being carved. A commissioned
+     * site is not in builtPlacements until its carve completes, so counting only finished rooms would let a cap be
+     * judged against a hive that is missing its newest one. Routing is gated on hasActiveCarveSite today, which closes
+     * that window by accident - the cap should not depend on it.
      */
     private static int committedRoomsOfType(HiveLocation location, String roomType) {
         int rooms = countRoomsOfType(location, roomType);
@@ -1066,17 +1066,16 @@ public final class HiveRouter {
     /**
      * Ordering for pending goals; lower routes first, ties broken by distance from centre.
      * <p>
-     * THE FIRST EGG CHAMBER OUTRANKS EVERYTHING. A hive with no nursery is in a deadlock it cannot dig out of:
-     * eggs have nowhere to be hauled, so no new aliens hatch, so there are no drones to carve the egg chamber.
-     * Razorem's log shows exactly that - six commissions, all six "unstaffed - no free drones, nothing in
-     * reserve", and six "Egg haul STUCK ... has 0 egg chamber(s)" while the queen still had 40+ free clutch
-     * cells. Eggs used to sit in the LAST tier, tied with jelly, and lose the distance tiebreak every time
-     * because the blueprint deliberately spreads egg goals widest (EGG_SPACING). So the hive built jelly
-     * vaults and hubs while its own nursery never came up.
+     * THE FIRST EGG CHAMBER OUTRANKS EVERYTHING. A hive with no nursery is in a deadlock it cannot dig out of: eggs
+     * have nowhere to be hauled, so no new aliens hatch, so there are no drones to carve the egg chamber. Razorem's log
+     * shows exactly that - six commissions, all six "unstaffed - no free drones, nothing in reserve", and six "Egg haul
+     * STUCK ... has 0 egg chamber(s)" while the queen still had 40+ free clutch cells. Eggs used to sit in the LAST
+     * tier, tied with jelly, and lose the distance tiebreak every time because the blueprint deliberately spreads egg
+     * goals widest (EGG_SPACING). So the hive built jelly vaults and hubs while its own nursery never came up.
      * <p>
-     * It jumps the raid chamber, which normally wants the emptiest map, and that is an accepted cost: an egg
-     * chamber is 1x1 with a zero-chunk reserve margin, so one of them early barely marks the footprint. The
-     * promotion applies ONLY while the count is zero - the second onward go back to the normal tier.
+     * It jumps the raid chamber, which normally wants the emptiest map, and that is an accepted cost: an egg chamber is
+     * 1x1 with a zero-chunk reserve margin, so one of them early barely marks the footprint. The promotion applies ONLY
+     * while the count is zero - the second onward go back to the normal tier.
      * <p>
      * Jelly vaults also drop BELOW eggs generally, since they were the rooms winning that tie.
      */

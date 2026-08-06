@@ -51,7 +51,6 @@ final class AlienXenomorphLimbGroups {
             AlienEntityTypes.IRRADIATED_CRUSHER,
             AlienEntityTypes.NETHER_CRUSHER
         ),
-        group("boiler", AlienEntityTypes.BOILER, AlienEntityTypes.ABERRANT_BOILER, AlienEntityTypes.NETHER_BOILER),
         group(
             "razor_claw",
             AlienEntityTypes.RAZOR_CLAW,
@@ -93,13 +92,6 @@ final class AlienXenomorphLimbGroups {
             AlienEntityTypes.ABERRANT_PREDALIEN,
             AlienEntityTypes.IRRADIATED_PREDALIEN,
             AlienEntityTypes.NETHER_PREDALIEN
-        ),
-        group(
-            "burster",
-            AlienEntityTypes.BURSTER,
-            AlienEntityTypes.ABERRANT_BURSTER,
-            AlienEntityTypes.IRRADIATED_BURSTER,
-            AlienEntityTypes.NETHER_BURSTER
         ),
         group(
             "empress",

@@ -15,39 +15,39 @@ description   = '''${mod_description}'''
     config        = "${mod_id}.mixins.json"
 [[mixins]]
     config        = "${mod_id}.neoforge.mixins.json"
-[[dependencies.${mod_id}]]
+[[dependencies.avp_alien]]
     modId         = "neoforge"
     type          = "required"
     versionRange  ="${neo_version_range}"
     ordering      = "NONE"
     side          = "BOTH"
-[[dependencies.${mod_id}]]
+[[dependencies.avp_alien]]
     modId         = "minecraft"
     type          = "required"
     versionRange  = "${minecraft_version_range}"
     ordering      = "NONE"
     side          = "BOTH"
-[[dependencies.${mod_id}]]
+[[dependencies.avp_alien]]
     modId         = "blib"
     type          = "required"
     versionRange  = "[${blib_version},)"
     side          = "BOTH"
-[[dependencies.${mod_id}]]
+[[dependencies.avp_alien]]
     modId         = "blib_engine"
     type          = "optional"
     versionRange  = "[${blib_engine_version},)"
     side          = "BOTH"
-[[dependencies.${mod_id}]]
+[[dependencies.avp_alien]]
     modId         = "avp_human"
     type          = "optional"
     versionRange  = "[${avp_human_version},)"
     side          = "BOTH"
-[[dependencies.${mod_id}]]
+[[dependencies.avp_alien]]
     modId         = "avp_predator"
     type          = "optional"
     versionRange  = "[${avp_predator_version},)"
     side          = "BOTH"
-[[dependencies.${mod_id}]]
+[[dependencies.avp_alien]]
     modId         = "gigeresque"
     type          = "optional"
     versionRange  = "[${gigeresque_version},)"

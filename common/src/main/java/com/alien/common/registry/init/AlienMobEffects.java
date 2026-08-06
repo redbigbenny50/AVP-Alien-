@@ -14,6 +14,7 @@ import com.alien.common.gameplay.effect.MetamorphosisStatusEffect;
 import com.alien.common.gameplay.effect.RadiationResistanceStatusEffect;
 import com.alien.common.gameplay.effect.RadiationSicknessStatusEffect;
 import com.alien.common.gameplay.effect.ScourgeStatusEffect;
+import com.alien.common.gameplay.effect.StunnedStatusEffect;
 import com.blib.api.common.registry.v1.BLibHolder;
 import com.blib.api.common.registry.v1.BLibRegistry;
 import net.minecraft.core.Holder;
@@ -61,6 +62,8 @@ public class AlienMobEffects {
         MarkedForDeathStatusEffect::new
     );
 
+    private static final BLibHolder<MobEffect> STUNNED = create("stunned", StunnedStatusEffect::new);
+
     public static Holder<MobEffect> getRadiationResistanceHolder() {
         return RADIATION_RESISTANCE.getBackingHolder();
     }
@@ -75,6 +78,10 @@ public class AlienMobEffects {
 
     public static Holder<MobEffect> getChitinousAuraHolder() {
         return CHITINOUS_AURA.getBackingHolder();
+    }
+
+    public static Holder<MobEffect> getStunnedHolder() {
+        return STUNNED.getBackingHolder();
     }
 
     public static Holder<MobEffect> getBloodLossHolder() {

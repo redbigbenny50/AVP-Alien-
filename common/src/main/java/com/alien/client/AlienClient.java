@@ -18,6 +18,7 @@ import com.alien.client.render.block.CrusherHeadBlockEntityRenderer;
 import com.alien.client.render.block.JellyVatBlockEntityRenderer;
 import com.alien.client.render.block.QueenHeadBlockEntityRenderer;
 import com.alien.client.render.block.XenomorphHeadBlockEntityRenderer;
+import com.alien.client.render.dismemberment.PraetorianRenderedLimbPicker;
 import com.alien.client.render.entity.AcidRenderer;
 import com.alien.client.render.entity.AcidSpitRenderer;
 import com.alien.client.render.entity.AdolescentRenderer;
@@ -62,6 +63,7 @@ import com.alien.common.registry.init.item.AlienItems;
 import com.alien.common.registry.init.item.AlienXenomorphHeadItems;
 import com.alien.compatibility.blib_engine.BLibEngine;
 import com.blib.api.client.mod.v1.BLibClientMod;
+import com.blib.api.common.dismemberment.v1.hitbox.LimbHitPredictionRegistry;
 import com.blib.api.common.registry.v1.BLibHolder;
 import net.minecraft.client.renderer.RenderType;
 import net.minecraft.world.item.Item;
@@ -83,6 +85,7 @@ public class AlienClient {
         registerItemRenderers();
         registerBlockEntityRenderers();
         registerParticleProviderFactories();
+        LimbHitPredictionRegistry.registerClientProvider(new PraetorianRenderedLimbPicker());
 
         // Engine workspace: add hive-specific inspector sections under the generic faction inspector so picking an AVP
         // faction in the FactionBrowser reveals biomass/jelly/caste/territory/leadership/vigilance data.

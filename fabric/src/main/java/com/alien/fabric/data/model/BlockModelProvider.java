@@ -14,6 +14,9 @@ import net.fabricmc.fabric.api.datagen.v1.provider.FabricModelProvider;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.data.models.BlockModelGenerators;
 import net.minecraft.data.models.ItemModelGenerators;
+import net.minecraft.data.models.blockstates.MultiVariantGenerator;
+import net.minecraft.data.models.blockstates.Variant;
+import net.minecraft.data.models.blockstates.VariantProperties;
 import net.minecraft.data.models.model.ModelLocationUtils;
 import net.minecraft.data.models.model.ModelTemplates;
 import net.minecraft.data.models.model.TextureMapping;
@@ -30,7 +33,7 @@ public class BlockModelProvider extends FabricModelProvider {
 
     @Override
     public void generateBlockStateModels(BlockModelGenerators generators) {
-        generators.createRotatedVariantBlock(IrradiatedAlienResinBlocks.IRRADIATED_RESIN.get());
+        createFullyRotatedVariantBlock(generators, IrradiatedAlienResinBlocks.IRRADIATED_RESIN.get());
         createSlab(generators, IrradiatedAlienResinBlocks.IRRADIATED_RESIN.get(), IrradiatedAlienResinBlocks.IRRADIATED_RESIN_SLAB.get());
         createStairs(
             generators,
@@ -113,7 +116,7 @@ public class BlockModelProvider extends FabricModelProvider {
             .stairs(IrradiatedAlienChitinBlocks.POLISHED_IRRADIATED_CHITIN_STAIRS.get())
             .wall(IrradiatedAlienChitinBlocks.POLISHED_IRRADIATED_CHITIN_WALL.get());
 
-        generators.createRotatedVariantBlock(AberrantAlienResinBlocks.ABERRANT_RESIN.get());
+        createFullyRotatedVariantBlock(generators, AberrantAlienResinBlocks.ABERRANT_RESIN.get());
         createSlab(generators, AberrantAlienResinBlocks.ABERRANT_RESIN.get(), AberrantAlienResinBlocks.ABERRANT_RESIN_SLAB.get());
         createStairs(generators, AberrantAlienResinBlocks.ABERRANT_RESIN.get(), AberrantAlienResinBlocks.ABERRANT_RESIN_STAIRS.get());
         createSlab(generators, AberrantAlienResinBlocks.ABERRANT_RESIN_BONE.get(), AberrantAlienResinBlocks.ABERRANT_RESIN_BONE_SLAB.get());
@@ -188,7 +191,7 @@ public class BlockModelProvider extends FabricModelProvider {
             .stairs(AberrantAlienChitinBlocks.POLISHED_ABERRANT_CHITIN_STAIRS.get())
             .wall(AberrantAlienChitinBlocks.POLISHED_ABERRANT_CHITIN_WALL.get());
 
-        generators.createRotatedVariantBlock(NetherAlienResinBlocks.NETHER_RESIN.get());
+        createFullyRotatedVariantBlock(generators, NetherAlienResinBlocks.NETHER_RESIN.get());
         createSlab(generators, NetherAlienResinBlocks.NETHER_RESIN.get(), NetherAlienResinBlocks.NETHER_RESIN_SLAB.get());
         createStairs(generators, NetherAlienResinBlocks.NETHER_RESIN.get(), NetherAlienResinBlocks.NETHER_RESIN_STAIRS.get());
         createSlab(generators, NetherAlienResinBlocks.NETHER_RESIN_BONE.get(), NetherAlienResinBlocks.NETHER_RESIN_BONE_SLAB.get());
@@ -340,6 +343,46 @@ public class BlockModelProvider extends FabricModelProvider {
             .put(TextureSlot.TOP, yResourceLocation);
 
         generators.createTrivialBlock(block, textureMapping, ModelTemplates.CUBE_BOTTOM_TOP);
+    }
+
+    /**
+     * Emits a cube blockstate randomised across ALL SIXTEEN orientations - every combination of x and y rotation -
+     * rather than vanilla's four.
+     * <p>
+     * [stated] "aberrant resin, nether resin, and irradiated resin ... should have the same rotations as the normal
+     * resin." Normal resin is hand-authored in resources with 16 variants precisely because vanilla cannot express
+     * this: {@code BlockModelGenerators.createRotatedVariantBlock} only ever varies y, so the three strain resins were
+     * generating 4 variants and tiling far more obviously than the normal strain beside them.
+     * <p>
+     * Generated rather than hand-authored on purpose. A manual copy in resources would collide with the datagen output
+     * on the same resource path - the same duplicate-root problem that had 120 files disagreeing - because the model
+     * and the blockstate come out of one vanilla call and cannot be split apart.
+     * <p>
+     * The block item model is unaffected: vanilla emits {@code {"parent": <block model>}} for BlockItems at the end of
+     * its own run, not from this call.
+     */
+    private void createFullyRotatedVariantBlock(BlockModelGenerators generators, Block block) {
+        var model = TexturedModel.CUBE.create(block, generators.modelOutput);
+        var rotations = new VariantProperties.Rotation[] {
+            VariantProperties.Rotation.R0,
+            VariantProperties.Rotation.R90,
+            VariantProperties.Rotation.R180,
+            VariantProperties.Rotation.R270
+        };
+
+        var variants = new Variant[rotations.length * rotations.length];
+        var index = 0;
+
+        for (var xRotation : rotations) {
+            for (var yRotation : rotations) {
+                variants[index++] = Variant.variant()
+                    .with(VariantProperties.MODEL, model)
+                    .with(VariantProperties.X_ROT, xRotation)
+                    .with(VariantProperties.Y_ROT, yRotation);
+            }
+        }
+
+        generators.blockStateOutput.accept(MultiVariantGenerator.multiVariant(block, variants));
     }
 
     private void createRotatedPillar(BlockModelGenerators generators, Block rotatedPillarBlock, TexturedModel.Provider modelProvider) {

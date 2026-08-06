@@ -14,6 +14,7 @@ public record XenomorphConfig(
     float healthRegenPerSecond,
     boolean isPushedByFluid,
     boolean canCrawl,
+    boolean canCrawlAfterLegLoss,
     Function<AlienVariant, @Nullable EntityType<? extends Alien>> variantResolver
 ) {
 
@@ -39,6 +40,8 @@ public record XenomorphConfig(
         private boolean isPushedByFluid = true;
 
         private boolean canCrawl = true;
+
+        private boolean canCrawlAfterLegLoss = true;
 
         private Builder(
             XenomorphPathConfig pathConfig,
@@ -78,6 +81,12 @@ public record XenomorphConfig(
             return this;
         }
 
+        /** Allows a damaged giant to crawl after losing a leg without allowing normal tight-space path crawling. */
+        public Builder canCrawlAfterLegLoss(boolean canCrawlAfterLegLoss) {
+            this.canCrawlAfterLegLoss = canCrawlAfterLegLoss;
+            return this;
+        }
+
         public XenomorphConfig build() {
             return new XenomorphConfig(
                 pathConfig,
@@ -86,6 +95,7 @@ public record XenomorphConfig(
                 healthRegenPerSecond,
                 isPushedByFluid,
                 canCrawl,
+                canCrawlAfterLegLoss,
                 variantResolver
             );
         }

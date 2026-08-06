@@ -1,5 +1,6 @@
 package com.alien.common.gameplay.entity.living.alien.xenomorph.queen;
 
+import com.alien.common.data.AlienVariantTypes;
 import com.alien.common.gameplay.entity.living.alien.Alien;
 import com.alien.common.gameplay.entity.living.alien.xenomorph.AttackType;
 import com.alien.common.gameplay.entity.living.alien.xenomorph.Xenomorph;
@@ -21,12 +22,16 @@ import com.alien.common.registry.init.item.AlienItems;
 import com.alien.common.registry.tag.AlienEntityTypeTags;
 import com.blib.api.common.data_sync.v1.DataAccessor;
 import com.blib.api.common.entity.v1.PlayerStatConstants;
+import com.blib.api.common.entity.v1.PlayerUtil;
 import com.blib.api.common.goap.v1.GOAPUser;
 import com.just.ai.goap.Agent;
 import com.just.ai.goap.graph.Graph;
+import net.minecraft.ChatFormatting;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.sounds.SoundEvent;
+import net.minecraft.sounds.SoundSource;
 import net.minecraft.tags.DamageTypeTags;
 import net.minecraft.world.DifficultyInstance;
 import net.minecraft.world.InteractionHand;
@@ -104,6 +109,7 @@ public class Queen extends Xenomorph implements GOAPUser<Queen>, EggLayer, com.a
         // (crawl, crawl.idle, crawl.rise, crawl.drop, crawl_attack) and wired in QueenAnimationDispatcher; only
         // this flag kept any of it from ever playing.
         .canCrawl(true)
+        .canCrawlAfterLegLoss(true)
         .build();
 
     /**
@@ -112,6 +118,8 @@ public class Queen extends Xenomorph implements GOAPUser<Queen>, EggLayer, com.a
     private static final String LIFECYCLE_PHASE_TAG = "lifecyclePhase";
 
     private static final String LEGACY_DORMANT_TAG = "legacyDormant";
+
+    private static final String LEGACY_DORMANT_COMPAT_TAG = "LegacyDormant";
 
     public static AttributeSupplier.Builder createQueenAttributes() {
         return Alien.createAlienAttributes()
@@ -379,11 +387,22 @@ public class Queen extends Xenomorph implements GOAPUser<Queen>, EggLayer, com.a
             return;
         }
 
+        alertPlayersOfSpawn();
         spawnGuards();
         resetQueenSpawnCooldown();
 
         StrainLeakData.getOrCreate(level)
             .ifSome(strainLeakData -> strainLeakData.add(getVariant(), -1));
+    }
+
+    private void alertPlayersOfSpawn() {
+        for (var player : PlayerUtil.getTrackingPlayers(this)) {
+            player.playNotifySound(AlienSoundEvents.ENTITY_QUEEN_SCREAM.get(), SoundSource.MASTER, 1, 1);
+            player.sendSystemMessage(
+                Component.literal("A scream from the depths sends chills down your spine...")
+                    .withStyle(AlienVariantTypes.getFor(this).chatColor(), ChatFormatting.ITALIC)
+            );
+        }
     }
 
     private void spawnGuards() {
@@ -755,8 +774,11 @@ public class Queen extends Xenomorph implements GOAPUser<Queen>, EggLayer, com.a
         // that
         // BEFORE loading the managers so LegacyHiveRecovery can migrate her.
         this.loadedWithoutLifecycleState =
-            !compoundTag.contains(LIFECYCLE_PHASE_TAG) && !compoundTag.contains(LEGACY_DORMANT_TAG);
-        this.legacyDormant = compoundTag.getBoolean(LEGACY_DORMANT_TAG);
+            !compoundTag.contains(LIFECYCLE_PHASE_TAG)
+                && !compoundTag.contains(LEGACY_DORMANT_TAG)
+                && !compoundTag.contains(LEGACY_DORMANT_COMPAT_TAG);
+        this.legacyDormant = compoundTag.getBoolean(LEGACY_DORMANT_TAG)
+            || compoundTag.getBoolean(LEGACY_DORMANT_COMPAT_TAG);
         this.playerPlaced = compoundTag.getBoolean("PlayerPlaced");
         ovipositorManager.load(compoundTag);
         queenData.load(compoundTag);

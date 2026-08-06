@@ -5,6 +5,7 @@ import com.alien.client.animation.entity.cocoon.CocoonAnimationStateTracker;
 import com.alien.common.gameplay.entity.living.alien.xenomorph.AttackType;
 import com.alien.common.gameplay.entity.living.alien.xenomorph.crusher.Crusher;
 import com.alien.common.gameplay.entity.living.alien.xenomorph.crusher.CrusherAnimationRefs;
+import com.alien.common.gameplay.entity.living.alien.xenomorph.crusher.CrusherChargeAttack;
 import com.alien.common.util.AzAlienAnimationUtil;
 import com.alien.common.util.AzAlienHeadAnimationUtil;
 import com.blib.api.client.animation.v1.animator.AzAnimatorConfig;
@@ -58,19 +59,26 @@ public class CrusherAnimator extends AzEntityAnimator<Crusher> {
     private void runPassiveAnimations(Crusher crusher) {
         var dispatcher = crusher.getAnimationDispatcher();
 
-        if (crusher.isLunging.get()) {
-            dispatcher.lunge();
-            return;
-        }
-
         var attackType = crusher.attackType.get();
         var attackId = crusher.attackId.get();
 
         if (!attackType.isNone()) {
+            if (attackType == CrusherChargeAttack.ATTACK) {
+                dispatcher.run();
+                return;
+            }
+
+            if (attackType == CrusherChargeAttack.BACKUP) {
+                dispatcher.walk();
+                return;
+            }
+
             if (attackId != previousAttackId) {
                 var speed = calculateAttackSpeed(crusher, attackType);
 
-                if (attackType == Crusher.BITE)
+                if (attackType == CrusherChargeAttack.WINDUP)
+                    dispatcher.lunge();
+                else if (attackType == Crusher.BITE)
                     dispatcher.biteAttack(speed);
                 else if (attackType == Crusher.TAIL)
                     dispatcher.tailAttack(speed);
