@@ -11,10 +11,12 @@ import com.alien.common.gameplay.hive.id.LineageIds;
 import com.alien.common.gameplay.hive.location.HiveLocation;
 import com.alien.common.gameplay.hive.location.HiveLocationRegistry;
 import com.alien.common.gameplay.hive.tick.HiveLocationLoadedTickTask;
+import com.alien.common.registry.init.AlienSoundEvents;
 import com.alien.common.registry.tag.AlienEntityTypeTags;
 import com.blib.api.common.faction.v1.RelationshipState;
 import com.blib.api.common.territory.v1.TerritoryContest;
 import com.blib.api.common.territory.v1.TerritoryContestListener;
+import net.minecraft.core.BlockPos;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
@@ -36,9 +38,6 @@ public final class AlienTerritoryWarSystem implements TerritoryContestListener {
     private static final ResourceLocation REASON = AlienResources.location("territory_war");
 
     private static final int[][] CARDINAL_OFFSETS = { { 1, 0 }, { -1, 0 }, { 0, 1 }, { 0, -1 } };
-
-    /** Players this close to either hive hear the war declared and settled. Matches the queen-message audience. */
-    private static final double ANNOUNCE_RANGE_BLOCKS = 256.0;
 
     /** [stated] "there is a period of 3 mc days before hostilities start" when two hives share a slab band. */
     private static final long SLAB_GRACE_TICKS = 3L * 24000L;
@@ -504,12 +503,11 @@ public final class AlienTerritoryWarSystem implements TerritoryContestListener {
         }
 
         if (level != null) {
-            announce(
+            broadcast(
                 level,
-                location,
-                enemy,
-                victorId == null ? "The hive war has ended - both sides are spent..." : "A hive war has ended...",
-                net.minecraft.ChatFormatting.DARK_RED
+                "<<Attention>> Hostilities at " + coordsOf(warAnchorPos(location, enemy)) + " have concluded",
+                net.minecraft.ChatFormatting.GREEN,
+                AlienSoundEvents.BROADCAST_WAR_ALL_CLEAR.get()
             );
         }
         Alien.LOGGER.info(
@@ -520,25 +518,52 @@ public final class AlienTerritoryWarSystem implements TerritoryContestListener {
         );
     }
 
-    /** War news reaches players near EITHER hive - they are the ones who will walk into it. */
-    private static void announce(
+    /**
+     * A hive war is world news, not local news: every player on the server gets the line and the morse broadcast,
+     * wherever they are. Range-limiting it would have hidden exactly the warning it exists to give - the point is that
+     * you learn the coordinates BEFORE you wander into a warzone.
+     */
+    private static void broadcast(
         ServerLevel level,
-        HiveLocation first,
-        @org.jetbrains.annotations.Nullable HiveLocation second,
         String text,
-        net.minecraft.ChatFormatting colour
+        net.minecraft.ChatFormatting colour,
+        net.minecraft.sounds.SoundEvent sound
     ) {
         var line = net.minecraft.network.chat.Component
             .literal(text)
             .withStyle(colour, net.minecraft.ChatFormatting.ITALIC);
-        for (var player : level.players()) {
-            boolean nearFirst = player.blockPosition().closerThan(first.centerPos(), ANNOUNCE_RANGE_BLOCKS);
-            boolean nearSecond = second != null
-                && player.blockPosition().closerThan(second.centerPos(), ANNOUNCE_RANGE_BLOCKS);
-            if (nearFirst || nearSecond) {
-                player.sendSystemMessage(line);
-            }
+        for (var player : level.getServer().getPlayerList().getPlayers()) {
+            player.sendSystemMessage(line);
+            player.playNotifySound(sound, net.minecraft.sounds.SoundSource.MASTER, 1F, 1F);
         }
+    }
+
+    /**
+     * The hive whose coordinates BOTH announcements quote, chosen the same way at declaration and at conclusion so the
+     * all-clear names the place the warning named.
+     * <p>
+     * It cannot simply be "the location that noticed", because a war is symmetric and either side may be the one that
+     * ticks the conclusion. Ordering the two ids gives both ends the same answer with nothing persisted. If the chosen
+     * side has already left the registry by conclusion time, the survivor stands in - the war is over either way, and a
+     * slightly different coordinate beats no all-clear at all.
+     */
+    private static BlockPos warAnchorPos(
+        @org.jetbrains.annotations.Nullable HiveLocation first,
+        @org.jetbrains.annotations.Nullable HiveLocation second
+    ) {
+        if (first == null) {
+            return second == null ? BlockPos.ZERO : second.centerPos();
+        }
+        if (second == null) {
+            return first.centerPos();
+        }
+        return first.id().value().toString().compareTo(second.id().value().toString()) <= 0
+            ? first.centerPos()
+            : second.centerPos();
+    }
+
+    private static String coordsOf(BlockPos pos) {
+        return pos.getX() + ", " + pos.getY() + ", " + pos.getZ();
     }
 
     @Override
@@ -897,12 +922,11 @@ public final class AlienTerritoryWarSystem implements TerritoryContestListener {
         // Two empires meeting: each crown pays its own hive up to half strength before the first blow.
         EmpressWarBolster.tryBolster(level, first, second);
         EmpressWarBolster.tryBolster(level, second, first);
-        announce(
+        broadcast(
             level,
-            first,
-            second,
-            "Two hives have gone to war...",
-            net.minecraft.ChatFormatting.DARK_RED
+            "<<Warning>> Alien lifeform hostilities reported, avoid " + coordsOf(warAnchorPos(first, second)),
+            net.minecraft.ChatFormatting.DARK_RED,
+            AlienSoundEvents.BROADCAST_WAR_SOS.get()
         );
         Alien.LOGGER.info(
             "Alien hive war DECLARED between {} and {} — contested ground is frozen until one side is spent.",

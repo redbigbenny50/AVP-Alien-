@@ -52,6 +52,7 @@ public class EnUsItemProvider {
         // UNSORTED
         addItem(builder, AlienItems.ALIEN_MUSIC_DISC_1, "Music Disc");
         addItem(builder, AlienItems.CAPTURE_CHAIN, "Capture Chain");
+        addItem(builder, AlienItems.FIELD_MANUAL, "Xenobiological Survey Vol. 1");
         addItem(builder, AlienItems.INHIBITOR, "Inhibitor");
         addItem(builder, AlienItems.TRACKER, "Tracker");
         addItem(builder, AlienItems.TRACKING_PDA, "Tracking PDA");

@@ -81,7 +81,7 @@ public final class EmpressEmergenceTask {
                 continue;
             }
 
-            var seat = EmpressCandidatePicker.pickSeat(lineage);
+            var seat = EmpressCandidatePicker.pickSeat(lineage, server, currentTick);
             if (seat == null) {
                 // No hive in the lineage has a seated queen. Nothing to crown; retry next scan.
                 continue;

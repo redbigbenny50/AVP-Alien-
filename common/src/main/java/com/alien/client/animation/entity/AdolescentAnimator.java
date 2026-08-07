@@ -18,6 +18,16 @@ public class AdolescentAnimator extends AzEntityAnimator<Adolescent> {
 
     private static final ResourceLocation ANIMATION = AlienResources.entityAnimationLocation(NAME);
 
+    private static final String ROYAL_NAME = "royal_adolescent";
+
+    /**
+     * The royal adolescent is the SAME entity class on the SAME renderer - only its texture, geo and now its animation
+     * file differ. The renderer already switches the geo on {@code isRoyal()}; this does the same for the clips, which
+     * were authored separately for the royal proportions. Clip NAMES are identical between the two files, so one
+     * dispatcher drives both.
+     */
+    private static final ResourceLocation ROYAL_ANIMATION = AlienResources.entityAnimationLocation(ROYAL_NAME);
+
     public AdolescentAnimator() {
         super(AzAnimatorConfig.defaultConfig());
     }
@@ -51,7 +61,7 @@ public class AdolescentAnimator extends AzEntityAnimator<Adolescent> {
 
     @Override
     public @NotNull ResourceLocation getAnimationLocation(Adolescent animatable) {
-        return ANIMATION;
+        return animatable.isRoyal() ? ROYAL_ANIMATION : ANIMATION;
     }
 
     @Override

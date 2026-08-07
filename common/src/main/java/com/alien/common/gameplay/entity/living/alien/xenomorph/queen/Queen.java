@@ -1,6 +1,5 @@
 package com.alien.common.gameplay.entity.living.alien.xenomorph.queen;
 
-import com.alien.common.data.AlienVariantTypes;
 import com.alien.common.gameplay.entity.living.alien.Alien;
 import com.alien.common.gameplay.entity.living.alien.xenomorph.AttackType;
 import com.alien.common.gameplay.entity.living.alien.xenomorph.Xenomorph;
@@ -22,16 +21,12 @@ import com.alien.common.registry.init.item.AlienItems;
 import com.alien.common.registry.tag.AlienEntityTypeTags;
 import com.blib.api.common.data_sync.v1.DataAccessor;
 import com.blib.api.common.entity.v1.PlayerStatConstants;
-import com.blib.api.common.entity.v1.PlayerUtil;
 import com.blib.api.common.goap.v1.GOAPUser;
 import com.just.ai.goap.Agent;
 import com.just.ai.goap.graph.Graph;
-import net.minecraft.ChatFormatting;
 import net.minecraft.nbt.CompoundTag;
-import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.sounds.SoundEvent;
-import net.minecraft.sounds.SoundSource;
 import net.minecraft.tags.DamageTypeTags;
 import net.minecraft.world.DifficultyInstance;
 import net.minecraft.world.InteractionHand;
@@ -387,7 +382,11 @@ public class Queen extends Xenomorph implements GOAPUser<Queen>, EggLayer, com.a
             return;
         }
 
-        alertPlayersOfSpawn();
+        // NO SPAWN ANNOUNCEMENT HERE. The world-genesis line is broadcast by
+        // QueenLifecyclePhaseManager.beginWildImmediateFounding, which already plays ENTITY_QUEEN_SCREAM
+        // itself (broadcastToNearbyPlayers withQueenScream = true). This call duplicated both the scream and
+        // the message for the first wild queen, and announced every LATER wild queen too - which contradicts
+        // the design note on beginWildImmediateFounding: later wild queens are DISCOVERED, not announced.
         spawnGuards();
         resetQueenSpawnCooldown();
 
@@ -395,20 +394,41 @@ public class Queen extends Xenomorph implements GOAPUser<Queen>, EggLayer, com.a
             .ifSome(strainLeakData -> strainLeakData.add(getVariant(), -1));
     }
 
-    private void alertPlayersOfSpawn() {
-        for (var player : PlayerUtil.getTrackingPlayers(this)) {
-            player.playNotifySound(AlienSoundEvents.ENTITY_QUEEN_SCREAM.get(), SoundSource.MASTER, 1, 1);
-            player.sendSystemMessage(
-                Component.literal("A scream from the depths sends chills down your spine...")
-                    .withStyle(AlienVariantTypes.getFor(this).chatColor(), ChatFormatting.ITALIC)
-            );
-        }
-    }
+    /** Escort for a freshly spawned wild queen - she has a long walk ahead and nothing else to defend her. */
+    private static final int SPAWN_ESCORT_SIZE = 4;
+
+    /** Workforce handed to a queen the moment she wakes to found. See {@link #spawnFoundingCrew()}. */
+    private static final int FOUNDING_CREW_SIZE = 4;
 
     private void spawnGuards() {
+        spawnDrones(SPAWN_ESCORT_SIZE);
+    }
+
+    /**
+     * Give a waking queen a founding crew.
+     * <p>
+     * [stated] "this queen when i woke her from hibernation she didnt spawn with any helper drones." She would not
+     * have: the only drone spawn was {@link #spawnGuards()}, fired from finalizeSpawn and ONLY for
+     * {@code MobSpawnType.NATURAL}. Those four appear at spawn time, and she then spends five minutes developing, walks
+     * to her anchor and sleeps three Minecraft days - so they have long scattered by the time she founds. A spawn-egged
+     * or summoned queen never had any at all.
+     * <p>
+     * This matters beyond flavour: the founding core is queen-dug, but every piece AFTER it needs drone diggers, and a
+     * hive with none logs "carve site is unstaffed - no free drones, nothing in reserve. Build paused." indefinitely. A
+     * queen who wakes alone cannot dig her way out of that.
+     */
+    public void spawnFoundingCrew() {
+        spawnDrones(FOUNDING_CREW_SIZE);
+    }
+
+    private void spawnDrones(int count) {
+        if (level().isClientSide) {
+            return;
+        }
+
         var droneType = Drone.getType(getVariant());
 
-        for (var i = 0; i < 4; i++) {
+        for (var i = 0; i < count; i++) {
             var drone = droneType.spawn((ServerLevel) level(), blockPosition(), MobSpawnType.NATURAL);
 
             if (drone != null) {

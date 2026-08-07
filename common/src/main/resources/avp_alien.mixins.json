@@ -10,6 +10,7 @@
     "MixinItem_GigeresqueSurgeryKit",
     "MixinLivingEntity_BloodLoss",
     "MixinLivingEntity_ChitinousAura",
+    "MixinLivingEntity_FireproofArmor",
     "MixinLivingEntity_GlowingTalons",
     "MixinLivingEntity_HiveBiomass",
     "MixinLivingEntity_Host",

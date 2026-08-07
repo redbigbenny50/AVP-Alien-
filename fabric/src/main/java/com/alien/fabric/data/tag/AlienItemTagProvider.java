@@ -6,7 +6,6 @@ import com.alien.common.registry.init.item.AlienItems;
 import com.alien.common.registry.init.item.block.IrradiatedAlienResinBlockItems;
 import com.alien.common.registry.tag.AlienItemTags;
 import com.alien.compatibility.avp_human.AVPHuman;
-import com.blib.api.common.tag.v1.BLibItemTags;
 import com.blib.api.common.tag.v1.CommonItemTags;
 import com.human.common.registry.tag.HumanItemTags;
 import net.fabricmc.fabric.api.datagen.v1.FabricDataOutput;
@@ -44,6 +43,15 @@ public class AlienItemTagProvider extends FabricTagProvider.ItemTagProvider {
 
         addCompatibilityTags();
 
+        // Every strain's resin ball, so the field manual recipe accepts any variant.
+        getOrCreateTagBuilder(AlienItemTags.RESIN_BALLS)
+            .add(
+                AlienItems.RESIN_BALL.get(),
+                AlienItems.ABERRANT_RESIN_BALL.get(),
+                AlienItems.IRRADIATED_RESIN_BALL.get(),
+                AlienItems.NETHER_RESIN_BALL.get()
+            );
+
         // Acid-resistant items
         getOrCreateTagBuilder(AlienItemTags.ACID_IMMUNE)
             .addTag(AlienItemTags.CHITIN_ARMORS)
@@ -59,7 +67,10 @@ public class AlienItemTagProvider extends FabricTagProvider.ItemTagProvider {
                 AlienItems.PLATED_IRRADIATED_CHITIN.get()
             );
 
-        getOrCreateTagBuilder(BLibItemTags.DECORATIVE_POT_SHERDS)
+        // VANILLA tag, not BLib's deprecated DECORATIVE_POT_SHERDS. Nothing in BLib 419 reads that constant any
+        // more, and `minecraft:decorated_pot_sherds` is the tag vanilla itself checks when crafting a decorated
+        // pot - so this both clears the deprecation and lets our sherds actually be used in one.
+        getOrCreateTagBuilder(ItemTags.DECORATED_POT_SHERDS)
             .add(
                 AlienItems.OVOID_POTTERY_SHERD.get(),
                 AlienItems.PARASITE_POTTERY_SHERD.get(),
@@ -216,14 +227,6 @@ public class AlienItemTagProvider extends FabricTagProvider.ItemTagProvider {
                 AlienArmorItems.IRRADIATED_CHITIN_BOOTS.get()
             );
 
-        getOrCreateTagBuilder(AlienItemTags.NETHER_CHITIN_ARMOR)
-            .add(
-                AlienArmorItems.NETHER_CHITIN_HELMET.get(),
-                AlienArmorItems.NETHER_CHITIN_CHESTPLATE.get(),
-                AlienArmorItems.NETHER_CHITIN_LEGGINGS.get(),
-                AlienArmorItems.NETHER_CHITIN_BOOTS.get()
-            );
-
         getOrCreateTagBuilder(AlienItemTags.PLATED_ABERRANT_CHITIN_ARMOR)
             .add(
                 AlienArmorItems.PLATED_ABERRANT_CHITIN_HELMET.get(),
@@ -264,9 +267,13 @@ public class AlienItemTagProvider extends FabricTagProvider.ItemTagProvider {
             .addTag(AlienItemTags.NETHER_CHITIN_ARMOR)
             .addTag(AlienItemTags.NORMAL_CHITIN_ARMOR);
 
-        getOrCreateTagBuilder(BLibItemTags.FIRE_RESISTANT_ARMORS)
-            .addTag(AlienItemTags.NETHER_CHITIN_ARMOR)
-            .addTag(AlienItemTags.PLATED_NETHER_CHITIN_ARMOR);
+        // BLibItemTags.FIRE_RESISTANT_ARMORS was deprecated for removal in BLib 0.3.0-alpha.419 and NOTHING in
+        // BLib reads it any more, so populating it did nothing. Removed rather than suppressed.
+        //
+        // ⚠ IF nether chitin armour is meant to grant fire resistance to the wearer, that behaviour has to live
+        // somewhere in avp_alien now - nothing in this repo implements it, and the tag it was relying on is
+        // dead. The armour items themselves are still fireproof via their item properties; it is the WEARER
+        // effect that has no owner.
 
         getOrCreateTagBuilder(AlienItemTags.PLATED_CHITIN_ARMORS)
             .addTag(AlienItemTags.PLATED_ABERRANT_CHITIN_ARMOR)

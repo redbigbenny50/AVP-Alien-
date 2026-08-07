@@ -21,12 +21,21 @@ import java.util.List;
 public class OvipositorManager implements NBTSerializable {
 
     /**
-     * The eggsack model sits visually skewed when given the royal's exact body yaw ([stated] "the eggsack seems off
-     * center for the queen and empress. it attaches fine to her but its not rotated correctly it needs to rotate more
-     * to the right") - a fixed authoring-orientation offset between the two models. Positive = clockwise (to her right)
-     * in Minecraft yaw. ONE dial, used by queen and empress managers alike; tune here if the sack still sits off.
+     * Yaw applied to the eggsack on top of the royal's own facing. **ZERO ON PURPOSE.**
+     * <p>
+     * This was 25 degrees, added to answer "it needs to rotate more to the right". That was the wrong tool and it broke
+     * the placement: the sack rides at a DERIVED offset - `positionRider` uses `EntityUtil.getRelativePosition(this, 3,
+     * 0.01, 5.25)`, and those numbers come from the seat cube in the model (`gFullSack`'s first cube, centre x -2.969 z
+     * -4.805 blocks) so that the seat lands under her. The seat sits 5.65 blocks from the sack's own origin, so yawing
+     * the whole model about that origin swings the seat through an arc - 2.44 blocks sideways at 25 degrees. That is
+     * why the sack drifted off centre.
+     * <p>
+     * [stated] "lets not rotate it and just leave it at the default positioning i can adjust rotations in the model
+     * itself. the important part is it sits under her." So the dial stays at zero and orientation is an ART decision.
+     * If it is ever set non-zero again the ride offsets in `Queen.positionRider` and the empress's
+     * OVIPOSITOR_RIDE_LATERAL / _DISTANCE must be rotated to match, or the seat walks off her again.
      */
-    public static final float OVIPOSITOR_YAW_OFFSET_DEGREES = 25.0F;
+    public static final float OVIPOSITOR_YAW_OFFSET_DEGREES = 0.0F;
 
     private final Cooldown ovipositorCreationCooldown;
 
@@ -295,7 +304,11 @@ public class OvipositorManager implements NBTSerializable {
         var ovipositor = AlienEntityTypes.OVIPOSITOR.get().create(queen.level());
 
         if (ovipositor != null) {
-            ovipositor.moveTo(queen.position(), queen.getYRot() + OVIPOSITOR_YAW_OFFSET_DEGREES, queen.getXRot());
+            ovipositor.moveTo(
+                queen.position(),
+                queen.getYRot() + OVIPOSITOR_YAW_OFFSET_DEGREES,
+                queen.getXRot()
+            );
             ovipositor.startRiding(queen, true);
 
             // Body rotation - offset so the sack model sits centered on her (see OVIPOSITOR_YAW_OFFSET_DEGREES).
@@ -427,7 +440,11 @@ public class OvipositorManager implements NBTSerializable {
             queen.yBodyRot = settledYaw;
             queen.yHeadRot = settledYaw;
 
-            ovipositor.moveTo(queen.position(), settledYaw + OVIPOSITOR_YAW_OFFSET_DEGREES, queen.getXRot());
+            ovipositor.moveTo(
+                queen.position(),
+                settledYaw + OVIPOSITOR_YAW_OFFSET_DEGREES,
+                queen.getXRot()
+            );
             ovipositor.startRiding(queen, true);
             ovipositor.yBodyRot = settledYaw + OVIPOSITOR_YAW_OFFSET_DEGREES;
             ovipositor.yHeadRot = settledYaw;

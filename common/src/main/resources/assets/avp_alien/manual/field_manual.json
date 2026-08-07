@@ -1,0 +1,661 @@
+{
+  "sections": [
+    {
+      "title": "Introduction",
+      "pages": [
+        {
+          "title": "Welcome To The Survey",
+          "elements": [
+            {
+              "type": "image",
+              "image": "avp_alien:textures/gui/manual/wy_science_logo.png",
+              "label": "Weyland-Yutani",
+              "width": 160,
+              "height": 27,
+              "show_border": false,
+              "spacing_after": 2
+            },
+            {
+              "type": "header",
+              "text": "Weyland Yutani Science Division",
+              "spacing_after": 8
+            },
+            {
+              "type": "text",
+              "text": "Thank you for volunteering for the Xenobiological Field Survey. If your participation was arranged on your behalf by the Debt Resolution Office, welcome all the same. Your enthusiasm is noted either way.",
+              "spacing_after": 6
+            },
+            {
+              "type": "text",
+              "text": "This manual covers the capture and containment of xenomorph queens. Inside you will find fabrication schematics for the necessary equipment, recommended field procedure, and the whole of what the Company has gathered on the species to date.",
+              "spacing_after": 6
+            },
+            {
+              "type": "text",
+              "text": "Read it before you need it. The sections are short because the situations they describe are short.",
+              "spacing_after": 0
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "title": "Dangers Of Poor Containment",
+      "pages": [
+        {
+          "title": "Do Not Improvise",
+          "elements": [
+            {
+              "type": "text",
+              "text": "Do not simply throw a wild queen into your holding cell at base.",
+              "spacing_after": 6
+            },
+            {
+              "type": "image",
+              "image": "avp_alien:textures/gui/manual/containment_failure.png",
+              "label": "Survey site 4 - structure loss following improvised containment",
+              "width": 160,
+              "height": 85,
+              "show_border": true,
+              "spacing_after": 3
+            },
+            {
+              "type": "text",
+              "text": "Recovered survey imagery. The cell held for some hours.",
+              "spacing_after": 7
+            },
+            {
+              "type": "text",
+              "text": "We do appreciate the initiative, and the free data. It also remains the single most avoidable loss of materials and personnel across the entire survey.",
+              "spacing_after": 6
+            },
+            {
+              "type": "text",
+              "text": "She is not an ordinary specimen. While you study her, she is studying you.",
+              "spacing_after": 6
+            },
+            {
+              "type": "text",
+              "text": "Improvised containment of a wild queen leads her to treat the cell as raw material, and then the structure around it, until she has built her palace out of your base.",
+              "spacing_after": 6
+            },
+            {
+              "type": "text",
+              "text": "There are, however, measures you can take to subdue her correctly. They follow.",
+              "spacing_after": 0
+            }
+          ]
+        },
+        {
+          "title": "On Improvised Containment",
+          "elements": [
+            {
+              "type": "text",
+              "text": "An unsubdued queen founds a hive. This is not aggression and it is not a response to you. It is simply what she does next, and she requires no permission to begin.",
+              "spacing_after": 6
+            },
+            {
+              "type": "text",
+              "text": "Founding is not a modest footprint. She claims territory considerably wider than the structure she excavates, carves chambers through whatever occupies the intervening space, and begins producing workers who widen it further. Your walls are not a barrier to this process. They are a duration.",
+              "spacing_after": 6
+            },
+            {
+              "type": "header",
+              "text": "Standing guidance",
+              "spacing_after": 4
+            },
+            {
+              "type": "bullet",
+              "text": "Subdue her before she settles, or keep her well away from anything you would mind losing."
+            },
+            {
+              "type": "bullet",
+              "text": "A sealed room is not containment. It is a delay of uncertain length."
+            },
+            {
+              "type": "bullet",
+              "text": "Only an inhibitor prevents founding. Nothing improvised has ever been observed to work."
+            },
+            {
+              "type": "space",
+              "height": 4
+            },
+            {
+              "type": "text",
+              "text": "The Company does not replace structures lost to preventable enthusiasm. It does, however, welcome the field notes.",
+              "spacing_after": 0
+            }
+          ]
+        },
+        {
+          "title": "If She Has Already Settled",
+          "elements": [
+            {
+              "type": "text",
+              "text": "A queen who has already founded can still be taken. Fitting an inhibitor severs her from the hive she made and reduces her claim to a single chunk of ground.",
+              "spacing_after": 6
+            },
+            {
+              "type": "text",
+              "text": "Be clear about what this does and does not achieve. The hive does not die with her removal \u2014 it is left queenless but functioning, and what has been excavated stays excavated. Capture stops the loss. It does not reverse it.",
+              "spacing_after": 6
+            },
+            {
+              "type": "text",
+              "text": "Act early. The difference between a five minute inconvenience and a permanent feature of your landscape is decided in the first few minutes of her life.",
+              "spacing_after": 0
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "title": "The Founding Sequence",
+      "pages": [
+        {
+          "title": "The Five Stages",
+          "elements": [
+            {
+              "type": "text",
+              "text": "Every queen runs the same five stages between arrival and a working hive. Identifying the current one tells you how much time remains to you, which is the only figure that matters in the field.",
+              "spacing_after": 7
+            },
+            {
+              "type": "columns",
+              "gap": 6,
+              "left": [
+                {
+                  "type": "header",
+                  "text": "1. Developing",
+                  "spacing_after": 3
+                },
+                {
+                  "type": "text",
+                  "text": "Roughly five minutes. Mobile and hostile, but with no interest in territory yet.",
+                  "spacing_after": 4
+                },
+                {
+                  "type": "text",
+                  "text": "The longest uninterrupted window you will be given.",
+                  "spacing_after": 4
+                }
+              ],
+              "right": [
+                {
+                  "type": "image",
+                  "image": "avp_alien:textures/gui/manual/queen_developing.png",
+                  "label": "Developing",
+                  "width": 78,
+                  "height": 55,
+                  "show_border": true,
+                  "spacing_after": 0
+                }
+              ],
+              "spacing_after": 8
+            },
+            {
+              "type": "columns",
+              "gap": 6,
+              "left": [
+                {
+                  "type": "image",
+                  "image": "avp_alien:textures/gui/manual/queen_location.png",
+                  "label": "Location",
+                  "width": 78,
+                  "height": 55,
+                  "show_border": true,
+                  "spacing_after": 0
+                }
+              ],
+              "right": [
+                {
+                  "type": "header",
+                  "text": "2. Location",
+                  "spacing_after": 3
+                },
+                {
+                  "type": "text",
+                  "text": "She commits to a site and travels to it, cutting through whatever lies between.",
+                  "spacing_after": 4
+                },
+                {
+                  "type": "text",
+                  "text": "Once she has chosen, she is working toward a hive and your window is closing.",
+                  "spacing_after": 4
+                }
+              ],
+              "spacing_after": 8
+            },
+            {
+              "type": "columns",
+              "gap": 6,
+              "left": [
+                {
+                  "type": "header",
+                  "text": "3. Hibernation",
+                  "spacing_after": 3
+                },
+                {
+                  "type": "text",
+                  "text": "She sleeps at the site for three days.",
+                  "spacing_after": 4
+                },
+                {
+                  "type": "text",
+                  "text": "A queen dispatched by an established hive skips this entirely. Assume the worst case unless you know her origin.",
+                  "spacing_after": 4
+                }
+              ],
+              "right": [
+                {
+                  "type": "image",
+                  "image": "avp_alien:textures/gui/manual/queen_hibernation.png",
+                  "label": "Hibernation",
+                  "width": 78,
+                  "height": 55,
+                  "show_border": true,
+                  "spacing_after": 0
+                }
+              ],
+              "spacing_after": 8
+            },
+            {
+              "type": "columns",
+              "gap": 6,
+              "left": [
+                {
+                  "type": "image",
+                  "image": "avp_alien:textures/gui/manual/queen_carving.png",
+                  "label": "Carving",
+                  "width": 78,
+                  "height": 55,
+                  "show_border": true,
+                  "spacing_after": 0
+                }
+              ],
+              "right": [
+                {
+                  "type": "header",
+                  "text": "4. Chamber Excavation",
+                  "spacing_after": 3
+                },
+                {
+                  "type": "text",
+                  "text": "She wakes and digs out her own core chamber - the only excavation she ever performs herself.",
+                  "spacing_after": 4
+                },
+                {
+                  "type": "text",
+                  "text": "Her first drones appear during this stage. From here the hive digs faster than you can fill it in.",
+                  "spacing_after": 4
+                }
+              ],
+              "spacing_after": 8
+            },
+            {
+              "type": "columns",
+              "gap": 6,
+              "left": [
+                {
+                  "type": "header",
+                  "text": "5. Founding",
+                  "spacing_after": 3
+                },
+                {
+                  "type": "text",
+                  "text": "She settles onto the ovipositor and begins to lay.",
+                  "spacing_after": 4
+                },
+                {
+                  "type": "text",
+                  "text": "She is no longer a wandering animal. She is infrastructure.",
+                  "spacing_after": 4
+                }
+              ],
+              "right": [
+                {
+                  "type": "image",
+                  "image": "avp_alien:textures/gui/manual/queen_founding.png",
+                  "label": "Founding",
+                  "width": 78,
+                  "height": 55,
+                  "show_border": true,
+                  "spacing_after": 0
+                }
+              ],
+              "spacing_after": 8
+            }
+          ]
+        },
+        {
+          "title": "A Note On Size",
+          "elements": [
+            {
+              "type": "text",
+              "text": "A new queen is not full size. She arrives at roughly four fifths of her mature dimensions and moults up over about fifteen minutes, in three observable stages.",
+              "spacing_after": 6
+            },
+            {
+              "type": "image",
+              "image": "avp_alien:textures/gui/manual/queensize.png",
+              "label": "Scale comparison",
+              "width": 160,
+              "height": 85,
+              "show_border": true,
+              "spacing_after": 3
+            },
+            {
+              "type": "text",
+              "text": "Left: fully moulted. Right: newly arrived.",
+              "spacing_after": 7
+            },
+            {
+              "type": "text",
+              "text": "Moulting occurs only when she is undisturbed. If she is moving, hunting, burning, injured, or has a target in view, she holds at her current size and waits for conditions to improve.",
+              "spacing_after": 6
+            },
+            {
+              "type": "text",
+              "text": "This is useful to you twice over. A queen who has been fighting is smaller than her age would suggest, and a queen still moulting is vulnerable in a way a mature specimen is not.",
+              "spacing_after": 6
+            },
+            {
+              "type": "text",
+              "text": "Observe her as you close the distance. Her size is a status report she cannot help but give you.",
+              "spacing_after": 0
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "title": "Windows Of Opportunity",
+      "pages": [
+        {
+          "title": "The Five States",
+          "elements": [
+            {
+              "type": "text",
+              "text": "An inhibitor will only seat on a queen who cannot resist it. Five states qualify. Outside them the device will not attach, and no amount of persistence will change that.",
+              "spacing_after": 6
+            },
+            {
+              "type": "bullet",
+              "text": "Still growing. Any queen who has not finished moulting."
+            },
+            {
+              "type": "bullet",
+              "text": "Incapacitated. Beaten down and unable to stand."
+            },
+            {
+              "type": "bullet",
+              "text": "Hibernating. Asleep at her chosen site."
+            },
+            {
+              "type": "bullet",
+              "text": "Fully restrained. Four anchors bound to her."
+            },
+            {
+              "type": "bullet",
+              "text": "Hand placed. A specimen you introduced to the environment yourself, in any state."
+            },
+            {
+              "type": "space",
+              "height": 4
+            },
+            {
+              "type": "text",
+              "text": "Attempt it on a healthy mature queen who is standing and unrestrained and she will hiss and shrug the device off. Personnel have reported this as equipment failure on more than one occasion. It is not. She simply is not beaten yet.",
+              "spacing_after": 0
+            }
+          ]
+        },
+        {
+          "title": "Selecting A Window",
+          "elements": [
+            {
+              "type": "header",
+              "text": "Growing",
+              "spacing_after": 3
+            },
+            {
+              "type": "text",
+              "text": "The cleanest window available and the one most often overlooked. A queen raised from a burster under your own supervision is vulnerable for the entire duration of her moult, and requires no confrontation whatsoever.",
+              "spacing_after": 6
+            },
+            {
+              "type": "header",
+              "text": "Hibernating",
+              "spacing_after": 3
+            },
+            {
+              "type": "text",
+              "text": "Three days of guaranteed opportunity. You must locate her first, and she is already at the site she has chosen to keep, which limits how much you will enjoy the result.",
+              "spacing_after": 6
+            },
+            {
+              "type": "header",
+              "text": "Incapacitated",
+              "spacing_after": 3
+            },
+            {
+              "type": "text",
+              "text": "Always available and always expensive. She can be put down three times. Budget accordingly.",
+              "spacing_after": 6
+            },
+            {
+              "type": "header",
+              "text": "Restrained",
+              "spacing_after": 3
+            },
+            {
+              "type": "text",
+              "text": "The deliberate method, and the only one that also yields a productive specimen. See Field Procedure.",
+              "spacing_after": 0
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "title": "Equipment",
+      "pages": [
+        {
+          "title": "Inhibitor",
+          "elements": [
+            {
+              "type": "text",
+              "text": "The device that ends a queen's autonomy. Clamps to the crest.",
+              "spacing_after": 5
+            },
+            {
+              "type": "recipe",
+              "items": [
+                "",
+                "minecraft:iron_ingot",
+                "",
+                "minecraft:iron_nugget",
+                "avp_alien:poison_jelly",
+                "minecraft:iron_nugget",
+                "minecraft:iron_ingot",
+                "",
+                "minecraft:iron_ingot"
+              ],
+              "result": "avp_alien:inhibitor",
+              "spacing_after": 6
+            },
+            {
+              "type": "text",
+              "text": "Apply to a subdued queen. A solid mechanical clunk indicates the device has seated. A hiss indicates it has not, and that you have misjudged her condition.",
+              "spacing_after": 0
+            }
+          ]
+        },
+        {
+          "title": "Anchor",
+          "elements": [
+            {
+              "type": "text",
+              "text": "Placed around the specimen. Four bound anchors hold a queen completely.",
+              "spacing_after": 5
+            },
+            {
+              "type": "recipe",
+              "items": [
+                "",
+                "minecraft:iron_ingot",
+                "",
+                "minecraft:iron_block",
+                "minecraft:iron_block",
+                "minecraft:iron_block",
+                "",
+                "",
+                ""
+              ],
+              "result": "avp_alien:anchor",
+              "spacing_after": 6
+            },
+            {
+              "type": "text",
+              "text": "Eight per fabrication, which is deliberate. You will want spares, and you will want them positioned before she arrives rather than during.",
+              "spacing_after": 0
+            }
+          ]
+        },
+        {
+          "title": "Capture Chain",
+          "elements": [
+            {
+              "type": "text",
+              "text": "Runs from an anchor to the specimen. Each one bound is a quarter of the task.",
+              "spacing_after": 5
+            },
+            {
+              "type": "recipe",
+              "items": [
+                "minecraft:chain",
+                "",
+                "",
+                "minecraft:chain",
+                "",
+                "",
+                "minecraft:chain",
+                "",
+                ""
+              ],
+              "result": "avp_alien:capture_chain",
+              "spacing_after": 6
+            },
+            {
+              "type": "text",
+              "text": "A chain announces itself as it binds. Count them. Three is not four, and three holds nothing at all.",
+              "spacing_after": 0
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "title": "Field Procedure",
+      "pages": [
+        {
+          "title": "Recommended Method",
+          "elements": [
+            {
+              "type": "text",
+              "text": "The reliable approach, in order.",
+              "spacing_after": 6
+            },
+            {
+              "type": "bullet",
+              "text": "Prepare the site first. Anchors positioned, chains and inhibitor to hand."
+            },
+            {
+              "type": "bullet",
+              "text": "Bring her to the site, or locate her hibernating."
+            },
+            {
+              "type": "bullet",
+              "text": "Bind four chains. She is held once the fourth seats."
+            },
+            {
+              "type": "bullet",
+              "text": "Fit the inhibitor. She is now Company property and will not found."
+            },
+            {
+              "type": "space",
+              "height": 4
+            },
+            {
+              "type": "image",
+              "image": "avp_alien:textures/gui/manual/anchorplacement.png",
+              "label": "Anchor layout",
+              "width": 160,
+              "height": 85,
+              "show_border": true,
+              "spacing_after": 3
+            },
+            {
+              "type": "text",
+              "text": "Four anchors, set before she arrives. Spacing is forgiving; the order you bind them is not.",
+              "spacing_after": 7
+            },
+            {
+              "type": "image",
+              "image": "avp_alien:textures/gui/manual/queenchained.png",
+              "label": "Queen fully bound",
+              "width": 160,
+              "height": 85,
+              "show_border": true,
+              "spacing_after": 3
+            },
+            {
+              "type": "text",
+              "text": "A fully bound specimen. Three chains hold nothing - count them as they seat.",
+              "spacing_after": 7
+            },
+            {
+              "type": "space",
+              "height": 4
+            },
+            {
+              "type": "text",
+              "text": "Beating her down also works and requires no preparation. It costs one of her three falls, and leaves her free the moment she recovers should you fumble the application. The Survey does not recommend it as a first approach, but records show it is the one most often used.",
+              "spacing_after": 0
+            }
+          ]
+        },
+        {
+          "title": "Holding A Specimen",
+          "elements": [
+            {
+              "type": "text",
+              "text": "An inhibited queen is a contained breeder. Her hive autonomy is suppressed and her claim is capped to a single chunk. She will not excavate outward, will not commission chambers, and will not extend her territory.",
+              "spacing_after": 6
+            },
+            {
+              "type": "text",
+              "text": "She is not harmless. She still fights, and she still defends the ground beneath her. Contained is not tame, and the distinction has cost us personnel who assumed otherwise.",
+              "spacing_after": 6
+            },
+            {
+              "type": "header",
+              "text": "The eggsack",
+              "spacing_after": 3
+            },
+            {
+              "type": "text",
+              "text": "Restrain an inhibited queen fully and she forms a chained eggsack and lays from it. She completes her growth to full size at that moment regardless of her age, so allow for the additional volume in your facility.",
+              "spacing_after": 6
+            },
+            {
+              "type": "text",
+              "text": "This is the outcome the Survey is after. A queen on an eggsack is production. A queen loose in your quarters is a demolition report and a difficult conversation.",
+              "spacing_after": 0
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

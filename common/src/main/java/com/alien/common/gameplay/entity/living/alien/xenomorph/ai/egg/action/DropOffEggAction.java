@@ -187,15 +187,13 @@ public class DropOffEggAction {
             var isHostDrop = hostDrop.isPresent();
             var freeSpot = isHostDrop
                 ? hostDrop
-                : findChamberBedSpot(xenomorph, failedSpots)
-                    .filter(spot -> !isClaimedByOther(xenomorph, spot));
+                : findChamberBedSpot(xenomorph, failedSpots);
             var isChamberBed = !isHostDrop && freeSpot.isPresent();
             if (freeSpot.isEmpty()) {
                 // OVERFLOW: nurseries full/unreachable -> the queen's clutch zone (a bounded patch in FRONT of
                 // her). The old fallback spiralled outward from the HAULER's position, which pushed overflow eggs
                 // into hallways and doorways. The zone is anchored to the queen and eggs can never leave it.
-                freeSpot = findQueenZoneSpot(xenomorph, failedSpots)
-                    .filter(spot -> !isClaimedByOther(xenomorph, spot));
+                freeSpot = findQueenZoneSpot(xenomorph, failedSpots);
             }
             setFailedSpots(blackboard, failedSpots);
 
@@ -598,7 +596,9 @@ public class DropOffEggAction {
             return Optional.empty();
         }
         for (var pos : QueenEggZone.candidates(serverLevel, queen)) {
-            if (failedSpots.contains(pos)) {
+            // Claim check inside the loop for the same reason as the bed search above - one claimed cell must
+            // not hide the other forty.
+            if (failedSpots.contains(pos) || isClaimedByOther(xenomorph, pos)) {
                 continue;
             }
             return Optional.of(pos);
@@ -731,7 +731,14 @@ public class DropOffEggAction {
                 continue;
             }
             for (var bed : HiveChamberSlots.eggBedSlots(serverLevel, location, chamber)) {
-                if (failedSpots.contains(bed) || isBedOccupied(serverLevel, bed)) {
+                // The claim check MUST live inside this loop. It used to be a .filter() on the returned
+                // Optional at the call site, which meant that if the single nearest free bed happened to be
+                // claimed by another hauler the whole search collapsed to empty - with two dozen other free
+                // beds untouched. Worse, the rejected bed was never TARGETED, so it never entered failedSpots,
+                // so the next retry picked the same bed and failed the same way. Every hauler converging on one
+                // nursery livelocked together and shelved its egg where it stood. Razorem: eggs rooted on top of
+                // each other while the log reported 25 free beds and 0 spots on the failed list.
+                if (failedSpots.contains(bed) || isBedOccupied(serverLevel, bed) || isClaimedByOther(xenomorph, bed)) {
                     continue;
                 }
                 // NO path pre-check: the navigator's follow-range makes distant beds read "unreachable" at

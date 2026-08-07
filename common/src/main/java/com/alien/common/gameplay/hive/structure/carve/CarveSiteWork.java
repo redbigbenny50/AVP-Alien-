@@ -166,7 +166,7 @@ public final class CarveSiteWork {
         // Founding core (step 6, design §7b): the QUEEN is the digger, at her fixed §8.8 pace - drone diggers are
         // never sourced for it. Her stand-dig sequence (start -> loop -> stop) tracks the excavation.
         if (site.isFoundingCore()) {
-            tickQueenDig(level, location, site);
+            tickQueenDig(level, location, site, crew.unstaffed());
         }
 
         var digStaffed = site.isFoundingCore() || crew.diggers() > 0;
@@ -365,7 +365,7 @@ public final class CarveSiteWork {
      * so the server's whole job is this one boolean. She is resolved via the location's founder id; if she is dead or
      * unloaded the carve continues without her show (never-wedge - founding must not hinge on an animation).
      */
-    private static void tickQueenDig(ServerLevel level, HiveLocation location, CarveSite site) {
+    private static void tickQueenDig(ServerLevel level, HiveLocation location, CarveSite site, boolean unstaffed) {
         var founderId = location.founderId();
         if (founderId == null) {
             return;
@@ -382,6 +382,106 @@ public final class CarveSiteWork {
         if (queen.standDiggingSynced.get() != shouldDig) {
             queen.standDiggingSynced.set(shouldDig);
         }
+
+        if (shouldDig) {
+            bootstrapFoundingCrew(location, queen, unstaffed);
+            recoverStuckDigger(level, location, site, queen);
+        } else {
+            STUCK_TICKS.remove(location.id());
+            LAST_DIGGER_POS.remove(location.id());
+        }
+    }
+
+    /** Locations already handed a founding crew this session. Transient - see the zero-worker gate below. */
+    private static final java.util.Set<com.alien.common.gameplay.hive.id.HiveLocationId> CREW_BOOTSTRAPPED =
+        new java.util.HashSet<>();
+
+    /**
+     * Give the founding queen her first workers while she digs her core.
+     * <p>
+     * [stated] "can we have it they appear when she is founding or in the process of digging out her chamber." Here
+     * rather than at her waking, because by now her claim EXISTS - drones spawned into a claimed chunk are auto-joined
+     * as members by finalizeSpawn, so they are her hive's workers immediately instead of unaffiliated strays that have
+     * to be adopted later.
+     * <p>
+     * The zero-worker gate is what makes this safe to run every tick: it fires only when the crew came back UNSTAFFED,
+     * so a hive that already has hands never gets more. The session set on top means killing the crew cannot be farmed
+     * for an endless supply while the core is still open. Being transient is deliberate - a restart mid-founding SHOULD
+     * be able to re-bootstrap a hive that still has nobody, which is exactly the "carve site is unstaffed - no free
+     * drones, nothing in reserve" deadlock this prevents.
+     */
+    private static void bootstrapFoundingCrew(
+        HiveLocation location,
+        com.alien.common.gameplay.entity.living.alien.xenomorph.queen.Queen queen,
+        boolean unstaffed
+    ) {
+        if (!unstaffed || !CREW_BOOTSTRAPPED.add(location.id())) {
+            return;
+        }
+
+        queen.spawnFoundingCrew();
+        Alien.LOGGER.info("Hive at {}: founding queen had no workers - spawned her founding crew.", location.centerPos());
+    }
+
+    /** Last observed position of each founding digger, for the stuck check below. Transient by design. */
+    private static final java.util.Map<com.alien.common.gameplay.hive.id.HiveLocationId, net.minecraft.world.phys.Vec3> LAST_DIGGER_POS =
+        new java.util.HashMap<>();
+
+    private static final java.util.Map<com.alien.common.gameplay.hive.id.HiveLocationId, Integer> STUCK_TICKS =
+        new java.util.HashMap<>();
+
+    /** Below this, she has not meaningfully moved since the last tick. */
+    private static final double STUCK_MOVE_EPSILON = 0.05;
+
+    /** She belongs AT the core she is digging; beyond this she is not merely standing still, she is lost. */
+    private static final double AT_SITE_DISTANCE = 8.0;
+
+    /** Ten seconds of no movement while stranded. Long enough that a brief snag never teleports her. */
+    private static final int STUCK_TICKS_BEFORE_WARP = 200;
+
+    /**
+     * Warp a founding queen back to her core if she gets stranded while digging it.
+     * <p>
+     * [stated] "can we have while carving if the queen gets stuck she warps back to center... she digs out her core
+     * chamber im watching her do it." The excavation itself is a GHOST CARVE on a timer, so it completes whether or not
+     * she is present - which is exactly why being stuck goes unnoticed: the chamber finishes while she stands in a cave
+     * somewhere, and nothing in the pipeline was watching her position.
+     * <p>
+     * STANDING STILL IS NOT THE TEST. Digging is standing still - that is the whole animation. The test is standing
+     * still while FAR FROM the core: within {@link #AT_SITE_DISTANCE} she is working, beyond it she is stranded. Both
+     * conditions must hold for {@link #STUCK_TICKS_BEFORE_WARP} so a snag on terrain never teleports her.
+     */
+    private static void recoverStuckDigger(
+        ServerLevel level,
+        HiveLocation location,
+        CarveSite site,
+        com.alien.common.gameplay.entity.living.alien.xenomorph.queen.Queen queen
+    ) {
+        var core = site.match().originChunk().getMiddleBlockPosition(location.hiveFloorY());
+        var atSite = queen.position().closerThan(net.minecraft.world.phys.Vec3.atCenterOf(core), AT_SITE_DISTANCE);
+        var previous = LAST_DIGGER_POS.put(location.id(), queen.position());
+
+        if (atSite || previous == null || previous.distanceTo(queen.position()) > STUCK_MOVE_EPSILON) {
+            STUCK_TICKS.remove(location.id());
+            return;
+        }
+
+        var stuckFor = STUCK_TICKS.merge(location.id(), 1, Integer::sum);
+        if (stuckFor < STUCK_TICKS_BEFORE_WARP) {
+            return;
+        }
+
+        STUCK_TICKS.remove(location.id());
+        LAST_DIGGER_POS.remove(location.id());
+        queen.teleportTo(core.getX() + 0.5, core.getY(), core.getZ() + 0.5);
+        queen.getNavigation().stop();
+        Alien.LOGGER.info(
+            "Hive at {}: founding queen was stranded {} blocks from her core for {} ticks - warped back to {}.",
+            location.centerPos(),
+            (int) queen.position().distanceTo(net.minecraft.world.phys.Vec3.atCenterOf(core)),
+            stuckFor,
+            core
+        );
     }
 
     /**

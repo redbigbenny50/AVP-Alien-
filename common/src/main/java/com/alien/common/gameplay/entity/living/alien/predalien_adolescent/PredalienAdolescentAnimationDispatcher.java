@@ -2,69 +2,69 @@ package com.alien.common.gameplay.entity.living.alien.predalien_adolescent;
 
 import com.alien.common.gameplay.entity.living.alien.adolescent.AdolescentAnimationRefs;
 import com.alien.common.util.AzAlienAnimationUtil;
-import com.blib.api.client.animation.v1.AzAnimationUtil;
 import com.blib.api.client.animation.v1.command.AzCommand;
 import com.blib.api.client.animation.v1.command.play_behavior.AzPlayBehaviors;
-import com.blib.api.client.animation.v1.command.policy.AzDispatchMode;
 
+/**
+ * Whole-body dispatch for the reworked predalien adolescent.
+ * <p>
+ * Same conversion as {@code AdolescentAnimationDispatcher}: the rework replaced 44 limb-split clips with 13 whole-body
+ * ones, so every action plays a single clip on the BODY track instead of being composed across seven limb tracks.
+ * <p>
+ * Names are shared from {@link AdolescentAnimationRefs} on purpose - this class already borrowed them, and the reworked
+ * predalien animation file was authored with a clip set identical to the base adolescent's. Its ANIMATION FILE is still
+ * its own ({@code PredalienAdolescentAnimator} points at {@code predalien_adolescent}), so the poses differ; only the
+ * names are shared.
+ */
 public class PredalienAdolescentAnimationDispatcher {
 
-    private static final AzCommand<PredalienAdolescent> ARMATTACK_RIGHTARM = AzCommand.<PredalienAdolescent>replay()
-        .play(AzAlienAnimationUtil.RIGHT_ARM, AdolescentAnimationRefs.ATTACKCLAW_RIGHTARM_ANIMATION_NAME, AzPlayBehaviors.PLAY_ONCE)
+    private static final AzCommand<PredalienAdolescent> IDLE = AzCommand.<PredalienAdolescent>idempotent()
+        .play(AzAlienAnimationUtil.BODY, AdolescentAnimationRefs.IDLE_ANIMATION_NAME, AzPlayBehaviors.LOOP)
         .build();
 
-    private static final AzCommand<PredalienAdolescent> BITEATTACK_HEAD = AzCommand.<PredalienAdolescent>replay()
-        .play(AzAlienAnimationUtil.HEAD, AdolescentAnimationRefs.ATTACKBITE_HEAD_ANIMATION_NAME, AzPlayBehaviors.PLAY_ONCE)
+    private static final AzCommand<PredalienAdolescent> WALK = AzCommand.<PredalienAdolescent>idempotent()
+        .play(AzAlienAnimationUtil.BODY, AdolescentAnimationRefs.WALK_ANIMATION_NAME, AzPlayBehaviors.LOOP)
         .build();
 
-    private static final AzCommand<PredalienAdolescent> CRAWL_ALL = AzAnimationUtil.compose(
-        AzAlienAnimationUtil.XENO_LIMBS,
-        "crawl",
-        AzPlayBehaviors.LOOP,
-        AzDispatchMode.PLAY_IF_NOT_PLAYING
-    );
+    private static final AzCommand<PredalienAdolescent> RUN = AzCommand.<PredalienAdolescent>idempotent()
+        .play(AzAlienAnimationUtil.BODY, AdolescentAnimationRefs.RUN_ANIMATION_NAME, AzPlayBehaviors.LOOP)
+        .build();
 
-    private static final AzCommand<PredalienAdolescent> CRAWL_ALL_HOLD = AzAnimationUtil.compose(
-        AzAlienAnimationUtil.XENO_LIMBS,
-        "crawl",
-        AzPlayBehaviors.HOLD_ON_LAST_FRAME,
-        AzDispatchMode.PLAY_IF_NOT_PLAYING
-    );
+    private static final AzCommand<PredalienAdolescent> SWIM = AzCommand.<PredalienAdolescent>idempotent()
+        .play(AzAlienAnimationUtil.BODY, AdolescentAnimationRefs.SWIM_ANIMATION_NAME, AzPlayBehaviors.LOOP)
+        .build();
 
-    private static final AzCommand<PredalienAdolescent> IDLE_ALL = AzAnimationUtil.compose(
-        AzAlienAnimationUtil.XENO_LIMBS,
-        "idle",
-        AzPlayBehaviors.LOOP,
-        AzDispatchMode.PLAY_IF_NOT_PLAYING
-    );
+    private static final AzCommand<PredalienAdolescent> CRAWL = AzCommand.<PredalienAdolescent>idempotent()
+        .play(AzAlienAnimationUtil.BODY, AdolescentAnimationRefs.CRAWL_ANIMATION_NAME, AzPlayBehaviors.LOOP)
+        .build();
 
-    private static final AzCommand<PredalienAdolescent> LUNGE_ALL = AzAnimationUtil.compose(
-        AzAlienAnimationUtil.XENO_LIMBS,
-        "lunge",
-        AzPlayBehaviors.PLAY_ONCE,
-        AzDispatchMode.REPLAY
-    );
+    private static final AzCommand<PredalienAdolescent> CRAWL_HOLD = AzCommand.<PredalienAdolescent>idempotent()
+        .play(
+            AzAlienAnimationUtil.BODY,
+            AdolescentAnimationRefs.CRAWL_ANIMATION_NAME,
+            AzPlayBehaviors.HOLD_ON_LAST_FRAME
+        )
+        .build();
 
-    private static final AzCommand<PredalienAdolescent> RUN_ALL = AzAnimationUtil.compose(
-        AzAlienAnimationUtil.XENO_LIMBS,
-        "sprint",
-        AzPlayBehaviors.LOOP,
-        AzDispatchMode.PLAY_IF_NOT_PLAYING
-    );
+    private static final AzCommand<PredalienAdolescent> POUNCE = AzCommand.<PredalienAdolescent>replay()
+        .play(AzAlienAnimationUtil.BODY, AdolescentAnimationRefs.POUNCE_ANIMATION_NAME, AzPlayBehaviors.PLAY_ONCE)
+        .build();
 
-    private static final AzCommand<PredalienAdolescent> SWIM_ALL = AzAnimationUtil.compose(
-        AzAlienAnimationUtil.XENO_LIMBS,
-        "swim",
-        AzPlayBehaviors.LOOP,
-        AzDispatchMode.PLAY_IF_NOT_PLAYING
-    );
+    private static final AzCommand<PredalienAdolescent> BITE_ATTACK = AzCommand.<PredalienAdolescent>replay()
+        .play(AzAlienAnimationUtil.BODY, AdolescentAnimationRefs.ATTACK_BITE_ANIMATION_NAME, AzPlayBehaviors.PLAY_ONCE)
+        .build();
 
-    private static final AzCommand<PredalienAdolescent> WALK_ALL = AzAnimationUtil.compose(
-        AzAlienAnimationUtil.XENO_LIMBS,
-        "walk",
-        AzPlayBehaviors.LOOP,
-        AzDispatchMode.PLAY_IF_NOT_PLAYING
-    );
+    private static final AzCommand<PredalienAdolescent> SWIPE_ATTACK = AzCommand.<PredalienAdolescent>replay()
+        .play(AzAlienAnimationUtil.BODY, AdolescentAnimationRefs.ATTACK_SWIPE_ANIMATION_NAME, AzPlayBehaviors.PLAY_ONCE)
+        .build();
+
+    private static final AzCommand<PredalienAdolescent> SWIM_BITE_ATTACK = AzCommand.<PredalienAdolescent>replay()
+        .play(
+            AzAlienAnimationUtil.BODY,
+            AdolescentAnimationRefs.ATTACK_SWIMBITE_ANIMATION_NAME,
+            AzPlayBehaviors.PLAY_ONCE
+        )
+        .build();
 
     private final PredalienAdolescent predalienAdolescent;
 
@@ -73,38 +73,44 @@ public class PredalienAdolescentAnimationDispatcher {
     }
 
     public void crawl() {
-        CRAWL_ALL.dispatchForEntity(predalienAdolescent);
+        CRAWL.dispatchForEntity(predalienAdolescent);
     }
 
     public void crawlHold() {
-        CRAWL_ALL_HOLD.dispatchForEntity(predalienAdolescent);
+        CRAWL_HOLD.dispatchForEntity(predalienAdolescent);
     }
 
     public void idle() {
-        IDLE_ALL.dispatchForEntity(predalienAdolescent);
+        IDLE.dispatchForEntity(predalienAdolescent);
     }
 
     public void lunge() {
-        LUNGE_ALL.dispatchForEntity(predalienAdolescent);
+        POUNCE.dispatchForEntity(predalienAdolescent);
     }
 
     public void run() {
-        RUN_ALL.dispatchForEntity(predalienAdolescent);
+        RUN.dispatchForEntity(predalienAdolescent);
     }
 
     public void swim() {
-        SWIM_ALL.dispatchForEntity(predalienAdolescent);
+        SWIM.dispatchForEntity(predalienAdolescent);
     }
 
     public void walk() {
-        WALK_ALL.dispatchForEntity(predalienAdolescent);
+        WALK.dispatchForEntity(predalienAdolescent);
     }
 
     public void biteAttack() {
-        BITEATTACK_HEAD.dispatchForEntity(predalienAdolescent);
+        BITE_ATTACK.dispatchForEntity(predalienAdolescent);
     }
 
+    /** Old name kept so existing callers still compile; the rework retired the per-arm claw for a whole-body swipe. */
     public void rightClawAttack() {
-        ARMATTACK_RIGHTARM.dispatchForEntity(predalienAdolescent);
+        SWIPE_ATTACK.dispatchForEntity(predalienAdolescent);
+    }
+
+    /** New with the rework - nothing calls this yet. */
+    public void swimBiteAttack() {
+        SWIM_BITE_ATTACK.dispatchForEntity(predalienAdolescent);
     }
 }
