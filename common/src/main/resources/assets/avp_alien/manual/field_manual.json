@@ -40,7 +40,146 @@
       ]
     },
     {
-      "title": "Dangers Of Poor Containment",
+      "title": "Essential Equipment",
+      "pages": [
+        {
+          "title": "Poison Jelly",
+          "elements": [
+            {
+              "type": "text",
+              "text": "Everything that follows begins here. Royal jelly is drawn from the higher castes, and on its own it is a growth medium - it is what the hive feeds its young to push them up the ladder.",
+              "spacing_after": 6
+            },
+            {
+              "type": "text",
+              "text": "Introduce a poison to it and the jelly turns against its own purpose. Development stops. A specimen dosed with it does not advance, does not moult, and does not become the next thing.",
+              "spacing_after": 6
+            },
+            {
+              "type": "recipe",
+              "items": [
+                "minecraft:poisonous_potato",
+                "avp_alien:raw_royal_jelly",
+                "",
+                "",
+                "",
+                "",
+                "",
+                "",
+                ""
+              ],
+              "result": "avp_alien:poison_jelly",
+              "spacing_after": 6
+            },
+            {
+              "type": "text",
+              "text": "Field specialists report moderate success brewing it into a potion, which sharpens the effect considerably. The Company neither endorses nor discourages the practice of drinking said potion, however we would appreciate it if notes can be taken.",
+              "spacing_after": 6
+            },
+            {
+              "type": "text",
+              "text": "It is also the active component of the inhibitor. Make more than you think you need.",
+              "spacing_after": 0
+            }
+          ]
+        },
+        {
+          "title": "Inhibitor",
+          "elements": [
+            {
+              "type": "text",
+              "text": "The device that ends a queen's autonomy. Clamps to the crest.",
+              "spacing_after": 5
+            },
+            {
+              "type": "recipe",
+              "items": [
+                "",
+                "minecraft:iron_ingot",
+                "",
+                "minecraft:iron_nugget",
+                "avp_alien:poison_jelly",
+                "minecraft:iron_nugget",
+                "minecraft:iron_ingot",
+                "",
+                "minecraft:iron_ingot"
+              ],
+              "result": "avp_alien:inhibitor",
+              "spacing_after": 6
+            },
+            {
+              "type": "text",
+              "text": "Apply to a subdued queen. A solid mechanical clunk indicates the device has seated. A hiss indicates it has not, and that you have misjudged her condition.",
+              "spacing_after": 0
+            }
+          ]
+        },
+        {
+          "title": "Anchor",
+          "elements": [
+            {
+              "type": "text",
+              "text": "Placed around the specimen. Four bound anchors hold a queen completely.",
+              "spacing_after": 5
+            },
+            {
+              "type": "recipe",
+              "items": [
+                "",
+                "minecraft:iron_ingot",
+                "",
+                "minecraft:iron_block",
+                "minecraft:iron_block",
+                "minecraft:iron_block",
+                "",
+                "",
+                ""
+              ],
+              "result": "avp_alien:anchor",
+              "spacing_after": 6
+            },
+            {
+              "type": "text",
+              "text": "Eight per fabrication, which is deliberate. You will want spares, and you will want them positioned before she arrives rather than during.",
+              "spacing_after": 0
+            }
+          ]
+        },
+        {
+          "title": "Capture Chain",
+          "elements": [
+            {
+              "type": "text",
+              "text": "Runs from an anchor to the specimen. Each one bound is a quarter of the task.",
+              "spacing_after": 5
+            },
+            {
+              "type": "recipe",
+              "items": [
+                "minecraft:chain",
+                "",
+                "",
+                "minecraft:chain",
+                "",
+                "",
+                "minecraft:chain",
+                "",
+                ""
+              ],
+              "result": "avp_alien:capture_chain",
+              "spacing_after": 6
+            },
+            {
+              "type": "text",
+              "text": "A chain announces itself as it binds. Count them. Three is not four, and three holds nothing at all.",
+              "spacing_after": 0
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "title": "Containment Risks",
       "pages": [
         {
           "title": "Do Not Improvise",
@@ -173,11 +312,6 @@
                   "type": "text",
                   "text": "Roughly five minutes. Mobile and hostile, but with no interest in territory yet.",
                   "spacing_after": 4
-                },
-                {
-                  "type": "text",
-                  "text": "The longest uninterrupted window you will be given.",
-                  "spacing_after": 4
                 }
               ],
               "right": [
@@ -191,7 +325,12 @@
                   "spacing_after": 0
                 }
               ],
-              "spacing_after": 8
+              "spacing_after": 4
+            },
+            {
+              "type": "text",
+              "text": "The longest uninterrupted window you will be given.",
+              "spacing_after": 9
             },
             {
               "type": "columns",
@@ -217,14 +356,14 @@
                   "type": "text",
                   "text": "She commits to a site and travels to it, cutting through whatever lies between.",
                   "spacing_after": 4
-                },
-                {
-                  "type": "text",
-                  "text": "Once she has chosen, she is working toward a hive and your window is closing.",
-                  "spacing_after": 4
                 }
               ],
-              "spacing_after": 8
+              "spacing_after": 4
+            },
+            {
+              "type": "text",
+              "text": "Once she has chosen, she is working toward a hive and your window is closing.",
+              "spacing_after": 9
             },
             {
               "type": "columns",
@@ -239,11 +378,6 @@
                   "type": "text",
                   "text": "She sleeps at the site for three days.",
                   "spacing_after": 4
-                },
-                {
-                  "type": "text",
-                  "text": "A queen dispatched by an established hive skips this entirely. Assume the worst case unless you know her origin.",
-                  "spacing_after": 4
                 }
               ],
               "right": [
@@ -257,7 +391,12 @@
                   "spacing_after": 0
                 }
               ],
-              "spacing_after": 8
+              "spacing_after": 4
+            },
+            {
+              "type": "text",
+              "text": "A queen dispatched by an established hive skips this entirely. Assume the worst case unless you know her origin.",
+              "spacing_after": 9
             },
             {
               "type": "columns",
@@ -281,16 +420,16 @@
                 },
                 {
                   "type": "text",
-                  "text": "She wakes and digs out her own core chamber - the only excavation she ever performs herself.",
-                  "spacing_after": 4
-                },
-                {
-                  "type": "text",
-                  "text": "Her first drones appear during this stage. From here the hive digs faster than you can fill it in.",
+                  "text": "She wakes and begins to dig out her main chamber.",
                   "spacing_after": 4
                 }
               ],
-              "spacing_after": 8
+              "spacing_after": 4
+            },
+            {
+              "type": "text",
+              "text": "This is the only excavation she performs herself. Her first drones appear during this stage. From here on the hive builds faster than you can control it.",
+              "spacing_after": 9
             },
             {
               "type": "columns",
@@ -305,11 +444,6 @@
                   "type": "text",
                   "text": "She settles onto the ovipositor and begins to lay.",
                   "spacing_after": 4
-                },
-                {
-                  "type": "text",
-                  "text": "She is no longer a wandering animal. She is infrastructure.",
-                  "spacing_after": 4
                 }
               ],
               "right": [
@@ -323,7 +457,12 @@
                   "spacing_after": 0
                 }
               ],
-              "spacing_after": 8
+              "spacing_after": 4
+            },
+            {
+              "type": "text",
+              "text": "She is no longer a wandering creature. She has claimed her throne as the hive's infrastructure.",
+              "spacing_after": 9
             }
           ]
         },
@@ -451,104 +590,6 @@
             {
               "type": "text",
               "text": "The deliberate method, and the only one that also yields a productive specimen. See Field Procedure.",
-              "spacing_after": 0
-            }
-          ]
-        }
-      ]
-    },
-    {
-      "title": "Equipment",
-      "pages": [
-        {
-          "title": "Inhibitor",
-          "elements": [
-            {
-              "type": "text",
-              "text": "The device that ends a queen's autonomy. Clamps to the crest.",
-              "spacing_after": 5
-            },
-            {
-              "type": "recipe",
-              "items": [
-                "",
-                "minecraft:iron_ingot",
-                "",
-                "minecraft:iron_nugget",
-                "avp_alien:poison_jelly",
-                "minecraft:iron_nugget",
-                "minecraft:iron_ingot",
-                "",
-                "minecraft:iron_ingot"
-              ],
-              "result": "avp_alien:inhibitor",
-              "spacing_after": 6
-            },
-            {
-              "type": "text",
-              "text": "Apply to a subdued queen. A solid mechanical clunk indicates the device has seated. A hiss indicates it has not, and that you have misjudged her condition.",
-              "spacing_after": 0
-            }
-          ]
-        },
-        {
-          "title": "Anchor",
-          "elements": [
-            {
-              "type": "text",
-              "text": "Placed around the specimen. Four bound anchors hold a queen completely.",
-              "spacing_after": 5
-            },
-            {
-              "type": "recipe",
-              "items": [
-                "",
-                "minecraft:iron_ingot",
-                "",
-                "minecraft:iron_block",
-                "minecraft:iron_block",
-                "minecraft:iron_block",
-                "",
-                "",
-                ""
-              ],
-              "result": "avp_alien:anchor",
-              "spacing_after": 6
-            },
-            {
-              "type": "text",
-              "text": "Eight per fabrication, which is deliberate. You will want spares, and you will want them positioned before she arrives rather than during.",
-              "spacing_after": 0
-            }
-          ]
-        },
-        {
-          "title": "Capture Chain",
-          "elements": [
-            {
-              "type": "text",
-              "text": "Runs from an anchor to the specimen. Each one bound is a quarter of the task.",
-              "spacing_after": 5
-            },
-            {
-              "type": "recipe",
-              "items": [
-                "minecraft:chain",
-                "",
-                "",
-                "minecraft:chain",
-                "",
-                "",
-                "minecraft:chain",
-                "",
-                ""
-              ],
-              "result": "avp_alien:capture_chain",
-              "spacing_after": 6
-            },
-            {
-              "type": "text",
-              "text": "A chain announces itself as it binds. Count them. Three is not four, and three holds nothing at all.",
               "spacing_after": 0
             }
           ]
