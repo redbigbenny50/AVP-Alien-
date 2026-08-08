@@ -182,6 +182,12 @@ public final class HiveLocationLoadedTickTask {
             com.alien.common.gameplay.hive.party.HostHuntPartyLifecycleTask.run(server, location, config);
             AttackPartyDispatch.tryRun(server, location, config);
             AttackPartyLifecycleTask.run(server, location, config);
+
+            // The hive notices its own egg backlog. An egg only asks for a hauler within 16 blocks (the listener
+            // lives on the CARRIER, not on the vents the way a cry for help does), so eggs laid away from the
+            // workers are never heard about at all. This is the missing relay: find a waiting egg, hand it to a
+            // free worker, and let the existing duct-travel in PickUpEggAction carry him there.
+            com.alien.common.gameplay.hive.economy.EggHaulDispatch.run(serverLevel, location);
         }
 
         // Structure growth: grow one hive piece off an open frontier socket on a coarse cadence (every 200 ticks / 10s)

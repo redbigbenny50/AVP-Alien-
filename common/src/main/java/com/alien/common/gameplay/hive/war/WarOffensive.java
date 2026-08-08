@@ -51,7 +51,14 @@ public final class WarOffensive {
     private static final int HOME_GARRISON_FLOOR = 4;
 
     /** How far from the enemy queen an attacker looks for something to kill on the way in. */
-    private static final double ENGAGEMENT_RANGE = 24.0;
+    /**
+     * How far from the strike a defender still counts as part of the battle.
+     * <p>
+     * Raised from 24 to a hive-scale figure: a hive is hundreds of blocks of corridor, and this is measured from the
+     * centre of the strike, so 24 covered barely one chamber. Both sides ended up inside the same hive and still out of
+     * each other's reach.
+     */
+    private static final double ENGAGEMENT_RANGE = 96.0;
 
     /** March speed toward the throne when nothing is in the way. */
     private static final double MARCH_SPEED = 1.15D;
@@ -234,15 +241,26 @@ public final class WarOffensive {
             return;
         }
 
-        var defenders = defendersNear(level, target, attackers.get(0).blockPosition());
+        // Measure from the CENTRE OF THE STRIKE, not from attackers.get(0). A strike spreads out as it marches,
+        // so anchoring the search on whichever attacker happened to be first in the list meant defenders standing
+        // beside the rest of the force were invisible - and with no defender found, every attacker fell through to
+        // "march to the throne" and stood there. [stated] "both are kinda just chilling inside the pure hive
+        // because they are too far apart to beef - so there is no actual war just a silly stalemate".
+        var strikeCentre = strikeCentre(attackers);
+        var defenders = defendersNear(level, target, strikeCentre);
         attackers.sort(Comparator.comparingDouble(WarOffensive::power).reversed());
         defenders.sort(Comparator.comparingDouble(WarOffensive::power).reversed());
 
         var throne = target.centerPos();
+
+        // EVERY attacker gets a defender while any defender is standing. The old rule paired by INDEX - attacker
+        // i to defender i - so the moment attackers outnumbered defenders the surplus marched past a live enemy
+        // to mill around the throne. Wrapping the index means a heavier force gangs up in waves instead, which is
+        // what a hive war should look like.
         for (var i = 0; i < attackers.size(); i++) {
             var attacker = attackers.get(i);
-            if (i < defenders.size()) {
-                attacker.setTarget(defenders.get(i));
+            if (!defenders.isEmpty()) {
+                attacker.setTarget(defenders.get(i % defenders.size()));
                 continue;
             }
             if (attacker.getTarget() != null && attacker.getTarget().isAlive()) {
@@ -250,6 +268,46 @@ public final class WarOffensive {
             }
             attacker.getNavigation().moveTo(throne.getX(), target.hiveFloorY() + 1, throne.getZ(), MARCH_SPEED);
         }
+
+        // AND COMMAND THE DEFENCE. Nothing here ever told a defender who to fight - the whole method only ever
+        // spoke to attackers, and the defenders were left to notice an intruder with their own senses. Inside a
+        // hive of corridors and chambers that frequently never happens, which is the other half of the stalemate:
+        // [stated] "they dont actively target all the members when they are at war so they kind of just stand
+        // around... how can all members die if they arent tracking them". A defender already in a fight is left
+        // alone; the rest are put onto their nearest attacker.
+        for (var defender : defenders) {
+            if (defender.getTarget() != null && defender.getTarget().isAlive()) {
+                continue;
+            }
+            Mob nearest = null;
+            var bestDistance = Double.MAX_VALUE;
+            for (var attacker : attackers) {
+                if (!attacker.isAlive()) {
+                    continue;
+                }
+                var distance = defender.distanceToSqr(attacker);
+                if (distance < bestDistance) {
+                    bestDistance = distance;
+                    nearest = attacker;
+                }
+            }
+            if (nearest != null) {
+                defender.setTarget(nearest);
+            }
+        }
+    }
+
+    /** The middle of the strike force, so the engagement search is not anchored on one arbitrary attacker. */
+    private static BlockPos strikeCentre(List<Mob> attackers) {
+        var x = 0;
+        var y = 0;
+        var z = 0;
+        for (var attacker : attackers) {
+            x += attacker.getBlockX();
+            y += attacker.getBlockY();
+            z += attacker.getBlockZ();
+        }
+        return new BlockPos(x / attackers.size(), y / attackers.size(), z / attackers.size());
     }
 
     /** Enemy members standing between the attackers and the throne. The queen counts - she is the objective. */
