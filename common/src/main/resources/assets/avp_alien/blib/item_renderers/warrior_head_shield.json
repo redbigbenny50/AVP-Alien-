@@ -1,0 +1,4 @@
+{
+  "parent": "avp_alien:templates/warrior_head_shield",
+  "texture": "avp_alien:textures/entity/warrior.png"
+}

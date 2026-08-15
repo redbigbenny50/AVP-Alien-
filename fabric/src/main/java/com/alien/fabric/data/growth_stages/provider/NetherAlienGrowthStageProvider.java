@@ -61,7 +61,7 @@ public class NetherAlienGrowthStageProvider {
             new GrowthStage(
                 AlienEntityTypes.NETHER_PREDALIEN_CHESTBURSTER.get(),
                 AlienEntityTypes.NETHER_PREDALIEN_ADOLESCENT.get(),
-                GrowthConstants.CHESTBURSTER_GROWTH_TIME_IN_TICKS
+                GrowthConstants.PREDALIEN_CHESTBURSTER_GROWTH_TIME_IN_TICKS
             )
         );
         biConsumer.accept(
@@ -69,7 +69,7 @@ public class NetherAlienGrowthStageProvider {
             new GrowthStage(
                 AlienEntityTypes.NETHER_PREDALIEN_ADOLESCENT.get(),
                 AlienEntityTypes.NETHER_PREDALIEN.get(),
-                GrowthConstants.ADOLESCENT_GROWTH_TIME_IN_TICKS
+                GrowthConstants.PREDALIEN_ADOLESCENT_GROWTH_TIME_IN_TICKS
             )
         );
     }
@@ -110,10 +110,10 @@ public class NetherAlienGrowthStageProvider {
             new GrowthRequirement.MobEffectRequirement(AlienMobEffects.getMetamorphosisHolder(), 0)
         );
 
-        biConsumer.accept(
-            "nether_ovomorph_to_royal_nether_ovomorph",
-            new GrowthStage(AlienEntityTypes.NETHER_OVOMORPH.get(), AlienEntityTypes.ROYAL_NETHER_OVOMORPH.get(), metamorphosis)
-        );
+        // Eggs are NO LONGER promoted by the Metamorphosis potion (splash or otherwise). Royalty is conferred by
+        // feeding RAW ROYAL JELLY directly to an ovomorph - see Ovomorph.mobInteract. Deleting the stage rather
+        // than un-gating it is deliberate: a requirement-less growth stage is treated as immediately matching, so
+        // an un-gated stage would turn every egg royal on its own.
         biConsumer.accept(
             "nether_drone_to_nether_warrior",
             new GrowthStage(AlienEntityTypes.NETHER_DRONE.get(), AlienEntityTypes.NETHER_WARRIOR.get(), metamorphosis)
@@ -144,17 +144,19 @@ public class NetherAlienGrowthStageProvider {
         List<GrowthRequirement> scourge = List.of(
             new GrowthRequirement.MobEffectRequirement(AlienMobEffects.getScourgeHolder(), 0)
         );
-        List<GrowthRequirement> scourgeII = List.of(
-            new GrowthRequirement.MobEffectRequirement(AlienMobEffects.getScourgeHolder(), 1)
-        );
 
-        biConsumer.accept(
-            "nether_drone_to_nether_razor_claw",
-            new GrowthStage(AlienEntityTypes.NETHER_DRONE.get(), AlienEntityTypes.NETHER_RAZOR_CLAW.get(), scourgeII)
-        );
+        // The drone is the one caste with two scourge futures. ONE stage names both: carrier by default, razor claw
+        // if the molt is redirected by a second dose. This was two competing stages split by a Scourge II amplifier
+        // gate, which made a stronger potion permanently mandatory and left the default at the mercy of resource-scan
+        // order - see GrowthStage and ScourgeStatusEffect.
         biConsumer.accept(
             "nether_drone_to_nether_carrier",
-            new GrowthStage(AlienEntityTypes.NETHER_DRONE.get(), AlienEntityTypes.NETHER_CARRIER.get(), scourge)
+            new GrowthStage(
+                AlienEntityTypes.NETHER_DRONE.get(),
+                AlienEntityTypes.NETHER_CARRIER.get(),
+                AlienEntityTypes.NETHER_RAZOR_CLAW.get(),
+                scourge
+            )
         );
         biConsumer.accept(
             "nether_runner_to_nether_burster",

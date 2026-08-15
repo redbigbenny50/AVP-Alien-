@@ -1,0 +1,15 @@
+{
+  "entity": "minecraft:dolphin",
+  "size": [
+    2.0,
+    2.0,
+    4.0
+  ],
+  "pivot": [
+    0.0,
+    0.0,
+    -3.0
+  ],
+  "vertical_offset": -11.2,
+  "face_offset": 13.6
+}

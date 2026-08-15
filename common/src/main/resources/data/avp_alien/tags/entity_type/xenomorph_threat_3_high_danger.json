@@ -1,0 +1,21 @@
+{
+  "values": [
+    "minecraft:player",
+    {
+      "id": "avp_human:marine",
+      "required": false
+    },
+    {
+      "id": "avp_predator:predator",
+      "required": false
+    },
+    {
+      "id": "avp_predator:yautja",
+      "required": false
+    },
+    {
+      "id": "#avp_predator:predators",
+      "required": false
+    }
+  ]
+}

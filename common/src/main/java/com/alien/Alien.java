@@ -5,11 +5,11 @@ import com.alien.common.data.fixer.migration.AlienDataMigrations;
 import com.alien.common.gameplay.advancement.AlienAdvancementEvents;
 import com.alien.common.gameplay.entity.dismemberment.AlienLimbDefinitions;
 import com.alien.common.gameplay.entity.dismemberment.AlienLimbDrops;
-import com.alien.common.gameplay.hive.growth.ResinDecorator;
 import com.alien.common.gameplay.hive.lifecycle.QueenSettlementDetector;
 import com.alien.common.gameplay.hive.location.HiveLocationRegistry;
 import com.alien.common.gameplay.level.saveddata.QueenSpawnChunkData;
 import com.alien.common.network.AlienNetworking;
+import com.alien.common.network.HeadAttachmentSync;
 import com.alien.common.property.AlienPropertyAccess;
 import com.alien.common.registry.GrowthStageRegistry;
 import com.alien.common.registry.InfectionRegistry;
@@ -22,6 +22,7 @@ import com.alien.common.registry.init.AlienDecoratedPotPatterns;
 import com.alien.common.registry.init.AlienEntityTypes;
 import com.alien.common.registry.init.AlienFactionDataTypes;
 import com.alien.common.registry.init.AlienGameEvents;
+import com.alien.common.registry.init.AlienGameRules;
 import com.alien.common.registry.init.AlienMobEffects;
 import com.alien.common.registry.init.AlienParticleTypes;
 import com.alien.common.registry.init.AlienPotions;
@@ -31,6 +32,7 @@ import com.alien.common.registry.init.block.AberrantAlienResinBlocks;
 import com.alien.common.registry.init.block.AlienBlocks;
 import com.alien.common.registry.init.block.AlienChitinBlocks;
 import com.alien.common.registry.init.block.AlienResinBlocks;
+import com.alien.common.registry.init.block.IrradiatedAlienChitinBlocks;
 import com.alien.common.registry.init.block.IrradiatedAlienResinBlocks;
 import com.alien.common.registry.init.block.NetherAlienChitinBlocks;
 import com.alien.common.registry.init.block.NetherAlienResinBlocks;
@@ -43,6 +45,7 @@ import com.alien.common.registry.init.item.block.AberrantAlienResinBlockItems;
 import com.alien.common.registry.init.item.block.AlienBlockItems;
 import com.alien.common.registry.init.item.block.AlienChitinBlockItems;
 import com.alien.common.registry.init.item.block.AlienResinBlockItems;
+import com.alien.common.registry.init.item.block.IrradiatedAlienChitinBlockItems;
 import com.alien.common.registry.init.item.block.IrradiatedAlienResinBlockItems;
 import com.alien.common.registry.init.item.block.NetherAlienChitinBlockItems;
 import com.alien.common.registry.init.item.block.NetherAlienResinBlockItems;
@@ -79,8 +82,10 @@ public class Alien {
         NetherAlienResinBlocks.initialize();
         AberrantAlienChitinBlocks.initialize();
         AberrantAlienResinBlocks.initialize();
+        IrradiatedAlienChitinBlocks.initialize();
         IrradiatedAlienResinBlocks.initialize();
         AlienItems.initialize();
+
         AlienEntityTypes.initialize();
         AlienSoundEvents.initialize();
 
@@ -92,6 +97,7 @@ public class Alien {
         NetherAlienResinBlockItems.initialize();
         AberrantAlienChitinBlockItems.initialize();
         AberrantAlienResinBlockItems.initialize();
+        IrradiatedAlienChitinBlockItems.initialize();
         IrradiatedAlienResinBlockItems.initialize();
         // Depends on sound events.
         AlienArmorMaterials.initialize();
@@ -105,6 +111,7 @@ public class Alien {
         AlienCreativeModeTabs.initialize();
 
         AlienGameEvents.initialize();
+        AlienGameRules.initialize();
         AlienMobEffects.initialize();
         AlienParticleTypes.initialize();
 
@@ -126,12 +133,16 @@ public class Alien {
         // Networking: hive inspection payloads (request/reply) for the engine workspace inspector.
         AlienNetworking.initialize();
 
+        // Facehugger head-attachment data: join/reload sync of the datapack-driven head profiles to clients.
+        HeadAttachmentSync.initialize();
+
         // Data Migration
         AlienDataMigrations.initialize();
 
         // Listeners/Events
         AlienReloadListeners.initialize();
         AlienAdvancementEvents.initialize();
+        com.alien.common.gameplay.hive.war.AlienTerritoryWarSystem.initialize();
 
         MOD.events().postLevelTick().register(Alien::tickHiveRegistry);
         MOD.events().postLevelTick().register(Alien::tickQueenSpawnCooldown);
@@ -139,6 +150,7 @@ public class Alien {
 
         MOD.events().onFactionsLoaded().register(Alien::rebuildHiveRegistryFromFactions);
         MOD.events().onServerStopped().register(server -> HiveLocationRegistry.INSTANCE.clear());
+        MOD.events().onServerStopped().register(server -> com.alien.common.gameplay.hive.structure.HivePieceRegistry.INSTANCE.clear());
 
         // Hive: defensive cleanup when any lineage faction is removed.
         MOD.events()
@@ -163,16 +175,19 @@ public class Alien {
         // HiveManager.ensureVariantFactionMembership.
         MOD.events().onEntityLoad().register(Alien::onAlienEntityLoaded);
 
-        // Hive: chunk-load decoration + on-demand catch-up. Fires for every loaded chunk; the decorator
-        // exits early for chunks not owned by any location.
-        MOD.events()
-            .onChunkLoad()
-            .register((level, chunk) -> ResinDecorator.onChunkLoad(level, chunk.getPos()));
+        // DO NOT REGISTER A CHUNK_LOAD LISTENER - the registration itself arms a server-killing crash.
+        // BLib's MixinChunkMap_ChunkLoadEvent calls level.getChunk(x, z) synchronously BEFORE dispatching to
+        // listeners, inside onFullChunkStatusChange, which runs inside DistanceManager.runAllUpdates' iteration -
+        // reentrancy -> ConcurrentModificationException -> "Exception ticking world" (tester: entering the nether).
+        // The handler early-outs while its listener list is EMPTY, so an empty list is the kill switch. Resin
+        // decoration now polls from HiveLocationLoadedTickTask via ResinDecorator.sweepLoaded. If BLib ships the
+        // real fix (non-blocking getChunkNow + deferred dispatch), event-driven decoration may return.
     }
 
     private static void onAlienEntityLoaded(net.minecraft.world.entity.Entity entity) {
         if (entity instanceof com.alien.common.gameplay.entity.living.alien.Alien alien) {
             alien.getHiveManager().ensureVariantFactionMembership();
+            com.alien.common.gameplay.hive.migration.LegacyHiveRecovery.recoverLoadedAlien(entity);
         }
     }
 
@@ -181,7 +196,15 @@ public class Alien {
         // structure after BLib's faction store is definitely loaded. Idempotent — does nothing on a clean hive-only
         // world.
         com.alien.common.gameplay.hive.migration.OldHiveMigrator.run(server);
+        com.alien.common.gameplay.claim.LegacyPlayerClaimMigration.migrateToBLib(server);
         HiveLocationRegistry.INSTANCE.rebuildFromFactions();
+        // The recovery pass needs a populated registry to inspect, hence the rebuild ABOVE it; the rebuild BELOW
+        // only exists to pick up factions the recovery just created, so it is skipped when the recovery repaired
+        // nothing. On a clean world that second pass was byte-identical to the first - the "registry rebuild runs
+        // twice" every load in the tester logs.
+        if (com.alien.common.gameplay.hive.migration.LegacyHiveRecovery.detectAndRecover(server)) {
+            HiveLocationRegistry.INSTANCE.rebuildFromFactions();
+        }
         HiveLocationRegistry.INSTANCE.repairTerritoryClaims(server);
     }
 
@@ -198,6 +221,10 @@ public class Alien {
 
         if (server != null) {
             HiveLocationRegistry.INSTANCE.tick(server);
+            com.alien.common.gameplay.hive.bootstrap.RoyalBootstrapResolver.tick(server);
+            com.alien.common.network.handler.HiveRenderToggleHandler.tick(server);
+            com.alien.common.network.handler.HiveStatsSidebarHandler.tick(server);
+            com.alien.common.gameplay.hive.migration.LegacyHiveRecovery.tickPlayerMessages(server);
         }
     }
 
@@ -208,6 +235,10 @@ public class Alien {
 
         QueenSpawnChunkData.getOrCreate(level)
             .ifSome(QueenSpawnChunkData::tick);
+
+        if (level instanceof net.minecraft.server.level.ServerLevel serverLevel) {
+            com.alien.common.gameplay.entity.living.alien.xenomorph.queen.QueenNaturalSpawnTask.tick(serverLevel);
+        }
     }
 
     private static void onTagsUpdated(RegistryAccess registryAccess, boolean flag) {

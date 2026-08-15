@@ -9,6 +9,7 @@ import com.alien.common.gameplay.hive.location.HiveLocation;
 import com.alien.common.gameplay.hive.location.HiveLocationRegistry;
 import com.alien.common.gameplay.hive.location.HiveLocationReserves;
 import com.alien.common.registry.RaidWaveProfileRegistry;
+import com.alien.common.registry.tag.AlienEntityTypeTags;
 import com.blib.api.common.entity.v1.EntityReserves;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
@@ -16,6 +17,7 @@ import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.util.RandomSource;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.phys.Vec3;
+import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -30,7 +32,9 @@ import java.util.UUID;
  * <p>
  * Per {@code HIVE_REDESIGN_06_CONVOYS.md} § 6:
  * <ul>
- * <li>Empress-gated.</li>
+ * <li>HARBINGER-gated, not empress-gated. The harbinger is the raid key (the hive's only scourge-jelly factory, and it
+ * marches in wave 5); an empress is not required to raid at all - she widens the hive footprint and adds a second raid
+ * chamber, which is a capacity bonus, not a prerequisite.</li>
  * <li>Triggered when a player has at least {@code raidThresholdKills} kills in the aggro window.</li>
  * <li>Source = the largest qualifying location ({@code claimedChunks ≥ raidMinLocationSizeChunks}) that can satisfy the
  * lineage variant's raid wave profile.</li>
@@ -53,6 +57,10 @@ public final class RaidDispatch {
         lastDispatchTickByLocation.clear();
     }
 
+    public static void markRaidPressureSpent(HiveLocationId sourceLocationId, long currentTick) {
+        lastDispatchTickByLocation.put(sourceLocationId, currentTick);
+    }
+
     public static void scanAndDispatch(MinecraftServer server) {
         var currentTick = server.overworld().getGameTime();
         var config = HiveLocationRegistry.INSTANCE.config();
@@ -65,11 +73,88 @@ public final class RaidDispatch {
             if (faction == null || !(faction.data() instanceof LineageFactionData lineage) || !lineage.isAlive()) {
                 continue;
             }
-            if (lineage.empressId() == null) {
-                continue;
-            }
+
+            // Post-replacement grudge runs UNGATED (a lone hive whose queen was killed still gets one grudge raid once
+            // it has a queen again) — checked before, and independent of, the kill-threshold auto-raid below.
+            scanGrudge(server, factionId, lineage, currentTick, config);
+
+            // NO EMPRESS GATE. Raids are HARBINGER-gated and nothing else: eligibleSources already requires a living
+            // harbinger plus enough banked reserves to fill the wave profile. An empress ENHANCES raiding (second raid
+            // chamber, so a second harbinger, plus the wider footprint) but was never meant to be a prerequisite.
+            // This used to `continue` on a null empressId, which silently made the kill-threshold auto-raid impossible
+            // for any lineage under 4 hives - directly contradicting this class's own javadoc, and the reason testers
+            // reported raids never firing.
             scanLineage(server, factionId, lineage, currentTick, config);
         }
+    }
+
+    /**
+     * Post-replacement grudge: for each location holding a {@code grudgePlayerId} (its founder queen was killed by that
+     * player), once the location has a living queen again (the firewall crowned a replacement) and the player is online
+     * in-dimension, dispatch a single grudge raid against them and clear the grudge — one raid only, not a permanent
+     * vendetta.
+     */
+    private static void scanGrudge(
+        MinecraftServer server,
+        ResourceLocation factionId,
+        LineageFactionData lineage,
+        long currentTick,
+        HiveConfig config
+    ) {
+        for (var location : lineage.locationsById().values()) {
+            if (com.alien.common.gameplay.hive.dimension.EndStyleHiveRules.isEndStyle(server, location)) {
+                continue; // END-STYLE: no raids - convoys of every type are off
+            }
+            var grudgePlayerId = location.grudgePlayerId();
+            if (grudgePlayerId == null) {
+                continue;
+            }
+            // Wait until a replacement queen actually exists (grudge belongs to the successor's first raid).
+            if (!locationHasLivingQueen(server, location)) {
+                continue;
+            }
+            var targetPlayer = server.getPlayerList().getPlayer(grudgePlayerId);
+            if (targetPlayer == null || targetPlayer.level().dimension() != location.dimension()) {
+                continue;
+            }
+
+            var dispatched = tryDispatchAgainstPlayer(
+                server,
+                lineage,
+                factionId,
+                grudgePlayerId,
+                targetPlayer,
+                currentTick,
+                config,
+                false,
+                true
+            );
+            // Clear the grudge whether or not a party formed — it's a one-shot intent, not a retry loop.
+            location.setGrudgePlayerId(null);
+            lineage.markDirty();
+            if (dispatched) {
+                Alien.LOGGER.info("Hive: post-replacement grudge raid dispatched from {} at player {}", location.id(), grudgePlayerId);
+            }
+        }
+    }
+
+    private static boolean locationHasLivingQueen(MinecraftServer server, HiveLocation location) {
+        var serverLevel = server.getLevel(location.dimension());
+        if (serverLevel == null) {
+            return false;
+        }
+        for (var entry : location.loadedMembersByType().entrySet()) {
+            if (!entry.getKey().is(AlienEntityTypeTags.QUEENS)) {
+                continue;
+            }
+            for (var uuid : entry.getValue()) {
+                var entity = serverLevel.getEntity(uuid);
+                if (entity != null && entity.isAlive()) {
+                    return true;
+                }
+            }
+        }
+        return false;
     }
 
     /** Admin trigger entry. Forces a raid against {@code targetPlayer} from the lineage's largest location. */
@@ -92,6 +177,93 @@ public final class RaidDispatch {
             false,
             false
         );
+    }
+
+    /**
+     * Revenge trigger: a founder queen of {@code lineage} was killed by {@code killer}. Dispatches an ungated (no
+     * empress required) 3-wave revenge raid against the killer, using the revenge wave profile. Distinct from the
+     * kill-threshold auto-raid — this fires on the single event of a queen's death, not accumulated kills.
+     */
+    public static boolean onQueenKilled(
+        MinecraftServer server,
+        LineageFactionData lineage,
+        ResourceLocation lineageFactionId,
+        ServerPlayer killer
+    ) {
+        var currentTick = server.overworld().getGameTime();
+        var config = HiveLocationRegistry.INSTANCE.config();
+        return tryDispatchAgainstPlayer(
+            server,
+            lineage,
+            lineageFactionId,
+            killer.getUUID(),
+            killer,
+            currentTick,
+            config,
+            false,
+            true,
+            true
+        );
+    }
+
+    /**
+     * Rescue trigger: {@code source}'s founder queen was captured and carried off. Dispatches an ungated rescue raid
+     * from {@code source} against the player holding her ({@code captor}). Returns the dispatched raid's id so the
+     * {@code RescueCampaign} can track this attempt, or {@code null} if no party could form (which the caller counts as
+     * a failed attempt).
+     */
+    public static @Nullable ConvoyId dispatchRescue(
+        MinecraftServer server,
+        LineageFactionData lineage,
+        ResourceLocation lineageFactionId,
+        HiveLocation source,
+        ServerPlayer captor
+    ) {
+        var currentTick = server.overworld().getGameTime();
+        if (hasActiveOutboundRaidAgainst(lineage, captor.getUUID())) {
+            return null;
+        }
+
+        var waveProfile = RaidWaveProfileRegistry.rescue();
+        var composition = drainComposition(source.localReserves(), waveProfile, server.overworld().random);
+        if (composition.getCount() < waveProfile.totalSize()) {
+            refundComposition(source.localReserves(), composition);
+            return null;
+        }
+
+        var sourceCenter = new Vec3(
+            source.centerPos().getX() + 0.5,
+            source.centerPos().getY() + 0.5,
+            source.centerPos().getZ() + 0.5
+        );
+
+        var raidId = ConvoyId.fresh();
+        var raid = new Convoy.Raid(
+            raidId,
+            lineageFactionId,
+            source.dimension(),
+            source.id(),
+            captor.getUUID(),
+            sourceCenter,
+            captor.blockPosition(),
+            composition,
+            currentTick,
+            Long.MAX_VALUE
+        );
+        raid.markRescue();
+        raid.setWaveCount(waveProfile.waves().size());
+
+        lineage.convoys().add(raid);
+        lineage.markDirty();
+
+        Alien.LOGGER.info(
+            "Hive: rescue raid {} dispatched from {} at captor {} ({} members)",
+            raidId,
+            source.id(),
+            captor.getUUID(),
+            composition.getCount()
+        );
+        return raidId;
     }
 
     private static void scanLineage(
@@ -145,15 +317,48 @@ public final class RaidDispatch {
         boolean consumeKillAttribution,
         boolean blockExistingTargetRaid
     ) {
+        return tryDispatchAgainstPlayer(
+            server,
+            lineage,
+            lineageFactionId,
+            playerId,
+            targetPlayer,
+            currentTick,
+            config,
+            consumeKillAttribution,
+            blockExistingTargetRaid,
+            false
+        );
+    }
+
+    private static boolean tryDispatchAgainstPlayer(
+        MinecraftServer server,
+        LineageFactionData lineage,
+        ResourceLocation lineageFactionId,
+        UUID playerId,
+        ServerPlayer targetPlayer,
+        long currentTick,
+        HiveConfig config,
+        boolean consumeKillAttribution,
+        boolean blockExistingTargetRaid,
+        boolean revenge
+    ) {
         if (blockExistingTargetRaid && hasActiveOutboundRaidAgainst(lineage, playerId)) {
             return false;
         }
 
-        var waveProfile = RaidWaveProfileRegistry.forVariant(lineage.variant());
+        // Revenge under an empress draws from a wider roster - the scourge tier rides along, harbinger excluded.
+        // Gated on the LINEAGE rather than the source hive because the profile has to be chosen before
+        // eligibleSources picks one, and influence follows empressId across every hive she holds anyway.
+        var waveProfile = revenge
+            ? (lineage.empressId() != null
+                ? RaidWaveProfileRegistry.revengeEmpress()
+                : RaidWaveProfileRegistry.revenge())
+            : RaidWaveProfileRegistry.forVariant(lineage.variant());
         HiveLocation source = null;
         EntityReserves composition = null;
 
-        for (var candidate : eligibleSources(lineage, currentTick, config, waveProfile)) {
+        for (var candidate : eligibleSources(server, lineage, currentTick, config, waveProfile)) {
             var candidateComposition = drainComposition(
                 candidate.localReserves(),
                 waveProfile,
@@ -189,6 +394,10 @@ public final class RaidDispatch {
             currentTick,
             Long.MAX_VALUE
         );
+        if (revenge) {
+            raid.markRevenge();
+            raid.setWaveCount(waveProfile.waves().size());
+        }
 
         lineage.convoys().add(raid);
         if (consumeKillAttribution) {
@@ -222,6 +431,7 @@ public final class RaidDispatch {
     }
 
     private static List<HiveLocation> eligibleSources(
+        MinecraftServer server,
         LineageFactionData lineage,
         long currentTick,
         HiveConfig config,
@@ -230,10 +440,27 @@ public final class RaidDispatch {
         var candidates = new ArrayList<HiveLocation>();
 
         for (var location : lineage.locationsById().values()) {
+            if (com.alien.common.gameplay.hive.dimension.EndStyleHiveRules.isEndStyle(server, location)) {
+                continue; // END-STYLE: an End hive never stages or sources a raid, even for an overworld sibling
+            }
             if (!location.isAlive()) {
                 continue;
             }
             if (location.claimedChunks().size() < config.raidMinLocationSizeChunks()) {
+                continue;
+            }
+            // NO HARBINGER, NO RAID.
+            //
+            // The harbinger is the raid key: it is the hive's only scourge-jelly factory, so without one the
+            // entire scourge tier stops being produced - and it marches in wave 5, so every raid stakes it.
+            // Kill it and the hive cannot raid again until it has grown a praetorian, fed it 200 biomass and a
+            // scourge jelly, and waited out the cooldown. Killing the harbinger is a DISABLE, not just a kill.
+            if (
+                com.alien.common.gameplay.hive.economy.CastePopulation.countCaste(
+                    location,
+                    com.alien.common.registry.tag.AlienEntityTypeTags.HARBINGERS
+                ) <= 0
+            ) {
                 continue;
             }
             if (!hasRaidCapacity(location.localReserves(), waveProfile)) {

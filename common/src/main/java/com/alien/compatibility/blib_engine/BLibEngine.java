@@ -1,6 +1,6 @@
 package com.alien.compatibility.blib_engine;
 
-import com.alien.client.inspector.AlienInspectorSections;
+import com.alien.compatibility.blib_engine.client.inspector.AlienInspectorSections;
 import com.blib.api.BLibAPI;
 import com.blib.api.common.mod.v1.BLibMod;
 

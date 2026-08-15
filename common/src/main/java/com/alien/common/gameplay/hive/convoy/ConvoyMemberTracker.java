@@ -39,6 +39,59 @@ public final class ConvoyMemberTracker {
         return membership != null && findConvoy(membership) instanceof Convoy.Raid;
     }
 
+    public static void markJoinedRaid(Convoy.Raid raid, com.alien.common.gameplay.entity.living.alien.Alien alien) {
+        markSpawned(raid, alien);
+        raid.incrementFrenziedJoinCount();
+    }
+
+    public static boolean isNearActiveRaidContext(Entity entity, double radiusBlocks) {
+        if (radiusBlocks <= 0.0 || entity.level().isClientSide()) {
+            return false;
+        }
+
+        var radiusSqr = radiusBlocks * radiusBlocks;
+        for (var factionId : new ArrayList<>(Alien.MOD.factions().getAllIds())) {
+            var faction = Alien.MOD.factions().get(factionId);
+            if (faction == null || !(faction.data() instanceof LineageFactionData lineage) || !lineage.isAlive()) {
+                continue;
+            }
+
+            for (var convoy : lineage.convoys()) {
+                if (!(convoy instanceof Convoy.Raid raid) || raid.returningHome()) {
+                    continue;
+                }
+                if (!raid.dimension().equals(entity.level().dimension())) {
+                    continue;
+                }
+                if (entity.position().distanceToSqr(raid.currentPos()) <= radiusSqr) {
+                    return true;
+                }
+                if (entity.position().distanceToSqr(raid.lastKnownTargetPos().getCenter()) <= radiusSqr) {
+                    return true;
+                }
+                if (isNearMaterializedRaidMember(entity, raid, radiusSqr)) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    private static boolean isNearMaterializedRaidMember(Entity entity, Convoy.Raid raid, double radiusSqr) {
+        var level = entity.getServer() == null ? null : entity.getServer().getLevel(raid.dimension());
+        if (level == null) {
+            return false;
+        }
+
+        for (var memberId : raid.materializedMembers().keySet()) {
+            var member = level.getEntity(memberId);
+            if (member != null && member != entity && member.position().distanceToSqr(entity.position()) <= radiusSqr) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     private static boolean returnToReserves(com.alien.common.gameplay.entity.living.alien.Alien alien, String reason) {
         var membership = alien.convoyMembership();
         if (membership == null) {
@@ -175,6 +228,9 @@ public final class ConvoyMemberTracker {
         for (var entry : new ArrayList<>(convoy.materializedMembers().entrySet())) {
             var entity = level == null ? null : level.getEntity(entry.getKey());
             if (entity != null && entity.isAlive() && !entity.isRemoved()) {
+                if (entity instanceof com.alien.common.gameplay.entity.living.alien.xenomorph.carrier.Carrier carrier) {
+                    carrier.releaseAllFacehuggers();
+                }
                 if (entity instanceof com.alien.common.gameplay.entity.living.alien.Alien alien) {
                     alien.clearConvoyMembership();
                 }

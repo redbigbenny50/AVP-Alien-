@@ -85,6 +85,23 @@ public final class BiomassIncome {
      * stockpile arbitrarily and then explode forward in growth (per the design's anti-runaway constraint in § 5).
      */
     public static int biomassCap(HiveLocation location, HiveConfig config) {
+        // Founding mode: a queen-founded hive that has not yet established its egg sack has its cap pinned to the
+        // founding target (resin floor + ovipositor cost) so the queen fills exactly that much and then commits it all
+        // at once. Without this the normal (much larger) cap means she'd never have a clear "tank full" point.
+        // Queenless
+        // hives (no founder) use the normal formula. See fill-then-commit founding design.
+        if (location.founderId() != null && !location.reproductiveEstablished()) {
+            return foundingBiomassTarget(config);
+        }
         return claimCost(location, config) * config.biomassAccumulationCapMultiplier();
+    }
+
+    /**
+     * Total biomass a founding queen must accumulate before she commits: the resin-floor stamp cost plus the ovipositor
+     * cost. Spent all at once at COMMIT. Currently resin-floor cost == ovipositor cost, so this is 2x the ovipositor
+     * cost (e.g. 100 + 100 = 200).
+     */
+    public static int foundingBiomassTarget(HiveConfig config) {
+        return config.ovipositorCreationBiomassCost() * 2;
     }
 }

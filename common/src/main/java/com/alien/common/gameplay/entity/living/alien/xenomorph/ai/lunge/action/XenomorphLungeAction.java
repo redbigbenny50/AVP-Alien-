@@ -1,6 +1,7 @@
 package com.alien.common.gameplay.entity.living.alien.xenomorph.ai.lunge.action;
 
 import com.alien.common.gameplay.entity.living.alien.xenomorph.Xenomorph;
+import com.alien.common.gameplay.entity.living.alien.xenomorph.ai.lunge.LungeSensors;
 import com.alien.common.registry.init.AlienSoundEvents;
 import com.blib.api.common.goap.v1.GOAPSensors;
 import com.just.ai.goap.StateKey;
@@ -30,7 +31,7 @@ public class XenomorphLungeAction {
 
         var attackTarget = attackTargetOption.unwrap();
 
-        if (!xenomorph.onGround()) {
+        if (!xenomorph.onGround() || !LungeSensors.hasRequiredLegs(xenomorph)) {
             return Action.Signal.ABORT;
         }
 

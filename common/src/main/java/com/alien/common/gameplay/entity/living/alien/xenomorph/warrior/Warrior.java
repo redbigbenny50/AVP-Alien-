@@ -2,6 +2,7 @@ package com.alien.common.gameplay.entity.living.alien.xenomorph.warrior;
 
 import com.alien.common.gameplay.entity.living.alien.Alien;
 import com.alien.common.gameplay.entity.living.alien.xenomorph.AttackType;
+import com.alien.common.gameplay.entity.living.alien.xenomorph.CrawlAttack;
 import com.alien.common.gameplay.entity.living.alien.xenomorph.Xenomorph;
 import com.alien.common.gameplay.entity.living.alien.xenomorph.XenomorphAttackConfig;
 import com.alien.common.gameplay.entity.living.alien.xenomorph.XenomorphConfig;
@@ -22,18 +23,48 @@ import org.jetbrains.annotations.Nullable;
 
 public class Warrior extends Xenomorph implements GOAPUser<Warrior> {
 
+    /**
+     * ⭐⭐ THE PRONE ATTACKS. [stated] "when either leg is shot off it has to crawl there should be no other
+     * alternatives... the attacks they can do are only the crawl ones."
+     * <p>
+     * ⚠⚠ THE CLIPS AND THE DISPATCHER METHODS ALREADY EXISTED - what was missing was the ATTACK TYPES, so the crawl
+     * preference in {@code XenomorphAttackConfig} had nothing to restrict to and fell through to the standing set. A
+     * one-legged warrior stood up to swing because there was literally nothing prone to pick.
+     * </p>
+     */
+    /** ⚠ Slightly softer than a standing swing, matching the predalien's existing crawl claw. */
+    private static final float CRAWL_DAMAGE_FRACTION = 0.8F;
+
+    public static final AttackType CRAWL_CLAW = CrawlAttack.create(
+        "warrior_crawl_claw",
+        CRAWL_DAMAGE_FRACTION,
+        CrawlAttack.Limb.ARM,
+        16
+    );
+
+    /** ⚠ HEAD, NOT ARM - so a crawling warrior that has also lost both arms still has a bite. */
+    public static final AttackType CRAWL_BITE = CrawlAttack.create(
+        "warrior_crawl_bite",
+        CRAWL_DAMAGE_FRACTION,
+        CrawlAttack.Limb.HEAD,
+        14
+    );
+
     public static final AttackType CLAW = AttackType.builder("warrior_claw")
-        .defaultDurationInTicks(10)
+        .requiresAnyArm()
+        .defaultDurationInTicks(20)
         .sound(AlienSoundEvents.ENTITY_XENOMORPH_ATTACK)
         .build();
 
     public static final AttackType BITE = AttackType.builder("warrior_bite")
-        .defaultDurationInTicks(8)
+        .requiresHead()
+        .defaultDurationInTicks(10)
         .sound(AlienSoundEvents.ENTITY_XENOMORPH_ATTACK)
         .build();
 
     public static final AttackType TAIL = AttackType.builder("warrior_tail")
-        .defaultDurationInTicks(12)
+        .requiresTail()
+        .defaultDurationInTicks(19)
         .sound(AlienSoundEvents.ENTITY_XENOMORPH_ATTACK)
         .build();
 
@@ -42,6 +73,8 @@ public class Warrior extends Xenomorph implements GOAPUser<Warrior> {
             XenomorphAttackConfig.builder()
                 .addRegular(CLAW)
                 .addRegular(BITE)
+                .addRegular(CRAWL_CLAW)
+                .addRegular(CRAWL_BITE)
                 .addRegular(TAIL)
                 .build()
         )
@@ -57,8 +90,8 @@ public class Warrior extends Xenomorph implements GOAPUser<Warrior> {
     public static AttributeSupplier.Builder createWarriorAttributes() {
         return Alien.createAlienAttributes()
             .add(Attributes.ARMOR, 8.0F)
-            .add(Attributes.ARMOR_TOUGHNESS, 0f)
-            .add(Attributes.ATTACK_DAMAGE, PlayerStatConstants.BASE_HEALTH * 0.5F)
+            .add(Attributes.ARMOR_TOUGHNESS, 4.0F)
+            .add(Attributes.ATTACK_DAMAGE, PlayerStatConstants.BASE_HEALTH * 0.4F)
             .add(Attributes.FOLLOW_RANGE, 35F)
             .add(Attributes.KNOCKBACK_RESISTANCE, 0.5f)
             .add(Attributes.MAX_HEALTH, PlayerStatConstants.BASE_HEALTH * 3F)

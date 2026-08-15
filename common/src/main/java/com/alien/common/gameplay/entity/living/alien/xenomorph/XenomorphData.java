@@ -14,11 +14,19 @@ public class XenomorphData implements NBTSerializable {
 
     private static final String NBT_LAST_LUNGE_TICK = "lastLungeTick";
 
+    private static final String NBT_ROYAL_LINE_CANDIDATE = "royalLineCandidate";
+
+    private static final String NBT_ROYAL_CANDIDATE_KILLS = "royalCandidateKills";
+
     private final RandomSource random;
 
     private int ticksUntilBored;
 
     private long lastLungeTick;
+
+    private boolean royalLineCandidate;
+
+    private int royalCandidateKills;
 
     private int lastAlertedHurtTimestamp;
 
@@ -85,6 +93,27 @@ public class XenomorphData implements NBTSerializable {
         this.parallelDigCount = count;
     }
 
+    public boolean isRoyalLineCandidate() {
+        return royalLineCandidate;
+    }
+
+    public void setRoyalLineCandidate(boolean royalLineCandidate) {
+        this.royalLineCandidate = royalLineCandidate;
+    }
+
+    public int getRoyalCandidateKills() {
+        return royalCandidateKills;
+    }
+
+    public void setRoyalCandidateKills(int royalCandidateKills) {
+        this.royalCandidateKills = Math.max(royalCandidateKills, 0);
+    }
+
+    public int incrementRoyalCandidateKills() {
+        royalCandidateKills++;
+        return royalCandidateKills;
+    }
+
     @Override
     public void load(CompoundTag compoundTag) {
         if (compoundTag.contains(NBT_TICKS_UNTIL_BORED)) {
@@ -94,11 +123,21 @@ public class XenomorphData implements NBTSerializable {
         if (compoundTag.contains(NBT_LAST_LUNGE_TICK)) {
             this.lastLungeTick = compoundTag.getLong(NBT_LAST_LUNGE_TICK);
         }
+
+        if (compoundTag.contains(NBT_ROYAL_LINE_CANDIDATE)) {
+            this.royalLineCandidate = compoundTag.getBoolean(NBT_ROYAL_LINE_CANDIDATE);
+        }
+
+        if (compoundTag.contains(NBT_ROYAL_CANDIDATE_KILLS)) {
+            this.royalCandidateKills = compoundTag.getInt(NBT_ROYAL_CANDIDATE_KILLS);
+        }
     }
 
     @Override
     public void save(CompoundTag compoundTag) {
         compoundTag.putInt(NBT_TICKS_UNTIL_BORED, ticksUntilBored);
         compoundTag.putLong(NBT_LAST_LUNGE_TICK, lastLungeTick);
+        compoundTag.putBoolean(NBT_ROYAL_LINE_CANDIDATE, royalLineCandidate);
+        compoundTag.putInt(NBT_ROYAL_CANDIDATE_KILLS, royalCandidateKills);
     }
 }

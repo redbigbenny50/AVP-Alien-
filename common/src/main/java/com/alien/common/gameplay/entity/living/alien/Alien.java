@@ -1,9 +1,11 @@
 package com.alien.common.gameplay.entity.living.alien;
 
 import com.alien.common.data.AlienVariantTypes;
+import com.alien.common.gameplay.entity.living.alien.xenomorph.RoyalCandidateProgress;
 import com.alien.common.gameplay.entity.living.alien.xenomorph.Xenomorph;
 import com.alien.common.gameplay.entity.living.alien.xenomorph.drone.Drone;
 import com.alien.common.gameplay.entity.living.alien.xenomorph.runner.Runner;
+import com.alien.common.gameplay.hive.bootstrap.RoyalBootstrapLeakRecorder;
 import com.alien.common.gameplay.hive.convoy.ConvoyId;
 import com.alien.common.gameplay.hive.convoy.ConvoyMemberTracker;
 import com.alien.common.gameplay.hive.convoy.ConvoyMembership;
@@ -20,6 +22,8 @@ import com.alien.common.registry.tag.AlienDamageTypesTags;
 import com.alien.common.registry.tag.AlienEntityTypeTags;
 import com.alien.common.registry.tag.AlienMobEffectTags;
 import com.alien.common.util.AcidBleedUtil;
+import com.alien.common.util.AlienIrradiationUtil;
+import com.alien.common.util.AlienPredicates;
 import com.alien.common.util.AlienTransitionUtil;
 import com.alien.compatibility.avp_human.AVPHuman;
 import com.alien.compatibility.avp_human.GeneManagerProxy;
@@ -50,16 +54,19 @@ import net.minecraft.world.DifficultyInstance;
 import net.minecraft.world.damagesource.DamageSource;
 import net.minecraft.world.effect.MobEffectInstance;
 import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.EntityDimensions;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.LightningBolt;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.MobSpawnType;
+import net.minecraft.world.entity.Pose;
 import net.minecraft.world.entity.SpawnGroupData;
 import net.minecraft.world.entity.ai.attributes.Attribute;
 import net.minecraft.world.entity.ai.attributes.AttributeModifier;
 import net.minecraft.world.entity.ai.attributes.AttributeSupplier;
 import net.minecraft.world.entity.ai.attributes.Attributes;
 import net.minecraft.world.entity.monster.Monster;
+import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.entity.vehicle.Boat;
 import net.minecraft.world.entity.vehicle.Minecart;
 import net.minecraft.world.level.Level;
@@ -72,6 +79,9 @@ import java.util.Objects;
 import java.util.function.Predicate;
 
 public abstract class Alien extends Monster implements DataUser {
+
+    /** Chance, per three-second fallout tick, that an alien standing in the nuked biome is irradiated. */
+    private static final int IRRADIATION_CHANCE_PERCENT = 10;
 
     private static final String NBT_HOST_TYPE = "hostType";
 
@@ -86,9 +96,23 @@ public abstract class Alien extends Monster implements DataUser {
     // Idle pathing uses 0.5x speed and pursuit uses 1.1x; 0.8x splits the two for animation.
     private static final double RUN_ANIMATION_SPEED_THRESHOLD_MULTIPLIER = 0.8D;
 
+    /**
+     * Drop-out fraction for the run gait. The run/walk decision used a single raw threshold, so an alien travelling
+     * near it flipped state several times a second - and every flip restarts the animation track into its transition,
+     * so neither gait ever advanced. That is what froze the drone's legs while it was digging (start-stop carve work
+     * sits right on the threshold), and it makes every alien's walk/run transition stutter. Enter the run gait at the
+     * full threshold, but keep it until speed falls to this fraction of it.
+     */
+    private static final double RUN_ANIMATION_EXIT_THRESHOLD_FACTOR = 0.7D;
+
     public final DataAccessor<Boolean> hasTarget;
 
     public final DataAccessor<Boolean> isPoisoned;
+
+    public final DataAccessor<Boolean> isWithered;
+
+    /** Born of an irradiated host - see {@code AlienDataSyncKeys.ALIEN_IS_BOILER_DESTINED}. */
+    public final DataAccessor<Boolean> isBoilerDestined;
 
     public final DataAccessor<Float> moltAlpha;
 
@@ -106,7 +130,17 @@ public abstract class Alien extends Monster implements DataUser {
 
     private @Nullable ConvoyMembership convoyMembership;
 
+    private @Nullable com.alien.common.gameplay.hive.party.PartyMembership partyMembership;
+
     private int lastHurtTimeInTicks;
+
+    /**
+     * Game time at which this alien was told to walk to a vent and fold into its hive's reserves (0 = not marked).
+     * TRANSIENT by design: if the chunk unloads or the server restarts mid-walk, the mark is simply lost and the alien
+     * carries on as an ordinary member - a harmless fallback, never a leak. Set by CarveWorkers.disband; consumed by
+     * BroodBankTask, which routes marked aliens to the nearest vent and returns them IDENTITY-INTACT.
+     */
+    private long reserveReturnMarkedAtTick;
 
     private boolean hasAnimationMovementSample;
 
@@ -119,6 +153,8 @@ public abstract class Alien extends Monster implements DataUser {
 
         this.hasTarget = new DataAccessor<>(this, BLibDataSyncKeys.ENTITY_HAS_TARGET.get());
         this.isPoisoned = new DataAccessor<>(this, AlienDataSyncKeys.ALIEN_IS_POISONED.get());
+        this.isWithered = new DataAccessor<>(this, AlienDataSyncKeys.ALIEN_IS_WITHERED.get());
+        this.isBoilerDestined = new DataAccessor<>(this, AlienDataSyncKeys.ALIEN_IS_BOILER_DESTINED.get());
         this.moltAlpha = new DataAccessor<>(this, AlienDataSyncKeys.ALIEN_MOLT_ALPHA.get());
         this.isMovingHorizontally = new DataAccessor<>(this, BLibDataSyncKeys.ENTITY_IS_MOVING_HORIZONTALLY.get());
         this.isMovingQuickly = new DataAccessor<>(this, AlienDataSyncKeys.ALIEN_IS_MOVING_QUICKLY.get());
@@ -135,7 +171,49 @@ public abstract class Alien extends Monster implements DataUser {
 
     protected abstract float getHealthRegenPerSecond();
 
+    /**
+     * ⭐⭐ A CRAWLING ALIEN IS SHORTER. [stated] "so wait while its crawling it still has a 5 tall hitbox how does that
+     * make sense? the hitbox should move with the body... its about 2.6 blocks tall when its crawling."
+     * <p>
+     * ⚠⚠ NOTHING SHRANK THE BOX BEFORE THIS, and it caused two separate faults on every tall caste. A harbinger, queen
+     * and empress are all 5.5 blocks standing, so {@code isTightSpace} put them into a permanent crawl indoors - while
+     * they still occupied a 5.5-tall collision box:
+     * </p>
+     * <ul>
+     * <li>STEPPING UP FAILED. {@code maxUpStep} of 1.5 is ample for a one-block rise, but the step only succeeds if the
+     * destination can FIT the box. Under a corridor ceiling there was nowhere to go, so they wedged and needed blocks
+     * broken out - [stated] "its like their getting stuck in the ground and we have to break some blocks".</li>
+     * <li>THEY COULD NOT SEE. Line of sight traces from EYE HEIGHT, about 5 blocks up on a 5.5-tall body - inside the
+     * ceiling of a 3-tall corridor. The harbinger was not short-sighted, it was looking out of solid rock, which is why
+     * [stated] "the tester had to get close to it for it to attack them" while FOLLOW_RANGE was a normal 35 on every
+     * caste.</li>
+     * </ul>
+     * <p>
+     * ⚠ WIDTH IS DELIBERATELY UNCHANGED. A prone body is not narrower - it is the same animal lying down - and
+     * shrinking the width would let a crawling alien slip through gaps its standing form cannot.
+     * </p>
+     * <p>
+     * ⚠ GROWING BACK IS SAFE BECAUSE OF WHO DECIDES. {@code isTightSpace} measures against the caste's STANDING height
+     * from its entity TYPE, not from these live dimensions - so the box shrinking can never trick it into standing up
+     * somewhere it does not fit, and a leg-forced crawl never stands at all.
+     * </p>
+     */
+    public static final float CRAWL_HEIGHT_SCALE = 0.5F;
+
+    // ⚠ getDefaultDimensions, NOT getDimensions - LivingEntity marks getDimensions FINAL, and this is the hook it
+    // calls through to. Overriding here also means the sleeping/pose handling above us keeps working.
     @Override
+    protected @NotNull EntityDimensions getDefaultDimensions(@NotNull Pose pose) {
+        var dimensions = super.getDefaultDimensions(pose);
+
+        if (!(this instanceof Xenomorph xenomorph) || !xenomorph.getCrawlingManager().isCrawling()) {
+            return dimensions;
+        }
+
+        // scale(width, height) - 1.0 on width keeps the footprint, so only the height comes down.
+        return dimensions.scale(1.0F, CRAWL_HEIGHT_SCALE);
+    }
+
     public float maxUpStep() {
         return 1.5F;
     }
@@ -178,6 +256,31 @@ public abstract class Alien extends Monster implements DataUser {
 
     @Override
     public void setTarget(@Nullable LivingEntity livingEntity) {
+        // KIN MERCY, enforced at the door rather than only in the sensors. The targeting pipeline already refuses a
+        // helpless same-strain queen, but every sensor check in the world is worthless against a direct setTarget:
+        // convoy dispatch, hive territory aggro and CryForHelpListener.retargetIfPossible all hand a target straight
+        // to a mob, and that last one copies whatever the crier was already fighting onto a newly summoned defender.
+        // A chained queen reaching a defender that way would be clawed by her own kin with nothing to stop it.
+        if (
+            livingEntity != null
+                && (AlienPredicates.isHelplessKinQueen(this, livingEntity)
+                    || AlienPredicates.isHelplessQueenStrikingKin(this, livingEntity))
+        ) {
+            return;
+        }
+
+        // CREATIVE AND SPECTATOR ARE NOT QUARRY. [stated] "creative players shouldnt be targeted by the
+        // birthraids spectator either."
+        //
+        // Enforced HERE for the same reason kin mercy is: the hive hands targets out through half a dozen direct
+        // setTarget paths - raid dispatch, convoy interception, territory aggro, CryForHelpListener retargeting -
+        // and guarding any one of them leaves the others open. Every other hive system already skips these
+        // players (HiveTerritoryAggroTask, ConvoyInterception, HiveBreachRepair, RescueCampaignTask), so this is
+        // making an existing stance uniform rather than introducing a new one.
+        if (livingEntity instanceof Player player && (player.isCreative() || player.isSpectator())) {
+            return;
+        }
+
         super.setTarget(livingEntity);
         // Hive: the per-location boss bar auto-adds in-range players via HiveLocationBossBar.updateTrackingPlayers
         // every 20 ticks; no manual track-on-target hook needed.
@@ -213,14 +316,52 @@ public abstract class Alien extends Monster implements DataUser {
             setPathfindingMalus(PathType.DANGER_FIRE, 0.0F);
             setPathfindingMalus(PathType.DAMAGE_FIRE, 0.0F);
         } else {
-            setPathfindingMalus(PathType.LAVA, PathType.LAVA.getMalus());
-            setPathfindingMalus(PathType.DANGER_FIRE, PathType.DANGER_FIRE.getMalus());
-            setPathfindingMalus(PathType.DAMAGE_FIRE, PathType.DAMAGE_FIRE.getMalus());
+            // Hard-avoid lava/fire for non-Nether aliens.
+            //
+            // The SIGN is the whole story here, and it is the opposite of what it looks like. In
+            // WalkNodeEvaluator a path type is traversable when its malus is >= 0; a NEGATIVE malus means the node
+            // is never even offered as a neighbour (-1 is exactly what vanilla stamps on a blocked node). A large
+            // POSITIVE malus does not forbid anything - it just prices the tile, and the pathfinder will happily
+            // pay it when the route is otherwise convenient.
+            //
+            // So an all-positive 16.0F did the reverse of what it intended: vanilla LAVA is already -1
+            // (impassable), and overriding it to +16 turned lava into a merely expensive shortcut - which is why
+            // workers walked into flowing lava at a carve site.
+            // LAVA / DAMAGE_FIRE are the hazard ITSELF (the lava, the fire, the magma block): never step onto one.
+            setPathfindingMalus(PathType.LAVA, -1.0F);
+            setPathfindingMalus(PathType.DAMAGE_FIRE, -1.0F);
+            // DANGER_FIRE is NOT the hazard - vanilla's checkNeighbourBlocks stamps it on any node with lava or
+            // fire in the surrounding 3x3x3, i.e. "within one block of". Making it impassable walled off a
+            // one-block halo around every lava block, which can sever a corridor outright and turn reachable
+            // nursery beds into NO_PATH failures. Keep it steeply priced but PASSABLE, as vanilla does (+8),
+            // so a worker will edge past a lava seam rather than treat the whole area as a wall.
+            setPathfindingMalus(PathType.DANGER_FIRE, 16.0F);
         }
     }
 
     public boolean isPoisoned() {
         return isPoisoned.get();
+    }
+
+    /** Withered mark - see {@code AlienDataSyncKeys.ALIEN_IS_WITHERED}. Rides growth transitions via NBT. */
+    public boolean isWithered() {
+        return isWithered.get();
+    }
+
+    public void setWithered(boolean withered) {
+        this.isWithered.set(withered);
+    }
+
+    /**
+     * Boiler destiny - the irradiated-host birthright. Read by {@code GrowthManager.canBecomeBoiler} at the adolescent
+     * -> adult transition; rides every growth step until then.
+     */
+    public boolean isBoilerDestined() {
+        return isBoilerDestined.get();
+    }
+
+    public void setBoilerDestined(boolean boilerDestined) {
+        this.isBoilerDestined.set(boilerDestined);
     }
 
     public void setPoisoned(boolean isPoisoned) {
@@ -264,6 +405,17 @@ public abstract class Alien extends Monster implements DataUser {
         // (natural, spawn egg, command). Idempotent — see HiveManager.ensureVariantFactionMembership.
         hiveManager.ensureVariantFactionMembership();
 
+        // COMMAND-SUMMONED ALIENS ARE BORN FULL SIZE ([stated]): "lets make it so that any summoned xenomorph
+        // skips that growth phase and is full size immidiately. spawn eggs can stay the same as they are."
+        //
+        // Deliberately COMMAND only. SPAWN_EGG is excluded by his call, and MOB_SUMMONED is excluded because
+        // that is the mod's OWN spawn path - carve crews, convoys, parties, reinforcements, repopulation all
+        // finalize with it, and they are supposed to grow like anything the hive produces. /summon is the
+        // testing tool, so it is the one that skips.
+        if (spawnType == MobSpawnType.COMMAND) {
+            moltingManager.matureImmediately();
+        }
+
         // Hive: if this alien spawned inside a location that has it in its reserves, decrement the reserves and
         // copy genes from the location's leader (preserves the legacy "spawned alien inherits leader's genes"
         // behavior).
@@ -301,6 +453,49 @@ public abstract class Alien extends Monster implements DataUser {
         return super.finalizeSpawn(level, difficulty, spawnType, spawnGroupData);
     }
 
+    /**
+     * ⭐⭐ NOTHING LIVES WITHOUT ITS HEAD. [stated] "everything without a head should die not just the irradiated."
+     * <p>
+     * ⚠⚠ THERE WAS NO SUCH RULE ANYWHERE IN THE MOD - not for irradiated, not for anyone. A head could be torn off (the
+     * ravager's head-rip, an explosion's limb roll) and the body simply carried on, minus its attacks that
+     * {@code requiresHead()} but otherwise alive and pathing. He saw it on irradiated xenos because that is what he was
+     * fighting; it was never strain-specific.
+     * </p>
+     * <p>
+     * ⚠ GENERIC_KILL, NOT A BIG NUMBER. It is in {@code bypasses_invulnerability}, so a headless chrysalis curled in
+     * its defence stance still dies - which is right, that stance protects against being HIT, not against already
+     * having been decapitated. A plain damage source would have left exactly that immortal case behind.
+     * </p>
+     * <p>
+     * ⚠ THE isDeadOrDying GUARD IS LOAD-BEARING. Boiler and burster call {@code detachAllLimbs()} as part of their own
+     * death explosion - without this they would be killed a second time mid-detonation, from inside their own death
+     * handler.
+     * </p>
+     * <p>
+     * ⚠ SCOPE: this is on {@code Alien}, so it covers every xenomorph, ovomorph and facehugger. A decapitated MARINE is
+     * avp_human's to decide and is untouched.
+     * </p>
+     */
+    private void dieIfHeadless() {
+        if (isDeadOrDying() || !(this instanceof Dismemberable dismemberable)) {
+            return;
+        }
+
+        var manager = dismemberable.getDismembermentManager();
+
+        // Cheap exit: the overwhelming majority of aliens have never lost anything, and this runs every tick.
+        if (manager == null || !manager.hasAnyDetached()) {
+            return;
+        }
+
+        for (var definition : LimbDefinitionRegistry.getDefinitions(getType())) {
+            if (definition.category().equals(LimbCategories.HEAD) && manager.isDetached(definition)) {
+                hurt(damageSources().genericKill(), Float.MAX_VALUE);
+                return;
+            }
+        }
+    }
+
     @Override
     public void tick() {
         if (!level().isClientSide && ConvoyMemberTracker.discardStaleLoadedMember(this)) {
@@ -311,11 +506,47 @@ public abstract class Alien extends Monster implements DataUser {
         super.tick();
 
         if (!level().isClientSide) {
+            dieIfHeadless();
+        }
+
+        // The withered mark, made visible. This was ParticleTypes.SMOKE at a quarter of ticks - vanilla's smoke is
+        // GREY, and on something as small and quick as a chestburster, in a dark hive already full of acid, it read as
+        // nothing at all. SQUID_INK is the only genuinely BLACK particle vanilla has; it is given a slight upward
+        // drift so it behaves like smoke coming off the thing rather than ink sinking through it, and a grey wisp
+        // still rises with it so the effect keeps some volume.
+        if (level().isClientSide && isWithered() && random.nextInt(2) == 0) {
+            level()
+                .addParticle(
+                    net.minecraft.core.particles.ParticleTypes.SQUID_INK,
+                    getRandomX(0.6),
+                    getRandomY(),
+                    getRandomZ(0.6),
+                    0,
+                    0.03,
+                    0
+                );
+            level()
+                .addParticle(
+                    net.minecraft.core.particles.ParticleTypes.SMOKE,
+                    getRandomX(0.6),
+                    getRandomY(),
+                    getRandomZ(0.6),
+                    0,
+                    0.02,
+                    0
+                );
+        }
+
+        if (!level().isClientSide) {
             movementAnalyzer.tick();
         }
 
         hiveManager.tick();
         moltingManager.tick();
+        if (!level().isClientSide) {
+            // Capture/delivery itself is a GOAP action (HostActions) - only the stun timer ticks here.
+            com.alien.common.gameplay.hive.party.HostGrabImmunity.tickStun(this);
+        }
 
         if (!level().isClientSide) {
             hasTarget.set(getTarget() != null);
@@ -363,11 +594,23 @@ public abstract class Alien extends Monster implements DataUser {
             getAttributeValue(Attributes.MOVEMENT_SPEED) * RUN_ANIMATION_SPEED_THRESHOLD_MULTIPLIER
         );
 
-        return deltaX * deltaX + deltaZ * deltaZ >= speedThreshold * speedThreshold;
+        // Hysteresis: a moving alien must slow well below the entry threshold before it drops back to a walk, so
+        // jitter around the boundary can no longer flip the gait (and restart the animation) tick after tick.
+        var travelledSquared = deltaX * deltaX + deltaZ * deltaZ;
+        var enterSquared = speedThreshold * speedThreshold;
+        if (isMovingQuickly.get()) {
+            var exitFactorSquared = RUN_ANIMATION_EXIT_THRESHOLD_FACTOR * RUN_ANIMATION_EXIT_THRESHOLD_FACTOR;
+            return travelledSquared >= enterSquared * exitFactorSquared;
+        }
+        return travelledSquared >= enterSquared;
     }
 
     /**
-     * 10% chance when in Nuked Biome to become Irradiated
+     * Rolls the fallout biome's chance to irradiate this alien.
+     * <p>
+     * What happens on a hit is NOT "become irradiated" — it is {@link AlienIrradiationUtil#irradiate}'s three-way rule,
+     * so an ABERRANT dies here rather than being promoted. This used to call the transition util directly and
+     * unguarded, which meant standing in fallout upgraded the one strain that is supposed to be killed by it.
      */
     private void becomeIrradiated() {
         if (!AVPHuman.MOD.isLoaded()) {
@@ -386,8 +629,10 @@ public abstract class Alien extends Monster implements DataUser {
             return;
         }
 
-        if (getRandom().nextIntBetweenInclusive(1, 100) >= 90) {
-            AlienTransitionUtil.transitionIntoVariant(this, AlienVariant.IRRADIATED);
+        // Was `>= 90`, which is 90..100 inclusive — eleven values, an 11% roll against a documented 10%. Stated as a
+        // percentage now so the number in the constant is the number in the design.
+        if (getRandom().nextIntBetweenInclusive(1, 100) <= IRRADIATION_CHANCE_PERCENT) {
+            AlienIrradiationUtil.irradiate(this);
         }
     }
 
@@ -412,12 +657,24 @@ public abstract class Alien extends Monster implements DataUser {
             return;
 
         if (canHeal()) {
+            var healthBefore = getHealth();
             heal(getHealthRegenPerSecond());
+            var healed = getHealth() - healthBefore;
+            if (healed > 0.0F && this instanceof Dismemberable dismemberable) {
+                dismemberable.getDismembermentManager().healLimbDamage(healed);
+            }
         }
     }
 
     @Override
     public boolean isInvulnerableTo(DamageSource damageSource) {
+        // Radiation never hurts the species - except the aberrant strain, the weak line that burns instead. This is
+        // the enforcement of the decree the talon code already states ("aliens are radiation-immune AS A SPECIES"):
+        // environmental radiation from nuked ground was still damaging xenomorphs - including, absurdly, the
+        // IRRADIATED strain ([stated] tester report). Variant-conditional, so it cannot live in the blanket tag.
+        if (damageSource.is(AlienDamageTypesTags.RADIATION) && getVariant() != AlienVariant.ABERRANT) {
+            return true;
+        }
         return damageSource.is(AlienDamageTypesTags.DOES_NOT_HURT_ALIENS) || super.isInvulnerableTo(damageSource);
     }
 
@@ -456,6 +713,10 @@ public abstract class Alien extends Monster implements DataUser {
             }
         }
 
+        if (killedEntity && this instanceof Xenomorph xenomorph) {
+            RoyalCandidateProgress.onKilledEntity(xenomorph, level, entity);
+        }
+
         return killedEntity;
     }
 
@@ -476,6 +737,20 @@ public abstract class Alien extends Monster implements DataUser {
 
     @Override
     public boolean hurt(@NotNull DamageSource damageSource, float damage) {
+        // Rescue: hurting a xenomorph that is carrying a captured host makes it drop the host and be stunned.
+        //
+        // The captive itself is excluded: a carried player can look down and hit the drone under them (see
+        // MixinProjectileUtil_AllowHittingVehicle, which deliberately allows hitting an alien vehicle), and letting
+        // that free them would bypass the struggle bar entirely. Rescue is something SOMEONE ELSE does for you; your
+        // own way out is HostStruggle.
+        if (!level().isClientSide) {
+            var captive = com.alien.common.gameplay.hive.party.HostCaptureTask.carriedHost(this);
+            var attacker = damageSource.getEntity();
+            var directAttacker = damageSource.getDirectEntity();
+            if (captive != null && attacker != captive && directAttacker != captive) {
+                com.alien.common.gameplay.hive.party.HostGrabImmunity.breakCapture(this, captive);
+            }
+        }
         var healthBefore = getHealth();
         var isHurt = super.hurt(damageSource, damage);
 
@@ -495,6 +770,24 @@ public abstract class Alien extends Monster implements DataUser {
             if (damageSource.getEntity() != null) {
                 // Cry for help so that nearby vents may try and summon help.
                 gameEvent(alienVariantType.cryForHelpEvent());
+            }
+
+            if (getType().is(AlienEntityTypeTags.XENOMORPHS) && damageSource.getEntity() instanceof ServerPlayer player) {
+                recordAttackByPlayer(player);
+            }
+
+            // SIEGE CLOCK FEED. [stated] territory attrition keys on "prolonged combat ... over 15 minutes or so of
+            // active combat/aggro with a player or enemy faction" in the hive's territory. A qualifying hit is: a
+            // hive member, standing in a chunk its location claims, hurt by a player or by a living attacker from
+            // OUTSIDE its own lineage (same-lineage crossfire and acid splash are not a siege). Environmental damage
+            // has no attacking entity and never qualifies. Duration filtering happens in PopulationPressureDecayTask
+            // - this just timestamps the hit.
+            if (
+                !level().isClientSide
+                    && getType().is(AlienEntityTypeTags.XENOMORPHS)
+                    && damageSource.getEntity() instanceof LivingEntity attackerEntity
+            ) {
+                recordSiegeDamage(attackerEntity);
             }
 
             if (canBleedAcid() && damageSource != damageSources().genericKill()) {
@@ -562,7 +855,7 @@ public abstract class Alien extends Monster implements DataUser {
             1F
         );
 
-        var canLoseLegs = !(this instanceof Xenomorph xeno) || xeno.getCrawlingManager().canCrawl();
+        var canLoseLegs = !(this instanceof Xenomorph xeno) || xeno.getCrawlingManager().canCrawlAfterLegLoss();
         var killedByExplosion = isDeadOrDying();
 
         for (var definition : definitions) {
@@ -594,7 +887,7 @@ public abstract class Alien extends Monster implements DataUser {
      * shallow drop.
      */
     private void rollFallLegDismemberment(float damageDealt) {
-        if (!(this instanceof Xenomorph xeno) || !xeno.getCrawlingManager().canCrawl()) {
+        if (!(this instanceof Xenomorph xeno) || !xeno.getCrawlingManager().canCrawlAfterLegLoss()) {
             return;
         }
 
@@ -670,7 +963,98 @@ public abstract class Alien extends Monster implements DataUser {
             return false;
         }
 
+        // The effect-side half of the radiation decree: the sickness never takes hold on a non-aberrant alien, so
+        // its damage ticks never even start. The damage-side refusal in isInvulnerableTo still stands behind it for
+        // any radiation damage dealt directly without the effect.
+        if (mobEffectInstance.getEffect().is(AlienMobEffectTags.RADIATION) && getVariant() != AlienVariant.ABERRANT) {
+            return false;
+        }
+
         return super.canBeAffected(mobEffectInstance);
+    }
+
+    /**
+     * AVPHuman's full-suit radiation armor tag, referenced BY ID so no avp_human class is touched - the tag simply has
+     * no members when the mod is absent.
+     */
+    private static final net.minecraft.tags.TagKey<net.minecraft.world.item.Item> RADIATION_RESISTANT_ARMORS =
+        net.minecraft.tags.TagKey.create(
+            net.minecraft.core.registries.Registries.ITEM,
+            net.minecraft.resources.ResourceLocation.fromNamespaceAndPath("avp_human", "radiation_resistant_armors")
+        );
+
+    /**
+     * AVPHuman's radiation effect, resolved lazily by id - a SOFT dependency: empty when avp_human is absent and the
+     * irradiated touch simply does nothing. Cached after the first lookup (registries are frozen by then).
+     */
+    private static java.util.Optional<net.minecraft.core.Holder.Reference<net.minecraft.world.effect.MobEffect>> radiationEffect;
+
+    public static java.util.Optional<net.minecraft.core.Holder.Reference<net.minecraft.world.effect.MobEffect>> radiationEffect() {
+        if (radiationEffect == null) {
+            radiationEffect = net.minecraft.core.registries.BuiltInRegistries.MOB_EFFECT.getHolder(
+                net.minecraft.resources.ResourceLocation.fromNamespaceAndPath("avp_human", "radiation")
+            );
+        }
+        return radiationEffect;
+    }
+
+    @Override
+    public boolean doHurtTarget(@NotNull net.minecraft.world.entity.Entity target) {
+        var hurt = super.doHurtTarget(target);
+
+        // Withered aliens fight like wither skeletons: every landed hit inflicts the wither. Fellow aliens are
+        // untouched - wither sits in the does_not_affect_aliens effect tag.
+        if (hurt && isWithered() && target instanceof net.minecraft.world.entity.LivingEntity livingTarget) {
+            livingTarget.addEffect(
+                new MobEffectInstance(net.minecraft.world.effect.MobEffects.WITHER, 200, 0),
+                this
+            );
+        }
+
+        // IRRADIATED strain: every landed hit adds to the victim's AVPHuman radiation EXPOSURE, so a fight
+        // escalates them up the sickness ladder instead of handing out one fixed dose. Optional dependency - the
+        // compat class is only touched when avp_human is actually present.
+        if (
+            hurt
+                && target instanceof net.minecraft.world.entity.LivingEntity irradiatedTarget
+                && canBeIrradiatedByTouch(irradiatedTarget)
+                && AlienVariantTypes.getFor(getVariant()) == AlienVariantTypes.IRRADIATED
+                && com.alien.compatibility.avp_human.AVPHuman.MOD.isLoaded()
+        ) {
+            com.alien.compatibility.avp_human.RadiationCompat.irradiateOnHit(irradiatedTarget);
+        }
+
+        return hurt;
+    }
+
+    /**
+     * Whether the irradiated touch may dose this victim. Deliberately mirrors AVPHuman's own {@code canBeIrradiated}
+     * gate, because this hook calls {@code addEffect} directly and would otherwise bypass every protection the mod
+     * grants its players:
+     * <ul>
+     * <li><b>A full radiation-resistant armor set stops it outright.</b> The MK50 suit trades armor points and mobility
+     * for radiation protection - a claw through it must not make that trade worthless.</li>
+     * <li><b>Fellow aliens are never dosed</b> - the species is radiation-immune by decree.</li>
+     * <li><b>An active radiation effect is never refreshed.</b> AVPHuman's damage curve is driven by how much of the
+     * ORIGINAL duration has elapsed; re-applying on every claw would keep resetting a victim into the harmless
+     * incubation window, so a dose is a dose and it must be allowed to run.</li>
+     * </ul>
+     */
+    private boolean canBeIrradiatedByTouch(net.minecraft.world.entity.LivingEntity victim) {
+        // Aliens are radiation-immune AS A SPECIES - except the aberrant strain, which is not. Aberrants are the
+        // weak line: it is why they cannot convert to irradiated the way normal and nether do, and it is why they
+        // burn instead. The avp_human:radiation_resistant tag we contribute lists every alien EXCEPT them, and this
+        // mirrors it so claws and talons agree with the environment.
+        if (victim instanceof Alien irradiatedAlien && irradiatedAlien.getVariant() != AlienVariant.ABERRANT) {
+            return false;
+        }
+        // NOTE: deliberately NOT refused for an already-irradiated victim any more. Under AVPHuman's exposure
+        // counter, repeat hits are supposed to accumulate - refusing them would mean a swarm could never take you
+        // past the first rung of the ladder.
+        return !com.blib.api.common.entity.v1.BLibEntityPredicates.hasFullArmorSetMatching(
+            victim,
+            stack -> stack.is(RADIATION_RESISTANT_ARMORS)
+        );
     }
 
     @Override
@@ -686,6 +1070,14 @@ public abstract class Alien extends Monster implements DataUser {
     @Override
     public boolean isPersistenceRequired() {
         if (super.isPersistenceRequired()) {
+            return true;
+        }
+        // Load-window guard: the hive registry is rebuilt from BLib faction data on load, and until that has happened
+        // once it cannot place ANY member in a hive - so every member would read as non-persistent and vanilla would
+        // despawn it the moment it ticks on load. That is the "on join, every xeno but the queen vanished" bug (the
+        // queen has her own registry-independent persistence). Until the registry is ready, hold every hive xenomorph
+        // persistent so nothing is culled in that window.
+        if (!HiveLocationRegistry.INSTANCE.hasRebuilt() && getType().is(AlienEntityTypeTags.XENOMORPHS)) {
             return true;
         }
         // Hive: an alien is persistent if it's standing in a hive location and either (a) the location's boss bar
@@ -733,8 +1125,63 @@ public abstract class Alien extends Monster implements DataUser {
                 return;
             }
 
+            RoyalBootstrapLeakRecorder.recordIfEligible(this);
             onStrainLeak();
         }
+    }
+
+    private void recordSiegeDamage(LivingEntity attackerEntity) {
+        // A LEADERSHIP DUEL is not a siege - [stated] "this is a battle for leadership": the empresses' mutual
+        // blows are sanctioned by the species and feed no clocks, no grudges, no attrition.
+        if (com.alien.common.gameplay.hive.empress.EndEmpressDuel.isDuelist(attackerEntity.getUUID())) {
+            return;
+        }
+        // Creative/spectator hits are not a siege - same rule as the intrusion timer ([stated] Aug 1): an admin
+        // sword-testing in creative must not start 15 minutes of territory attrition against the hive.
+        if (
+            attackerEntity instanceof net.minecraft.world.entity.player.Player player
+                && (player.isCreative() || player.isSpectator())
+        ) {
+            return;
+        }
+        var location = HiveMemberLocationResolver.reserveReturnLocation(this);
+        if (location == null || !location.claimedChunks().contains(chunkPosition())) {
+            return;
+        }
+        if (attackerEntity instanceof Alien attackerAlien) {
+            var attackerLocation = HiveMemberLocationResolver.reserveReturnLocation(attackerAlien);
+            if (
+                attackerLocation != null
+                    && attackerLocation.lineageFactionId() != null
+                    && attackerLocation.lineageFactionId().equals(location.lineageFactionId())
+            ) {
+                return;
+            }
+        }
+        location.recordCombatDamage(level().getGameTime());
+    }
+
+    /** Marks this alien to walk to a vent and fold back into reserves. See {@code reserveReturnMarkedAtTick}. */
+    public void markForReserveReturn(long gameTime) {
+        this.reserveReturnMarkedAtTick = Math.max(1L, gameTime);
+    }
+
+    public boolean isMarkedForReserveReturn() {
+        return reserveReturnMarkedAtTick > 0L;
+    }
+
+    /**
+     * Clears the reserve-return mark. Used by the crawl-retreat rule when its conditions stop holding (the xenomorph
+     * found headroom to stand, so its standing attacks are back and it should fight, not be quietly banked the next
+     * time it idles). A disband-marked carve worker that briefly entered and left retreat loses its disband mark too -
+     * it then simply lives on as an ordinary member, which is harmless.
+     */
+    public void clearReserveReturnMark() {
+        this.reserveReturnMarkedAtTick = 0L;
+    }
+
+    public long reserveReturnMarkedAtTick() {
+        return reserveReturnMarkedAtTick;
     }
 
     private @Nullable HiveLocation reserveReturnLocation() {
@@ -770,18 +1217,83 @@ public abstract class Alien extends Monster implements DataUser {
                 strainLeakData.add(alienVariant, 1);
 
                 if (!wasAlienVariantAlreadyPresent) {
-                    for (var player : serverLevel.players()) {
-                        player.sendSystemMessage(
-                            Component.literal(strainBasedLeakMessage)
-                                .withStyle(alienVariantType.chatColor(), ChatFormatting.ITALIC)
-                        );
-                    }
+                    announceStrainArrival(serverLevel, alienVariant, strainBasedLeakMessage);
                 }
             });
     }
 
     @Override
     public void remove(@NotNull RemovalReason removalReason) {
+        // ⭐⭐ YANKED OUT OF THE WORLD ALIVE == DEAD, AS FAR AS THE HIVE IS CONCERNED.
+        //
+        // [stated] "theres a mod called mob capture tool that seems to corrupt or erase data affecting hives...
+        // erases lineage ID changes queen's personal ID as well as if she were an entirely different individual",
+        // then: "i think it should mark her as dead that way the hive replaces her and the revenge party is sent
+        // out."
+        //
+        // ⚠⚠ THE PROBLEM IS THAT `remove(KILLED)` NEVER CALLS `die()`. MobCapturingTool does exactly
+        // saveWithoutId -> remove(KILLED) -> EntityType.create + load, so a captured royal leaves the world
+        // without a single death hook firing: the founder seat still names her, the lineage still counts her, and
+        // the hive waits forever for a queen that is sitting in somebody's inventory. Releasing her later cannot
+        // repair that, because the faction registry that holds lineage membership is keyed OUTSIDE her NBT - it is
+        // the one part of her identity the capture round-trip cannot carry.
+        //
+        // ⚠ SO WE DO NOT TRY TO PRESERVE HER. Treating the removal as a death is cheaper and leaves the hive
+        // CONSISTENT rather than subtly wrong: the seat clears, a successor is crowned, and the grudge fires.
+        // If she is released later she is simply a queen with no seat - which the founding path already handles,
+        // she goes and digs her own hive.
+        //
+        // ⚠ THE ALIVE TEST IS WHAT KEEPS THIS SAFE. A genuinely killed entity has already run `die()` and is dead
+        // by the time it is removed, so it never reaches this branch and nothing runs twice. Only a removal that
+        // takes a LIVING entity out of the world - which no vanilla path does with KILLED - lands here.
+        if (
+            !level().isClientSide
+                && removalReason == RemovalReason.KILLED
+                && !isRemoved()
+                && isAlive()
+                && !isDeadOrDying()
+        ) {
+            onRemovedAliveTreatAsDeath();
+        }
+
+        // DIAGNOSTIC (queen bug 1 - "she seems to despawn while digging her core"). Every mod-side removal path was
+        // audited and none can touch a queen (eviction exempts avp mobs, brood bank is host-born-only, convoys never
+        // carry queens, the reserve unload handler guards the QUEENS tag), and vanilla distance-despawn is disabled
+        // by her persistence - so whatever removes her is unknown, and this names it: reason + caller stack at the
+        // exact moment. Prime suspect: PEACEFUL difficulty, which Monster.checkDespawn honours REGARDLESS of
+        // persistence (shouldDespawnInPeaceful is never overridden in this mod). Remove once the culprit is known.
+        if (
+            !level().isClientSide
+                && !isRemoved()
+                && getType().is(AlienEntityTypeTags.QUEENS)
+        ) {
+            if (removalReason == RemovalReason.UNLOADED_TO_CHUNK || removalReason == RemovalReason.CHANGED_DIMENSION) {
+                // Normal chunk churn - one line, no stack, so "unloaded at T and never seen again" is visible in a
+                // timeline without drowning the log.
+                com.alien.Alien.LOGGER.info(
+                    "QUEEN-DIAG {} {} removed reason={} pos={} - routine unload, should reappear on chunk load",
+                    getType().builtInRegistryHolder().key().location(),
+                    getUUID(),
+                    removalReason,
+                    blockPosition()
+                );
+            } else {
+                com.alien.Alien.LOGGER.warn(
+                    "QUEEN-DIAG {} {} REMOVED reason={} pos={} difficulty={} persistent={} phase={} - caller stack follows",
+                    getType().builtInRegistryHolder().key().location(),
+                    getUUID(),
+                    removalReason,
+                    blockPosition(),
+                    level().getDifficulty(),
+                    isPersistenceRequired(),
+                    this instanceof com.alien.common.gameplay.entity.living.alien.xenomorph.queen.Queen queen
+                        ? String.valueOf(queen.getLifecyclePhaseManager().getPhase())
+                        : "n/a",
+                    new Throwable("QUEEN-DIAG removal stack (not an error)")
+                );
+            }
+        }
+
         super.remove(removalReason);
         // Hive: BLib's faction system handles removal cleanup automatically when the entity is killed or
         // discarded — no manual hive.removeHiveMember call needed.
@@ -789,6 +1301,17 @@ public abstract class Alien extends Monster implements DataUser {
 
     @Override
     public void die(@NotNull DamageSource damageSource) {
+        // Free any egg destination this hauler had reserved - a dead carrier must not keep a nursery bed or a
+        // webbed host locked out of the hive.
+        if (!level().isClientSide) {
+            com.alien.common.gameplay.entity.living.alien.xenomorph.ai.egg.EggSpotClaims.releaseAll(getUUID());
+        }
+
+        // Untrack this member from its party NOW, while we know it truly died. Resolution cannot otherwise tell a
+        // dead member from one that is merely in an unloaded chunk, and was writing off both.
+        if (!level().isClientSide) {
+            com.alien.common.gameplay.hive.party.PartyMemberDeath.onDeath(this);
+        }
         // Hive raid attribution: if a player gets the kill credit, record it against every lineage this alien
         // belongs to. Defers to vanilla's getKillCredit so indirect kills (TNT, fall damage from broken block,
         // etc) count when vanilla counts them.
@@ -800,15 +1323,281 @@ public abstract class Alien extends Monster implements DataUser {
                     && level() instanceof ServerLevel serverLevel
             ) {
                 attributeKillToLineages(player.getUUID(), serverLevel.getGameTime());
+                recordHiveCombatKill(player);
             }
             ConvoyMemberTracker.unregisterKilled(this);
+            // ANY royal death (queen or empress, any cause, killer or not) surrenders the founder pointer on the
+            // hives she was seated at. Before this, setFounderId(null) had exactly one caller in the whole tree -
+            // QueenInhibitionService - so a location kept naming a long-dead queen forever. That made
+            // "founderId != null" read as "once had a queen" rather than "has a living queen", which stalled the
+            // post-replacement grudge (it waits for a successor that the queenless path never crowned) and let the
+            // empress election seat a hive with no queen in it at all.
+            if (getType().is(AlienEntityTypeTags.QUEENS)) {
+                onRoyalDiedClearFounder();
+            }
             // Hive empress death clears the lineage's empress slot so the next emergence ritual can fire.
             if (getType().is(AlienEntityTypeTags.EMPRESSES)) {
+                // BROKEN THRONE: she was cast out by her own empire and died on the ruin it left her, guarded by
+                // whatever refused to leave. Checked BEFORE onEmpressDied because exile has already surrendered the
+                // lineage's empressId - the only thing that still remembers what she was is the flag on her.
+                // A code grant rather than a kill criterion: "exiled" is entity state, not an entity type, so no tag
+                // could tell this death apart from killing a reigning empress.
+                if (
+                    this instanceof com.alien.common.gameplay.entity.living.alien.xenomorph.empress.Empress empress
+                        && empress.isExiled()
+                        && getKillCredit() instanceof net.minecraft.server.level.ServerPlayer throneBreaker
+                ) {
+                    com.alien.common.data.AlienAdvancements.BROKEN_THRONE.grant(throneBreaker);
+                }
                 onEmpressDied();
+            }
+            // Queen killed by a player → revenge raid (ungated 3-wave strike against the killer), and mark her
+            // location for the post-replacement grudge so the crowned successor prioritizes that player.
+            if (
+                getType().is(AlienEntityTypeTags.QUEENS)
+                    && getKillCredit() instanceof ServerPlayer queenKiller
+                    && level() instanceof ServerLevel queenLevel
+            ) {
+                onQueenKilled(queenKiller, queenLevel);
+            }
+            // END-STYLE succession: ANY royal death (any killer, any cause) in an end-style hive raises a regent
+            // praetorian at the spot - [stated] "when a queen dies a praetorian spawns out of the reserves. and
+            // persists." Deliberately outside the player-killer gate above: a queen who suffocates or falls to a
+            // mob still leaves her fortress a regent.
+            if (
+                getType().is(AlienEntityTypeTags.QUEENS)
+                    && level() instanceof ServerLevel regentLevel
+                    && com.alien.common.gameplay.hive.dimension.EndStyleHiveRules.isEndStyle(regentLevel)
+            ) {
+                com.alien.common.gameplay.hive.lifecycle.EndRegent.onRoyalDied(regentLevel, this);
             }
         }
 
         super.die(damageSource);
+    }
+
+    /**
+     * OBSERVE, DON'T INTERFERE - [stated] "the other aliens dont join in the fight they will observe but not
+     * interfere." While a leadership duel runs, no xenomorph may attack either duelist - only the rival empress herself
+     * may. Vanilla consults canAttack before committing to a target, so this one gate covers every AI route. Players
+     * are not bound by the ritual.
+     */
+    @Override
+    public boolean canAttack(@NotNull LivingEntity target) {
+        if (
+            com.alien.common.gameplay.hive.empress.EndEmpressDuel.isDuelist(target.getUUID())
+                && !com.alien.common.gameplay.hive.empress.EndEmpressDuel.isDuelist(getUUID())
+        ) {
+            return false;
+        }
+        return super.canAttack(target);
+    }
+
+    private void onQueenKilled(ServerPlayer killer, ServerLevel serverLevel) {
+        var server = serverLevel.getServer();
+
+        // Case A — a captured queen (severed into her own inhibited lineage) dies mid-recovery. She's no longer a
+        // member of her original hive, so the ONLY link back is the RescueCampaign holding her UUID. Scan all
+        // locations for it: convert the recovery into a revenge raid carrying the logged failure count, then clear the
+        // campaign so the firewall can finally crown a replacement.
+        if (convertRescueToRevengeOnDeath(server, killer)) {
+            return;
+        }
+
+        // Case B — a normal (in-hive) founder queen killed by a player: grudge + straight revenge raid.
+        for (var factionId : com.alien.Alien.MOD.factions().getFactionIds(getUUID())) {
+            if (!com.alien.common.gameplay.hive.id.LineageIds.isLineageId(factionId)) {
+                continue;
+            }
+            var faction = com.alien.Alien.MOD.factions().get(factionId);
+            if (faction == null || !(faction.data() instanceof LineageFactionData lineage)) {
+                continue;
+            }
+
+            // Mark this queen's own location (the one she founded) for the post-replacement grudge.
+            for (var location : lineage.locationsById().values()) {
+                if (getUUID().equals(location.founderId())) {
+                    location.setGrudgePlayerId(killer.getUUID());
+                    var lineageFaction = com.alien.Alien.MOD.factions().get(location.lineageFactionId());
+                    if (lineageFaction != null && lineageFaction.data() instanceof LineageFactionData ld) {
+                        ld.markDirty();
+                    }
+                }
+            }
+
+            com.alien.common.gameplay.hive.convoy.RaidDispatch.onQueenKilled(server, lineage, factionId, killer);
+        }
+    }
+
+    /**
+     * If this dying queen has an open {@link com.alien.common.gameplay.hive.party.RescueCampaign} on some hive
+     * location, converts recovery → revenge: dispatches a revenge raid from that original hive carrying the campaign's
+     * failure count context, stamps the grudge, and clears the campaign (unblocking the firewall). Returns true if a
+     * conversion happened.
+     */
+    private boolean convertRescueToRevengeOnDeath(net.minecraft.server.MinecraftServer server, ServerPlayer killer) {
+        for (var factionId : new java.util.ArrayList<>(com.alien.Alien.MOD.factions().getAllIds())) {
+            if (!com.alien.common.gameplay.hive.id.LineageIds.isLineageId(factionId)) {
+                continue;
+            }
+            var faction = com.alien.Alien.MOD.factions().get(factionId);
+            if (faction == null || !(faction.data() instanceof LineageFactionData lineage)) {
+                continue;
+            }
+            for (var location : lineage.locationsById().values()) {
+                var campaign = location.rescueCampaign();
+                if (campaign == null || !getUUID().equals(campaign.queenUuid())) {
+                    continue;
+                }
+
+                // Convert. The revenge raid fires ungated against the killer; the grudge is stamped so the eventual
+                // replacement also prioritizes them (the 3-strike patience was against the loss, not the method).
+                location.setGrudgePlayerId(killer.getUUID());
+                location.setRescueCampaign(null);
+                lineage.markDirty();
+                com.alien.common.gameplay.hive.convoy.RaidDispatch.onQueenKilled(server, lineage, factionId, killer);
+                com.alien.Alien.LOGGER.info(
+                    "Hive: recovery converted to revenge — captured queen {} killed by {}; {} rescue attempts had failed",
+                    getUUID(),
+                    killer.getUUID(),
+                    campaign.attemptsFailed()
+                );
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Clear this royal's founder pointer on every hive that named her.
+     * <p>
+     * Scans the locations of every lineage she belonged to rather than trusting a single resolver, because a royal can
+     * die outside her own claimed chunks (dragged off by a raid, killed mid-convoy, executed in a player's lab) and the
+     * seat still has to be released. Null founder is the established "queenless" state the growth, economy and
+     * maturation tasks already read - see QueenInhibitionService, which sets exactly this.
+     */
+    /**
+     * A third party removed this alien from the world while it was still alive. Run the hive-side bookkeeping that
+     * {@code die} would have run, so the colony is not left holding a pointer to something that no longer exists.
+     * <p>
+     * ⚠ HIVE BOOKKEEPING ONLY - NO LOOT, NO LIMBS, NO DEATH ANIMATION. It deliberately does NOT call {@code die()}:
+     * that would spawn drops for a mob nobody killed and hand out advancements for a kill that never happened. What the
+     * hive needs is the STATE change, not the spectacle.
+     * </p>
+     * <p>
+     * ⚠ THE REVENGE RAID NEEDS A KILLER AND USUALLY WILL NOT HAVE ONE. {@code getKillCredit()} is only set by actual
+     * combat, and capturing a queen does no damage - so a player who simply pockets her gets no raid. If they softened
+     * her up first, the credit is still there and the raid fires. That asymmetry is honest: the hive avenges violence
+     * it can attribute, and a bloodless abduction leaves nobody to blame.
+     * </p>
+     */
+    private void onRemovedAliveTreatAsDeath() {
+        if (!getType().is(AlienEntityTypeTags.XENOMORPHS)) {
+            return;
+        }
+
+        com.alien.common.gameplay.entity.living.alien.xenomorph.ai.egg.EggSpotClaims.releaseAll(getUUID());
+        com.alien.common.gameplay.hive.party.PartyMemberDeath.onDeath(this);
+        ConvoyMemberTracker.unregisterKilled(this);
+
+        if (getType().is(AlienEntityTypeTags.QUEENS)) {
+            onRoyalDiedClearFounder();
+        }
+
+        if (getType().is(AlienEntityTypeTags.EMPRESSES)) {
+            onEmpressDied();
+        }
+
+        if (getType().is(AlienEntityTypeTags.QUEENS) && level() instanceof ServerLevel abductedLevel) {
+            var abductor = getKillCredit() instanceof ServerPlayer credited
+                ? credited
+                : recentTerritoryVisitor(abductedLevel);
+
+            if (abductor != null) {
+                onQueenKilled(abductor, abductedLevel);
+            }
+        }
+
+        com.alien.Alien.LOGGER.info(
+            "Hive: {} {} was removed from the world ALIVE (reason=KILLED) - treated as a death so the hive can move on",
+            getType().builtInRegistryHolder().key().location(),
+            getUUID()
+        );
+    }
+
+    /**
+     * ⭐⭐ WHO WAS IN THE HIVE WHEN SHE VANISHED. [stated] "the hive tracks who enters and is present in the hive area so
+     * whoever is present when the queen vanishes should be marked for the revenge."
+     * <p>
+     * ⚠ THIS IS THE FALLBACK, NOT THE PRIMARY. A real kill still uses {@code getKillCredit()} - vanilla already knows
+     * exactly who did it, and indirect kills (TNT, a fall she took from a broken block) resolve correctly there. This
+     * only answers the case credit CANNOT answer: an abduction does no damage, so there is no credit to read, and
+     * without this a queen could be pocketed with no consequence at all.
+     * </p>
+     * <p>
+     * ⚠ IT REUSES THE VISIT LEDGER THE HIVE ALREADY KEEPS. {@code HiveTerritoryAggroTask.recordVisitors} stamps every
+     * player it sees in the territory with the tick they were seen, so the answer is already written down - nothing new
+     * is tracked and nothing extra ticks.
+     * </p>
+     * <p>
+     * ⚠ MOST RECENT VISITOR, AND ONLY IF RECENT. Picking the newest stamp is what makes "present when she vanished"
+     * mean it: a player who walked through the claim an hour ago is not blamed for an abduction they were nowhere near.
+     * ⚠ AND THE PLAYER MUST STILL BE ONLINE - the raid targets a live player, and blaming someone who logged out would
+     * fire a campaign at nobody.
+     * </p>
+     */
+    private @Nullable ServerPlayer recentTerritoryVisitor(ServerLevel level) {
+        var location = com.alien.common.gameplay.hive.location.HiveLocationRegistry.INSTANCE.getByChunk(
+            level.dimension(),
+            new net.minecraft.world.level.ChunkPos(blockPosition())
+        );
+
+        if (location == null) {
+            return null;
+        }
+
+        var now = level.getGameTime();
+        ServerPlayer best = null;
+        var bestTick = Long.MIN_VALUE;
+
+        for (var visit : location.territoryVisits().entrySet()) {
+            if (now - visit.getValue() > ABDUCTION_WITNESS_WINDOW_TICKS || visit.getValue() <= bestTick) {
+                continue;
+            }
+
+            if (level.getServer().getPlayerList().getPlayer(visit.getKey()) instanceof ServerPlayer witness) {
+                best = witness;
+                bestTick = visit.getValue();
+            }
+        }
+
+        return best;
+    }
+
+    /** How recently a player must have been seen in the territory to be blamed for a royal vanishing. 30 seconds. */
+    private static final long ABDUCTION_WITNESS_WINDOW_TICKS = 600L;
+
+    private void onRoyalDiedClearFounder() {
+        for (var factionId : com.alien.Alien.MOD.factions().getFactionIds(getUUID())) {
+            if (!com.alien.common.gameplay.hive.id.LineageIds.isLineageId(factionId)) {
+                continue;
+            }
+            var faction = com.alien.Alien.MOD.factions().get(factionId);
+            if (faction == null || !(faction.data() instanceof LineageFactionData lineage)) {
+                continue;
+            }
+            for (var location : lineage.locationsById().values()) {
+                if (getUUID().equals(location.founderId())) {
+                    location.setFounderId(null);
+                    com.alien.Alien.LOGGER.info(
+                        "Hive: royal {} died - location {} is now queenless",
+                        getUUID(),
+                        location.id()
+                    );
+                }
+            }
+            lineage.markDirty();
+        }
     }
 
     private void onEmpressDied() {
@@ -822,6 +1611,15 @@ public abstract class Alien extends Monster implements DataUser {
             }
             if (getUUID().equals(lineage.empressId())) {
                 lineage.setEmpressId(null);
+                lineage.setPendingEmpressSeatId(null);
+
+                // Killing her has to BUY something. Without this the lineage still holds 4+ hives, so the very next
+                // scan crowns her successor and the players get nothing for the fight.
+                var server = level().getServer();
+                if (server != null) {
+                    var cooldown = HiveLocationRegistry.INSTANCE.config().empressCrowningCooldownTicks();
+                    lineage.setEmpressCooldownUntilTick(server.overworld().getGameTime() + cooldown);
+                }
             }
             com.alien.Alien.LOGGER.info(
                 "Hive: empress {} died — lineage {} has {} location(s); empress slot cleared",
@@ -846,14 +1644,120 @@ public abstract class Alien extends Monster implements DataUser {
         }
     }
 
+    private void recordHiveCombatKill(ServerPlayer player) {
+        var location = HiveMemberLocationResolver.reserveReturnLocation(this);
+        if (location == null) {
+            location = HiveLocationRegistry.INSTANCE.getByChunk(level().dimension(), chunkPosition());
+        }
+        if (location == null || !location.isAlive()) {
+            return;
+        }
+
+        location.recordCombatKill(player.blockPosition(), HiveLocationRegistry.INSTANCE.config());
+        var faction = com.alien.Alien.MOD.factions().get(location.lineageFactionId());
+        if (faction != null && faction.data() instanceof LineageFactionData lineage) {
+            lineage.markDirty();
+        }
+    }
+
+    /**
+     * Notes that {@code player} was hostile to a member of this alien's home hive location right now — feeds
+     * {@code HiveTerritoryAggroTask}'s intrusion dwell tracking (a player who breaches the claim, fights members, and
+     * lingers past the dwell threshold earns a two-wave retribution campaign). Only the "recently hostile" timestamp is
+     * stamped here; the dwell accrual and campaign start happen in the aggro task, which has the in-claim timing
+     * context this per-hit hook lacks.
+     */
+    private void recordAttackByPlayer(ServerPlayer player) {
+        if (!(level() instanceof ServerLevel serverLevel)) {
+            return;
+        }
+        var location = HiveMemberLocationResolver.reserveReturnLocation(this);
+        if (location == null) {
+            location = HiveLocationRegistry.INSTANCE.getByChunk(level().dimension(), chunkPosition());
+        }
+        if (location == null || !location.isAlive()) {
+            return;
+        }
+
+        var campaign = location.attackCampaigns()
+            .computeIfAbsent(
+                player.getUUID(),
+                $ -> new com.alien.common.gameplay.hive.party.AttackCampaign()
+            );
+        campaign.setLastHostileTick(serverLevel.getGameTime());
+    }
+
+    /**
+     * Tells the whole world a strain has arrived, and gives it a voice.
+     * <p>
+     * Public because IRRADIATED does not come through the leak path at all - it is announced from
+     * {@code NukeConversion} on every conversion, since a hive being MADE is a thing that can happen repeatedly and is
+     * worth hearing about each time. The other three fire once, on first sighting.
+     * <p>
+     * The sound is played AT EACH PLAYER rather than at a position, so a world-wide announcement is actually heard
+     * world-wide instead of only by whoever happens to be standing near the newcomer.
+     */
+    public static void announceStrainArrival(ServerLevel serverLevel, AlienVariant alienVariant, String message) {
+        var variantType = AlienVariantTypes.getFor(alienVariant);
+        var sound = strainArrivalSound(alienVariant);
+
+        for (var player : serverLevel.players()) {
+            player.sendSystemMessage(
+                Component.literal(message).withStyle(variantType.chatColor(), ChatFormatting.ITALIC)
+            );
+
+            serverLevel.playSound(
+                null,
+                player.getX(),
+                player.getY(),
+                player.getZ(),
+                sound,
+                net.minecraft.sounds.SoundSource.HOSTILE,
+                1.0F,
+                1.0F
+            );
+        }
+    }
+
+    /** One signature per strain, so you know what has turned up before you read the line. */
+    private static net.minecraft.sounds.SoundEvent strainArrivalSound(AlienVariant alienVariant) {
+        return switch (alienVariant) {
+            case NORMAL -> com.alien.common.registry.init.AlienSoundEvents.ENTITY_QUEEN_SCREAM.get();
+            case NETHER -> net.minecraft.sounds.SoundEvents.WITHER_SPAWN;
+            case ABERRANT -> net.minecraft.sounds.SoundEvents.ANVIL_USE;
+            case IRRADIATED -> net.minecraft.sounds.SoundEvents.WARDEN_EMERGE;
+        };
+    }
+
     // TODO: Use level-specific phrasing here.
     private @Nullable String getStrainLeakMessageForVariant(AlienVariant alienVariant) {
         return switch (alienVariant) {
             case NORMAL -> "The perfect organism has found a new world to conquer...";
             case NETHER -> "Hell has found its way into this plane of existence...";
             case ABERRANT -> "Genetic experiments have found their way into the wide open world...";
+            // Deliberately silent HERE. An irradiated strain is not a leak: nothing crossed over from anywhere, it
+            // is MADE out of a hive that was already present. It also has to announce itself on EVERY conversion
+            // rather than once per world the way a genuine leak does, so the line lives in NukeConversion instead.
             case IRRADIATED -> null;
         };
+    }
+
+    /**
+     * NBT key for {@link #hostBorn}. Deliberately NOT in {@code GrowthManager.TRANSITION_NBT_KEY_BLACKLIST}, so the
+     * flag rides {@code EntityTransitionUtil.transitionInto} through every growth step: the chestburster that crawls
+     * out of a cow is tagged once, and the adult it eventually becomes still knows it was host-born.
+     */
+    private static final String NBT_HOST_BORN = "avp_host_born";
+
+    /** True if this line began inside a host (chestburst), rather than being simulated out of a reserve bank. */
+    private boolean hostBorn;
+
+    public boolean isHostBorn() {
+        return hostBorn;
+    }
+
+    public void setHostBorn(boolean hostBorn) {
+        this.hostBorn = hostBorn;
     }
 
     @Override
@@ -861,6 +1765,7 @@ public abstract class Alien extends Monster implements DataUser {
         super.readAdditionalSaveData(compoundTag);
         hiveManager.load(compoundTag);
         moltingManager.load(compoundTag);
+        this.hostBorn = compoundTag.getBoolean(NBT_HOST_BORN);
 
         if (compoundTag.contains(NBT_HOST_TYPE)) {
             var resourceLocationString = compoundTag.getString(NBT_HOST_TYPE);
@@ -877,6 +1782,7 @@ public abstract class Alien extends Monster implements DataUser {
         super.addAdditionalSaveData(compoundTag);
         hiveManager.save(compoundTag);
         moltingManager.save(compoundTag);
+        compoundTag.putBoolean(NBT_HOST_BORN, hostBorn);
 
         hostTypeOption.ifSome(hostType -> {
             var resourceLocation = BuiltInRegistries.ENTITY_TYPE.getKey(hostTypeOption.unwrap());
@@ -953,6 +1859,18 @@ public abstract class Alien extends Monster implements DataUser {
         this.convoyMembership = null;
     }
 
+    public @Nullable com.alien.common.gameplay.hive.party.PartyMembership partyMembership() {
+        return partyMembership;
+    }
+
+    public void setPartyMembership(com.alien.common.gameplay.hive.party.PartyMembership partyMembership) {
+        this.partyMembership = partyMembership;
+    }
+
+    public void clearPartyMembership() {
+        this.partyMembership = null;
+    }
+
     public Option<EntityType<?>> getHostType() {
         return hostTypeOption;
     }
@@ -971,9 +1889,70 @@ public abstract class Alien extends Monster implements DataUser {
 
     private static final ResourceLocation aberrantDebuff = com.alien.Alien.MOD.resources().createLocation("aberrant_debuff");
 
+    private static final ResourceLocation predalienBuff = com.alien.Alien.MOD.resources().createLocation("predalien_buff");
+
     private static final ResourceLocation irradiatedBuff = com.alien.Alien.MOD.resources().createLocation("irradiated_buff");
 
+    private static final ResourceLocation empressBuff = com.alien.Alien.MOD.resources().createLocation("empress_buff");
+
+    /**
+     * Empress influence changes rarely, so the membership walk is throttled rather than run every tick.
+     * <p>
+     * Phased by entity id, not raw tickCount: a hive that spawns a wave of forty aliens in one tick would otherwise
+     * give them all the same modulo phase, and every one of them would do the walk on the same tick forever.
+     */
+    private static final int EMPRESS_BUFF_RECHECK_TICKS = 40;
+
+    /**
+     * Strain buffs, and the health correction that has to ride with them.
+     * <p>
+     * THE BUG THIS FIXES: {@link #applyBuff} raises MAX_HEALTH by 20% for an irradiated alien, but nothing moved its
+     * CURRENT health to match - so one spawned at its unbuffed value against a taller bar and visibly regenerated the
+     * difference through {@code healPassively}. It arrived wounded for no reason.
+     * <p>
+     * Corrected by SCALING rather than topping up, which is the same one line for two different situations:
+     * <ul>
+     * <li>A FRESH SPAWN is at full health, so the ratio holds it at full - 40/40 becomes 48/48.</li>
+     * <li>An alien TRANSITIONING to irradiated mid-life keeps the wound it already had - 20/40 becomes 24/48, still
+     * half. Topping up would have healed it as a side effect of changing strain, which is a free heal for anything
+     * caught in a nuke.</li>
+     * </ul>
+     * BOTH DIRECTIONS, deliberately - the aberrant debuff is the same code path at -20%, an 0.8x multiplier. It never
+     * showed the bug because dropping the maximum below current health makes vanilla clamp on its own, but that clamp
+     * is NOT proportional: a wounded aberrant at 20/40 keeps its 20 against a new max of 32 and comes out at 62%,
+     * relatively healthier for having been debuffed. Scaling both ways keeps a half-health alien at half whichever
+     * direction its maximum moved.
+     */
     private void applyDynamicAttributes() {
+        var maxHealthBefore = getMaxHealth();
+
+        applyVariantBuffs();
+
+        // Only ever true on the tick a modifier actually lands - applyBuff is guarded by hasModifier, so every
+        // subsequent tick leaves the maximum untouched and this does nothing.
+        var maxHealthAfter = getMaxHealth();
+        if (maxHealthAfter != maxHealthBefore && maxHealthBefore > 0.0F) {
+            setHealth(getHealth() * (maxHealthAfter / maxHealthBefore));
+        }
+    }
+
+    private void applyVariantBuffs() {
+        // PREDALIEN, and deliberately NOT part of the strain chain below - it is a CASTE buff, not a strain one, so it
+        // stacks with whichever strain the predalien happens to be.
+        //
+        // [stated] "predaliens get a buff of 1.5x... if they are irradiated they get both so a total of 1.7x. if its
+        // an aberrant predalien its 1.3x." That falls out for free from how applyBuff works: every modifier is
+        // computed as baseValue * percentage and added with ADD_VALUE, so they SUM against the base rather than
+        // compounding. On a 40-health base: +50% is +20, +20% irradiated is +8, and 40 + 20 + 8 = 68 = 1.7x exactly.
+        // Aberrant instead subtracts 8, giving 52 = 1.3x.
+        if (getType().is(AlienEntityTypeTags.PREDALIENS)) {
+            var percentage = 0.5;
+            applyBuff(Attributes.MAX_HEALTH, percentage, predalienBuff);
+            applyBuff(Attributes.ATTACK_DAMAGE, percentage, predalienBuff);
+            applyBuff(Attributes.ARMOR, percentage, predalienBuff);
+            applyBuff(Attributes.ARMOR_TOUGHNESS, percentage, predalienBuff);
+        }
+
         if (isAberrant()) {
             var percentage = -0.2;
             applyBuff(Attributes.MAX_HEALTH, percentage, aberrantDebuff);
@@ -987,6 +1966,30 @@ public abstract class Alien extends Monster implements DataUser {
             applyBuff(Attributes.ARMOR, percentage, irradiatedBuff);
             applyBuff(Attributes.ARMOR_TOUGHNESS, percentage, irradiatedBuff);
         }
+
+        // EMPRESS: a third, independent axis. Strain is what you ARE and caste is what you GREW INTO; this is who
+        // you ANSWER TO, so it stacks with both. [stated] "an irradaiated predalien empress for example would have 3
+        // bonuses empress bonus, predalien bonus, and irradiated bonus." Summed against base like every other buff
+        // here, so on a 40-health base: +50% predalien +20, +20% irradiated +8, +30% empress +12, total 80 = 2.0x.
+        //
+        // The ONLY buff on this list that can be taken away, so unlike the others it also has to be REMOVED - she
+        // dies, she is exiled, the hive leaves her lineage, or the alien simply walks off her territory. The
+        // enclosing applyDynamicAttributes rescales current health proportionally in BOTH directions, so losing it
+        // wounds rather than kills.
+        if (!level().isClientSide && (tickCount + getId()) % EMPRESS_BUFF_RECHECK_TICKS == 0) {
+            if (isUnderEmpressInfluence()) {
+                var percentage = 0.3;
+                applyBuff(Attributes.MAX_HEALTH, percentage, empressBuff);
+                applyBuff(Attributes.ATTACK_DAMAGE, percentage, empressBuff);
+                applyBuff(Attributes.ARMOR, percentage, empressBuff);
+                applyBuff(Attributes.ARMOR_TOUGHNESS, percentage, empressBuff);
+            } else {
+                removeBuff(Attributes.MAX_HEALTH, empressBuff);
+                removeBuff(Attributes.ATTACK_DAMAGE, empressBuff);
+                removeBuff(Attributes.ARMOR, empressBuff);
+                removeBuff(Attributes.ARMOR_TOUGHNESS, empressBuff);
+            }
+        }
     }
 
     private void applyBuff(Holder<Attribute> attribute, double percentage, ResourceLocation resourceLocation) {
@@ -998,6 +2001,40 @@ public abstract class Alien extends Monster implements DataUser {
 
         var modifier = new AttributeModifier(resourceLocation, instance.getBaseValue() * percentage, AttributeModifier.Operation.ADD_VALUE);
         instance.addPermanentModifier(modifier);
+    }
+
+    /**
+     * Whether this alien BELONGS to a hive under empress influence - by MEMBERSHIP, not by where it is standing.
+     * <p>
+     * [stated] "its meant to apply to the whole hive raids included a empress is punishing it makes you want to find
+     * and kill her." A positional test would have quietly switched the buff off the moment a raid crossed its own
+     * border, which is exactly the fight where it is supposed to matter. Strain and caste buffs travel with the
+     * creature; so does this one.
+     */
+    private boolean isUnderEmpressInfluence() {
+        for (var factionId : com.alien.Alien.MOD.factions().getFactionIds(getUUID())) {
+            if (!com.alien.common.gameplay.hive.id.HiveLocationIds.isHiveLocationId(factionId)) {
+                continue;
+            }
+            var location = HiveLocationRegistry.INSTANCE.get(
+                com.alien.common.gameplay.hive.id.HiveLocationId.of(factionId)
+            );
+            if (location != null && location.isEmpressInfluenced()) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /** The mirror of {@link #applyBuff} - only needed for buffs that can be revoked, which today means the empress. */
+    private void removeBuff(Holder<Attribute> attribute, ResourceLocation resourceLocation) {
+        var instance = getAttributes().getInstance(attribute);
+
+        if (instance == null || !instance.hasModifier(resourceLocation)) {
+            return;
+        }
+
+        instance.removeModifier(resourceLocation);
     }
 
     public static AttributeSupplier.Builder createAlienAttributes() {

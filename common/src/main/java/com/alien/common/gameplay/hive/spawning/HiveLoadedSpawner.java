@@ -4,6 +4,7 @@ import com.alien.common.gameplay.entity.living.alien.Alien;
 import com.alien.common.gameplay.entity.living.alien.AlienSpawning;
 import com.alien.common.gameplay.entity.living.alien.xenomorph.queen.Queen;
 import com.alien.common.gameplay.hive.economy.CastePopulation;
+import com.alien.common.gameplay.hive.faction.LocationMembership;
 import com.alien.common.gameplay.hive.location.HiveLocation;
 import com.alien.common.gameplay.hive.location.HiveLocationRegistry;
 import com.alien.common.gameplay.hive.location.HiveLocationSpacing;
@@ -24,6 +25,18 @@ import java.util.List;
 
 public final class HiveLoadedSpawner {
 
+    /**
+     * When true, per-pass spawn summaries and skip reasons are logged (readable, low-volume). Toggled by
+     * {@code /avp_alien debug hive log_spawns}.
+     */
+    public static boolean DEBUG_SPAWN_REJECTS = false;
+
+    /**
+     * When true, ALSO logs every individual out-of-slab spawn-position rejection (very noisy). Off by default; the
+     * per-pass summary is usually enough. No command wires this yet — flip in code if you need attempt-level detail.
+     */
+    public static boolean DEBUG_SPAWN_REJECTS_VERBOSE = false;
+
     private static final int MIN_DISTANCE_FROM_PLAYER_BLOCKS = 24;
 
     private static final int MAX_DISTANCE_FROM_PLAYER_BLOCKS = 96;
@@ -36,7 +49,29 @@ public final class HiveLoadedSpawner {
         var config = HiveLocationRegistry.INSTANCE.config();
 
         for (var location : HiveLocationRegistry.INSTANCE.all()) {
-            if (!location.isAlive()) {
+            if (!location.isAlive() || location.isInhibited()) {
+                continue; // inhibited (severed contained-breeder) locations spawn no castes.
+            }
+            if (com.alien.common.gameplay.hive.dimension.EndStyleHiveRules.isEndStyle(server, location)) {
+                // END-STYLE: no ambient materialization. The bank holds player choices and pays them out through
+                // exactly two doors - the worker deployment (EndHiveTickTask, 10 active) and vent defense. Idle
+                // ambience would drain the player's bank into scenery, the precise "30+ xenos standing around"
+                // this dimension's design forbids.
+                continue;
+            }
+            // Founding lockout: a queen-founded hive that has not yet established its egg sack spawns NOTHING. The
+            // queen must fill her biomass tank and commit (resin floor + ovipositor) before the territory comes alive.
+            // Stops random xenomorphs appearing before there are any eggs. Queenless hives are unaffected.
+            if (location.founderId() != null && !location.reproductiveEstablished()) {
+                if (DEBUG_SPAWN_REJECTS) {
+                    com.alien.Alien.LOGGER.info("[hive-spawn] {} skipped: founding (not yet reproductive)", location.id());
+                }
+                continue;
+            }
+            if (location.isInCombatRespite()) {
+                if (DEBUG_SPAWN_REJECTS) {
+                    com.alien.Alien.LOGGER.info("[hive-spawn] {} skipped: in combat respite", location.id());
+                }
                 continue;
             }
 
@@ -47,11 +82,25 @@ public final class HiveLoadedSpawner {
 
             var loadedCount = countLoadedXenomorphs(location);
             if (loadedCount >= config.hiveSpawnerMinimumLoadedXenomorphs()) {
+                if (DEBUG_SPAWN_REJECTS) {
+                    com.alien.Alien.LOGGER.info(
+                        "[hive-spawn] {} skipped: at loaded cap ({} >= {})",
+                        location.id(),
+                        loadedCount,
+                        config.hiveSpawnerMinimumLoadedXenomorphs()
+                    );
+                }
                 continue;
             }
 
             var players = nearbyPlayers(level, location);
             if (players.isEmpty()) {
+                if (DEBUG_SPAWN_REJECTS) {
+                    com.alien.Alien.LOGGER.info(
+                        "[hive-spawn] {} skipped: no players within boss-bar radius",
+                        location.id()
+                    );
+                }
                 continue;
             }
 
@@ -68,6 +117,21 @@ public final class HiveLoadedSpawner {
                 if (entity != null) {
                     spawned++;
                 }
+            }
+
+            // Summary: only interesting when the pass tried but couldn't place everything it wanted. A pass that
+            // spawned its full quota needs no comment. attempts>spawned means positions were rejected (out-of-slab,
+            // out-of-distance, unclaimed, no reserve type, etc.) — read the per-attempt slab lines for the slab case.
+            if (DEBUG_SPAWN_REJECTS && attempts > 0 && spawned < config.hiveSpawnerMaxSpawnsPerLocation()) {
+                com.alien.Alien.LOGGER.info(
+                    "[hive-spawn] {} pass: {} attempts, {} spawned, {} rejected (loaded={}, target={})",
+                    location.id(),
+                    attempts,
+                    spawned,
+                    attempts - spawned,
+                    loadedCount,
+                    config.hiveSpawnerMinimumLoadedXenomorphs()
+                );
             }
         }
     }
@@ -107,6 +171,15 @@ public final class HiveLoadedSpawner {
             return null;
         }
 
+        var restored = trySpawnIdentityReserve(level, location, type, pos);
+        if (restored != null) {
+            return restored;
+        }
+
+        if (!location.localReserves().canSpawn(type)) {
+            return null;
+        }
+
         var spawnType = type.is(AlienEntityTypeTags.QUEENS) ? MobSpawnType.MOB_SUMMONED : MobSpawnType.NATURAL;
         var entity = type.spawn(level, pos, spawnType);
         if (entity instanceof Queen queen && location.founderId() == null) {
@@ -115,12 +188,62 @@ public final class HiveLoadedSpawner {
         return entity;
     }
 
+    /** Public: the vent-defense dispatcher materializes defenders through this exact path. */
+    public static @Nullable Entity trySpawnIdentityReserve(
+        ServerLevel level,
+        HiveLocation location,
+        EntityType<?> type,
+        BlockPos pos
+    ) {
+        var entry = location.localReserves().removeIdentity(type);
+        if (entry == null) {
+            return null;
+        }
+
+        if (level.getEntity(entry.uuid()) != null) {
+            com.alien.Alien.LOGGER.warn(
+                "Hive: discarded duplicate identity reserve {} ({}) because an entity with that UUID is already loaded.",
+                entry.uuid(),
+                net.minecraft.core.registries.BuiltInRegistries.ENTITY_TYPE.getKey(type)
+            );
+            return null;
+        }
+
+        var entity = entry.createEntity(level);
+        if (entity == null || !entity.getType().equals(type)) {
+            com.alien.Alien.LOGGER.warn(
+                "Hive: discarded invalid identity reserve {} ({}) because it could not be restored.",
+                entry.uuid(),
+                net.minecraft.core.registries.BuiltInRegistries.ENTITY_TYPE.getKey(type)
+            );
+            return null;
+        }
+
+        entity.moveTo(
+            pos.getX() + 0.5,
+            pos.getY(),
+            pos.getZ() + 0.5,
+            level.random.nextFloat() * 360.0F,
+            0.0F
+        );
+        if (!level.addFreshEntity(entity)) {
+            location.localReserves().restoreIdentity(entry);
+            return null;
+        }
+
+        LocationMembership.join(location, entity);
+        if (entity instanceof Queen queen && location.founderId() == null) {
+            location.setFounderId(queen.getUUID());
+        }
+        return entity;
+    }
+
     private static @Nullable EntityType<?> pickWeightedReserveType(ServerLevel level, HiveLocation location) {
         var reserves = location.localReserves();
-        var knownQueenCount = CastePopulation.countKnownCaste(location, AlienEntityTypeTags.QUEENS);
-        var knownHarbingerCount = CastePopulation.countKnownCaste(location, AlienEntityTypeTags.HARBINGERS);
-        if (knownQueenCount <= 0) {
-            for (var type : reserves.getAvailableEntityTypes()) {
+        var loadedQueenCount = CastePopulation.countLoadedCaste(location, AlienEntityTypeTags.QUEENS);
+        var loadedHarbingerCount = CastePopulation.countLoadedCaste(location, AlienEntityTypeTags.HARBINGERS);
+        if (loadedQueenCount <= 0) {
+            for (var type : reserves.getReliableAvailableEntityTypes()) {
                 if (type.is(AlienEntityTypeTags.QUEENS)) {
                     return type;
                 }
@@ -130,18 +253,18 @@ public final class HiveLoadedSpawner {
         var weightedTypes = new ArrayList<WeightedType>();
         var totalWeight = 0;
 
-        for (var type : reserves.getAvailableEntityTypes()) {
+        for (var type : reserves.getReliableAvailableEntityTypes()) {
             if (!type.is(AlienEntityTypeTags.XENOMORPHS)) {
                 continue;
             }
-            if (type.is(AlienEntityTypeTags.QUEENS) && knownQueenCount > 0) {
+            if (type.is(AlienEntityTypeTags.QUEENS) && loadedQueenCount > 0) {
                 continue;
             }
-            if (type.is(AlienEntityTypeTags.HARBINGERS) && knownHarbingerCount > 0) {
+            if (type.is(AlienEntityTypeTags.HARBINGERS) && loadedHarbingerCount > 0) {
                 continue;
             }
 
-            var reserveCount = reserves.getCount(type);
+            var reserveCount = reserves.getReliableCount(type);
             var weight = weightFor(type) * Math.max(1, reserveCount);
             if (weight <= 0) {
                 continue;
@@ -184,9 +307,16 @@ public final class HiveLoadedSpawner {
         ) {
             return 8;
         }
+        // CARRIERS NEVER MATERIALIZE IN-HIVE - [stated] "have carriers only in Raids." Every reserve-spawned
+        // carrier arms a 6-facehugger spine payload (ReserveSpawnUtil), so each in-hive materialization dumped up
+        // to six huggers around the queen - the tester-reported facehugger overpop, which appeared exactly when
+        // hives unlocked carrier production. Zero weight removes them from every in-hive spawn path this class
+        // serves, raid room included; RaidDispatch fields them from the same reserves unaffected.
+        if (type.is(AlienEntityTypeTags.CARRIERS)) {
+            return 0;
+        }
         if (
-            type.is(AlienEntityTypeTags.CARRIERS)
-                || type.is(AlienEntityTypeTags.RAVAGERS)
+            type.is(AlienEntityTypeTags.RAVAGERS)
                 || type.is(AlienEntityTypeTags.RAZOR_CLAWS)
                 || type.is(AlienEntityTypeTags.PREDALIENS)
                 || type.is(AlienEntityTypeTags.CHRYSALISES)
@@ -211,7 +341,11 @@ public final class HiveLoadedSpawner {
             var chunk = candidateChunks.get(level.random.nextInt(candidateChunks.size()));
             var x = chunk.x * 16 + level.random.nextInt(16);
             var z = chunk.z * 16 + level.random.nextInt(16);
-            var baseY = player.blockPosition().getY() + level.random.nextInt(17) - 8;
+            // Anchor spawns to the hive's own slab band, NOT the player's elevation. Picking a random Y across the
+            // slab keeps spawns inside the hive's built level so players standing far above or below a claimed chunk
+            // column are not swarmed at their own Y. Clamped to world height as a safety bound.
+            var slabSpan = Math.max(1, location.hiveCeilingY() - location.hiveFloorY());
+            var baseY = location.hiveFloorY() + level.random.nextInt(slabSpan);
 
             for (var dy = -8; dy <= 8; dy++) {
                 var y = Math.clamp(baseY + dy, level.getMinBuildHeight() + 1, level.getMaxBuildHeight() - 1);
@@ -246,6 +380,21 @@ public final class HiveLoadedSpawner {
 
     @SuppressWarnings("unchecked")
     private static boolean isValidSpawnPosition(ServerLevel level, HiveLocation location, BlockPos pos, EntityType<?> rawType) {
+        // Slab clamp: a spawn must fall within the hive's active vertical band, regardless of which chunk owns the
+        // column. This is the single gate that prevents alien spawns above/below the hive's built level. Belt-and-
+        // suspenders with the slab-anchored baseY in pickSpawnPosition.
+        if (!location.withinSlab(pos.getY())) {
+            if (DEBUG_SPAWN_REJECTS_VERBOSE) {
+                com.alien.Alien.LOGGER.info(
+                    "[hive-slab] rejected spawn at Y={} (slab {}..{}) for location {}",
+                    pos.getY(),
+                    location.hiveFloorY(),
+                    location.hiveCeilingY(),
+                    location.id()
+                );
+            }
+            return false;
+        }
         if (!isValidPlayerDistance(level, pos)) {
             return false;
         }

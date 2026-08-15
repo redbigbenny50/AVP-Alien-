@@ -1,0 +1,4 @@
+{
+  "parent": "avp_alien:templates/razor_claw_head_shield",
+  "texture": "avp_alien:textures/entity/aberrant_razor_claw.png"
+}

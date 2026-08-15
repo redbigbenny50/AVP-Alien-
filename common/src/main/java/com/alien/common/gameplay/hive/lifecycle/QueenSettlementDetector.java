@@ -12,64 +12,76 @@ import java.util.Map;
 import java.util.UUID;
 
 /**
- * Per-queen settlement timer. Tracks how long each queen has been out of combat. Returns a {@link BlockPos} when
- * {@link com.alien.common.gameplay.hive.config.HiveConfig#settlementTicks()} have elapsed since she first anchored — at
- * which point the caller should evaluate {@link SpreadZoneCheck} and (if permitted) hand the position to
- * {@link HiveLocationFoundingService}.
+ * Per-queen settlement timer. Accumulates how long each queen has stood ready to found while <em>out of combat</em>;
+ * returns a {@link BlockPos} once {@link com.alien.common.gameplay.hive.config.HiveConfig#settlementTicks()} of
+ * out-of-combat time have banked, at which point the caller should evaluate {@link SpreadZoneCheck} and (if permitted)
+ * hand the position to {@link HiveLocationFoundingService}.
  * <p>
- * Reset conditions:
- * <ul>
- * <li>Queen has a target (in combat).</li>
- * <li>Queen took damage in the last few ticks ({@code hurtTime > 0}).</li>
- * </ul>
- * <p>
- * Chunk crossings do <em>not</em> reset the timer — wandering during settlement is fine; she founds the hive at
- * whichever chunk she happens to be in when the timer expires.
+ * Combat <em>pauses</em> the timer rather than resetting it. While she has a target, was recently hurt, or has a
+ * last-hurt-by attacker, no progress accrues — but the progress already banked is preserved and resumes when the fight
+ * ends. Chunk crossings do not affect the timer; wandering during settlement is fine, and she founds at whichever chunk
+ * she is standing in when the timer fills.
  * <p>
  * State is in-memory only — a server stop or world reload starts every queen fresh. That's the design intent;
- * settlements are rare events (60 seconds each) and persistence isn't worth the complexity.
+ * settlements are rare events and persistence isn't worth the complexity. A large gap between observations (chunk
+ * unload/reload) restarts accrual rather than crediting the whole gap at once.
  */
 public final class QueenSettlementDetector {
+
+    /**
+     * Largest gap (ticks) between two observations that still counts as continuous presence. The driver observes every
+     * tick, so the real delta is 1; anything beyond this means she was unloaded / not ticked, so accrual restarts
+     * instead of dumping the whole gap into the timer.
+     */
+    private static final long MAX_OBSERVATION_GAP_TICKS = 40L;
 
     private static final Map<UUID, AnchorState> states = new HashMap<>();
 
     private QueenSettlementDetector() {}
 
     /**
-     * Per-tick observation. Returns the anchor block position when the queen has stood there long enough without combat
-     * — typically the chunk's middle block-position. Returns {@code null} otherwise.
+     * Per-tick observation. Banks out-of-combat time toward settlement and returns the settlement block-position (the
+     * current chunk's middle) once enough has accrued. Returns {@code null} while still banking or paused by combat.
      */
     public static @Nullable BlockPos observe(Queen queen, long currentGameTime) {
         var uuid = queen.getUUID();
-
-        if (isInCombat(queen)) {
-            states.remove(uuid);
-            return null;
-        }
-
         var existing = states.get(uuid);
+
         if (existing == null) {
-            // First out-of-combat observation — start the timer. The recorded chunk is purely informational
-            // (used in /hive inspect_settlement); settlement snaps to wherever she's standing at expiry.
+            // First observation — start banking from zero (whether or not she is currently in combat).
             states.put(
                 uuid,
-                new AnchorState(new ChunkPos(queen.blockPosition()), currentGameTime, queen.blockPosition())
+                new AnchorState(new ChunkPos(queen.blockPosition()), 0L, currentGameTime, queen.blockPosition())
             );
             return null;
         }
 
-        var settlementTicks = HiveLocationRegistry.INSTANCE.config().settlementTicks();
-        var elapsed = currentGameTime - existing.startedAtTick();
-
-        if (elapsed < settlementTicks) {
+        var delta = currentGameTime - existing.lastObservedTick();
+        if (delta < 0L || delta > MAX_OBSERVATION_GAP_TICKS) {
+            // Discontinuous observation (unload/reload/time anomaly) — restart accrual rather than crediting the gap.
+            states.put(
+                uuid,
+                new AnchorState(new ChunkPos(queen.blockPosition()), 0L, currentGameTime, queen.blockPosition())
+            );
             return null;
         }
 
-        // Settled at the queen's CURRENT chunk — wandering across chunk borders during the settlement window is
-        // allowed. Snap to the chunk's middle for a stable, reproducible centerPos.
-        var settlementChunk = new ChunkPos(queen.blockPosition());
-        states.remove(uuid);
-        return settlementChunk.getMiddleBlockPosition(queen.blockPosition().getY());
+        // Combat pauses (accrue nothing) but preserves banked progress; out of combat, bank the elapsed ticks.
+        var accumulated = existing.accumulatedTicks() + (isInCombat(queen) ? 0L : delta);
+        var settlementTicks = HiveLocationRegistry.INSTANCE.config().settlementTicks();
+
+        if (accumulated >= settlementTicks) {
+            states.remove(uuid);
+            return new ChunkPos(queen.blockPosition()).getMiddleBlockPosition(queen.blockPosition().getY());
+        }
+
+        states.put(uuid, new AnchorState(existing.chunk(), accumulated, currentGameTime, queen.blockPosition()));
+        return null;
+    }
+
+    /** True while this queen is mid-settlement (banking or paused by combat) — the "actively founding" window. */
+    public static boolean isSettling(UUID queenId) {
+        return states.containsKey(queenId);
     }
 
     /** Drops the queen's anchor without firing settlement. Use when she dies, despawns, or is otherwise removed. */
@@ -97,9 +109,15 @@ public final class QueenSettlementDetector {
         return queen.getLastHurtByMob() != null;
     }
 
+    /**
+     * Per-queen settlement progress. {@code accumulatedTicks} is the banked out-of-combat time toward
+     * {@code settlementTicks}; {@code lastObservedTick} is the game tick of the most recent observation (used to
+     * compute the per-tick delta and detect unload gaps).
+     */
     public record AnchorState(
         ChunkPos chunk,
-        long startedAtTick,
+        long accumulatedTicks,
+        long lastObservedTick,
         BlockPos lastSeenPos
     ) {}
 }

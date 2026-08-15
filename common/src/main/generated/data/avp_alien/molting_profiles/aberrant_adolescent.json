@@ -1,0 +1,19 @@
+{
+  "endScale": 1.25,
+  "entityType": "avp_alien:aberrant_adolescent",
+  "phases": [
+    {
+      "idleTicks": 240,
+      "moltTicks": 100
+    },
+    {
+      "idleTicks": 240,
+      "moltTicks": 100
+    },
+    {
+      "idleTicks": 240,
+      "moltTicks": 100
+    }
+  ],
+  "startScale": 1.0
+}

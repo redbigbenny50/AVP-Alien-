@@ -1,0 +1,4 @@
+{
+  "parent": "avp_alien:templates/harbinger_head_trophy",
+  "texture": "avp_alien:textures/entity/nether_harbinger.png"
+}

@@ -5,6 +5,7 @@ import com.alien.common.registry.init.block.AlienResinBlocks;
 import com.alien.common.registry.init.creative_mode_tab.initializer.BlocksCreativeModeTabInitializer;
 import com.alien.common.registry.init.creative_mode_tab.initializer.CombatCreativeModeTabInitializer;
 import com.alien.common.registry.init.creative_mode_tab.initializer.FoodAndDrinksCreativeModeTabInitializer;
+import com.alien.common.registry.init.creative_mode_tab.initializer.FunctionalBlocksCreativeModeTabInitializer;
 import com.alien.common.registry.init.creative_mode_tab.initializer.IngredientsCreativeModeTabInitializer;
 import com.alien.common.registry.init.creative_mode_tab.initializer.SpawnEggsCreativeModeTabInitializer;
 import com.alien.common.registry.init.creative_mode_tab.initializer.ToolsAndUtilitiesCreativeModeTabInitializer;
@@ -34,6 +35,12 @@ public class AlienCreativeModeTabs {
         AlienCreativeModeTabKeys.BLOCKS_KEY,
         () -> new ItemStack(AlienResinBlocks.RESIN.get()),
         BlocksCreativeModeTabInitializer.OUTPUT_CONSUMER
+    );
+
+    public static final BLibHolder<CreativeModeTab> FUNCTIONAL_BLOCKS = create(
+        AlienCreativeModeTabKeys.FUNCTIONAL_BLOCKS_KEY,
+        () -> new ItemStack(AlienItems.QUEEN_HEAD.get()),
+        FunctionalBlocksCreativeModeTabInitializer.OUTPUT_CONSUMER
     );
 
     public static final BLibHolder<CreativeModeTab> COMBAT = create(

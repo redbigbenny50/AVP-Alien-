@@ -1,14 +1,20 @@
 package com.alien.common.registry.init.block;
 
 import com.alien.Alien;
+import com.alien.common.gameplay.block.ResinContainerBlock;
+import com.alien.common.gameplay.block.capture.anchor.AnchorBlock;
 import com.alien.common.gameplay.block.crusher.CrusherHeadBlock;
 import com.alien.common.gameplay.block.crusher.CrusherHeadVariant;
 import com.alien.common.gameplay.block.crusher.CrusherWallHeadBlock;
 import com.alien.common.gameplay.block.jelly.JellyBlock;
+import com.alien.common.gameplay.block.jelly.JellyVatBlock;
 import com.alien.common.gameplay.block.queen.QueenHeadBlock;
 import com.alien.common.gameplay.block.queen.QueenHeadVariant;
 import com.alien.common.gameplay.block.queen.QueenWallHeadBlock;
+import com.alien.common.gameplay.block.xenomorph.head.XenomorphHeadBlock;
+import com.alien.common.gameplay.block.xenomorph.head.XenomorphWallHeadBlock;
 import com.alien.common.registry.init.block.property.AlienBlockProperties;
+import com.alien.common.registry.init.item.AlienXenomorphHeadItems;
 import com.blib.api.common.block.v1.BlockPropertyBuilder;
 import com.blib.api.common.registry.v1.BLibHolder;
 import com.blib.api.common.registry.v1.BLibRegistry;
@@ -24,6 +30,46 @@ public class AlienBlocks {
 
     public static final BLibRegistry<Block> REGISTRY = Alien.MOD.registries().create(BuiltInRegistries.BLOCK);
 
+    /**
+     * ⭐⭐ THE RESIN CONTAINERS, one per strain. [stated] "made from resin and chitin of its strain type... acid proof
+     * and explosion proof."
+     * <p>
+     * ⚠ THE IMMUNITIES ARE PROPERTIES AND TAGS, NOT CODE. `explosionResistance` above vanilla obsidian covers the nuke
+     * ([stated] "yes"), and acid is a tag membership - see AlienBlockTags.ACID_IMMUNE and its strain variants, which
+     * the acid system already consults. Neither needed a line in the block class.
+     * </p>
+     */
+    public static final BLibHolder<Block> RESIN_CONTAINER = create(
+        "resin_container",
+        () -> new ResinContainerBlock(resinContainerProperties(AlienBlockProperties.RESIN))
+    );
+
+    public static final BLibHolder<Block> NETHER_RESIN_CONTAINER = create(
+        "nether_resin_container",
+        () -> new ResinContainerBlock(resinContainerProperties(AlienBlockProperties.NETHER_RESIN))
+    );
+
+    public static final BLibHolder<Block> ABERRANT_RESIN_CONTAINER = create(
+        "aberrant_resin_container",
+        () -> new ResinContainerBlock(resinContainerProperties(AlienBlockProperties.ABERRANT_RESIN))
+    );
+
+    public static final BLibHolder<Block> IRRADIATED_RESIN_CONTAINER = create(
+        "irradiated_resin_container",
+        () -> new ResinContainerBlock(resinContainerProperties(AlienBlockProperties.IRRADIATED_RESIN))
+    );
+
+    /**
+     * ⚠ 1200 BLAST RESISTANCE puts it above obsidian (1200) territory deliberately: [stated] the nuke must not take
+     * one. ⚠ noOcclusion because the ribs open outward and would otherwise cull the faces behind them.
+     */
+    private static BlockBehaviour.Properties resinContainerProperties(BlockPropertyBuilder strain) {
+        return strain.build()
+            .strength(6.0F, 1200.0F)
+            .noOcclusion()
+            .sound(SoundType.SLIME_BLOCK);
+    }
+
     public static final BLibHolder<Block> ROYAL_JELLY_BLOCK = create(
         "royal_jelly_block",
         () -> new JellyBlock(AlienBlockProperties.JELLY.build().speedFactor(0.4F).jumpFactor(0.5F))
@@ -32,6 +78,22 @@ public class AlienBlocks {
     public static final BLibHolder<Block> SCOURGE_JELLY_BLOCK = create(
         "scourge_jelly_block",
         () -> new JellyBlock(AlienBlockProperties.JELLY.build().speedFactor(0.4F).jumpFactor(0.5F))
+    );
+
+    /** The irradiated strain's jelly. Gated at the tab and the recipe, not the registry - see AlienModGates. */
+    public static final BLibHolder<Block> IRRADIATED_JELLY_BLOCK = create(
+        "irradiated_jelly_block",
+        () -> new JellyBlock(AlienBlockProperties.JELLY.build().speedFactor(0.4F).jumpFactor(0.5F))
+    );
+
+    public static final BLibHolder<AnchorBlock> ANCHOR = create(
+        "anchor",
+        () -> new AnchorBlock(anchorProperties())
+    );
+
+    public static final BLibHolder<JellyVatBlock> JELLY_VAT = create(
+        "jelly_vat",
+        () -> new JellyVatBlock(AlienBlockProperties.RESIN.build().noOcclusion())
     );
 
     public static final BLibHolder<QueenHeadBlock> QUEEN_HEAD = create(
@@ -119,6 +181,14 @@ public class AlienBlocks {
      * by hand in ~1.5s, no resistance, instrument NONE), and {@code noOcclusion} since the BE renderer paints a
      * non-cube shape that doesn't fill the full 1x1x1 voxel.
      */
+    private static BlockBehaviour.Properties anchorProperties() {
+        return BlockBehaviour.Properties.of()
+            .mapColor(MapColor.METAL)
+            .strength(3.5F, 6.0F)
+            .sound(SoundType.METAL)
+            .noOcclusion();
+    }
+
     private static BlockBehaviour.Properties queenHeadProperties() {
         return BlockBehaviour.Properties.of()
             .mapColor(MapColor.COLOR_GRAY)
@@ -140,6 +210,22 @@ public class AlienBlocks {
             .noOcclusion();
     }
 
+    public static BLibHolder<XenomorphHeadBlock> createXenomorphHeadBlock(String path) {
+        return create(path, () -> new XenomorphHeadBlock(path, xenomorphHeadProperties()));
+    }
+
+    public static BLibHolder<XenomorphWallHeadBlock> createXenomorphWallHeadBlock(String path, String itemPath) {
+        return create(path, () -> new XenomorphWallHeadBlock(itemPath, xenomorphHeadProperties()));
+    }
+
+    private static BlockBehaviour.Properties xenomorphHeadProperties() {
+        return BlockBehaviour.Properties.of()
+            .mapColor(MapColor.COLOR_GRAY)
+            .strength(1.0F)
+            .sound(SoundType.BONE_BLOCK)
+            .noOcclusion();
+    }
+
     private static BLibHolder<Block> create(String path, BlockPropertyBuilder blockPropertyBuilder) {
         return create(path, () -> new Block(blockPropertyBuilder.build()));
     }
@@ -149,6 +235,7 @@ public class AlienBlocks {
     }
 
     public static void initialize() {
+        AlienXenomorphHeadItems.initialize();
         REGISTRY.registerAll();
     }
 }

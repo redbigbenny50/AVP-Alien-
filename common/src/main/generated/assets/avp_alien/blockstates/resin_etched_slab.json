@@ -1,0 +1,13 @@
+{
+  "variants": {
+    "type=bottom": {
+      "model": "avp_alien:block/resin_etched_slab"
+    },
+    "type=double": {
+      "model": "avp_alien:block/resin_etched"
+    },
+    "type=top": {
+      "model": "avp_alien:block/resin_etched_slab_top"
+    }
+  }
+}

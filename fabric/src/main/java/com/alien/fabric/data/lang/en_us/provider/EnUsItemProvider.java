@@ -3,6 +3,7 @@ package com.alien.fabric.data.lang.en_us.provider;
 import com.alien.common.registry.init.item.AlienArmorItems;
 import com.alien.common.registry.init.item.AlienItems;
 import com.alien.common.registry.init.item.AlienSpawnEggItems;
+import com.alien.common.registry.init.item.AlienXenomorphHeadItems;
 import net.fabricmc.fabric.api.datagen.v1.provider.FabricLanguageProvider;
 import net.minecraft.world.item.Item;
 
@@ -50,6 +51,11 @@ public class EnUsItemProvider {
 
         // UNSORTED
         addItem(builder, AlienItems.ALIEN_MUSIC_DISC_1, "Music Disc");
+        addItem(builder, AlienItems.CAPTURE_CHAIN, "Capture Chain");
+        addItem(builder, AlienItems.FIELD_MANUAL, "Xenobiological Survey Vol. 1");
+        addItem(builder, AlienItems.INHIBITOR, "Inhibitor");
+        addItem(builder, AlienItems.TRACKER, "Tracker");
+        addItem(builder, AlienItems.TRACKING_PDA, "Tracking PDA");
         addItem(builder, AlienItems.ALIEN_MUSIC_DISC_1_FRAGMENT, "Disc Fragment");
         builder.add(AlienItems.ALIEN_MUSIC_DISC_1_FRAGMENT.get().getDescriptionId() + ".desc", "Music Disc - Silver Smile");
         addItem(builder, AlienItems.CHITIN, "Chitin");
@@ -62,6 +68,7 @@ public class EnUsItemProvider {
         addItem(builder, AlienItems.PLATED_NETHER_CHITIN, "Plated Nether Chitin");
         addItem(builder, AlienItems.RAW_ROYAL_JELLY, "Raw Royal Jelly");
         addItem(builder, AlienItems.RAW_SCOURGE_JELLY, "Raw Scourge Jelly");
+        addItem(builder, AlienItems.RAW_IRRADIATED_JELLY, "Raw Irradiated Jelly");
         addItem(builder, AlienItems.POISON_JELLY, "Poison Jelly");
         addItem(builder, AlienItems.RESIN_BALL, "Resin Ball");
         addItem(builder, AlienItems.VECTOR_POTTERY_SHERD, "Vector Pottery Sherd");
@@ -71,22 +78,10 @@ public class EnUsItemProvider {
         addItem(builder, AlienItems.IRRADIATED_RESIN_BALL, "Irradiated Resin Ball");
         addItem(builder, AlienItems.IRRADIATED_CHITIN, "Irradiated Chitin");
         addItem(builder, AlienItems.PLATED_IRRADIATED_CHITIN, "Plated Irradiated Chitin");
-        addItem(builder, AlienItems.QUEEN_HEAD, "Queen Head");
-        addItem(builder, AlienItems.ABERRANT_QUEEN_HEAD, "Aberrant Queen Head");
-        addItem(builder, AlienItems.IRRADIATED_QUEEN_HEAD, "Irradiated Queen Head");
-        addItem(builder, AlienItems.NETHER_QUEEN_HEAD, "Nether Queen Head");
-        addItem(builder, AlienItems.QUEEN_HEAD_SHIELD, "Queen Head Shield");
-        addItem(builder, AlienItems.ABERRANT_QUEEN_HEAD_SHIELD, "Aberrant Queen Head Shield");
-        addItem(builder, AlienItems.IRRADIATED_QUEEN_HEAD_SHIELD, "Irradiated Queen Head Shield");
-        addItem(builder, AlienItems.NETHER_QUEEN_HEAD_SHIELD, "Nether Queen Head Shield");
-        addItem(builder, AlienItems.CRUSHER_HEAD, "Crusher Head");
-        addItem(builder, AlienItems.ABERRANT_CRUSHER_HEAD, "Aberrant Crusher Head");
-        addItem(builder, AlienItems.IRRADIATED_CRUSHER_HEAD, "Irradiated Crusher Head");
-        addItem(builder, AlienItems.NETHER_CRUSHER_HEAD, "Nether Crusher Head");
-        addItem(builder, AlienItems.CRUSHER_HEAD_SHIELD, "Crusher Head Shield");
-        addItem(builder, AlienItems.ABERRANT_CRUSHER_HEAD_SHIELD, "Aberrant Crusher Head Shield");
-        addItem(builder, AlienItems.IRRADIATED_CRUSHER_HEAD_SHIELD, "Irradiated Crusher Head Shield");
-        addItem(builder, AlienItems.NETHER_CRUSHER_HEAD_SHIELD, "Nether Crusher Head Shield");
+        AlienXenomorphHeadItems.ALL.forEach(entry -> {
+            addItem(builder, entry.head(), entry.displayName() + " Head");
+            addItem(builder, entry.headShield(), entry.displayName() + " Head Shield");
+        });
 
         // Spawn Egg Items
         addItem(builder, AlienSpawnEggItems.ABERRANT_ADOLESCENT_SPAWN_EGG, "Aberrant Adolescent Spawn Egg");
@@ -140,6 +135,7 @@ public class EnUsItemProvider {
         addItem(builder, AlienSpawnEggItems.NETHER_BURSTER_SPAWN_EGG, "Nether Burster Spawn Egg");
         addItem(builder, AlienSpawnEggItems.NETHER_RUNNER_SPAWN_EGG, "Nether Runner Spawn Egg");
         addItem(builder, AlienSpawnEggItems.NETHER_SPITTER_SPAWN_EGG, "Nether Spitter Spawn Egg");
+        addItem(builder, AlienSpawnEggItems.IRRADIATED_SPITTER_SPAWN_EGG, "Irradiated Spitter Spawn Egg");
         addItem(builder, AlienSpawnEggItems.NETHER_WARRIOR_SPAWN_EGG, "Nether Warrior Spawn Egg");
         addItem(builder, AlienSpawnEggItems.NETHER_RAZOR_CLAW_SPAWN_EGG, "Nether Razor Claw Spawn Egg");
         addItem(builder, AlienSpawnEggItems.NETHER_RAVAGER_SPAWN_EGG, "Nether Ravager Spawn Egg");
@@ -148,6 +144,8 @@ public class EnUsItemProvider {
         addItem(builder, AlienSpawnEggItems.IRRADIATED_CARRIER_SPAWN_EGG, "Irradiated Carrier Spawn Egg");
         addItem(builder, AlienSpawnEggItems.IRRADIATED_CHRYSALIS_SPAWN_EGG, "Irradiated Chrysalis Spawn Egg");
         addItem(builder, AlienSpawnEggItems.IRRADIATED_CRUSHER_SPAWN_EGG, "Irradiated Crusher Spawn Egg");
+        addItem(builder, AlienSpawnEggItems.IRRADIATED_OVOMORPH_SPAWN_EGG, "Irradiated Ovomorph Spawn Egg");
+        addItem(builder, AlienSpawnEggItems.IRRADIATED_FACEHUGGER_SPAWN_EGG, "Irradiated Facehugger Spawn Egg");
         addItem(builder, AlienSpawnEggItems.IRRADIATED_DRONE_SPAWN_EGG, "Irradiated Drone Spawn Egg");
         addItem(builder, AlienSpawnEggItems.IRRADIATED_PRAETORIAN_SPAWN_EGG, "Irradiated Praetorian Spawn Egg");
         addItem(builder, AlienSpawnEggItems.IRRADIATED_PREDALIEN_SPAWN_EGG, "Irradiated Predalien Spawn Egg");

@@ -83,6 +83,18 @@ public class QueenSpawning {
     }
 
     /**
+     * Placement rules for WILD (exploration-driven) queen spawning: unclaimed ground and a non-peaceful world.
+     * Deliberately NOT the vanilla monster rules - a wild queen needs deep ground per the lifecycle dig bands, not
+     * darkness: caves lit by lava or amethyst are exactly the kind of place she takes root, and light-level gating
+     * silently starved spawning in the field. Depth and the no-sky requirement live with the position sampling in
+     * {@code QueenNaturalSpawnTask}.
+     */
+    public static boolean checkWildSpawnRules(ServerLevelAccessor serverLevelAccessor, BlockPos blockPos) {
+        return serverLevelAccessor.getDifficulty() != net.minecraft.world.Difficulty.PEACEFUL
+            && isQueenSpawnSpatiallyAllowed(serverLevelAccessor, blockPos);
+    }
+
+    /**
      * Hive: a queen can only spawn into chunks that are NOT inside any existing location's claimed territory. The
      * design says queen-distance is 0–0 (per {@code HIVE_REDESIGN_03_LOCATIONS.md} § 4) — but for natural spawning, the
      * practical constraint is "fresh ground only." Once a queen settles, the founding service mints a new location at

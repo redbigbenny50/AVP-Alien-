@@ -59,4 +59,16 @@ public class HiveVentCache extends Cache<BlockPos, Void> {
     public Set<BlockPos> getVentsForSection(SectionPos sectionPos) {
         return ventPositionsBySectionPos.getOrDefault(sectionPos, Set.of());
     }
+
+    /**
+     * All known vent positions across every section. Returns a fresh aggregated set; intended for debug/inspection
+     * (counts, listings), not hot-path AI queries.
+     */
+    public Set<BlockPos> allVents() {
+        var all = new HashSet<BlockPos>();
+        for (var positions : ventPositionsBySectionPos.values()) {
+            all.addAll(positions);
+        }
+        return all;
+    }
 }

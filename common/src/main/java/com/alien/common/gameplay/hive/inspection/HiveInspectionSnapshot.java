@@ -429,7 +429,7 @@ public final class HiveInspectionSnapshot {
             aggScourgeJelly += location.scourgeJelly();
             var locTotalPop = CastePopulation.totalTrackedPopulation(location);
             var locPopCap = config.populationPerChunk() * Math.max(1, location.claimedChunks().size());
-            var locLocalReserves = location.localReserves().getCount();
+            var locLocalReserves = location.localReserves().getReliableCount();
             var locLoadedMembers = loadedMemberTotal(location);
             var locLocationMembers = locationFactionMemberCount(location);
             var locServerLevel = server != null ? server.getLevel(location.dimension()) : null;
@@ -615,7 +615,7 @@ public final class HiveInspectionSnapshot {
                 aggScourgeJelly += loc.scourgeJelly();
                 var locPop = CastePopulation.totalTrackedPopulation(loc);
                 var locCap = config.populationPerChunk() * Math.max(1, loc.claimedChunks().size());
-                var locLocalReserves = loc.localReserves().getCount();
+                var locLocalReserves = loc.localReserves().getReliableCount();
                 var locLoadedMembers = loadedMemberTotal(loc);
                 var locLocationMembers = locationFactionMemberCount(loc);
                 var locServerLevel = server != null ? server.getLevel(loc.dimension()) : null;

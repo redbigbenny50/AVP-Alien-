@@ -1,0 +1,19 @@
+{
+  "values": [
+    {
+      "id": "#blib:should_not_be_destroyed",
+      "required": false
+    },
+    "#avp_alien:xenomorph_immune",
+    "minecraft:reinforced_deepslate",
+    "minecraft:end_portal",
+    "minecraft:end_portal_frame",
+    "minecraft:end_gateway",
+    "minecraft:bedrock",
+    "minecraft:obsidian",
+    "minecraft:crying_obsidian",
+    "minecraft:respawn_anchor",
+    "minecraft:ancient_debris",
+    "minecraft:nether_portal"
+  ]
+}

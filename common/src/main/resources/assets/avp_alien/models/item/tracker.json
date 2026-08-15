@@ -1,0 +1,84 @@
+{
+  "credit": "Made with Blockbench",
+  "parent": "builtin/entity",
+  "texture_size": [
+    64,
+    64
+  ],
+  "display": {
+    "thirdperson_righthand": {
+      "translation": [
+        0,
+        -1,
+        1.2499
+      ]
+    },
+    "thirdperson_lefthand": {
+      "translation": [
+        0,
+        -1,
+        1.2499
+      ]
+    },
+    "firstperson_righthand": {
+      "translation": [
+        0,
+        -0.2499,
+        0
+      ]
+    },
+    "firstperson_lefthand": {
+      "translation": [
+        0,
+        -0.2499,
+        0
+      ]
+    },
+    "ground": {
+      "translation": [
+        0,
+        -4,
+        0
+      ]
+    },
+    "gui": {
+      "rotation": [
+        90,
+        43,
+        0
+      ],
+      "scale": [
+        2.5,
+        2.5,
+        2.5
+      ]
+    },
+    "head": {
+      "translation": [
+        0,
+        5.7501,
+        0
+      ]
+    },
+    "fixed": {
+      "rotation": [
+        -90,
+        45,
+        0
+      ],
+      "translation": [
+        0,
+        -8,
+        -17.7501
+      ],
+      "scale": [
+        2.5,
+        2.5,
+        2.5
+      ]
+    }
+  },
+  "textures": {
+    "particle": "avp_alien:item/tracker"
+  }
+}

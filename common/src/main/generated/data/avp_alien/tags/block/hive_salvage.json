@@ -1,0 +1,9 @@
+{
+  "values": [
+    {
+      "id": "#c:ores",
+      "required": false
+    },
+    "minecraft:gilded_blackstone"
+  ]
+}

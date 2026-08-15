@@ -1,0 +1,7 @@
+{
+  "parent": "minecraft:block/cube_column",
+  "textures": {
+    "end": "avp_alien:block/ribbed_resin",
+    "side": "avp_alien:block/ribbed_resin"
+  }
+}

@@ -1,0 +1,21 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "misc",
+  "key": {
+    "C": {
+      "item": "avp_alien:nether_chitin"
+    },
+    "R": {
+      "item": "avp_alien:nether_resin_ball"
+    }
+  },
+  "pattern": [
+    "RCR",
+    "C C",
+    "RCR"
+  ],
+  "result": {
+    "count": 1,
+    "id": "avp_alien:nether_resin_container"
+  }
+}

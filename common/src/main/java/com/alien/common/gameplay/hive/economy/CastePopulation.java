@@ -9,9 +9,9 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 
 /**
- * Snapshot of a location's per-caste population: known location members + local reserves, summed by entity-type tag.
- * Used by {@link HiveBalanceTask} to compute deficits and by purchase-condition checks. The known-member index is
- * persisted on each location so persistent queens, empresses, and harbingers still count after their chunks unload.
+ * Snapshot of a location's reliable per-caste population: currently loaded location members + local reserves, summed by
+ * entity-type tag. Persisted known members are intentionally excluded because unloaded UUIDs can become stale and
+ * should not keep a location alive or block new reserve materialization.
  */
 public final class CastePopulation {
 
@@ -30,12 +30,13 @@ public final class CastePopulation {
         AlienEntityTypeTags.CARRIERS,
         AlienEntityTypeTags.CHRYSALISES,
         AlienEntityTypeTags.SPITTERS,
+        AlienEntityTypeTags.PREDALIENS,
         AlienEntityTypeTags.HARBINGERS
     };
 
     private CastePopulation() {}
 
-    /** Per-caste population (known location members + reserves). Insertion-ordered for stable iteration. */
+    /** Per-caste population (loaded location members + reserves). Insertion-ordered for stable iteration. */
     public static Map<TagKey<EntityType<?>>, Integer> popByCaste(HiveLocation location) {
         var counts = new LinkedHashMap<TagKey<EntityType<?>>, Integer>();
         for (var caste : TRACKED_CASTES) {
@@ -53,15 +54,15 @@ public final class CastePopulation {
         return total;
     }
 
-    /** Count of one caste (known location members + reserves) in this location. */
+    /** Count of one caste (loaded location members + reserves) in this location. */
     public static int countCaste(HiveLocation location, TagKey<EntityType<?>> caste) {
-        return countKnownCaste(location, caste) + location.localReserves().getCountMatching(type -> type.is(caste));
+        return countLoadedCaste(location, caste) + location.localReserves().getReliableCountMatching(type -> type.is(caste));
     }
 
-    /** Count of one caste from persisted known members only; reserve entries are intentionally excluded. */
-    public static int countKnownCaste(HiveLocation location, TagKey<EntityType<?>> caste) {
+    /** Count of one caste from loaded location members only; reserve entries are intentionally excluded. */
+    public static int countLoadedCaste(HiveLocation location, TagKey<EntityType<?>> caste) {
         var count = 0;
-        for (var entry : location.knownMembersByType().entrySet()) {
+        for (var entry : location.loadedMembersByType().entrySet()) {
             if (entry.getKey().is(caste)) {
                 count += entry.getValue().size();
             }
@@ -69,11 +70,22 @@ public final class CastePopulation {
         return count;
     }
 
-    /** Count of one concrete entity type (known location members + reserves) in this location. */
+    /** Count of one concrete entity type (loaded location members + reserves) in this location. */
     public static int countEntity(HiveLocation location, EntityType<?> entityType) {
-        var known = location.knownMembersByType()
+        var loaded = location.loadedMembersByType()
             .getOrDefault(entityType, java.util.Set.of())
             .size();
-        return known + location.localReserves().getCount(entityType);
+        return loaded + location.localReserves().getReliableCount(entityType);
+    }
+
+    /** Count loaded xenomorphs plus reserve xenomorphs, matching the hive boss-bar source of truth. */
+    public static int totalReliableXenomorphPopulation(HiveLocation location) {
+        var count = 0;
+        for (var entry : location.loadedMembersByType().entrySet()) {
+            if (entry.getKey().is(AlienEntityTypeTags.XENOMORPHS)) {
+                count += entry.getValue().size();
+            }
+        }
+        return count + location.localReserves().getReliableCountMatching(type -> type.is(AlienEntityTypeTags.XENOMORPHS));
     }
 }

@@ -1,6 +1,7 @@
 package com.alien.common.gameplay.entity.living.alien.xenomorph.ai.lunge;
 
 import com.alien.common.gameplay.entity.living.alien.xenomorph.Xenomorph;
+import com.alien.common.gameplay.entity.living.alien.xenomorph.XenomorphAttackLimbRequirement;
 import com.blib.api.common.goap.v1.GOAPSensors;
 import com.just.ai.goap.StateKey;
 import com.just.ai.goap.sensor.Compose2;
@@ -16,7 +17,7 @@ public class LungeSensors {
             GOAPSensors.IS_ON_GROUND.key(),
             StateKey.sensed("is_target_in_lunge_range"),
             (xenomorph, attackTargetOption, isOnGround) -> {
-                if (!isOnGround || attackTargetOption.isNone()) {
+                if (!isOnGround || attackTargetOption.isNone() || !hasRequiredLegs(xenomorph)) {
                     return false;
                 }
 
@@ -30,6 +31,10 @@ public class LungeSensors {
                     && xenomorph.getSensing().hasLineOfSight(attackTarget);
             }
         );
+    }
+
+    public static boolean hasRequiredLegs(Xenomorph xenomorph) {
+        return XenomorphAttackLimbRequirement.ALL_LEGS.isSatisfiedBy(xenomorph);
     }
 
     private static boolean isLungeCooldownExpired(Xenomorph xenomorph, LungeConfig config) {

@@ -113,6 +113,98 @@ public class IrradiatedAlienResinBlocks {
         () -> new WallBlock(AlienBlockProperties.IRRADIATED_RESIN.build())
     );
 
+    public static final BLibHolder<Block> RIBBED_IRRADIATED_RESIN_SLAB = create(
+        "ribbed_irradiated_resin_slab",
+        () -> new SlabBlock(AlienBlockProperties.IRRADIATED_RESIN.build())
+    );
+
+    public static final BLibHolder<Block> RIBBED_IRRADIATED_RESIN_STAIRS = create(
+        "ribbed_irradiated_resin_stairs",
+        () -> new StairBlock(
+            RIBBED_IRRADIATED_RESIN.get().defaultBlockState(),
+            AlienBlockProperties.IRRADIATED_RESIN.build()
+        )
+    );
+
+    public static final BLibHolder<Block> IRRADIATED_RESIN_BONE = create("irradiated_resin_bone", AlienBlockProperties.IRRADIATED_RESIN);
+
+    public static final BLibHolder<Block> IRRADIATED_RESIN_BONE_SLAB = create(
+        "irradiated_resin_bone_slab",
+        () -> new SlabBlock(AlienBlockProperties.IRRADIATED_RESIN.build())
+    );
+
+    public static final BLibHolder<Block> IRRADIATED_RESIN_BONE_STAIRS = create(
+        "irradiated_resin_bone_stairs",
+        () -> new StairBlock(
+            IRRADIATED_RESIN_BONE.get().defaultBlockState(),
+            AlienBlockProperties.IRRADIATED_RESIN.build()
+        )
+    );
+
+    public static final BLibHolder<Block> IRRADIATED_RESIN_DOORWAY = create(
+        "irradiated_resin_doorway",
+        () -> new RotatedPillarBlock(AlienBlockProperties.IRRADIATED_RESIN.build())
+    );
+
+    public static final BLibHolder<Block> IRRADIATED_RESIN_ETCHED = create(
+        "irradiated_resin_etched",
+        () -> new RotatedPillarBlock(AlienBlockProperties.IRRADIATED_RESIN.build())
+    );
+
+    public static final BLibHolder<Block> IRRADIATED_RESIN_ETCHED_SLAB = create(
+        "irradiated_resin_etched_slab",
+        () -> new SlabBlock(AlienBlockProperties.IRRADIATED_RESIN.build())
+    );
+
+    public static final BLibHolder<Block> IRRADIATED_RESIN_ETCHED_STAIRS = create(
+        "irradiated_resin_etched_stairs",
+        () -> new StairBlock(
+            IRRADIATED_RESIN_ETCHED.get().defaultBlockState(),
+            AlienBlockProperties.IRRADIATED_RESIN.build()
+        )
+    );
+
+    public static final BLibHolder<Block> IRRADIATED_RESIN_SPINE = create(
+        "irradiated_resin_spine",
+        () -> new RotatedPillarBlock(AlienBlockProperties.IRRADIATED_RESIN.build())
+    );
+
+    public static final BLibHolder<Block> IRRADIATED_RESIN_STRETCHED = create(
+        "irradiated_resin_stretched",
+        () -> new RotatedPillarBlock(AlienBlockProperties.IRRADIATED_RESIN.build())
+    );
+
+    public static final BLibHolder<Block> IRRADIATED_RESIN_STRETCHED_SLAB = create(
+        "irradiated_resin_stretched_slab",
+        () -> new SlabBlock(AlienBlockProperties.IRRADIATED_RESIN.build())
+    );
+
+    public static final BLibHolder<Block> IRRADIATED_RESIN_STRETCHED_STAIRS = create(
+        "irradiated_resin_stretched_stairs",
+        () -> new StairBlock(
+            IRRADIATED_RESIN_STRETCHED.get().defaultBlockState(),
+            AlienBlockProperties.IRRADIATED_RESIN.build()
+        )
+    );
+
+    public static final BLibHolder<Block> IRRADIATED_RESIN_TENDRIL = create(
+        "irradiated_resin_tendril",
+        () -> new RotatedPillarBlock(AlienBlockProperties.IRRADIATED_RESIN.build())
+    );
+
+    public static final BLibHolder<Block> IRRADIATED_RESIN_TENDRIL_SLAB = create(
+        "irradiated_resin_tendril_slab",
+        () -> new SlabBlock(AlienBlockProperties.IRRADIATED_RESIN.build())
+    );
+
+    public static final BLibHolder<Block> IRRADIATED_RESIN_TENDRIL_STAIRS = create(
+        "irradiated_resin_tendril_stairs",
+        () -> new StairBlock(
+            IRRADIATED_RESIN_TENDRIL.get().defaultBlockState(),
+            AlienBlockProperties.IRRADIATED_RESIN.build()
+        )
+    );
+
     private static BLibHolder<Block> create(String path, BlockPropertyBuilder blockPropertyBuilder) {
         return create(path, () -> new Block(blockPropertyBuilder.build()));
     }

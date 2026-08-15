@@ -27,6 +27,9 @@ public class SeekCarrierSensors {
                 .filter(e -> e instanceof Carrier)
                 .map(e -> (Carrier) e)
                 .filter(carrier -> carrier.getRidingFacehuggerCount() < CarrierSpine.COUNT)
+                // A facehugger only boards a carrier of its own strain; a cross-strain carrier is not its hive, and
+                // would otherwise treat the rival rider on its back as an enemy it can never reach.
+                .filter(carrier -> carrier.getVariant() == facehugger.getVariant())
                 .min(Comparator.comparingDouble(facehugger::distanceToSqr))
                 .orElse(null);
         }

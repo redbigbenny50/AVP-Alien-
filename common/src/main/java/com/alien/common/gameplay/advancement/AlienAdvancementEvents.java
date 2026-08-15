@@ -2,6 +2,7 @@ package com.alien.common.gameplay.advancement;
 
 import com.alien.Alien;
 import com.alien.common.data.AlienAdvancements;
+import com.alien.compatibility.avp_human.AVPHuman;
 import com.blib.api.common.advancement.v1.BLibAdvancement;
 import net.minecraft.advancements.AdvancementHolder;
 import net.minecraft.server.level.ServerPlayer;
@@ -29,12 +30,20 @@ public final class AlienAdvancementEvents {
         }
 
         for (var advancement : VARIANT_XENOCIDE_ADVANCEMENTS) {
+            if (!isRequiredVariantXenocideAdvancement(advancement)) {
+                continue;
+            }
+
             if (!advancement.isGranted(player)) {
                 return;
             }
         }
 
         AlienAdvancements.KILL_ALL_ALIENS.grant(player);
+    }
+
+    private static boolean isRequiredVariantXenocideAdvancement(BLibAdvancement advancement) {
+        return !AlienAdvancements.KILL_ALL_IRRADIATED_ALIENS.equals(advancement) || AVPHuman.MOD.isLoaded();
     }
 
     private AlienAdvancementEvents() {}

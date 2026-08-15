@@ -37,8 +37,24 @@ public class EnglishLanguageProvider extends FabricLanguageProvider {
         EnUsCreativeModeTabProvider.CONSUMER.accept(builder);
 
         // Death messages
+        // Boss bar shown while a queen is DOWN. This lived only in the generated en_us.json and would have been
+        // wiped by the next datagen run, leaving the raw key on screen.
+        builder.add("boss.avp_alien.queen_incapacitated", "Queen \u2014 Incapacitated");
+        builder.add(
+            "message.avp_alien.inhibitor.not_subdued",
+            "The queen isn't subdued \u2014 down her, catch her hibernating, or chain her fully"
+        );
+        builder.add("message.avp_alien.inhibitor.already_attached", "This queen already has an inhibitor");
+
         builder.add("death.attack.acid", "%1$s vaporized in acid");
         builder.add("death.attack.chestbursting", "%1$s gave birth");
+        builder.add("death.attack.harbinger_backhand", "%1$s was swatted aside");
+        builder.add("death.attack.harbinger_backhand.player", "%1$s was swatted aside by %2$s");
+        builder.add("death.attack.harbinger_kick", "%1$s was punted");
+        builder.add("death.attack.harbinger_kick.player", "%1$s was punted by %2$s");
+        builder.add("death.attack.harbinger_slam", "%1$s was flattened");
+        builder.add("death.attack.harbinger_slam.player", "%1$s was flattened by %2$s");
+        builder.add("death.attack.radiation_sickness", "%1$s was welcomed to the wasteland");
         builder.add("death.attack.ravager_claw", "%1$s was torn apart");
         builder.add("death.attack.ravager_claw.player", "%1$s was torn apart by %2$s");
         builder.add("death.attack.ravager_special", "%1$s was eviscerated");
@@ -51,19 +67,34 @@ public class EnglishLanguageProvider extends FabricLanguageProvider {
         builder.add(AlienMobEffects.getMetamorphosisHolder().value(), "Metamorphosis");
         builder.add(AlienMobEffects.getScourgeHolder().value(), "Scourge");
         builder.add(AlienMobEffects.getMarkedForDeathHolder().value(), "Marked for Death");
+        // The six that were missing - tooltips showed raw keys ([stated] "the effects listed on the potion seems
+        // to have long form not the normal name").
+        builder.add(AlienMobEffects.getRadiationResistanceHolder().value(), "Radiation Resistance");
+        builder.add(AlienMobEffects.getGlowingTalonsHolder().value(), "Glowing Talons");
+        builder.add(AlienMobEffects.getRadiationSicknessHolder().value(), "Radiation Sickness");
+        builder.add(AlienMobEffects.getChitinousAuraHolder().value(), "Chitinous Aura");
+        builder.add(AlienMobEffects.getHivesBaneHolder().value(), "Hive's Bane");
+        builder.add(AlienMobEffects.getImmovableHolder().value(), "Immovable");
 
         // Potions
-        builder.add("item.minecraft.potion.effect.blood_loss", "Potion of Blood Loss");
-        builder.add("item.minecraft.splash_potion.effect.blood_loss", "Splash Potion of Blood Loss");
-        builder.add("item.minecraft.lingering_potion.effect.blood_loss", "Lingering Potion of Blood Loss");
-        builder.add("item.minecraft.tipped_arrow.effect.blood_loss", "Arrow of Blood Loss");
         builder.add("item.minecraft.potion.effect.metamorphosis", "Potion of Metamorphosis");
         builder.add("item.minecraft.splash_potion.effect.metamorphosis", "Splash Potion of Metamorphosis");
         builder.add("item.minecraft.lingering_potion.effect.metamorphosis", "Lingering Potion of Metamorphosis");
         builder.add("item.minecraft.tipped_arrow.effect.metamorphosis", "Arrow of Metamorphosis");
+        builder.add("item.minecraft.potion.effect.growth_suppression", "Potion of Growth Suppression");
+        builder.add("item.minecraft.splash_potion.effect.growth_suppression", "Splash Potion of Growth Suppression");
+        builder.add("item.minecraft.lingering_potion.effect.growth_suppression", "Lingering Potion of Growth Suppression");
+        builder.add("item.minecraft.tipped_arrow.effect.growth_suppression", "Arrow of Growth Suppression");
+        builder.add("effect.avp_alien.growth_suppression", "Growth Suppression");
+        builder.add("effect.avp_alien.jelly_sickness", "Jelly Sickness");
         builder.add("item.minecraft.potion.effect.scourge", "Potion of Scourge");
         builder.add("item.minecraft.splash_potion.effect.scourge", "Splash Potion of Scourge");
         builder.add("item.minecraft.lingering_potion.effect.scourge", "Lingering Potion of Scourge");
+
+        builder.add("item.minecraft.potion.effect.irradiation", "Potion of Irradiation");
+        builder.add("item.minecraft.splash_potion.effect.irradiation", "Splash Potion of Irradiation");
+        builder.add("item.minecraft.lingering_potion.effect.irradiation", "Lingering Potion of Irradiation");
+        builder.add("item.minecraft.tipped_arrow.effect.irradiation", "Arrow of Irradiation");
         builder.add("item.minecraft.tipped_arrow.effect.scourge", "Arrow of Scourge");
 
         // Entities

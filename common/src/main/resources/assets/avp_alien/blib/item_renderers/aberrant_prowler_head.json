@@ -1,0 +1,4 @@
+{
+  "parent": "avp_alien:templates/prowler_head_trophy",
+  "texture": "avp_alien:textures/entity/aberrant_prowler.png"
+}

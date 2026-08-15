@@ -3,91 +3,87 @@ package com.alien.common.gameplay.entity.living.alien.xenomorph.ai.vent.action;
 import com.alien.common.data.AlienVariantTypes;
 import com.alien.common.gameplay.entity.living.alien.xenomorph.VentBuilder;
 import com.alien.common.gameplay.entity.living.alien.xenomorph.Xenomorph;
-import com.alien.common.model.alien.variant.AlienVariantType;
-import com.alien.common.registry.tag.AlienBlockTags;
+import com.alien.common.gameplay.hive.location.HiveLocationRegistry;
+import com.alien.common.gameplay.hive.vent.VentKind;
+import com.alien.common.gameplay.hive.vent.VentPlacement;
 import com.blib.api.common.goap.v1.action.impl.NeoMoveToPosAction;
 import com.just.ai.goap.StateKey;
 import com.just.ai.goap.action.Action;
 import com.just.ai.goap.state.Blackboard;
 import net.minecraft.core.BlockPos;
-import net.minecraft.core.Direction;
-import net.minecraft.world.level.ClipContext;
+import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.Level;
-import net.minecraft.world.level.block.Block;
-import net.minecraft.world.phys.BlockHitResult;
-import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
+import org.jetbrains.annotations.Nullable;
 
+/**
+ * Place a FRONTIER vent: the hive's outpost onto the caves and openings beyond its structure.
+ * <p>
+ * <b>Xenomorphs no longer dig.</b> The old action rayed into a wall, carved a three-block tunnel of resin web with
+ * resin walls, and buried the vent block inside the rock at depth three. Nothing could path to such a vent, which is
+ * why every consumer had to go hunting for a standable cell near it, and why carriers stalled forever outside hills.
+ * <p>
+ * Now the vent is simply placed in an <b>open cell resting against a solid face</b> - floor, wall or ceiling - webbed
+ * on every side that touches air, with resin creeping over the rock around it. The wall stays solid. See
+ * {@link VentPlacement}.
+ * <p>
+ * The hive's own internal ducts are STRUCTURE vents and come with the templates; nothing is dug for them. SURFACE vents
+ * are dropped by surface parties. This action builds the third kind and only the third kind, out in the rock.
+ */
 public class CreateVentAction {
 
-    private static final Direction[] ALL_DIRECTIONS = Direction.values();
+    /** How far a builder will look for somewhere to put a vent. */
+    private static final int SEARCH_RADIUS = 5;
 
-    private static final int WALL_DEPTH = 3;
+    /**
+     * The openness test. A frontier vent is meant to sit at a cave mouth or an opening - somewhere a party can actually
+     * pour out of - not wedged into a crevice or flat against a boulder in a dirt tunnel. So the cell must have real
+     * space around it: at least this many of its 26 surrounding cells open.
+     */
+    private static final int MIN_OPEN_NEIGHBOURS = 9;
 
-    private static final int WALL_TOTAL_DEPTH = 4;
+    private static final StateKey<BlockPos> KEY_VENT_SPOT = StateKey.sensed("vent_spot");
 
-    private static final StateKey<BlockPos> KEY_WALL_START = StateKey.sensed("vent_wall_start");
-
-    private static final StateKey<Integer> KEY_DIRECTION_ORDINAL = StateKey.sensed("vent_direction");
-
-    private static final StateKey<Boolean> KEY_HAS_DRILLED = StateKey.sensed("vent_has_drilled");
+    private static final StateKey<Boolean> KEY_HAS_PLACED = StateKey.sensed("vent_has_placed");
 
     public static boolean hasVentTarget(Xenomorph xenomorph) {
-        return findVentTarget(xenomorph, (wallStart, direction) -> {});
+        return findVentSpot(xenomorph) != null;
     }
 
     public static Action.Signal perform(Action.Context<? extends Xenomorph> context) {
         var xenomorph = context.getActor();
         var blackboard = context.getBlackboard(Blackboard.Scope.ACTION);
 
-        var wallStart = blackboard.getOrDefault(KEY_WALL_START, (BlockPos) null);
-        var directionOrdinal = blackboard.getOrDefault(KEY_DIRECTION_ORDINAL, -1);
-
-        if (wallStart == null) {
-            var found = findVentTarget(xenomorph, blackboard);
-
-            if (!found) {
-                recordVentTargetSearchFailure(xenomorph);
-                return Action.Signal.ABORT;
-            }
-
-            wallStart = blackboard.getOrDefault(KEY_WALL_START, (BlockPos) null);
-            directionOrdinal = blackboard.getOrDefault(KEY_DIRECTION_ORDINAL, -1);
-        }
-
-        if (wallStart == null || directionOrdinal < 0) {
-            return Action.Signal.ABORT;
-        }
-
-        var direction = Direction.from3DDataValue(directionOrdinal);
-        var pathTarget = wallStart.relative(direction, WALL_TOTAL_DEPTH - 1);
-        var targetPos = Vec3.atBottomCenterOf(pathTarget);
-
-        var hasDrilled = blackboard.getOrDefault(KEY_HAS_DRILLED, false);
-
-        if (hasDrilled) {
+        if (blackboard.getOrDefault(KEY_HAS_PLACED, false)) {
             return Action.Signal.CONTINUE;
         }
 
-        var result = NeoMoveToPosAction.perform(context, targetPos, 0.5);
+        var ventSpot = blackboard.getOrDefault(KEY_VENT_SPOT, (BlockPos) null);
+        if (ventSpot == null) {
+            ventSpot = findVentSpot(xenomorph);
+            if (ventSpot == null) {
+                recordVentTargetSearchFailure(xenomorph);
+                return Action.Signal.ABORT;
+            }
+            blackboard.set(KEY_VENT_SPOT, ventSpot);
+        }
+
+        // Walk to the mouth itself. Unlike the old buried vent, this cell is open ground - it can actually be stood in.
+        var result = NeoMoveToPosAction.perform(context, Vec3.atBottomCenterOf(ventSpot), 0.5);
 
         return switch (result) {
             case FINISHED -> {
-                drillVent(xenomorph, wallStart, direction);
+                placeVent(xenomorph, ventSpot);
 
                 if (xenomorph instanceof VentBuilder ventBuilder) {
                     ventBuilder.getVentData().setLastVentCreationTick(xenomorph.tickCount);
                     ventBuilder.getVentData().clearVentTargetSearchFailure();
                 }
 
-                blackboard.set(KEY_HAS_DRILLED, true);
+                blackboard.set(KEY_HAS_PLACED, true);
                 yield Action.Signal.CONTINUE;
             }
             case MOVING -> Action.Signal.CONTINUE;
-            case NO_PATH -> {
-                recordVentTargetSearchFailure(xenomorph);
-                yield Action.Signal.ABORT;
-            }
             default -> {
                 recordVentTargetSearchFailure(xenomorph);
                 yield Action.Signal.ABORT;
@@ -99,151 +95,172 @@ public class CreateVentAction {
         NeoMoveToPosAction.onFinish(context);
     }
 
-    private static boolean findVentTarget(Xenomorph xenomorph, Blackboard blackboard) {
-        return findVentTarget(xenomorph, (hitPos, direction) -> {
-            blackboard.set(KEY_WALL_START, hitPos);
-            blackboard.set(KEY_DIRECTION_ORDINAL, direction.get3DDataValue());
-        });
+    private static void placeVent(Xenomorph xenomorph, BlockPos ventSpot) {
+        // Resolve the owning hive so the frontier vent is registered in its manager at placement time (a
+        // frontier vent that never reached the manager could not launch biomass/attack parties).
+        //
+        // Resolve from the BUILDER's chunk, not the vent spot. A frontier vent deliberately sits OUTSIDE the built
+        // structure - out at a cave mouth that is often in an UNCLAIMED chunk - so getByChunk(ventSpot) would
+        // return null and the vent would be placed unowned and unregistered. The builder itself only builds while
+        // standing in its own claimed territory (VentSensors gates on that), so its chunk always resolves.
+        var location = HiveLocationRegistry.INSTANCE.getByChunk(
+            xenomorph.level().dimension(),
+            xenomorph.chunkPosition()
+        );
+        if (location == null) {
+            // Builder somehow not in claimed territory this tick - fall back to the vent spot rather than skip.
+            location = HiveLocationRegistry.INSTANCE.getByChunk(
+                xenomorph.level().dimension(),
+                new net.minecraft.world.level.ChunkPos(ventSpot)
+            );
+        }
+        // ⭐⭐ CLASSIFY BY WHERE THE VENT ACTUALLY SITS, IN EVERY DIMENSION.
+        //
+        // ⚠⚠ THIS USED TO HARDCODE FRONTIER OUTSIDE CEILED DIMENSIONS, on the assumption that "a dug vent is an
+        // outpost in the rock by definition" in the overworld. That assumption is simply false: a xenomorph that
+        // digs UP and breaks out onto grass has made a front door, and branding it FRONTIER meant the party system
+        // could not see a vent the player was standing next to. [stated] "there was clearly a vent on the surface
+        // but it kept acting like it wasnt" - that is exactly this line, and the vent he could see was real.
+        //
+        // ⚠ CLASSIFICATION IS WRITE-ONCE AND PERSISTED, so a vent mislabelled here stayed wrong for the life of
+        // the world - which is why this looked like a lookup bug rather than a labelling one.
+        //
+        // `classifyUntagged` already answers correctly for every dimension: STRUCTURE if it is inside the hive's
+        // own footprint, SURFACE if `isNearSurface` says so (which resolves shelf floors in ceiled dimensions and
+        // the heightmap elsewhere), FRONTIER otherwise. A deep tunnel vent still comes out FRONTIER, as it should.
+        var kind = VentKind.FRONTIER;
+        if (location != null) {
+            kind = com.alien.common.gameplay.hive.vent.HiveVents.classifyUntagged(
+                xenomorph.level(),
+                location,
+                ventSpot,
+                HiveLocationRegistry.INSTANCE.config().surfacePartySurfaceBandBlocks()
+            );
+        }
+        VentPlacement.place(
+            xenomorph.level(),
+            ventSpot,
+            // The vent belongs to the HIVE, so it is stamped in the hive's strain, not the digger's.
+            AlienVariantTypes.getForBuild(xenomorph, location),
+            kind,
+            location
+        );
     }
 
-    private static boolean findVentTarget(Xenomorph xenomorph, VentTargetConsumer targetConsumer) {
-        var footPos = xenomorph.blockPosition();
+    /**
+     * An open cell that rests against a solid face, sits in real open space, is reachable, and is not right on top of a
+     * vent the hive already has.
+     */
+    /**
+     * ⚠⚠ A HALLWAY IS NOT A CAVE MOUTH. [stated] "xenos are making vents in the hallways and leaving behind webs. xenos
+     * shouldnt be making vents in the hive".
+     * <p>
+     * Every other filter in {@link #findVentSpot} passes happily INSIDE the hive: a corridor cell is open, it rests on
+     * a solid resin face, and a 1x1 hallway easily clears {@link #MIN_OPEN_NEIGHBOURS} because the corridor runs open
+     * along its length. So a drone standing in its own hallway would place a frontier vent right there and web every
+     * face of it - which is the litter the testers are seeing.
+     * </p>
+     * <p>
+     * The class doc has always said this action builds frontier vents "out in the rock" and that the hive's internal
+     * ducts are STRUCTURE vents shipped with the templates. The intent was written down; only the test was missing.
+     * This is the same structure-chunk + slab test {@code HiveVents.classifyUntagged} already uses to LABEL a vent
+     * STRUCTURE - now used to REFUSE the spot instead of mislabelling it after the fact.
+     * </p>
+     * <p>
+     * ⚠ Chunk membership ALONE is not enough: a hive's structure chunks extend from its floor to its ceiling only, and
+     * a genuine cave mouth can sit directly under or over the built slab in the same chunk. {@code withinSlab} is what
+     * keeps those legal.
+     * </p>
+     */
+    private static boolean isInsideBuiltStructure(Xenomorph xenomorph, BlockPos pos) {
+        var location = HiveLocationRegistry.INSTANCE.getByChunk(
+            xenomorph.level().dimension(),
+            new net.minecraft.world.level.ChunkPos(pos)
+        );
 
-        for (var direction : Direction.Plane.HORIZONTAL) {
-            var hit = rayTraceToSolid(xenomorph, footPos, direction);
+        return location != null
+            && location.structurePieceByChunk().containsKey(new net.minecraft.world.level.ChunkPos(pos))
+            && location.withinSlab(pos.getY());
+    }
 
-            if (!(hit instanceof BlockHitResult blockHitResult)) {
+    private static @Nullable BlockPos findVentSpot(Xenomorph xenomorph) {
+        var level = xenomorph.level();
+        var origin = xenomorph.blockPosition();
+
+        BlockPos best = null;
+        double bestDistance = Double.MAX_VALUE;
+
+        for (
+            var candidate : BlockPos.betweenClosed(
+                origin.offset(-SEARCH_RADIUS, -SEARCH_RADIUS, -SEARCH_RADIUS),
+                origin.offset(SEARCH_RADIUS, SEARCH_RADIUS, SEARCH_RADIUS)
+            )
+        ) {
+            var pos = candidate.immutable();
+
+            if (!VentPlacement.isOpen(level, pos)) {
+                continue; // the vent sits ON a surface, not inside it
+            }
+            if (!VentPlacement.restsOnSolidFace(level, pos)) {
+                continue; // nothing to mount it against
+            }
+            if (!isOpening(level, pos)) {
+                continue; // a crevice, not a cave mouth
+            }
+            if (hasVentNearby(xenomorph, pos)) {
+                continue; // the hive already has a mouth here
+            }
+            if (isInsideBuiltStructure(xenomorph, pos)) {
+                continue; // a corridor is not a cave mouth - see below
+            }
+
+            var distance = pos.distSqr(origin);
+            if (distance >= bestDistance) {
                 continue;
             }
 
-            var hitPos = blockHitResult.getBlockPos();
-
-            // Reject if a vent already exists in the hive location that owns this chunk. (If no location owns it,
-            // there's nothing to dedupe against — let the build proceed.)
-            var owningLocation = com.alien.common.gameplay.hive.location.HiveLocationRegistry.INSTANCE.getByChunk(
-                xenomorph.level().dimension(),
-                new net.minecraft.world.level.ChunkPos(hitPos)
-            );
-            if (owningLocation != null && !owningLocation.ventManager().getVentsWithinSection(hitPos).isEmpty()) {
+            var path = xenomorph.getNavigation().createPath(pos, 1);
+            if (path == null || !path.canReach()) {
                 continue;
             }
 
-            if (!isValidWall(xenomorph, hitPos, direction)) {
-                continue;
-            }
-
-            var pathTarget = hitPos.relative(direction, WALL_TOTAL_DEPTH - 1);
-            var path = xenomorph.getNavigation().createPath(pathTarget, 1);
-
-            if (path != null && path.canReach()) {
-                targetConsumer.accept(hitPos, direction);
-                return true;
-            }
+            best = pos;
+            bestDistance = distance;
         }
 
-        return false;
+        return best;
+    }
+
+    /** Real open space around the cell - a cave mouth or an opening, rather than a crack in the rock. */
+    private static boolean isOpening(Level level, BlockPos pos) {
+        var open = 0;
+        for (var dx = -1; dx <= 1; dx++) {
+            for (var dy = -1; dy <= 1; dy++) {
+                for (var dz = -1; dz <= 1; dz++) {
+                    if (dx == 0 && dy == 0 && dz == 0) {
+                        continue;
+                    }
+                    if (VentPlacement.isOpen(level, pos.offset(dx, dy, dz))) {
+                        open++;
+                    }
+                }
+            }
+        }
+        return open >= MIN_OPEN_NEIGHBOURS;
+    }
+
+    private static boolean hasVentNearby(Xenomorph xenomorph, BlockPos pos) {
+        var owningLocation = HiveLocationRegistry.INSTANCE.getByChunk(
+            xenomorph.level().dimension(),
+            new ChunkPos(pos)
+        );
+        return owningLocation != null && !owningLocation.ventManager().getVentsWithinSection(pos).isEmpty();
     }
 
     private static void recordVentTargetSearchFailure(Xenomorph xenomorph) {
         if (xenomorph instanceof VentBuilder ventBuilder) {
             ventBuilder.getVentData().recordVentTargetSearchFailure(xenomorph.tickCount);
         }
-    }
-
-    private static void drillVent(Xenomorph xenomorph, BlockPos wallStart, Direction direction) {
-        var level = xenomorph.level();
-        var alienVariantType = AlienVariantTypes.getFor(xenomorph);
-        var resinHolder = alienVariantType.resin();
-        var resinVentHolder = alienVariantType.resinVent();
-        var resinWebHolder = alienVariantType.resinWeb();
-
-        for (var i = 0; i < WALL_DEPTH; i++) {
-            var tunnelPos = wallStart.relative(direction, i);
-
-            level.setBlock(tunnelPos, resinWebHolder.get().defaultBlockState(), Block.UPDATE_ALL);
-
-            for (var relativeDirection : ALL_DIRECTIONS) {
-                if (relativeDirection == direction || relativeDirection == direction.getOpposite()) {
-                    continue;
-                }
-
-                var tunnelWallPos = tunnelPos.relative(relativeDirection);
-
-                level.setBlock(tunnelWallPos, resinHolder.get().defaultBlockState(), Block.UPDATE_ALL);
-            }
-        }
-
-        var ventPos = wallStart.relative(direction, WALL_DEPTH);
-
-        level.setBlock(ventPos, resinVentHolder.get().defaultBlockState(), Block.UPDATE_ALL);
-    }
-
-    private static HitResult rayTraceToSolid(Xenomorph xenomorph, BlockPos start, Direction direction) {
-        var from = Vec3.atCenterOf(start);
-        var to = from.add(Vec3.atLowerCornerOf(direction.getNormal()).scale(16));
-
-        return xenomorph.level()
-            .clip(
-                new ClipContext(
-                    from,
-                    to,
-                    ClipContext.Block.COLLIDER,
-                    ClipContext.Fluid.NONE,
-                    xenomorph
-                )
-            );
-    }
-
-    private static boolean isValidWall(Xenomorph xenomorph, BlockPos start, Direction direction) {
-        var level = xenomorph.level();
-        var alienVariantType = AlienVariantTypes.getFor(xenomorph);
-
-        for (var i = 0; i < WALL_DEPTH; i++) {
-            var tunnelPos = start.relative(direction, i);
-
-            if (!isTunnelPosClear(level, tunnelPos, alienVariantType)) {
-                return false;
-            }
-
-            for (var adjacentDirection : ALL_DIRECTIONS) {
-                if (adjacentDirection == direction || adjacentDirection == direction.getOpposite()) {
-                    continue;
-                }
-
-                var tunnelWallPos = tunnelPos.relative(adjacentDirection);
-
-                if (!isTunnelWallReplaceable(level, tunnelWallPos, alienVariantType)) {
-                    return false;
-                }
-            }
-        }
-
-        var ventPos = start.relative(direction, WALL_TOTAL_DEPTH - 1);
-
-        return isTunnelPosClear(level, ventPos, alienVariantType);
-    }
-
-    private static boolean isTunnelPosClear(Level level, BlockPos pos, AlienVariantType alienVariantType) {
-        var blockState = level.getBlockState(pos);
-
-        return blockState.isAir() || isTunnelWallReplaceable(level, pos, alienVariantType);
-    }
-
-    private static boolean isTunnelWallReplaceable(Level level, BlockPos pos, AlienVariantType alienVariantType) {
-        var blockState = level.getBlockState(pos);
-
-        if (blockState.is(AlienBlockTags.XENOMORPH_IMMUNE)) {
-            return false;
-        }
-
-        return blockState.is(alienVariantType.resin().get())
-            || blockState.is(alienVariantType.resinReplaceableTag());
-    }
-
-    @FunctionalInterface
-    private interface VentTargetConsumer {
-
-        void accept(BlockPos wallStart, Direction direction);
     }
 
     private CreateVentAction() {

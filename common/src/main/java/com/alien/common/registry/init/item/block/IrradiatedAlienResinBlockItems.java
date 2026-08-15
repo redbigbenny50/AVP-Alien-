@@ -95,6 +95,86 @@ public class IrradiatedAlienResinBlockItems {
         IrradiatedAlienResinBlocks.SMOOTH_IRRADIATED_RESIN_WALL
     );
 
+    public static final BLibHolder<BlockItem> RIBBED_IRRADIATED_RESIN_SLAB = create(
+        "ribbed_irradiated_resin_slab",
+        IrradiatedAlienResinBlocks.RIBBED_IRRADIATED_RESIN_SLAB
+    );
+
+    public static final BLibHolder<BlockItem> RIBBED_IRRADIATED_RESIN_STAIRS = create(
+        "ribbed_irradiated_resin_stairs",
+        IrradiatedAlienResinBlocks.RIBBED_IRRADIATED_RESIN_STAIRS
+    );
+
+    public static final BLibHolder<BlockItem> IRRADIATED_RESIN_BONE = create(
+        "irradiated_resin_bone",
+        IrradiatedAlienResinBlocks.IRRADIATED_RESIN_BONE
+    );
+
+    public static final BLibHolder<BlockItem> IRRADIATED_RESIN_BONE_SLAB = create(
+        "irradiated_resin_bone_slab",
+        IrradiatedAlienResinBlocks.IRRADIATED_RESIN_BONE_SLAB
+    );
+
+    public static final BLibHolder<BlockItem> IRRADIATED_RESIN_BONE_STAIRS = create(
+        "irradiated_resin_bone_stairs",
+        IrradiatedAlienResinBlocks.IRRADIATED_RESIN_BONE_STAIRS
+    );
+
+    public static final BLibHolder<BlockItem> IRRADIATED_RESIN_DOORWAY = create(
+        "irradiated_resin_doorway",
+        IrradiatedAlienResinBlocks.IRRADIATED_RESIN_DOORWAY
+    );
+
+    public static final BLibHolder<BlockItem> IRRADIATED_RESIN_ETCHED = create(
+        "irradiated_resin_etched",
+        IrradiatedAlienResinBlocks.IRRADIATED_RESIN_ETCHED
+    );
+
+    public static final BLibHolder<BlockItem> IRRADIATED_RESIN_ETCHED_SLAB = create(
+        "irradiated_resin_etched_slab",
+        IrradiatedAlienResinBlocks.IRRADIATED_RESIN_ETCHED_SLAB
+    );
+
+    public static final BLibHolder<BlockItem> IRRADIATED_RESIN_ETCHED_STAIRS = create(
+        "irradiated_resin_etched_stairs",
+        IrradiatedAlienResinBlocks.IRRADIATED_RESIN_ETCHED_STAIRS
+    );
+
+    public static final BLibHolder<BlockItem> IRRADIATED_RESIN_SPINE = create(
+        "irradiated_resin_spine",
+        IrradiatedAlienResinBlocks.IRRADIATED_RESIN_SPINE
+    );
+
+    public static final BLibHolder<BlockItem> IRRADIATED_RESIN_STRETCHED = create(
+        "irradiated_resin_stretched",
+        IrradiatedAlienResinBlocks.IRRADIATED_RESIN_STRETCHED
+    );
+
+    public static final BLibHolder<BlockItem> IRRADIATED_RESIN_STRETCHED_SLAB = create(
+        "irradiated_resin_stretched_slab",
+        IrradiatedAlienResinBlocks.IRRADIATED_RESIN_STRETCHED_SLAB
+    );
+
+    public static final BLibHolder<BlockItem> IRRADIATED_RESIN_STRETCHED_STAIRS = create(
+        "irradiated_resin_stretched_stairs",
+        IrradiatedAlienResinBlocks.IRRADIATED_RESIN_STRETCHED_STAIRS
+    );
+
+    public static final BLibHolder<BlockItem> IRRADIATED_RESIN_TENDRIL = create(
+        "irradiated_resin_tendril",
+        IrradiatedAlienResinBlocks.IRRADIATED_RESIN_TENDRIL
+    );
+
+    public static final BLibHolder<BlockItem> IRRADIATED_RESIN_TENDRIL_SLAB = create(
+        "irradiated_resin_tendril_slab",
+        IrradiatedAlienResinBlocks.IRRADIATED_RESIN_TENDRIL_SLAB
+    );
+
+    public static final BLibHolder<BlockItem> IRRADIATED_RESIN_TENDRIL_STAIRS = create(
+        "irradiated_resin_tendril_stairs",
+        IrradiatedAlienResinBlocks.IRRADIATED_RESIN_TENDRIL_STAIRS
+    );
+
     private static BLibHolder<BlockItem> create(String id, Supplier<? extends Block> blockSupplier) {
         return create(id, blockSupplier, new Item.Properties());
     }

@@ -59,15 +59,34 @@ public record HiveConfig(
     int baseRaidSize,
     double raidSizePerClaimedChunk,
     int raidEngageRadiusBlocks,
+    int raidFrenzyExtraMemberCap,
+    long raidLossDeathWindowTicks,
+    int raidLossDeathThreshold,
+    long raidLossDownGraceTicks,
+    long raidLossAftermathTicks,
 
     // ---------- § 8 Leadership ----------
     long empressMoltDurationTicks,
+    int maxDaughterHivesPerLocation,
+    int queenPromotionJellyCost,
+    long queenPromotionMoltTicks,
     long localLeaderPickCadenceTicks,
+    int empressCandidateMinMembers,
+    long empressCrowningCooldownTicks,
+    int empressCapPercent,
+    int empressRescuesPerHive,
+    int empressRescueBudget,
+    long firewallCooldownTicks,
+    long firewallStabilityScanIntervalTicks,
+    int firewallJellyFloor,
+    int firewallCrowningJellyCost,
+    int minRoyalJellyCap,
 
     // ---------- § 9 Lineage spread ----------
     int maxLineageSpreadChunks,
     long lineageSpreadCooldownTicks,
     int maxLocationsPerLineage,
+    int maxLocationsUnderEmpress,
     int minimumPopulationForHiveSpread,
     int abstractSpreadMinFounderGroupSize,
     int abstractSpreadMaxFounderGroupSize,
@@ -78,6 +97,7 @@ public record HiveConfig(
     long perLocationClaimCooldownTicks,
     long lineageScanIntervalTicks,
     int maxChunksPerLocation,
+    int maxTerritoryRadiusChunks,
     int maxChunksPerLineage,
     int maxLineagesPerDimensionPerVariant,
     int maxClaimsPerScan,
@@ -113,17 +133,51 @@ public record HiveConfig(
     long hiveSpawnerIntervalTicks,
     int hiveSpawnerMaxSpawnAttemptsPerLocation,
     int hiveSpawnerMaxSpawnsPerLocation,
-    int maxOvomorphsPerHiveLocation,
+    int combatRespiteKillThreshold,
+    long combatRespiteMinTicks,
+    long combatRespiteMaxTicks,
     long royalJellyTicksPerProduction,
     long scourgeJellyTicksPerQueenProduction,
-    long scourgeJellyTicksPerHarbingerProduction
+    long scourgeJellyTicksPerHarbingerProduction,
+
+    // ---------- § 14 Queen lifecycle ----------
+    boolean queenFrontEndPhasesEnabled,
+
+    // ---------- § 15 Parties ----------
+    int surfacePartyBaseSize,
+    double surfacePartySizePerClaimedChunk,
+    int surfacePartyMaxSize,
+    double surfacePartyVentDropChance,
+    int surfacePartyMaxVentsPerClaim,
+    int surfacePartySurfaceBandBlocks,
+    int biomassHuntingPartyBaseSize,
+    double biomassHuntingPartySizePerClaimedChunk,
+    int biomassHuntingPartyMaxSize,
+    int hostHuntPartyBaseSize,
+    double hostHuntPartySizePerClaimedChunk,
+    int hostHuntPartyMaxSize,
+    int hostHuntPartyDurationTicks,
+    int biomassHuntingPartyBonusSpitterCount,
+    long biomassHuntingPartyDurationTicks,
+    int attackPartyBaseSize,
+    double attackPartySizePerClaimedChunk,
+    int attackPartyMaxSize,
+    long attackPartyCooldownTicks,
+    long attackPartyWave1DelayTicks,
+    long attackIntrusionDwellTicks,
+    long attackPartyDurationTicks
 ) {
 
     private static final int TICKS_PER_SECOND = 20;
 
+    private static final long TICKS_PER_MINECRAFT_DAY = 24000L;
+
     private static final long TICKS_PER_MINUTE = 60L * TICKS_PER_SECOND;
 
-    private static final long TICKS_PER_HOUR = 60L * TICKS_PER_MINUTE;
+    // NOTE: there is deliberately no TICKS_PER_HOUR. One existed (60L * TICKS_PER_MINUTE = 72000t) and was a REAL
+    // hour, so every "24L * TICKS_PER_HOUR" written to mean one day was actually SEVENTY-TWO Minecraft days. Four
+    // knobs were wrong by that factor. Durations meant in game-days use TICKS_PER_MINECRAFT_DAY; anything meant in
+    // wall-clock time uses TICKS_PER_MINUTE explicitly.
 
     public static HiveConfig defaults() {
         return new HiveConfig(
@@ -131,13 +185,22 @@ public record HiveConfig(
             5L * TICKS_PER_MINUTE, // protoHiveStageInterval: 5 min between drone→warrior→praetorian→queen advances
 
             // § 2 Locations
-            60L * TICKS_PER_SECOND, // settlementTicks: 60s
-            7L * 24L * TICKS_PER_HOUR, // locationMaxNoContactTicks: 7 game-days of loaded-no-contact time
+            10L * TICKS_PER_SECOND, // settlementTicks: 10s
+            14L * TICKS_PER_MINECRAFT_DAY, // locationMaxNoContactTicks: LocationDormancyTask rule 3. Accrues ONLY
+            // while a claimed chunk is loaded AND not one of this location's members is standing in the claim;
+            // pauses entirely when nothing is loaded, and RESETS to zero the moment any member is home. So an
+            // unvisited hive can never die this way - it only catches a claim held open with nobody in it.
+            // Deliberately generous (14 MC days of ticks = ~4.7 real hours of that condition) because the failure
+            // mode is DESTRUCTIVE: a false positive deletes a legitimate hive. Rule 2 already reaps a genuinely
+            // empty hive in 30s, so rule 3 only needs to catch the narrow "population on paper, nobody on the
+            // ground" case - e.g. a hive that sent its whole roster out on parties while a player parked nearby
+            // holds the chunks open.
             30L * TICKS_PER_MINUTE, // locationBootstrapGraceTicks: protect newborn locations for 30 min
             96, // bossBarDisplayRadiusBlocks
             60L * TICKS_PER_SECOND, // angryGraceTicks: 60s
             60L * TICKS_PER_SECOND, // contestTickWindow: 60s
-            16, // minimumHiveLocationDistanceChunks
+            17, // minimumHiveLocationDistanceChunks: 17 so two hive CENTERS are >=17 chunks apart, guaranteeing a
+            // full 16-chunk gap between them (16 would leave centers 16 apart = a <16 edge-to-edge gap).
             1, // initialHiveLocationClaimRadiusChunks: 3x3
 
             // § 3 Reserves
@@ -169,21 +232,73 @@ public record HiveConfig(
             5, // raidThresholdKills
             10L * TICKS_PER_MINUTE, // raidAggroWindowTicks
             8, // raidMinLocationSizeChunks
-            20L * TICKS_PER_MINUTE, // perSourceRaidCooldownTicks
+            5L * TICKS_PER_MINECRAFT_DAY, // perSourceRaidCooldownTicks (5 MC days - a raid is a campaign, not a habit)
             30L * TICKS_PER_MINUTE, // raidExpiryTicks
             4, // baseRaidSize
             0.25, // raidSizePerClaimedChunk
             32, // raidEngageRadiusBlocks
+            6, // raidFrenzyExtraMemberCap: max extra members that can frenzy-join an in-progress raid
+            30L * TICKS_PER_SECOND, // raidLossDeathWindowTicks: window for counting repeated target deaths
+            3, // raidLossDeathThreshold: target deaths within the window that confirm a raid loss
+            60L * TICKS_PER_SECOND, // raidLossDownGraceTicks: how long the target stays down before loss is confirmed
+            5L * TICKS_PER_MINUTE, // raidLossAftermathTicks: aftermath duration after a raid loss is confirmed
 
             // § 8 Leadership
             30L * TICKS_PER_SECOND, // empressMoltDurationTicks
+            2, // maxDaughterHivesPerLocation: a hive may seed exactly two daughters in its whole life. With the
+               // 8-hive lineage cap this is the same constraint said twice - 1 -> 3 -> 7 -> 8 converges exactly on
+               // maxLocationsPerLineage - which is what stops one hive quietly taking the world.
+            50, // queenPromotionJellyCost: royal jelly to raise a praetorian (or, failing that, a crusher) into a
+            // founding queen. ⚠ [stated] Aug 14, LOWERED 100 -> 50, so it is NO LONGER matched to
+            // firewallCrowningJellyCost (still 100) - that pairing is history, do not "restore" it. The vats now back
+            // this spend (see QueenPromotionService), so 50 is what a hive can realistically hold aside.
+            30L * TICKS_PER_SECOND, // queenPromotionMoltTicks: same window as the empress molt
             5L * TICKS_PER_SECOND, // localLeaderPickCadenceTicks (100 ticks)
+            0, // empressCandidateMinMembers: population floor for empress eligibility. WAS 250, which no hive could
+               // ever reach in practice - 250 is also exactly HiveBalanceTask.MEMBER_CAP, the working-adult ceiling, so
+               // a
+               // hive had to be pegged at its absolute cap to nominate anyone. Field-confirmed dead: a 5-location
+               // lineage
+               // peaked at 19 members per hive and no empress ever emerged. The design gate is HIVE COUNT (4+
+               // locations),
+               // not population, and member count is a RANKING factor (see EmpressCandidatePicker), so 0 = off is the
+               // spec-faithful default. Raise this if you later want a size floor as well as a count gate.
+            5L * TICKS_PER_MINECRAFT_DAY, // empressCrowningCooldownTicks: after an empress DIES, her lineage cannot
+            // crown another for 5 Minecraft days. Killing her is meant to buy the players breathing room, not to
+            // start a countdown to the next one.
+            2, // empressRescuesPerHive: how many times she will refill ONE hive's firewall fund before writing it
+               // off. Two extra lives, not immortality - die a third time and the hive dies like any other.
+            6, // empressRescueBudget: NETWORK-WIDE cap on transfers for one empress, keyed on her empressId. This is
+               // what makes broad pressure viable: without it the only answer to her is to besiege a single hive to its
+               // third death, because she could rescue everywhere forever. A fresh empress gets a fresh budget.
+            150, // empressCapPercent: a BLANKET percentage on every ceiling an empress raises - one rule instead of a
+            // hand-tuned twin per cap. It covers the working population (250 -> 375), all four party sizes (attack
+            // 8 -> 12, biomass hunting 7 -> 11, surface 5 -> 8, host hunt 4 -> 6), AND every per-caste ceiling in the
+            // hive unit purchase data - warriors, praetorians, crushers, spitters and the rest all grow by the same
+            // half again. The harbinger is the one deliberate exception and needs no exclusion logic: it is capped
+            // per raid chamber, and she raises it by granting the hive a second chamber. Anything below 100 is
+            // clamped in EmpressCaps so a misconfiguration can never punish a hive for having an empress.
+            7L * TICKS_PER_MINECRAFT_DAY, // firewallCooldownTicks: 7 MC days of accrued stability to refill the fund
+            5L * TICKS_PER_MINUTE, // firewallStabilityScanIntervalTicks: cadence for both the stability check and the
+            // biomass income-rate sample
+            50, // firewallJellyFloor: jelly reserve floor for the "has jelly reserves" stability condition
+            100, // firewallCrowningJellyCost: jelly cost paid when a queen is crowned via QueenlessMaturationTask
+            128, // minRoyalJellyCap: floor under the royal jelly ceiling, which is otherwise the hive's CLAIMED CHUNK
+            // COUNT. That coupling quietly made both 100-jelly costs - crowning a successor and promoting a founder
+            // queen - unpayable for any hive holding under 100 chunks: it could never bank the price, so a small
+            // hive that lost its queen could never crown one and could never seed a daughter. Territory still buys
+            // capacity above this floor; the floor only guarantees the essential royal costs stay reachable. Keep it
+            // above the largest royal-jelly cost in the game (currently 100) or the hole reopens.
 
             // § 9 Lineage spread
             32, // maxLineageSpreadChunks
             30L * TICKS_PER_MINUTE, // lineageSpreadCooldownTicks
-            16, // maxLocationsPerLineage
-            100, // minimumPopulationForHiveSpread
+            8, // maxLocationsPerLineage: a lineage can have at most 8 member hives
+            8, // maxLocationsUnderEmpress: an empress controls up to 8 hives (her origin included) - matched to
+               // maxLocationsPerLineage so the empress (emerging at 4 hives) never freezes lineage growth short of
+               // the 8-hive cap. Was 5, which silently capped every empress-led lineage at 5.
+            70, // minimumPopulationForHiveSpread: ⚠ [stated] Aug 14, LOWERED 100 -> 70. SHARED with
+                // AbstractSpreadAttempt, so this loosens the ABSTRACT spread path too, not just the visible promotion.
             4, // abstractSpreadMinFounderGroupSize
             10, // abstractSpreadMaxFounderGroupSize
             30L * TICKS_PER_SECOND, // foragerJoinTicks
@@ -193,15 +308,17 @@ public record HiveConfig(
             30L * TICKS_PER_SECOND, // perLocationClaimCooldownTicks
             5L * TICKS_PER_MINUTE, // lineageScanIntervalTicks
             256, // maxChunksPerLocation
+            9, // maxTerritoryRadiusChunks: 3x3 core (radius 1) + 8 chunks outward = radius 9 => 19x19 max footprint.
+               // Empress-influenced hives are intended to expand this later (parked).
             10000, // maxChunksPerLineage
             16, // maxLineagesPerDimensionPerVariant
             64, // maxClaimsPerScan (enough to complete a 7x7 ring boundary in one scan, so partial fills
             // align with ring boundaries instead of breaking mid-ring)
-            24L * TICKS_PER_HOUR, // resinFullDensityTicks
+            1L * TICKS_PER_MINECRAFT_DAY, // resinFullDensityTicks: 1 MC day
             1, // maxPassiveClaimsPerUnloadedScan
 
             // § 11 Biomass
-            100, // baseChunkCost
+            25, // baseChunkCost
             100, // ovipositorCreationBiomassCost
             5, // resinSpreadBiomassCost
             0.05, // growthFactor
@@ -229,10 +346,42 @@ public record HiveConfig(
             TICKS_PER_SECOND, // hiveSpawnerIntervalTicks
             32, // hiveSpawnerMaxSpawnAttemptsPerLocation
             4, // hiveSpawnerMaxSpawnsPerLocation
-            30, // maxOvomorphsPerHiveLocation
+            40, // combatRespiteKillThreshold: 2x hiveSpawnerMinimumLoadedXenomorphs default, intentionally not coupled
+            10L * TICKS_PER_SECOND, // combatRespiteMinTicks
+            TICKS_PER_MINUTE, // combatRespiteMaxTicks
             TICKS_PER_MINUTE, // royalJellyTicksPerProduction (1 game-min per queen)
             100L * TICKS_PER_MINUTE, // scourgeJellyTicksPerQueenProduction (100 game-min per queen)
-            TICKS_PER_MINUTE // scourgeJellyTicksPerHarbingerProduction (1 game-min per harbinger)
+            TICKS_PER_MINUTE, // scourgeJellyTicksPerHarbingerProduction (1 game-min per harbinger)
+
+            // § 14 Queen lifecycle
+            true, // queenFrontEndPhasesEnabled: run developing->location->hibernation before founding
+
+            // § 15 Parties
+            2, // surfacePartyBaseSize
+            0.15, // surfacePartySizePerClaimedChunk
+            5, // surfacePartyMaxSize: hard ceiling - size scaled with claims unbounded (20+ on a big hive)
+            0.35, // surfacePartyVentDropChance: roll on dawn despawn. Was 0.10, which (combined with a placement
+            // bug that silently aborted on sloped ground) meant testers ran party after party and never saw
+            // a vent. Vents gate the whole vent-dependent trio, so a hive that cannot seed one is stuck.
+            3, // surfacePartyMaxVentsPerClaim: cap counted against near-surface vents only, not the full column
+            6, // surfacePartySurfaceBandBlocks: vertical margin around the terrain heightmap counted as "surface"
+               // (also reused by biomass hunting party's vent-spawn-point lookup)
+            2, // biomassHuntingPartyBaseSize
+            0.15, // biomassHuntingPartySizePerClaimedChunk
+            7, // biomassHuntingPartyMaxSize: hard ceiling (bonus spitters ride on top)
+            2, // hostHuntPartyBaseSize
+            0.1, // hostHuntPartySizePerClaimedChunk
+            4, // hostHuntPartyMaxSize: drones sent to fetch hosts
+            6000, // hostHuntPartyDurationTicks: 5 minutes to find a host, then give up and refund
+            1, // biomassHuntingPartyBonusSpitterCount: extra spitters beyond the base budget, only if reserves allow
+            10L * TICKS_PER_MINUTE, // biomassHuntingPartyDurationTicks: active duration before returning home via vent
+            2, // attackPartyBaseSize
+            0.15, // attackPartySizePerClaimedChunk
+            8, // attackPartyMaxSize: hard ceiling - size scaled with claims unbounded (~20 on a big hive)
+            3L * TICKS_PER_MINECRAFT_DAY, // attackPartyCooldownTicks: gap between wave 1 and wave 2 (3 MC days)
+            1L * TICKS_PER_MINECRAFT_DAY, // attackPartyWave1DelayTicks: wave 1 fires ~1 MC day after the intrusion
+            30L * TICKS_PER_SECOND, // attackIntrusionDwellTicks: in-claim-while-hostile dwell before a campaign arms
+            10L * TICKS_PER_MINUTE // attackPartyDurationTicks: active duration hunting the target before giving up
         );
     }
 }

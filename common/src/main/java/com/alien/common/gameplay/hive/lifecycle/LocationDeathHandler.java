@@ -43,8 +43,17 @@ public final class LocationDeathHandler {
         kill(level, location, lineage, new HiveLocationRemovalReason.KilledByPlayer(killerId), true);
     }
 
-    /** Natural decay (dormancy/0-chunk shrink). Does NOT fire the advancement. */
+    /**
+     * Natural decay (dormancy/0-chunk shrink). Does NOT fire the advancement.
+     * <p>
+     * If this was a living empress's seat she is EXILED rather than removed with it - she failed to hold the hive, so
+     * the lineage writes her off and leaves her the ruin. Nukes are deliberately not routed here: they kill every
+     * spawned hive member, and she dies with them.
+     */
     public static void killNaturalDecay(ServerLevel level, HiveLocation location, LineageFactionData lineage) {
+        if (com.alien.common.gameplay.hive.empress.EmpressExileService.exile(level, location, lineage, false)) {
+            return;
+        }
         kill(level, location, lineage, new HiveLocationRemovalReason.NaturalDecay(), false);
     }
 
@@ -72,6 +81,7 @@ public final class LocationDeathHandler {
 
         // 2. Release every claimed chunk via BLib + reset local indexes (LocationRemovalHelper handles BLib release).
         LocationRemovalHelper.remove(level, location, lineage, reason);
+        com.alien.common.gameplay.hive.lifecycle.LocationDormancyTask.forgetLocation(location);
 
         // 3. Drop the per-location BLib faction. Members of this faction lose location-tier membership but stay in
         // the parent lineage (no eviction-on-load — loading state should not affect lineage membership).

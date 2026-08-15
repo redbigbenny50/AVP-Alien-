@@ -95,6 +95,86 @@ public class AberrantAlienResinBlockItems {
         AberrantAlienResinBlocks.SMOOTH_ABERRANT_RESIN_WALL
     );
 
+    public static final BLibHolder<BlockItem> RIBBED_ABERRANT_RESIN_SLAB = create(
+        "ribbed_aberrant_resin_slab",
+        AberrantAlienResinBlocks.RIBBED_ABERRANT_RESIN_SLAB
+    );
+
+    public static final BLibHolder<BlockItem> RIBBED_ABERRANT_RESIN_STAIRS = create(
+        "ribbed_aberrant_resin_stairs",
+        AberrantAlienResinBlocks.RIBBED_ABERRANT_RESIN_STAIRS
+    );
+
+    public static final BLibHolder<BlockItem> ABERRANT_RESIN_BONE = create(
+        "aberrant_resin_bone",
+        AberrantAlienResinBlocks.ABERRANT_RESIN_BONE
+    );
+
+    public static final BLibHolder<BlockItem> ABERRANT_RESIN_BONE_SLAB = create(
+        "aberrant_resin_bone_slab",
+        AberrantAlienResinBlocks.ABERRANT_RESIN_BONE_SLAB
+    );
+
+    public static final BLibHolder<BlockItem> ABERRANT_RESIN_BONE_STAIRS = create(
+        "aberrant_resin_bone_stairs",
+        AberrantAlienResinBlocks.ABERRANT_RESIN_BONE_STAIRS
+    );
+
+    public static final BLibHolder<BlockItem> ABERRANT_RESIN_DOORWAY = create(
+        "aberrant_resin_doorway",
+        AberrantAlienResinBlocks.ABERRANT_RESIN_DOORWAY
+    );
+
+    public static final BLibHolder<BlockItem> ABERRANT_RESIN_ETCHED = create(
+        "aberrant_resin_etched",
+        AberrantAlienResinBlocks.ABERRANT_RESIN_ETCHED
+    );
+
+    public static final BLibHolder<BlockItem> ABERRANT_RESIN_ETCHED_SLAB = create(
+        "aberrant_resin_etched_slab",
+        AberrantAlienResinBlocks.ABERRANT_RESIN_ETCHED_SLAB
+    );
+
+    public static final BLibHolder<BlockItem> ABERRANT_RESIN_ETCHED_STAIRS = create(
+        "aberrant_resin_etched_stairs",
+        AberrantAlienResinBlocks.ABERRANT_RESIN_ETCHED_STAIRS
+    );
+
+    public static final BLibHolder<BlockItem> ABERRANT_RESIN_SPINE = create(
+        "aberrant_resin_spine",
+        AberrantAlienResinBlocks.ABERRANT_RESIN_SPINE
+    );
+
+    public static final BLibHolder<BlockItem> ABERRANT_RESIN_STRETCHED = create(
+        "aberrant_resin_stretched",
+        AberrantAlienResinBlocks.ABERRANT_RESIN_STRETCHED
+    );
+
+    public static final BLibHolder<BlockItem> ABERRANT_RESIN_STRETCHED_SLAB = create(
+        "aberrant_resin_stretched_slab",
+        AberrantAlienResinBlocks.ABERRANT_RESIN_STRETCHED_SLAB
+    );
+
+    public static final BLibHolder<BlockItem> ABERRANT_RESIN_STRETCHED_STAIRS = create(
+        "aberrant_resin_stretched_stairs",
+        AberrantAlienResinBlocks.ABERRANT_RESIN_STRETCHED_STAIRS
+    );
+
+    public static final BLibHolder<BlockItem> ABERRANT_RESIN_TENDRIL = create(
+        "aberrant_resin_tendril",
+        AberrantAlienResinBlocks.ABERRANT_RESIN_TENDRIL
+    );
+
+    public static final BLibHolder<BlockItem> ABERRANT_RESIN_TENDRIL_SLAB = create(
+        "aberrant_resin_tendril_slab",
+        AberrantAlienResinBlocks.ABERRANT_RESIN_TENDRIL_SLAB
+    );
+
+    public static final BLibHolder<BlockItem> ABERRANT_RESIN_TENDRIL_STAIRS = create(
+        "aberrant_resin_tendril_stairs",
+        AberrantAlienResinBlocks.ABERRANT_RESIN_TENDRIL_STAIRS
+    );
+
     private static BLibHolder<BlockItem> create(String id, Supplier<? extends Block> blockSupplier) {
         return create(id, blockSupplier, new Item.Properties());
     }

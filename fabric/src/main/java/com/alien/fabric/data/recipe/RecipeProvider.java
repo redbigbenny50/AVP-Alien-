@@ -3,6 +3,7 @@ package com.alien.fabric.data.recipe;
 import com.alien.Alien;
 import com.alien.fabric.data.recipe.impl.ArmorRecipeProvider;
 import com.alien.fabric.data.recipe.impl.MiscellaneousRecipeProvider;
+import com.alien.fabric.data.recipe.impl.ResinContainerRecipeProvider;
 import com.alien.fabric.data.recipe.impl.chitin.ChitinRecipeProvider;
 import com.alien.fabric.data.recipe.impl.resin.ResinRecipeProvider;
 import com.blib.fabric.data.recipe.builder.RecipeBuilder;
@@ -26,6 +27,7 @@ public class RecipeProvider extends FabricRecipeProvider {
         MiscellaneousRecipeProvider.provide(builder);
         ChitinRecipeProvider.provide(builder);
         ResinRecipeProvider.provide(builder);
+        ResinContainerRecipeProvider.provide(builder);
     }
 
 }

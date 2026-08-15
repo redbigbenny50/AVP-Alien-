@@ -18,9 +18,12 @@ public class EggPickupRequestListener implements GameEventListener {
 
     private final PositionSource positionSource;
 
+    private final Entity owner;
+
     private final Consumer<Ovomorph> onRequestReceived;
 
     public EggPickupRequestListener(Entity entity, Consumer<Ovomorph> onRequestReceived) {
+        this.owner = entity;
         this.onRequestReceived = onRequestReceived;
         this.positionSource = new EntityPositionSource(entity, 0F);
     }
@@ -60,6 +63,10 @@ public class EggPickupRequestListener implements GameEventListener {
                 || ovomorph.pickupRequestAcknowledged
                 // OR the ovomorph doesn't want to be picked up...
                 || !ovomorph.wantsPickup
+                // OR the ovomorph belongs to a different strain than the listening xenomorph - strains are always
+                // hostile to one another and never haul each other's eggs.
+                || !(owner instanceof com.alien.common.gameplay.entity.living.alien.Alien alienOwner)
+                || !java.util.Objects.equals(alienOwner.getVariant(), ovomorph.getVariant())
         ) {
             // Then don't acknowledge the event, it either can't be or already has been acknowledged.
             return false;

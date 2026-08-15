@@ -1,0 +1,53 @@
+{
+  "model": "avp_alien:geo/entity/runner.geo.json",
+  "bone": "gHead",
+  "transforms": {
+    "idle": {
+      "thirdperson_righthand": {
+        "translation": [-0.0005, -0.1502, 0.0813],
+        "rotation": [-63.9815, -0.0122, 0.0088],
+        "scale": [0.6, 0.6, 0.6]
+      },
+      "thirdperson_lefthand": {
+        "translation": [0.0005, -0.1502, 0.0813],
+        "rotation": [-63.9815, 0.0122, -0.0088],
+        "scale": [0.6, 0.6, 0.6]
+      },
+      "firstperson_righthand": {
+        "translation": [-0.1332, 0.2564, 0.15],
+        "rotation": [-41.8418, 0.0, 0.0],
+        "scale": [0.4, 0.4, 0.4]
+      },
+      "firstperson_lefthand": {
+        "translation": [0.1332, 0.2564, 0.15],
+        "rotation": [-41.8418, 0.0, 0.0],
+        "scale": [0.4, 0.4, 0.4]
+      },
+      "head": {
+        "translation": [-0.0414, 0.2145, 0.4564],
+        "rotation": [-80.7772, 0.0, 0.0],
+        "scale": [1.3, 1.3, 1.3]
+      },
+      "gui": {
+        "translation": [0.0, 0.0, 0.0],
+        "rotation": [-80.0, 145.0, -30.0],
+        "scale": [0.65, 0.65, 0.65]
+      },
+      "ground": {
+        "translation": [0.0, 0.0, 0.0],
+        "rotation": [-90.0, 0.0, 0.0],
+        "scale": [0.25, 0.25, 0.25]
+      },
+      "fixed": {
+        "translation": [0.0, 0.0991, -0.1618],
+        "rotation": [-34.8212, 0.0, 0.0],
+        "scale": [1.0, 1.0, 1.0]
+      },
+      "fixed_wall": {
+        "translation": [0.0, 0.0, 0.421],
+        "rotation": [-126.29, 0.0, 0.0],
+        "scale": [1.0, 1.0, 1.0]
+      }
+    }
+  }
+}

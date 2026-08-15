@@ -3,9 +3,11 @@ package com.alien.client.render.entity.parasite.facehugger;
 import com.alien.client.render.entity.carrier.CarrierSpineBoneCache;
 import com.alien.client.render.entity.head.EntityHeadData;
 import com.alien.client.render.entity.head.EntityHeadDataCache;
+import com.alien.client.render.entity.head.HeadAttachmentClientCache;
 import com.alien.client.render.entity.parasite.attachment.ParasiteHeadAttachmentOffsetDataCache;
 import com.alien.common.gameplay.entity.living.alien.parasite.facehugger.Facehugger;
 import com.alien.common.gameplay.entity.living.alien.xenomorph.carrier.Carrier;
+import com.alien.common.registry.init.AlienEntityTypes;
 import com.alien.common.registry.tag.AlienEntityTypeTags;
 import com.blib.api.client.render.v1.AzLayerRenderer;
 import com.blib.api.client.render.v1.entity.model.AzEntityModelRenderer;
@@ -18,8 +20,6 @@ import net.minecraft.world.entity.LivingEntity;
 import java.util.UUID;
 
 public class FacehuggerModelRenderer extends AzEntityModelRenderer<Facehugger> {
-
-    private static final float MODEL_TO_BLOCKS = 1.0F / 16.0F;
 
     public FacehuggerModelRenderer(
         AzEntityRendererPipeline<Facehugger> entityRendererPipeline,
@@ -58,13 +58,26 @@ public class FacehuggerModelRenderer extends AzEntityModelRenderer<Facehugger> {
             return;
         }
 
-        var data = EntityHeadDataCache.get(host.getType());
+        var data = HeadAttachmentClientCache.get(host.getType());
 
-        if (data == null) {
+        if (data != null) {
+            applyHuggingRotations(facehugger, poseStack, partialTick, host, data);
             return;
         }
 
-        applyHuggingRotations(facehugger, poseStack, partialTick, host, data);
+        // Compatibility tier: sibling mods (avp_human, avp_predator) register their own mobs into the legacy
+        // code-driven cache during client setup. Honored second so a head_data JSON can always override.
+        var legacyData = EntityHeadDataCache.get(host.getType());
+
+        if (legacyData != null) {
+            applyLegacyHuggingRotations(facehugger, poseStack, partialTick, host, legacyData);
+            return;
+        }
+
+        // No head profile for this host type (typically a third-party mob nobody has written a
+        // data/<ns>/head_data JSON for yet): approximate the face from the host's eye height and hitbox so the
+        // hugger still latches somewhere sensible instead of floating at the vanilla passenger position.
+        applyFallbackHuggingRotations(facehugger, poseStack, partialTick, host);
     }
 
     private void applySpineRidingRotations(
@@ -127,6 +140,55 @@ public class FacehuggerModelRenderer extends AzEntityModelRenderer<Facehugger> {
         PoseStack poseStack,
         float partialTick,
         LivingEntity host,
+        HeadAttachmentClientCache.BakedHeadAttachment data
+    ) {
+        var bodyYaw = Mth.rotLerp(partialTick, host.yBodyRotO, host.yBodyRot);
+        var headYaw = Mth.rotLerp(partialTick, host.yHeadRotO, host.yHeadRot) - bodyYaw;
+        var headPitch = Mth.rotLerp(partialTick, host.getXRot(), host.xRotO);
+
+        // Per-individual size adaptation: when the profile declares the hitbox height it was tuned against,
+        // measure this specific host and scale the whole placement to match (mods like MCA give the same entity
+        // type a different size per individual, and keep the hitbox honest via refreshDimensions). Without a
+        // declared reference, fall back to the vanilla SCALE attribute, which is 1.0 for ordinary mobs.
+        var scale = data.referenceHeight() != null
+            ? host.getBbHeight() / data.referenceHeight()
+            : (double) host.getScale();
+        scale = Mth.clamp(scale, 0.25, 4.0);
+
+        var xPivot = data.pivot().x * scale;
+        var yPivot = data.pivot().y * scale;
+        var zPivot = data.pivot().z * scale;
+        var ySize = data.size().y * scale;
+        var zSize = data.size().z * scale;
+
+        poseStack.mulPose(Axis.YN.rotationDegrees(bodyYaw));
+
+        poseStack.translate(xPivot, yPivot - host.getBbHeight(), -zPivot);
+        poseStack.mulPose(Axis.YN.rotationDegrees(headYaw));
+        poseStack.mulPose(Axis.XP.rotationDegrees(headPitch));
+        poseStack.translate(-xPivot, -yPivot + host.getBbHeight(), zPivot);
+
+        var yOffset = data.verticalOffset() != null ? data.verticalOffset() * scale : -ySize;
+        var zOffset = data.faceOffset() != null ? data.faceOffset() * scale : zSize;
+
+        // Profiles are authored against the standard facehugger; larger or smaller hugger variants push out or pull
+        // in by their height difference so one JSON stays correct for every parasite size. Deliberately unscaled —
+        // this term is about the parasite, not the host.
+        zOffset += facehugger.getBbHeight() - AlienEntityTypes.FACEHUGGER_HEIGHT;
+
+        poseStack.translate(0, yOffset, zOffset);
+    }
+
+    /**
+     * Pre-datapack placement path, kept verbatim for entries the sibling mods still register into
+     * {@link EntityHeadDataCache} in code. Identical math to the original renderer, including the optional per-mob
+     * offset suppliers from {@link ParasiteHeadAttachmentOffsetDataCache}.
+     */
+    private void applyLegacyHuggingRotations(
+        Facehugger facehugger,
+        PoseStack poseStack,
+        float partialTick,
+        LivingEntity host,
         EntityHeadData data
     ) {
         var bodyYaw = Mth.rotLerp(partialTick, host.yBodyRotO, host.yBodyRot);
@@ -155,5 +217,38 @@ public class FacehuggerModelRenderer extends AzEntityModelRenderer<Facehugger> {
         } else {
             poseStack.translate(0, -ySize, zSize);
         }
+    }
+
+    private void applyFallbackHuggingRotations(
+        Facehugger facehugger,
+        PoseStack poseStack,
+        float partialTick,
+        LivingEntity host
+    ) {
+        var bodyYaw = Mth.rotLerp(partialTick, host.yBodyRotO, host.yBodyRot);
+        var headYaw = Mth.rotLerp(partialTick, host.yHeadRotO, host.yHeadRot) - bodyYaw;
+        var headPitch = Mth.rotLerp(partialTick, host.getXRot(), host.xRotO);
+
+        var hostX = Mth.lerp(partialTick, host.xOld, host.getX());
+        var hostY = Mth.lerp(partialTick, host.yOld, host.getY());
+        var hostZ = Mth.lerp(partialTick, host.zOld, host.getZ());
+
+        var entityX = Mth.lerp(partialTick, facehugger.xOld, facehugger.getX());
+        var entityY = Mth.lerp(partialTick, facehugger.yOld, facehugger.getY());
+        var entityZ = Mth.lerp(partialTick, facehugger.zOld, facehugger.getZ());
+
+        // Re-anchor the hugger at the host's eye point, rotate with the host's body and head there, then push it
+        // forward onto the front of the hitbox — a plausible face latch for any mob shape.
+        poseStack.translate(
+            hostX - entityX,
+            hostY + host.getEyeHeight() - entityY,
+            hostZ - entityZ
+        );
+
+        poseStack.mulPose(Axis.YN.rotationDegrees(bodyYaw));
+        poseStack.mulPose(Axis.YN.rotationDegrees(headYaw));
+        poseStack.mulPose(Axis.XP.rotationDegrees(headPitch));
+
+        poseStack.translate(0, -facehugger.getBbHeight() / 2.0, host.getBbWidth() / 2.0);
     }
 }

@@ -37,7 +37,7 @@ public class EnUsAdvancementProvider {
         addAdvancement(
             builder,
             AlienAdvancements.LEAD_RAID_TO_ENEMY_HIVE,
-            "And Hell Followed With Them",
+            "And Hell Followed With You",
             "Lead a raid to a hive of a different xenomorph variant"
         );
 
@@ -53,6 +53,13 @@ public class EnUsAdvancementProvider {
             AlienAdvancements.KILL_A_HIVE,
             "Hive Buster",
             "Kill an alien hive"
+        );
+
+        addAdvancement(
+            builder,
+            AlienAdvancements.WITHSTAND_ATTACK_PARTY,
+            "Here to stay",
+            "Outlast a queen's attack party"
         );
 
         addAdvancement(
@@ -79,7 +86,7 @@ public class EnUsAdvancementProvider {
         addAdvancement(
             builder,
             AlienAdvancements.KILL_ALL_ALIENS,
-            "Xenocide",
+            "Total Xenocide",
             "Complete every variant xenocide advancement"
         );
 
@@ -107,7 +114,7 @@ public class EnUsAdvancementProvider {
         addAdvancement(
             builder,
             AlienAdvancements.KILL_ALL_NORMAL_ALIENS,
-            "Classic Xenocide",
+            "Xenocide",
             "Kill one of every normal alien"
         );
 
@@ -123,6 +130,13 @@ public class EnUsAdvancementProvider {
             AlienAdvancements.KILL_AN_EMPRESS,
             "Not Empressed",
             "Kill an empress"
+        );
+
+        addAdvancement(
+            builder,
+            AlienAdvancements.BROKEN_THRONE,
+            "Broken Throne",
+            "Kill an exiled empress on the ruin her own empire left her"
         );
 
         addAdvancement(
@@ -151,6 +165,41 @@ public class EnUsAdvancementProvider {
             AlienAdvancements.REMOVE_EMBRYO_WITH_CHORUS_FRUIT,
             "Eviction",
             "Remove an alien from your chest by eating chorus fruit"
+        );
+
+        addAdvancement(
+            builder,
+            AlienAdvancements.EAT_RAW_ROYAL_JELLY,
+            "Peanut Butter... Jelly... Time?",
+            "Eat raw royal jelly. Do not make a habit of it"
+        );
+
+        addAdvancement(
+            builder,
+            AlienAdvancements.EAT_RAW_SCOURGE_JELLY,
+            "I Like When the Red Water Comes Out",
+            "Eat raw scourge jelly"
+        );
+
+        addAdvancement(
+            builder,
+            AlienAdvancements.EAT_RAW_IRRADIATED_JELLY,
+            "All That Glitters and Glows",
+            "Eat raw irradiated jelly. It bites back hardest"
+        );
+
+        addAdvancement(
+            builder,
+            AlienAdvancements.EAT_POISON_JELLY,
+            "Toxicity only Reddit could love",
+            "Eat raw poison jelly. There was never an upside"
+        );
+
+        addAdvancement(
+            builder,
+            AlienAdvancements.EAT_EVERY_JELLY,
+            "Spreading it thick",
+            "Eat every kind of jelly the hive makes"
         );
     }
 

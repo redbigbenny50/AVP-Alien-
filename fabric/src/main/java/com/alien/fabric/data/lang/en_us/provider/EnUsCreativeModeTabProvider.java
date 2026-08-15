@@ -9,6 +9,7 @@ public class EnUsCreativeModeTabProvider {
 
     public static final Consumer<FabricLanguageProvider.TranslationBuilder> CONSUMER = builder -> {
         builder.add(AlienCreativeModeTabKeys.BLOCKS_KEY, "Blocks (AVP: Alien)");
+        builder.add(AlienCreativeModeTabKeys.FUNCTIONAL_BLOCKS_KEY, "Functional Blocks (AVP: Alien)");
         builder.add(AlienCreativeModeTabKeys.COMBAT_KEY, "Combat (AVP: Alien)");
         builder.add(AlienCreativeModeTabKeys.INGREDIENTS_KEY, "Ingredients (AVP: Alien)");
         builder.add(AlienCreativeModeTabKeys.SPAWN_EGGS_KEY, "Spawn Eggs (AVP: Alien)");

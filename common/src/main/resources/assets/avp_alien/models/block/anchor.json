@@ -1,0 +1,6 @@
+{
+  "parent": "builtin/entity",
+  "textures": {
+    "particle": "avp_alien:block/anchor"
+  }
+}

@@ -14,6 +14,7 @@ public class DroneGOAP {
         .apply(XenomorphGOAP::applyBaseGraph)
         .apply(b -> XenomorphGOAP.addLungePackage(b, LUNGE_CONFIG))
         .apply(XenomorphGOAP::addEggPackage)
+        .apply(XenomorphGOAP::addHostCapturePackage)
         .apply(XenomorphGOAP::addVentPackage)
         .apply(XenomorphGOAP::addResinPackage)
         .build();

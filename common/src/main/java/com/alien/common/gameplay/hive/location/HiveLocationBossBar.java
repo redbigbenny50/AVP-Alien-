@@ -2,20 +2,18 @@ package com.alien.common.gameplay.hive.location;
 
 import com.alien.common.data.AlienVariantTypes;
 import com.alien.common.gameplay.hive.config.HiveConfig;
+import com.alien.common.gameplay.hive.economy.CastePopulation;
 import com.alien.common.gameplay.hive.faction.LineageFactionData;
 import com.alien.common.model.alien.variant.AlienVariant;
 import com.alien.common.property.AlienProperties;
 import com.alien.common.property.AlienPropertyAccess;
-import com.alien.common.registry.tag.AlienEntityTypeTags;
 import com.alien.common.util.AlienPredicates;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerBossEvent;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.BossEvent;
-import net.minecraft.world.entity.EntityType;
 
-import java.util.function.Predicate;
 import java.util.function.Supplier;
 
 /**
@@ -41,8 +39,6 @@ public final class HiveLocationBossBar {
     private static final long PEAK_DECAY_INTERVAL_TICKS = 20L * 60L; // 1 per minute
 
     private static final long VISIBILITY_REEVAL_INTERVAL_TICKS = 20L;
-
-    private static final Predicate<EntityType<?>> XENOMORPH_PREDICATE = type -> type.is(AlienEntityTypeTags.XENOMORPHS);
 
     private final HiveLocation location;
 
@@ -103,19 +99,7 @@ public final class HiveLocationBossBar {
     }
 
     private int currentXenomorphCount() {
-        var loadedHere = countMatchingLoadedMembers(XENOMORPH_PREDICATE);
-        var inReserves = location.localReserves().getCountMatching(XENOMORPH_PREDICATE);
-        return loadedHere + inReserves;
-    }
-
-    private int countMatchingLoadedMembers(Predicate<EntityType<?>> predicate) {
-        var count = 0;
-        for (var entry : location.loadedMembersByType().entrySet()) {
-            if (predicate.test(entry.getKey())) {
-                count += entry.getValue().size();
-            }
-        }
-        return count;
+        return CastePopulation.totalReliableXenomorphPopulation(location);
     }
 
     private void updateColorAndTitle(AlienVariant variant, int xenomorphCount) {

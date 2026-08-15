@@ -4,11 +4,13 @@ import com.alien.Alien;
 import com.alien.common.gameplay.entity.acid.Acid;
 import com.alien.common.gameplay.entity.living.alien.adolescent.Adolescent;
 import com.alien.common.gameplay.entity.living.alien.chestburster.Chestburster;
+import com.alien.common.gameplay.entity.living.alien.ovipositor.EmpressOvipositor;
 import com.alien.common.gameplay.entity.living.alien.ovipositor.Ovipositor;
 import com.alien.common.gameplay.entity.living.alien.ovomorph.Ovomorph;
 import com.alien.common.gameplay.entity.living.alien.parasite.facehugger.Facehugger;
 import com.alien.common.gameplay.entity.living.alien.predalien_adolescent.PredalienAdolescent;
 import com.alien.common.gameplay.entity.living.alien.predalien_chestburster.PredalienChestburster;
+import com.alien.common.gameplay.entity.living.alien.royal_cocoon.RoyalCocoon;
 import com.alien.common.gameplay.entity.living.alien.xenomorph.boiler.Boiler;
 import com.alien.common.gameplay.entity.living.alien.xenomorph.burster.Burster;
 import com.alien.common.gameplay.entity.living.alien.xenomorph.carrier.Carrier;
@@ -93,14 +95,21 @@ public class AlienEntityTypes {
     public static final float FACEHUGGER_HEIGHT = 0.25F;
 
     // Harbinger
-    public static final float HARBINGER_WIDTH = 0.98F;
+    // [stated] hitbox sized to the model rather than to a corridor: 2.6 x 2.6 x 5.5. Kept SQUARE on purpose -
+    // an AABB cannot rotate and the navigator takes a single integer footprint, so a non-square box would
+    // permanently disagree with pathing on one axis. Harbinger paths as XenomorphPathConfig.HUGE (3 x 6).
+    public static final float HARBINGER_WIDTH = 2.6F;
 
-    public static final float HARBINGER_HEIGHT = 3.98F;
+    public static final float HARBINGER_HEIGHT = 5.5F;
 
     // Ovipositor
     public static final float OVIPOSITOR_WIDTH = 5.0F;
 
     public static final float OVIPOSITOR_HEIGHT = 3.25F;
+
+    public static final float ROYAL_COCOON_WIDTH = 4.0F;
+
+    public static final float ROYAL_COCOON_HEIGHT = 6.0F;
 
     // Ovomorph
     public static final float OVOMORPH_WIDTH = 0.65F;
@@ -123,9 +132,40 @@ public class AlienEntityTypes {
     public static final float PROWLER_HEIGHT = 0.98F;
 
     // Queen
-    public static final float QUEEN_WIDTH = 1.98F;
+    // [stated] "i want to make her hitbox smaller but keep the front of it mostly where it is. most of the back
+    // of the hitbox is tail i want the bulk to be head and body space for attacks and attaching things."
+    //
+    // No forward OFFSET was needed, and an AABB could not have carried one anyway (it cannot rotate). Measured
+    // from queen.geo.json: -Z is forward (gBottomJawBase Z -0.22, gTailBlade Z +7.93), and her torso pivots sit
+    // essentially ON the origin (gUpperBody 0.27, gLowerBody 0.17). Her head reaches only 0.90 blocks in front
+    // of it; the other ~9 blocks of model depth are all tail. So a box centred on the origin is ALREADY
+    // front-biased - 3.8 deep just wasted ~1.0 block of air in front of her face and swallowed ~1.9 of tail
+    // root behind. Shrinking to 2.6 puts the back face at the tail root and keeps the head tip (-0.90) inside.
+    //
+    // REACH, the reason this is safe ([stated] "i want the inhibitor to be placeable from an ok distance"):
+    // a player's ENTITY_INTERACTION_RANGE is 3.0 in EVERY game mode (creative only raises BLOCK reach), and it
+    // is measured to the box SURFACE, so click distance from her centre is 3.0 + half-width. Her own melee
+    // reach is getBbWidth() + 1.0, centre to centre. Shrinking therefore costs the player only half a block of
+    // click range while cutting her reach by the full amount:
+    // 3.8 wide -> click from 4.90, her reach 4.80, margin 0.10
+    // 2.6 wide -> click from 4.30, her reach 3.60, margin 0.70
+    // The old 1x1 box felt like standing inside her not because of range but because the box surface sat at her
+    // spine while the model is 4.2 wide. At 2.6 the surface is 1.3 out, so the player stands beside her.
+    public static final float QUEEN_WIDTH = 2.6F;
 
-    public static final float QUEEN_HEIGHT = 3.98F;
+    // 5.5 rather than 5.0 ([stated]): gHead pivots at Y 6.01, so a 5.0 box cut off above her shoulders and
+    // neither her head nor her crest was clickable at full scale - which matters when the inhibitor clamps
+    // onto exactly that crest.
+    public static final float QUEEN_HEIGHT = 5.5F;
+
+    // Empress. Deliberately SEPARATE constants rather than shared with the queen: all four empresses used to be
+    // sized with QUEEN_WIDTH/QUEEN_HEIGHT, so the two could never differ and resizing one silently resized the
+    // other. [stated] "the empress will need this as well same sizing for the body" - so they hold the same
+    // figures today, but by choice, and either can move without dragging the other. Her model is only 2.89
+    // wide (narrower than the queen's 4.21), so 2.6 fits her at least as well.
+    public static final float EMPRESS_WIDTH = 2.6F;
+
+    public static final float EMPRESS_HEIGHT = 5.5F;
 
     // Ravager
     public static final float RAVAGER_WIDTH = 0.98F;
@@ -268,7 +308,7 @@ public class AlienEntityTypes {
     public static final BLibHolder<EntityType<Empress>> ABERRANT_EMPRESS = create(
         "aberrant_empress",
         EntityType.Builder.of(Empress::new, MobCategory.MONSTER)
-            .sized(QUEEN_WIDTH, QUEEN_HEIGHT)
+            .sized(EMPRESS_WIDTH, EMPRESS_HEIGHT)
     );
 
     public static final BLibHolder<EntityType<Burster>> ABERRANT_BURSTER = create(
@@ -352,7 +392,7 @@ public class AlienEntityTypes {
     public static final BLibHolder<EntityType<Empress>> EMPRESS = create(
         "empress",
         EntityType.Builder.of(Empress::new, MobCategory.MONSTER)
-            .sized(QUEEN_WIDTH, QUEEN_HEIGHT)
+            .sized(EMPRESS_WIDTH, EMPRESS_HEIGHT)
     );
 
     public static final BLibHolder<EntityType<Harbinger>> HARBINGER = create(
@@ -409,6 +449,37 @@ public class AlienEntityTypes {
             .sized(PROWLER_WIDTH, PROWLER_HEIGHT)
     );
 
+    /**
+     * The irradiated line has NO chestburster and NO adolescent, deliberately: an irradiated hive does not breed
+     * through hosts. Its egg and its hugger are ORDNANCE - the egg detonates, and the hugger detonates on the face it
+     * reaches instead of implanting anything. See IrradiatedDetonation.
+     */
+    /**
+     * The spitter the previous pass forgot. Every other caste had an irradiated form; this one fell through and left
+     * Spitter.getType returning null for the strain, so irradiated hives could never field one.
+     * <p>
+     * Nothing special is needed for its behaviour: its acid already reads the strain. An irradiated spitter's blood is
+     * FREEZING blood, and AcidBlockDamageUtil already branches on {@code acid.isIrradiated()} to turn what it destroys
+     * into blue ice (or netherrack over nether resin). Same geo, irradiated texture, and the spit inherits the rest.
+     */
+    public static final BLibHolder<EntityType<Spitter>> IRRADIATED_SPITTER = create(
+        "irradiated_spitter",
+        EntityType.Builder.of(Spitter::new, MobCategory.MONSTER)
+            .sized(SPITTER_WIDTH, SPITTER_HEIGHT)
+    );
+
+    public static final BLibHolder<EntityType<Facehugger>> IRRADIATED_FACEHUGGER = create(
+        "irradiated_facehugger",
+        EntityType.Builder.of(Facehugger::new, MobCategory.MONSTER)
+            .sized(FACEHUGGER_WIDTH, FACEHUGGER_HEIGHT)
+    );
+
+    public static final BLibHolder<EntityType<Ovomorph>> IRRADIATED_OVOMORPH = create(
+        "irradiated_ovomorph",
+        EntityType.Builder.of(Ovomorph::new, MobCategory.MISC)
+            .sized(OVOMORPH_WIDTH, OVOMORPH_HEIGHT)
+    );
+
     public static final BLibHolder<EntityType<Harbinger>> IRRADIATED_HARBINGER = create(
         "irradiated_harbinger",
         EntityType.Builder.of(Harbinger::new, MobCategory.MONSTER)
@@ -436,7 +507,7 @@ public class AlienEntityTypes {
     public static final BLibHolder<EntityType<Empress>> IRRADIATED_EMPRESS = create(
         "irradiated_empress",
         EntityType.Builder.of(Empress::new, MobCategory.MONSTER)
-            .sized(QUEEN_WIDTH, QUEEN_HEIGHT)
+            .sized(EMPRESS_WIDTH, EMPRESS_HEIGHT)
     );
 
     public static final BLibHolder<EntityType<Burster>> IRRADIATED_BURSTER = create(
@@ -568,7 +639,7 @@ public class AlienEntityTypes {
     public static final BLibHolder<EntityType<Empress>> NETHER_EMPRESS = create(
         "nether_empress",
         EntityType.Builder.of(Empress::new, MobCategory.MONSTER)
-            .sized(QUEEN_WIDTH, QUEEN_HEIGHT)
+            .sized(EMPRESS_WIDTH, EMPRESS_HEIGHT)
     );
 
     public static final BLibHolder<EntityType<Burster>> NETHER_BURSTER = create(
@@ -595,10 +666,43 @@ public class AlienEntityTypes {
             .sized(WARRIOR_WIDTH, WARRIOR_HEIGHT)
     );
 
+    /**
+     * Sized from the GEO, not guessed: the empress model measures 1.29x wider and 1.14x taller than the queen's, so her
+     * hitbox takes the queen ovipositor's 5.0 x 3.25 scaled by the same ratios. Both stay far smaller than the visual
+     * model, which is deliberate and inherited - a 14-block-wide collision box would be unplayable.
+     */
+    public static final float EMPRESS_OVIPOSITOR_WIDTH = 6.5F;
+
+    public static final float EMPRESS_OVIPOSITOR_HEIGHT = 3.7F;
+
+    public static final BLibHolder<EntityType<EmpressOvipositor>> EMPRESS_OVIPOSITOR = create(
+        "empress_ovipositor",
+        EntityType.Builder.of(EmpressOvipositor::new, MobCategory.MONSTER)
+            .sized(EMPRESS_OVIPOSITOR_WIDTH, EMPRESS_OVIPOSITOR_HEIGHT)
+    );
+
     public static final BLibHolder<EntityType<Ovipositor>> OVIPOSITOR = create(
         "ovipositor",
         EntityType.Builder.of(Ovipositor::new, MobCategory.MONSTER)
             .sized(OVIPOSITOR_WIDTH, OVIPOSITOR_HEIGHT)
+    );
+
+    public static final BLibHolder<EntityType<RoyalCocoon>> ROYAL_COCOON = create(
+        "royal_cocoon",
+        EntityType.Builder.of(RoyalCocoon::new, MobCategory.MONSTER)
+            .sized(ROYAL_COCOON_WIDTH, ROYAL_COCOON_HEIGHT)
+    );
+
+    public static final BLibHolder<EntityType<RoyalCocoon>> ABERRANT_ROYAL_COCOON = create(
+        "aberrant_royal_cocoon",
+        EntityType.Builder.of(RoyalCocoon::new, MobCategory.MONSTER)
+            .sized(ROYAL_COCOON_WIDTH, ROYAL_COCOON_HEIGHT)
+    );
+
+    public static final BLibHolder<EntityType<RoyalCocoon>> NETHER_ROYAL_COCOON = create(
+        "nether_royal_cocoon",
+        EntityType.Builder.of(RoyalCocoon::new, MobCategory.MONSTER)
+            .sized(ROYAL_COCOON_WIDTH, ROYAL_COCOON_HEIGHT)
     );
 
     public static final BLibHolder<EntityType<Ovomorph>> OVOMORPH = create(
@@ -799,6 +903,7 @@ public class AlienEntityTypes {
         ATTRIBUTE_REGISTRY.register(EMPRESS, Empress::createEmpressAttributes);
         ATTRIBUTE_REGISTRY.register(HARBINGER, Harbinger::createHarbingerAttributes);
         ATTRIBUTE_REGISTRY.register(FACEHUGGER, Facehugger::createFacehuggerAttributes);
+        ATTRIBUTE_REGISTRY.register(IRRADIATED_FACEHUGGER, Facehugger::createFacehuggerAttributes);
         ATTRIBUTE_REGISTRY.register(IRRADIATED_CARRIER, Carrier::createCarrierAttributes);
         ATTRIBUTE_REGISTRY.register(IRRADIATED_CHRYSALIS, Chrysalis::createChrysalisAttributes);
         ATTRIBUTE_REGISTRY.register(IRRADIATED_CRUSHER, Crusher::createCrusherAttributes);
@@ -844,7 +949,12 @@ public class AlienEntityTypes {
         ATTRIBUTE_REGISTRY.register(NETHER_SPITTER, Spitter::createSpitterAttributes);
         ATTRIBUTE_REGISTRY.register(NETHER_WARRIOR, Warrior::createWarriorAttributes);
         ATTRIBUTE_REGISTRY.register(OVIPOSITOR, Ovipositor::createOvipositorAttributes);
+        ATTRIBUTE_REGISTRY.register(EMPRESS_OVIPOSITOR, EmpressOvipositor::createEmpressOvipositorAttributes);
+        ATTRIBUTE_REGISTRY.register(ROYAL_COCOON, RoyalCocoon::createRoyalCocoonAttributes);
+        ATTRIBUTE_REGISTRY.register(ABERRANT_ROYAL_COCOON, RoyalCocoon::createRoyalCocoonAttributes);
+        ATTRIBUTE_REGISTRY.register(NETHER_ROYAL_COCOON, RoyalCocoon::createRoyalCocoonAttributes);
         ATTRIBUTE_REGISTRY.register(OVOMORPH, Ovomorph::createOvomorphAttributes);
+        ATTRIBUTE_REGISTRY.register(IRRADIATED_OVOMORPH, Ovomorph::createOvomorphAttributes);
         ATTRIBUTE_REGISTRY.register(PRAETORIAN, Praetorian::createPraetorianAttributes);
         ATTRIBUTE_REGISTRY.register(PREDALIEN, Predalien::createPredalienAttributes);
         ATTRIBUTE_REGISTRY.register(PREDALIEN_ADOLESCENT, PredalienAdolescent::createPredalienAdolescentAttributes);
@@ -871,6 +981,7 @@ public class AlienEntityTypes {
         ATTRIBUTE_REGISTRY.register(BURSTER, Burster::createBursterAttributes);
         ATTRIBUTE_REGISTRY.register(RUNNER, Runner::createRunnerAttributes);
         ATTRIBUTE_REGISTRY.register(SPITTER, Spitter::createSpitterAttributes);
+        ATTRIBUTE_REGISTRY.register(IRRADIATED_SPITTER, Spitter::createSpitterAttributes);
         ATTRIBUTE_REGISTRY.register(WARRIOR, Warrior::createWarriorAttributes);
     }
 }

@@ -1,6 +1,6 @@
 package com.alien.common.gameplay.entity.living.alien.xenomorph.queen;
 
-import com.alien.common.data.AlienVariantTypes;
+import com.alien.common.gameplay.entity.dismemberment.MirroredAttackSide;
 import com.alien.common.gameplay.entity.living.alien.Alien;
 import com.alien.common.gameplay.entity.living.alien.xenomorph.AttackType;
 import com.alien.common.gameplay.entity.living.alien.xenomorph.Xenomorph;
@@ -10,31 +10,40 @@ import com.alien.common.gameplay.entity.living.alien.xenomorph.XenomorphPathConf
 import com.alien.common.gameplay.entity.living.alien.xenomorph.ai.egg_laying.EggLayer;
 import com.alien.common.gameplay.entity.living.alien.xenomorph.drone.Drone;
 import com.alien.common.gameplay.entity.living.alien.xenomorph.queen.ai.QueenGOAP;
+import com.alien.common.gameplay.hive.lifecycle.QueenInhibitionService;
 import com.alien.common.gameplay.level.saveddata.QueenSpawnChunkData;
 import com.alien.common.gameplay.level.saveddata.StrainLeakData;
+import com.alien.common.gameplay.level.saveddata.TrackedQueenRegistry;
 import com.alien.common.model.alien.variant.AlienVariant;
+import com.alien.common.registry.init.AlienDataSyncKeys;
 import com.alien.common.registry.init.AlienEntityTypes;
 import com.alien.common.registry.init.AlienSoundEvents;
+import com.alien.common.registry.init.item.AlienItems;
 import com.alien.common.registry.tag.AlienEntityTypeTags;
+import com.blib.api.common.data_sync.v1.DataAccessor;
 import com.blib.api.common.entity.v1.PlayerStatConstants;
-import com.blib.api.common.entity.v1.PlayerUtil;
 import com.blib.api.common.goap.v1.GOAPUser;
 import com.just.ai.goap.Agent;
 import com.just.ai.goap.graph.Graph;
-import net.minecraft.ChatFormatting;
 import net.minecraft.nbt.CompoundTag;
-import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.sounds.SoundEvent;
-import net.minecraft.sounds.SoundSource;
+import net.minecraft.tags.DamageTypeTags;
 import net.minecraft.world.DifficultyInstance;
+import net.minecraft.world.InteractionHand;
+import net.minecraft.world.InteractionResult;
 import net.minecraft.world.damagesource.DamageSource;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.entity.EquipmentSlot;
+import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.MobSpawnType;
 import net.minecraft.world.entity.SpawnGroupData;
 import net.minecraft.world.entity.ai.attributes.AttributeSupplier;
 import net.minecraft.world.entity.ai.attributes.Attributes;
+import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.item.AxeItem;
+import net.minecraft.world.item.SwordItem;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.ServerLevelAccessor;
 import net.minecraft.world.phys.Vec3;
@@ -43,19 +52,125 @@ import org.jetbrains.annotations.Nullable;
 
 import java.util.Objects;
 
-public class Queen extends Xenomorph implements GOAPUser<Queen>, EggLayer {
+public class Queen extends Xenomorph implements GOAPUser<Queen>, EggLayer, com.alien.common.gameplay.entity.CrawlPostureTransitionListener, QueenScreamDefense.ScreamingRoyal {
+
+    @Override
+    public int crawlPostureTransitionTicks(boolean enteringCrawl) {
+        return enteringCrawl ? QueenAnimationRefs.CRAWL_DROP_TICKS : QueenAnimationRefs.CRAWL_RISE_TICKS;
+    }
+
+    /**
+     * ⭐⭐ THE BITE. [stated] "a standard bite it can be mixed in with regular attacks if the target is infront of her.
+     * same for the crawl bite and also incase she loses both arms this would become the default attack."
+     * <p>
+     * ⚠⚠ THE "DEFAULT WHEN ARMLESS" HALF NEEDED NO CODE - and that is worth knowing rather than adding a second
+     * mechanism for it. Every other attack she has requires an arm ({@code SWIPE_DOWN}, {@code BACKHAND},
+     * {@code CRAWL_ATTACK}) or a tail ({@code TAIL_STRIKE}), so a queen who loses both arms is left with the bite and
+     * the head ram as the only things the limb gate still admits. It becomes her default by elimination.
+     * </p>
+     * <p>
+     * ⚠ THE FACING CONE IS RELAXED WHEN SHE IS ARMLESS. Otherwise the one attack she has left could be refused because
+     * a target slipped behind her, and she would stand there doing nothing at all - the failure mode the "default
+     * attack" clause exists to prevent.
+     * </p>
+     */
+    private static final double BITE_FACING_DOT = 0.5; // ~120 degree cone in front
+
+    public static final AttackType BITE = AttackType.builder("queen_bite")
+        .requiresHead()
+        .activationCondition(Queen::canBite)
+        .defaultDurationInTicks(14)
+        .sound(AlienSoundEvents.ENTITY_XENOMORPH_ATTACK)
+        .build();
+
+    /** The prone bite. Same rules; the posture gate confines it to the ground. */
+    public static final AttackType CRAWL_BITE = AttackType.builder("queen_crawl_bite")
+        .crawlAttack()
+        .requiresHead()
+        .activationCondition(Queen::canBite)
+        .defaultDurationInTicks(14)
+        .sound(AlienSoundEvents.ENTITY_XENOMORPH_ATTACK)
+        .build();
+
+    /**
+     * Is her target in front of her - or is the bite all she has left?
+     * <p>
+     * ⚠ NO TARGET MEANS YES. The router may score an attack before a target is resolved, and refusing on a null target
+     * would make the bite unpickable rather than merely unlucky.
+     * </p>
+     */
+    private static boolean canBite(Xenomorph xenomorph) {
+        if (hasNoArms(xenomorph)) {
+            return true;
+        }
+
+        var target = xenomorph.getTarget();
+
+        if (target == null) {
+            return true;
+        }
+
+        var toTarget = target.position().subtract(xenomorph.position());
+        var flat = new Vec3(toTarget.x, 0.0, toTarget.z);
+
+        if (flat.lengthSqr() < 1.0E-4) {
+            return true; // stood on top of her - there is no "behind" to speak of
+        }
+
+        var look = xenomorph.getLookAngle();
+        var facing = new Vec3(look.x, 0.0, look.z).normalize();
+
+        return facing.dot(flat.normalize()) >= BITE_FACING_DOT;
+    }
+
+    private static boolean hasNoArms(Xenomorph xenomorph) {
+        return MirroredAttackSide.isArmDetached(xenomorph, true)
+            && MirroredAttackSide.isArmDetached(xenomorph, false);
+    }
 
     public static final AttackType SWIPE_DOWN = AttackType.builder("queen_swipe_down")
+        .requiresAnyArm()
         .defaultDurationInTicks(18)
         .sound(AlienSoundEvents.ENTITY_XENOMORPH_ATTACK)
         .build();
 
     public static final AttackType BACKHAND = AttackType.builder("queen_backhand")
+        .requiresAnyArm()
         .defaultDurationInTicks(15)
         .sound(AlienSoundEvents.ENTITY_XENOMORPH_ATTACK)
         .build();
 
+    /**
+     * Her ground game: [stated] a crawling xenomorph fights with crawl attacks, and she has the clip
+     * ({@code crawl_attack}, 0.5s). Marked {@code crawlAttack()} so the posture gate confines it to the ground and the
+     * config's crawl preference makes it her ONLY pick while crawling - a legless queen is still a queen.
+     */
+    public static final AttackType CRAWL_ATTACK = AttackType.builder("queen_crawl_attack")
+        .crawlAttack()
+        .requiresAnyArm()
+        .defaultDurationInTicks(QueenAnimationRefs.CRAWL_ATTACK_DURATION_TICKS)
+        .sound(AlienSoundEvents.ENTITY_XENOMORPH_ATTACK)
+        .build();
+
+    /**
+     * ⭐⭐ THE HEAD RAM. [stated] "its a knock back if it hits mobs or a player an aoe knockback to anything 5x5x3
+     * infront of her so up to 3 blocks out. also if she rams a wall she breaks blocks in that pattern if its in the
+     * xeno break list. it does medium damage if hit has a cool down of 120s."
+     * <p>
+     * The 120s cooldown is enforced by the existing {@code AttackCooldownTracker} through
+     * {@code AttackType.cooldownInTicks} - no new timer, GOAP action or sensor.
+     * </p>
+     */
+    private static final int HEAD_RAM_COOLDOWN_TICKS = 120 * 20;
+
+    public static final AttackType HEAD_RAM = QueenHeadRamAttack.create(
+        "queen_head_ram",
+        HEAD_RAM_COOLDOWN_TICKS,
+        22
+    );
+
     public static final AttackType TAIL_STRIKE = AttackType.builder("queen_tail_strike")
+        .requiresTail()
         .defaultDurationInTicks(20)
         .sound(AlienSoundEvents.ENTITY_XENOMORPH_ATTACK)
         .build();
@@ -66,35 +181,130 @@ public class Queen extends Xenomorph implements GOAPUser<Queen>, EggLayer {
                 .addRegular(SWIPE_DOWN)
                 .addRegular(BACKHAND)
                 .addRegular(TAIL_STRIKE)
+                .addRegular(HEAD_RAM)
+                .addRegular(BITE)
+                .addRegular(CRAWL_BITE)
+                .addRegular(CRAWL_ATTACK)
                 .build()
         )
         .parallelDigCount(4)
         .pushedByFluid(false)
-        .canCrawl(false)
+        // A queen ducks too. She is 3.8 x 5.0 and needs a FIVE-block opening standing, which no ordinary corridor
+        // gives her - crawling scales her to 2.0 and drops that to two. Her crawl set was fully animated all along
+        // (crawl, crawl.idle, crawl.rise, crawl.drop, crawl_attack) and wired in QueenAnimationDispatcher; only
+        // this flag kept any of it from ever playing.
+        .canCrawl(true)
+        .canCrawlAfterLegLoss(true)
         .build();
+
+    /**
+     * Must match {@code QueenLifecyclePhaseManager}'s phase tag — its absence in a save marks a pre-lifecycle queen.
+     */
+    private static final String LIFECYCLE_PHASE_TAG = "lifecyclePhase";
+
+    private static final String LEGACY_DORMANT_TAG = "legacyDormant";
+
+    private static final String LEGACY_DORMANT_COMPAT_TAG = "LegacyDormant";
 
     public static AttributeSupplier.Builder createQueenAttributes() {
         return Alien.createAlienAttributes()
             .add(Attributes.ARMOR, 16.0F)
-            .add(Attributes.ARMOR_TOUGHNESS, 16.0F)
-            .add(Attributes.ATTACK_DAMAGE, PlayerStatConstants.BASE_HEALTH * 2.5F)
+            .add(Attributes.ARMOR_TOUGHNESS, 20.0F)
+            .add(Attributes.ATTACK_DAMAGE, PlayerStatConstants.BASE_HEALTH * 1F)
             .add(Attributes.FOLLOW_RANGE, 35F)
             .add(Attributes.KNOCKBACK_RESISTANCE, 1f)
-            .add(Attributes.MAX_HEALTH, PlayerStatConstants.BASE_HEALTH * 10F)
-            .add(Attributes.MOVEMENT_SPEED, PlayerStatConstants.BASE_WALK_SPEED * 0.9F);
+            .add(Attributes.MAX_HEALTH, PlayerStatConstants.BASE_HEALTH * 12.5F)
+            .add(Attributes.MOVEMENT_SPEED, PlayerStatConstants.BASE_WALK_SPEED * 1.1F);
     }
 
     private final QueenAnimationDispatcher animationDispatcher;
 
     private final OvipositorManager ovipositorManager;
 
+    private final QueenIncapacitationManager incapacitationManager;
+
     private final QueenData queenData;
+
+    private final QueenLifecyclePhaseManager lifecyclePhaseManager;
+
+    /**
+     * Synced chain count for the client (shackle reveal + chain render). The bind manager keeps it in lockstep with the
+     * anchor list each server tick.
+     */
+    public final DataAccessor<Integer> bindChainCount;
+
+    private final QueenBindManager bindManager;
+
+    private final QueenRescueManager rescueManager;
+
+    /**
+     * Synced + persisted: whether the inhibitor device is attached. Drives the {@code gInhibitor} bone reveal and (in
+     * later slices) the contained-breeder behaviour — hive autonomy off, claim capped at one chunk.
+     */
+    public final DataAccessor<Boolean> hasInhibitor;
+
+    public final DataAccessor<Boolean> tracked;
+
+    /** Synced + persisted: the involuntary, defeat-induced downed state. Drives the incapacitated animations. */
+    /** ⭐ The defensive scream: its cooldown, and one latch per health threshold. See QueenScreamDefense. */
+    public final DataAccessor<Integer> screamCooldownTicks;
+
+    public final DataAccessor<Boolean> screamedAtFirstThreshold;
+
+    public final DataAccessor<Boolean> screamedAtSecondThreshold;
+
+    /** Bumped on every scream; the animator edge-detects it so the clip plays exactly once. */
+    public final DataAccessor<Integer> screamId;
+
+    public final DataAccessor<Boolean> incapacitated;
+
+    /**
+     * Synced, transient: true while she is carving her founding chamber (construction economy step 6). Set by the carve
+     * tick server-side; the client QueenAnimator drives the stand-dig animation triptych off its edges.
+     */
+    public final DataAccessor<Boolean> standDiggingSynced;
+
+    /**
+     * Transient: true while clip-digging to her location anchor (Stage 2b). Not saved — a reload never stays noclip.
+     */
+    private boolean digging;
+
+    /**
+     * Facing captured the moment she becomes a pacified captive breeder; held so she doesn't turn under the eggsack.
+     */
+    private Float containedYRotLock = null;
+
+    /**
+     * Legacy-recovery state. A queen saved before the lifecycle system existed loads without a {@code lifecyclePhase}
+     * tag; {@link #wasLoadedWithoutLifecycleState()} reports that so {@code LegacyHiveRecovery} can treat her as a
+     * legacy queen. She is parked {@link #isLegacyDormant() legacy-dormant} until recovery wakes her via
+     * {@link #wakeFromLegacyDormantRecovery()}, which hands her back to the normal lifecycle (LOCATION phase).
+     */
+    private boolean legacyDormant;
+
+    /** Transient: set at load time when the save carried no lifecycle-phase state (a pre-lifecycle-system queen). */
+    private boolean loadedWithoutLifecycleState;
 
     public Queen(EntityType<? extends Queen> entityType, Level level) {
         super(entityType, level, CONFIG);
         this.animationDispatcher = new QueenAnimationDispatcher(this);
         this.ovipositorManager = new OvipositorManager(this);
+        this.incapacitationManager = new QueenIncapacitationManager(this);
         this.queenData = new QueenData();
+        this.lifecyclePhaseManager = new QueenLifecyclePhaseManager(this);
+        this.bindChainCount = new DataAccessor<>(this, AlienDataSyncKeys.QUEEN_BIND_CHAIN_COUNT.get());
+        this.bindManager = new QueenBindManager(this);
+        this.rescueManager = new QueenRescueManager(this);
+        this.hasInhibitor = new DataAccessor<>(this, AlienDataSyncKeys.QUEEN_HAS_INHIBITOR.get());
+        this.tracked = new DataAccessor<>(this, AlienDataSyncKeys.QUEEN_IS_TRACKED.get());
+        this.incapacitated = new DataAccessor<>(this, AlienDataSyncKeys.QUEEN_IS_INCAPACITATED.get());
+        this.screamCooldownTicks = new DataAccessor<>(this, AlienDataSyncKeys.QUEEN_SCREAM_COOLDOWN_TICKS.get());
+        this.screamedAtFirstThreshold =
+            new DataAccessor<>(this, AlienDataSyncKeys.QUEEN_SCREAMED_AT_FIRST_THRESHOLD.get());
+        this.screamedAtSecondThreshold =
+            new DataAccessor<>(this, AlienDataSyncKeys.QUEEN_SCREAMED_AT_SECOND_THRESHOLD.get());
+        this.screamId = new DataAccessor<>(this, AlienDataSyncKeys.QUEEN_SCREAM_ID.get());
+        this.standDiggingSynced = new DataAccessor<>(this, AlienDataSyncKeys.QUEEN_IS_STAND_DIGGING.get());
     }
 
     @Override
@@ -111,11 +321,152 @@ public class Queen extends Xenomorph implements GOAPUser<Queen>, EggLayer {
         return ovipositorManager != null && ovipositorManager.hasOvipositor();
     }
 
+    /** How far from her throne she tolerates being before drifting back. Generous - this is duty, not a tether. */
+    private static final double LEASH_RADIUS_BLOCKS = 24.0;
+
+    private static final double LEASH_RADIUS_SQUARED = LEASH_RADIUS_BLOCKS * LEASH_RADIUS_BLOCKS;
+
+    /** Unhurried. She is going home, not responding to anything. */
+    private static final double LEASH_RETURN_SPEED = 0.8;
+
+    /** Checked rarely; a boss ambling home does not need per-tick pathing. */
+    private static final int LEASH_CHECK_INTERVAL_TICKS = 40;
+
+    /**
+     * An irradiated queen keeps to her broken throne, but is not chained to it.
+     * <p>
+     * [stated] "she will try to stay in her chamber out of duty and a boss like fight, but shes NOT LOCKED TO THE
+     * CENTRE trying to make an eggsack." Her chamber is the hive's CORE CHUNKS - [stated] "thats her broken throne".
+     * <p>
+     * Deliberately a PULL and not a pin. She only drifts home when she has nothing to fight, so a player cannot park
+     * outside her chamber and plink at her while a leash drags her back out of reach - if she has a target she goes and
+     * gets it, wherever it stands. And it only applies while she HAS a hive: off her slab she is [stated] "just a
+     * roaming weapon of radioactive teeth and claws" with nowhere to be.
+     */
+    private void tickIrradiatedChamberLeash() {
+        if (level().isClientSide || tickCount % LEASH_CHECK_INTERVAL_TICKS != 0) {
+            return;
+        }
+
+        if (!com.alien.common.gameplay.hive.economy.IrradiatedHiveRules.isIrradiated(this) || getTarget() != null) {
+            return;
+        }
+
+        var location = com.alien.common.gameplay.hive.faction.HiveMemberLocationResolver.reserveReturnLocation(this);
+        if (location == null || !location.isAlive()) {
+            return;
+        }
+
+        var throne = location.centerPos();
+        if (blockPosition().distSqr(throne) <= LEASH_RADIUS_SQUARED) {
+            return;
+        }
+
+        getNavigation().moveTo(throne.getX() + 0.5, throne.getY(), throne.getZ() + 0.5, LEASH_RETURN_SPEED);
+    }
+
+    @Override
+    public DataAccessor<Integer> screamCooldownTicks() {
+        return screamCooldownTicks;
+    }
+
+    @Override
+    public DataAccessor<Boolean> screamedAtFirstThreshold() {
+        return screamedAtFirstThreshold;
+    }
+
+    @Override
+    public DataAccessor<Boolean> screamedAtSecondThreshold() {
+        return screamedAtSecondThreshold;
+    }
+
+    /** [stated] "3 praetoraians are summoned to her defense". The empress calls five. */
+    @Override
+    public int praetoriansSummoned() {
+        return 3;
+    }
+
     @Override
     public void tick() {
         super.tick();
+
+        // ⭐⭐ SHE CANNOT BE DISMEMBERED WHILE SEATED ON THE EGGSACK. [stated] "make it a rule the queen cant lose
+        // any limbs while riding the eggsack."
+        //
+        // ⚠ IT CLEARS ACCUMULATED LIMB DAMAGE; IT DOES NOT BLOCK DAMAGE. She still takes health damage normally
+        // and can still be killed on the sack - what she cannot do is have a limb reach its detach threshold. A
+        // shooter is not made to waste ammunition, they are made to drive her off the sack first.
+        //
+        // ⚠ WHY CLEARING RATHER THAN GATING THE DETACH: the threshold accrual lives inside BLib's limb system,
+        // which avp_alien cannot intercept. Zeroing the pool each tick is the one lever on this side, and it has
+        // the right shape anyway - punishment landed while she is seated simply does not persist toward a limb.
+        //
+        // ⚠ IT ALSO REMOVES THE SITUATION I FLAGGED AS MY LEADING SUSPECT FOR THE QUEEN-LEG CRASH: a limb coming
+        // off while she is a VEHICLE CARRYING A PASSENGER is the one interaction no other caste can produce. This
+        // is not a fix for that crash - if the cause lies elsewhere it will still happen off the sack - but it
+        // takes the riskiest version of it off the table.
+        // ⚠ Dismemberable is an interface Alien implements conditionally - go through it rather than assuming.
+        if (
+            !level().isClientSide
+                && isRidingOvipositor()
+                && this instanceof com.blib.api.common.dismemberment.v1.Dismemberable dismemberable
+        ) {
+            dismemberable.getDismembermentManager().healLimbDamage(Float.MAX_VALUE);
+        }
+
         ovipositorManager.tick();
         queenData.tick();
+        lifecyclePhaseManager.tick();
+        bindManager.tick();
+        rescueManager.tick();
+        incapacitationManager.tick();
+        tickIrradiatedChamberLeash();
+
+        // A pacified captive breeder holds still AND holds her FACING: idle look control would keep turning her body
+        // in place, twisting her against the eggsack that is anchored to her rotation. Capture her facing once when
+        // she enters the state and pin body + head to it every tick; release it when she is no longer contained.
+        if (isInhibited() && isRidingOvipositor()) {
+            if (containedYRotLock == null) {
+                // Capture the settled facing (yBodyRot is what the eggsack copied at creation) so body and
+                // eggsack hold the exact same angle.
+                containedYRotLock = yBodyRot;
+            }
+            setYRot(containedYRotLock);
+            yBodyRot = containedYRotLock;
+            yHeadRot = containedYRotLock;
+        } else if (containedYRotLock != null) {
+            containedYRotLock = null;
+        }
+
+        if (isInhibited() && tickCount % 20 == 0 && level() instanceof ServerLevel serverLevel) {
+            QueenInhibitionService.tickFollow(serverLevel, this);
+        }
+
+        if (isTracked() && level() instanceof ServerLevel trackedLevel) {
+            TrackedQueenRegistry.getOrCreate(trackedLevel).ifSome(registry -> {
+                if (registry.consumePendingDestroy(getUUID())) {
+                    // "Destroy tracker" was requested while she was unloaded; clear the tag now instead of re-adding.
+                    setTracked(false);
+                } else if (tickCount % 40 == 0) {
+                    registry.updatePosition(
+                        getUUID(),
+                        blockPosition(),
+                        trackedLevel.dimension(),
+                        trackedLevel.getGameTime()
+                    );
+                }
+            });
+        }
+    }
+
+    @Override
+    public void startAttack(AttackType attack, @Nullable LivingEntity target) {
+        int attackIdBefore = attackId.get();
+        super.startAttack(attack, target);
+        // A real attack just began (attackId advanced) — give her capture chains a chance to snap (1-3 chains only).
+        if (attackId.get() != attackIdBefore) {
+            bindManager.onQueenAttack();
+        }
     }
 
     @Override
@@ -145,7 +496,35 @@ public class Queen extends Xenomorph implements GOAPUser<Queen>, EggLayer {
             applyNaturalSpawnEffects();
         }
 
+        // PLAYER-PLACED marker for the hibernation rule. finalizeSpawn's auto-join makes any queen spawned inside
+        // a claimed chunk a hive-location member instantly, which made a spawn-egged queen indistinguishable from
+        // a dispatched daughter - and she skipped her sleep ([stated] tester report: "wild queen hibernation is
+        // still ending in 1 second"; the log showed "sleeping 0 ticks"). Spawn TYPE is the true discriminator:
+        // transitions never call finalizeSpawn, so a promoted daughter can never carry this flag, while an egg,
+        // command, or dispenser queen always does. The lifecycle manager reads it alongside the membership test.
+        if (
+            spawnType == MobSpawnType.SPAWN_EGG
+                || spawnType == MobSpawnType.COMMAND
+                || spawnType == MobSpawnType.BUCKET
+                || spawnType == MobSpawnType.DISPENSER
+        ) {
+            this.playerPlaced = true;
+        }
+
         return super.finalizeSpawn(serverLevelAccessor, difficulty, spawnType, spawnGroupData);
+    }
+
+    /** See finalizeSpawn - persisted so a relog cannot turn a placed queen into a "dispatched daughter". */
+    private boolean playerPlaced;
+
+    public boolean isPlayerPlaced() {
+        return playerPlaced;
+    }
+
+    @Override
+    public boolean removeWhenFarAway(double distanceToClosestPlayer) {
+        // Queens are persistent by nature -- they anchor a hive and may be tracked, so they must never despawn.
+        return false;
     }
 
     private void applyNaturalSpawnEffects() {
@@ -155,7 +534,11 @@ public class Queen extends Xenomorph implements GOAPUser<Queen>, EggLayer {
             return;
         }
 
-        alertPlayersOfSpawn();
+        // NO SPAWN ANNOUNCEMENT HERE. The world-genesis line is broadcast by
+        // QueenLifecyclePhaseManager.beginWildImmediateFounding, which already plays ENTITY_QUEEN_SCREAM
+        // itself (broadcastToNearbyPlayers withQueenScream = true). This call duplicated both the scream and
+        // the message for the first wild queen, and announced every LATER wild queen too - which contradicts
+        // the design note on beginWildImmediateFounding: later wild queens are DISCOVERED, not announced.
         spawnGuards();
         resetQueenSpawnCooldown();
 
@@ -163,20 +546,41 @@ public class Queen extends Xenomorph implements GOAPUser<Queen>, EggLayer {
             .ifSome(strainLeakData -> strainLeakData.add(getVariant(), -1));
     }
 
-    private void alertPlayersOfSpawn() {
-        for (var player : PlayerUtil.getTrackingPlayers(this)) {
-            player.playNotifySound(AlienSoundEvents.ENTITY_QUEEN_SCREAM.get(), SoundSource.MASTER, 1, 1);
-            player.sendSystemMessage(
-                Component.literal("A scream from the depths sends chills down your spine...")
-                    .withStyle(AlienVariantTypes.getFor(this).chatColor(), ChatFormatting.ITALIC)
-            );
-        }
-    }
+    /** Escort for a freshly spawned wild queen - she has a long walk ahead and nothing else to defend her. */
+    private static final int SPAWN_ESCORT_SIZE = 4;
+
+    /** Workforce handed to a queen the moment she wakes to found. See {@link #spawnFoundingCrew()}. */
+    private static final int FOUNDING_CREW_SIZE = 4;
 
     private void spawnGuards() {
+        spawnDrones(SPAWN_ESCORT_SIZE);
+    }
+
+    /**
+     * Give a waking queen a founding crew.
+     * <p>
+     * [stated] "this queen when i woke her from hibernation she didnt spawn with any helper drones." She would not
+     * have: the only drone spawn was {@link #spawnGuards()}, fired from finalizeSpawn and ONLY for
+     * {@code MobSpawnType.NATURAL}. Those four appear at spawn time, and she then spends five minutes developing, walks
+     * to her anchor and sleeps three Minecraft days - so they have long scattered by the time she founds. A spawn-egged
+     * or summoned queen never had any at all.
+     * <p>
+     * This matters beyond flavour: the founding core is queen-dug, but every piece AFTER it needs drone diggers, and a
+     * hive with none logs "carve site is unstaffed - no free drones, nothing in reserve. Build paused." indefinitely. A
+     * queen who wakes alone cannot dig her way out of that.
+     */
+    public void spawnFoundingCrew() {
+        spawnDrones(FOUNDING_CREW_SIZE);
+    }
+
+    private void spawnDrones(int count) {
+        if (level().isClientSide) {
+            return;
+        }
+
         var droneType = Drone.getType(getVariant());
 
-        for (var i = 0; i < 4; i++) {
+        for (var i = 0; i < count; i++) {
             var drone = droneType.spawn((ServerLevel) level(), blockPosition(), MobSpawnType.NATURAL);
 
             if (drone != null) {
@@ -237,6 +641,280 @@ public class Queen extends Xenomorph implements GOAPUser<Queen>, EggLayer {
         return queenData;
     }
 
+    public QueenLifecyclePhaseManager getLifecyclePhaseManager() {
+        return lifecyclePhaseManager;
+    }
+
+    /**
+     * True if this queen was loaded from a save that predates the lifecycle system (no lifecycle-phase tag was
+     * present). Used by {@code LegacyHiveRecovery} to identify queens that need migrating into the current lifecycle.
+     */
+    public boolean wasLoadedWithoutLifecycleState() {
+        return loadedWithoutLifecycleState;
+    }
+
+    /** True while this queen is parked as a legacy-dormant queen awaiting recovery. */
+    public boolean isLegacyDormant() {
+        return legacyDormant;
+    }
+
+    /**
+     * Marks (or clears) this queen's legacy-dormant state. Persisted so she stays parked across reloads until woken.
+     */
+    public void setLegacyDormant(boolean dormant) {
+        this.legacyDormant = dormant;
+    }
+
+    /**
+     * Wakes a legacy-dormant queen and hands her back to the normal lifecycle: clears the dormant flag and the
+     * loaded-without-state marker, then restarts her LOCATION phase so she resumes founding/holding a hive under the
+     * current system. Safe to call on an already-awake queen (the flags simply clear and the phase restarts).
+     */
+    public void wakeFromLegacyDormantRecovery() {
+        this.legacyDormant = false;
+        this.loadedWithoutLifecycleState = false;
+        lifecyclePhaseManager.restartLocationPhase();
+    }
+
+    public QueenBindManager getBindManager() {
+        return bindManager;
+    }
+
+    /**
+     * Whether she is riding her ovipositor (the chained eggsack). Safe to call on the CLIENT: the ovipositor is a
+     * passenger of the queen, and passengers are vanilla-synced - unlike the server-only OvipositorManager.
+     */
+    public boolean isRidingOvipositor() {
+        return getPassengers()
+            .stream()
+            .anyMatch(passenger -> Objects.equals(passenger.getType(), AlienEntityTypes.OVIPOSITOR.get()));
+    }
+
+    /**
+     * A CAPTIVE breeder is pacified and stays put: an inhibited queen riding her chained eggsack must not shuffle
+     * around under idle AI, or her body drifts and rotates against the static eggsack that is anchored to her, leaving
+     * her off-centre and contorted. Freeze her movement in that state only. A FOUNDING/reproductive queen (rides an
+     * eggsack but is NOT inhibited) is untouched and can still shuffle to lay.
+     */
+    @Override
+    public void travel(@NotNull Vec3 vec3) {
+        if (isInhibited() && isRidingOvipositor()) {
+            // Freeze horizontal drift only - keep vertical velocity so gravity still settles her onto the ground
+            // if she was caught mid-air or on uneven terrain (a hard Vec3.ZERO would leave her hanging).
+            var v = getDeltaMovement();
+            setDeltaMovement(0.0, v.y, 0.0);
+            super.travel(Vec3.ZERO);
+            return;
+        }
+        super.travel(vec3);
+    }
+
+    /** Whether the inhibitor device is attached (synced + persisted). */
+    @Override
+    public void die(@NotNull DamageSource damageSource) {
+        // She is leaving the world - never leave her incapacitation bar stuck on a player's screen.
+        incapacitationManager.onRemoved();
+        super.die(damageSource);
+
+        if (level() instanceof ServerLevel serverLevel) {
+            TrackedQueenRegistry.markLostAndAnnounce(serverLevel, getUUID(), TrackedQueenRegistry.REASON_DECEASED);
+        }
+    }
+
+    @Override
+    public @NotNull InteractionResult mobInteract(@NotNull Player player, @NotNull InteractionHand hand) {
+        var stack = player.getItemInHand(hand);
+
+        // Pry the inhibitor off: sneak + right-click an inhibited queen with a sword or axe. Re-enables her autonomy,
+        // tears down her inhibited claim, and drops the inhibitor so it's recoverable. Costs the tool some durability.
+        if (
+            isInhibited()
+                && player.isShiftKeyDown()
+                && (stack.getItem() instanceof SwordItem || stack.getItem() instanceof AxeItem)
+        ) {
+            if (level() instanceof ServerLevel serverLevel) {
+                setInhibited(false);
+                QueenInhibitionService.onReleased(serverLevel, this);
+                spawnAtLocation(AlienItems.INHIBITOR.get());
+                stack.hurtAndBreak(
+                    5,
+                    player,
+                    hand == InteractionHand.MAIN_HAND ? EquipmentSlot.MAINHAND : EquipmentSlot.OFFHAND
+                );
+            }
+            return InteractionResult.sidedSuccess(level().isClientSide);
+        }
+
+        return super.mobInteract(player, hand);
+    }
+
+    public boolean isInhibited() {
+        return hasInhibitor.get();
+    }
+
+    /** Attach or remove the inhibitor device. Server-authoritative; syncs and persists automatically. */
+    public void setInhibited(boolean inhibited) {
+        hasInhibitor.set(inhibited);
+    }
+
+    public boolean isTracked() {
+        return tracked.get();
+    }
+
+    /** Attach or remove the tracker tag. Server-authoritative; syncs and persists automatically. */
+    public void setTracked(boolean value) {
+        tracked.set(value);
+    }
+
+    /**
+     * Whether she is in the involuntary, defeat-induced incapacitated state (Part 2). Not yet implemented — the
+     * incapacitation state machine (incap HP bar, kill/heal/self-recovery/capture exits) is a deferred feature, so this
+     * hook returns {@code false} for now. When that state lands it should read its flag here, and the inhibitor gate
+     * below picks it up automatically.
+     */
+    public boolean isIncapacitated() {
+        return incapacitated.get();
+    }
+
+    /** Server-authoritative. Set by {@link QueenIncapacitationManager}; syncs and persists automatically. */
+    public void setIncapacitated(boolean value) {
+        incapacitated.set(value);
+    }
+
+    public QueenIncapacitationManager getIncapacitationManager() {
+        return incapacitationManager;
+    }
+
+    /**
+     * Whether the inhibitor may be applied to her right now. Per design she must be helpless in one of three ways:
+     * incapacitated, in the {@link QueenLifecyclePhase#HIBERNATION} phase, or already secured with all four chains.
+     */
+    /**
+     * PLAYER-PLACED QUEENS ARE EXEMPT ([stated]): "people are clearly trying to fast track and we dont want her digging
+     * or building a hive if they want her captured." A queen from a spawn egg, command, bucket or dispenser can be
+     * clamped in ANY state - the whole point of spawning one is to keep her, and forcing a fight first just means she
+     * founds a hive in the meantime. {@link #isPlayerPlaced()} already exists for the hibernation rule and is exactly
+     * the right discriminator: it is persisted, and transitions never call finalizeSpawn, so a hive-promoted daughter
+     * can never carry it.
+     * <p>
+     * Everyone else has to be unable to resist: beaten down, asleep, or fully chained.
+     */
+    public boolean canBeInhibited() {
+        return isPlayerPlaced()
+            || isIncapacitated()
+            || lifecyclePhaseManager.getPhase() == QueenLifecyclePhase.HIBERNATION
+            || bindManager.isFullyBound()
+            // STILL GROWING COUNTS AS HELPLESS ([stated]): "if you burst a praetorian then make her molt into a
+            // queen you should be able to inhibit her as its a vulnerable phase like the chained and
+            // incapacitated/hibernating are." A queen who came up the burst line is never isPlayerPlaced -
+            // transitions do not call finalizeSpawn - so without this the ONLY window on her was the hibernation
+            // she may skip entirely as a dispatched daughter. hasReachedTargetScale() is false from the molt
+            // until her profile tops out at endScale, which is exactly that vulnerable stretch.
+            || !getMoltingManager().hasReachedTargetScale();
+    }
+
+    /**
+     * Whether she is contained — subdued enough to be a captive breeder that grows a chained eggsack. For now this is
+     * the four-chain full bind; a human titanium enclosure becomes a second containment source later.
+     */
+    public boolean isContained() {
+        // Synced chain count (mirrors the bind anchors), so this is correct on both server and client
+        // — the chained-eggsack renderer reads it off the vehicle queen.
+        return bindChainCount.get() >= QueenBindManager.FULLY_BOUND_CHAINS;
+    }
+
+    public boolean isDigging() {
+        return digging;
+    }
+
+    /**
+     * Toggles the location-phase spectator dig. While digging she clips through blocks (noPhysics) and ignores gravity
+     * so she can travel straight to her committed anchor; noPhysics also suppresses suffocation, and
+     * {@link #isInvulnerableTo} adds fire/lava immunity. She stays an ordinary, attackable entity in every other
+     * respect. Owned by {@code QueenLifecyclePhaseManager}, which reconciles it every tick.
+     */
+    public void setDigging(boolean digging) {
+        if (this.digging == digging) {
+            return;
+        }
+        this.digging = digging;
+        this.noPhysics = digging;
+        setNoGravity(digging);
+        isDiggingSynced.set(digging);
+    }
+
+    @Override
+    public boolean isInvulnerableTo(DamageSource source) {
+        if (digging && source.is(DamageTypeTags.IS_FIRE)) {
+            return true;
+        }
+        return super.isInvulnerableTo(source);
+    }
+
+    @Override
+    public boolean hurt(DamageSource damageSource, float amount) {
+        // While DOWN, damage eats the incapacitation bar instead of her health - that bar IS the finisher. She
+        // only truly dies when it is drained to zero.
+        if (!level().isClientSide && isIncapacitated()) {
+            // ONLY players and rival xenomorphs can work the finisher bar. The bar opens at 1, and in the nether a
+            // downed queen is instantly mobbed by piglins - ambient mobs drained it the same tick she fell, so the
+            // downed state was over before anyone saw it ([stated] "nether queens dont get incapacitated" - they
+            // did, for a frame). Kin mercy already shields her from her own strain; vanilla wildlife chewing on a
+            // downed queen wounds her pride, not the bar. Execution stays with players and rival strains.
+            var downedAttacker = damageSource.getEntity();
+            var canWorkTheBar = downedAttacker instanceof net.minecraft.world.entity.player.Player
+                || downedAttacker instanceof com.alien.common.gameplay.entity.living.alien.Alien;
+            if (!canWorkTheBar) {
+                return true; // shrugged off - chitin holds, the bar does not move
+            }
+            if (incapacitationManager.onDamageWhileDown(amount)) {
+                setIncapacitated(false);
+                setNoAi(false);
+                return super.hurt(damageSource, Float.MAX_VALUE); // finished off for real
+            }
+            return true; // absorbed by the bar
+        }
+
+        // A blow that WOULD kill her puts her down instead - unless her strain cannot be incapacitated, or she
+        // has been worn down too many times inside the window, in which case it is a real death.
+        if (!level().isClientSide && amount >= getHealth() && incapacitationManager.onLethalDamage()) {
+            return true;
+        }
+
+        var wasHurt = super.hurt(damageSource, amount);
+        if (wasHurt && !level().isClientSide) {
+            // A hit only pulls her off her duty once she is enough HEALTH down - and her regeneration repays that
+            // debt, so it has to come off faster than she heals. See QueenLifecyclePhaseManager.registerDisturbance.
+            // Called AFTER super.hurt so her health already reflects this blow.
+            //
+            // SHE STILL TOOK THE DAMAGE. This is about her ATTENTION, not her health: vanilla's hurt marks the
+            // attacker as her last-hurt-by, and her sensors turn that into a target, and a queen with a target stops
+            // tending her eggsack. So when the disturbance does not clear the bar, the retaliation is cleared with it
+            // - otherwise a syringe (0.01 health) or a stray splash ends her egg-laying as surely as an axe.
+            if (getLifecyclePhaseManager().registerDisturbance()) {
+                // Roused for real: she leaves the eggsack the same way the empress does - DESTRUCTIVELY. The
+                // ovipositor cannot exist off a royal (it self-discards the next tick without a living vehicle), so
+                // there is no dismounting it and no sitting back down. She grows a fresh one later through the normal
+                // creation path once she is calm and the cooldown allows, which is the real cost of getting her up.
+                ovipositorManager.abandonOvipositor();
+            } else if (isOnDuty()) {
+                setLastHurtByMob(null);
+                setTarget(null);
+            }
+        }
+        return wasHurt;
+    }
+
+    /**
+     * Whether she is doing something a light knock should not interrupt: riding her eggsack, or asleep.
+     * <p>
+     * A queen who is already up and walking about retaliates normally - the whole point is protecting the states where
+     * standing up COSTS her something.
+     */
+    private boolean isOnDuty() {
+        return isRidingOvipositor() || Boolean.TRUE.equals(isHibernating.get());
+    }
+
     @Override
     public Entity asEntity() {
         return this;
@@ -265,15 +943,37 @@ public class Queen extends Xenomorph implements GOAPUser<Queen>, EggLayer {
     @Override
     public void readAdditionalSaveData(@NotNull CompoundTag compoundTag) {
         super.readAdditionalSaveData(compoundTag);
+        // A pre-lifecycle-system save carries neither the lifecycle-phase tag nor the legacy-dormant marker. Detect
+        // that
+        // BEFORE loading the managers so LegacyHiveRecovery can migrate her.
+        this.loadedWithoutLifecycleState =
+            !compoundTag.contains(LIFECYCLE_PHASE_TAG)
+                && !compoundTag.contains(LEGACY_DORMANT_TAG)
+                && !compoundTag.contains(LEGACY_DORMANT_COMPAT_TAG);
+        this.legacyDormant = compoundTag.getBoolean(LEGACY_DORMANT_TAG)
+            || compoundTag.getBoolean(LEGACY_DORMANT_COMPAT_TAG);
+        this.playerPlaced = compoundTag.getBoolean("PlayerPlaced");
         ovipositorManager.load(compoundTag);
         queenData.load(compoundTag);
+        lifecyclePhaseManager.load(compoundTag);
+        bindManager.load(compoundTag);
+        rescueManager.load(compoundTag);
+        bindManager.onLoaded(); // drop any chain whose anchor was broken while she was unloaded (phantom bind)
+        incapacitationManager.load(compoundTag);
+        incapacitationManager.onLoaded(); // a downed queen must not come back with her AI switched on
     }
 
     @Override
     public void addAdditionalSaveData(@NotNull CompoundTag compoundTag) {
         super.addAdditionalSaveData(compoundTag);
+        compoundTag.putBoolean("PlayerPlaced", playerPlaced);
+        compoundTag.putBoolean(LEGACY_DORMANT_TAG, legacyDormant);
         ovipositorManager.save(compoundTag);
         queenData.save(compoundTag);
+        lifecyclePhaseManager.save(compoundTag);
+        bindManager.save(compoundTag);
+        rescueManager.save(compoundTag);
+        incapacitationManager.save(compoundTag);
     }
 
     public static EntityType<? extends Alien> getType(AlienVariant alienVariant) {

@@ -1,0 +1,4 @@
+{
+  "parent": "avp_alien:templates/jelly_vat",
+  "texture": "avp_alien:textures/block/jelly_vat.png"
+}

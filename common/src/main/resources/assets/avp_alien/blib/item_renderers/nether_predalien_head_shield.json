@@ -1,0 +1,4 @@
+{
+  "parent": "avp_alien:templates/predalien_head_shield",
+  "texture": "avp_alien:textures/entity/nether_predalien.png"
+}

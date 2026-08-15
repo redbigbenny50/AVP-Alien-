@@ -1,0 +1,43 @@
+{
+  "parent": "minecraft:recipes/root",
+  "criteria": {
+    "has_aberrant_drone_head": {
+      "conditions": {
+        "items": [
+          {
+            "items": "avp_alien:aberrant_drone_head"
+          }
+        ]
+      },
+      "trigger": "minecraft:inventory_changed"
+    },
+    "has_shield": {
+      "conditions": {
+        "items": [
+          {
+            "items": "minecraft:shield"
+          }
+        ]
+      },
+      "trigger": "minecraft:inventory_changed"
+    },
+    "has_the_recipe": {
+      "conditions": {
+        "recipe": "avp_alien:aberrant_drone_head_shield"
+      },
+      "trigger": "minecraft:recipe_unlocked"
+    }
+  },
+  "requirements": [
+    [
+      "has_the_recipe",
+      "has_aberrant_drone_head",
+      "has_shield"
+    ]
+  ],
+  "rewards": {
+    "recipes": [
+      "avp_alien:aberrant_drone_head_shield"
+    ]
+  }
+}

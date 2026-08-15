@@ -1,0 +1,30 @@
+{
+  "parent": "avp_alien:aliens/kill_an_alien",
+  "criteria": {
+    "withstand_attack_party": {
+      "trigger": "minecraft:impossible"
+    }
+  },
+  "display": {
+    "description": {
+      "translate": "advancements.aliens.withstand_attack_party.description"
+    },
+    "frame": "challenge",
+    "icon": {
+      "count": 1,
+      "id": "avp_alien:raw_royal_jelly"
+    },
+    "title": {
+      "translate": "advancements.aliens.withstand_attack_party.title"
+    }
+  },
+  "requirements": [
+    [
+      "withstand_attack_party"
+    ]
+  ],
+  "rewards": {
+    "experience": 100
+  },
+  "sends_telemetry_event": true
+}

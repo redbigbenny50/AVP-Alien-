@@ -1,0 +1,4 @@
+{
+  "parent": "avp_alien:templates/runner_head_shield",
+  "texture": "avp_alien:textures/entity/irradiated_runner.png"
+}

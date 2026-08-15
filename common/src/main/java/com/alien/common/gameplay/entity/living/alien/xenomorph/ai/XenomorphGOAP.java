@@ -39,7 +39,43 @@ public class XenomorphGOAP {
     }
 
     public static <T extends Xenomorph & EggLayer> Graph.Builder<T> applyEggLayingOnlyGraph(Graph.Builder<T> graphBuilder) {
-        return graphBuilder.apply(XenomorphGOAP::addEggLayingPackage);
+        return graphBuilder
+            // ⚠⚠ THE SENSORS PACKAGE IS NOT OPTIONAL ON ANY GRAPH. `applyBaseAgentProperties` builds a replan policy
+            // that READS `IS_ON_FIRE` and `HEALTH_RATIO` every 20 ticks, so a graph without these sensors makes the
+            // agent's own replan logic log "Attempted to sense a value for key X, but no sensor exists" forever. The
+            // egg-laying-only graph was the one graph that omitted it.
+            .apply(XenomorphGOAP::addSensorsPackage)
+            .apply(XenomorphGOAP::addEggLayingPackage)
+            // ⭐ SENSORS ONLY, DELIBERATELY WITHOUT THEIR GOALS OR ACTIONS. A royal mounts her ovipositor and swaps
+            // onto this narrow graph MID-PLAN; the plan she was already running belongs to the wide graph, and its
+            // runtime preconditions still get evaluated against the new one. Those preconditions read
+            // `has_attack_target`, `is_bored` and `has_target_anchor` - keys this graph never registered - which is
+            // the burst of warnings seen whenever a queen settles onto her eggsack.
+            // <p>
+            // Registering the SENSORS makes those reads answerable; deliberately NOT registering the matching goals
+            // and actions keeps the behaviour exactly as designed - a queen on her ovipositor still does not wander,
+            // fight or go anchor-hunting, which is the entire point of the narrow graph. Sensing is demand-driven and
+            // memoised, so an unread sensor costs nothing.
+            // </p>
+            // ⚠⚠⚠ DO NOT ADD `GOAPSensors.HAS_ATTACK_TARGET` HERE. I DID, AND IT CRASHED EVERY QUEEN THAT MOUNTED HER
+            // EGGSACK: "NullPointerException: Cannot invoke Option.isSome() because attackTargetOption is null".
+            // <p>
+            // It is a COMPOSED sensor, not a plain one, with a three-link upstream chain:
+            // XenomorphTargetSensors.NEARBY_ATTACKABLE_TARGETS -> GOAPSensors.NEAREST_ATTACKABLE_TARGETS ->
+            // NEAREST_ATTACKABLE_TARGET -> HAS_ATTACK_TARGET. Register only the last link and the upstream read
+            // returns null, and `attackTargetOption.isSome()` dereferences it on the very first plan evaluation.
+            // </p>
+            // <p>
+            // ⚠ AND REGISTERING THE WHOLE CHAIN WOULD BE WORSE, not a fix: `NEAREST_ATTACKABLE_TARGET` has a SIDE
+            // EFFECT - `targetOption.ifSome(mob::setTarget)` - so it would hand a queen bound to her ovipositor a live
+            // attack target, which is exactly what the narrow graph exists to prevent.
+            // </p>
+            // <p>
+            // The cost of leaving it out is a "no sensor exists for key 'sensed:has_attack_target'" WARNING when a
+            // stale plan from the wide graph is evaluated against this one. A warning is not a crash. Leave it.
+            // </p>
+            .addSensor(IdleSensors.IS_BORED)
+            .addSensor(com.alien.common.gameplay.entity.living.alien.xenomorph.ai.anchor_break.AnchorBreakSensors.HAS_TARGET_ANCHOR);
     }
 
     public static <T extends Xenomorph> Agent.Builder<T> applyBaseAgentProperties(Agent.Builder<T> agentBuilder) {
@@ -147,6 +183,33 @@ public class XenomorphGOAP {
         graphBuilder.addAction(LungeActions.createLungeAtTarget(lungeSensor.key()));
         graphBuilder.addSensor(lungeSensor);
 
+        return graphBuilder;
+    }
+
+    /**
+     * Anchor demolition: a royal defender tears capture anchors out of its own hive claim.
+     * <p>
+     * Deliberately NOT part of the base graph. Only praetorians and crushers get it - they are the royal guard, and the
+     * queen must never have it: she is what the anchors are for, and a queen who could free herself would make capture
+     * pointless.
+     */
+    public static <T extends Xenomorph> Graph.Builder<T> addAnchorBreakPackage(Graph.Builder<T> graphBuilder) {
+        graphBuilder.addGoal(com.alien.common.gameplay.entity.living.alien.xenomorph.ai.anchor_break.AnchorBreakActions.BREAK_ANCHOR_GOAL);
+        graphBuilder.addAction(com.alien.common.gameplay.entity.living.alien.xenomorph.ai.anchor_break.AnchorBreakActions.BREAK_ANCHOR);
+        graphBuilder.addSensor(
+            com.alien.common.gameplay.entity.living.alien.xenomorph.ai.anchor_break.AnchorBreakSensors.HAS_TARGET_ANCHOR
+        );
+        return graphBuilder;
+    }
+
+    /** Host hunt: walk to a host, grab it, carry it to a vent, hand it into the host chamber. */
+    public static <T extends Xenomorph> Graph.Builder<T> addHostCapturePackage(Graph.Builder<T> graphBuilder) {
+        graphBuilder.addGoal(com.alien.common.gameplay.entity.living.alien.xenomorph.ai.host.HostActions.CAPTURE_HOST_GOAL);
+        graphBuilder.addGoal(com.alien.common.gameplay.entity.living.alien.xenomorph.ai.host.HostActions.DELIVER_HOST_GOAL);
+        graphBuilder.addAction(com.alien.common.gameplay.entity.living.alien.xenomorph.ai.host.HostActions.CAPTURE_HOST);
+        graphBuilder.addAction(com.alien.common.gameplay.entity.living.alien.xenomorph.ai.host.HostActions.DELIVER_HOST);
+        graphBuilder.addSensor(com.alien.common.gameplay.entity.living.alien.xenomorph.ai.host.HostSensors.HAS_TARGET_HOST);
+        graphBuilder.addSensor(com.alien.common.gameplay.entity.living.alien.xenomorph.ai.host.HostSensors.IS_CARRYING_HOST);
         return graphBuilder;
     }
 

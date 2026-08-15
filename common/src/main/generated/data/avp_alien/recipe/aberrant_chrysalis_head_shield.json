@@ -1,0 +1,16 @@
+{
+  "type": "minecraft:crafting_shapeless",
+  "category": "equipment",
+  "ingredients": [
+    {
+      "item": "avp_alien:aberrant_chrysalis_head"
+    },
+    {
+      "item": "minecraft:shield"
+    }
+  ],
+  "result": {
+    "count": 1,
+    "id": "avp_alien:aberrant_chrysalis_head_shield"
+  }
+}

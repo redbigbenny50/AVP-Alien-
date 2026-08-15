@@ -76,6 +76,12 @@ public final class ContestResolutionTask {
                 continue;
             }
 
+            // Inhibited (severed contained-breeder) locations don't participate in contests — their single
+            // follow-chunk claim is managed by the queen, not won or stripped by a territory dispute.
+            if (location.isInhibited()) {
+                continue;
+            }
+
             validLocationClaimants.add(location);
         }
 

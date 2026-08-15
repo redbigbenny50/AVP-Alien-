@@ -16,13 +16,13 @@
 					"pivot": [0, 0, 0]
 				},
 				{
-					"name": "main",
+					"name": "gMain",
 					"parent": "root",
 					"pivot": [0, 21.06245, 2.45284]
 				},
 				{
 					"name": "gLowerBody",
-					"parent": "main",
+					"parent": "gMain",
 					"pivot": [0, 21.06245, 2.45284],
 					"cubes": [
 						{"origin": [-3, 20.56245, 0.45284], "size": [6, 6, 4], "uv": [21, 32]}
@@ -58,7 +58,7 @@
 					]
 				},
 				{
-					"name": "gRightFobackm",
+					"name": "gRightForearm",
 					"parent": "gRightBicep",
 					"pivot": [-5.55866, 22.77439, 2.45284],
 					"rotation": [-22.5, 0, 0],
@@ -68,7 +68,7 @@
 				},
 				{
 					"name": "gRightHand",
-					"parent": "gRightFobackm",
+					"parent": "gRightForearm",
 					"pivot": [-5.90866, 15.32439, 2.70284],
 					"rotation": [0, 0, -22.5],
 					"cubes": [
@@ -170,7 +170,7 @@
 					]
 				},
 				{
-					"name": "gLeftFobackm",
+					"name": "gLeftForearm",
 					"parent": "gLeftBicep",
 					"pivot": [5.55866, 22.77439, 2.45284],
 					"rotation": [-22.5, 0, 0],
@@ -180,7 +180,7 @@
 				},
 				{
 					"name": "gLeftHand",
-					"parent": "gLeftFobackm",
+					"parent": "gLeftForearm",
 					"pivot": [5.90866, 15.32439, 2.70284],
 					"rotation": [0, 0, 22.5],
 					"cubes": [
@@ -375,8 +375,8 @@
 					]
 				},
 				{
-					"name": "Waist",
-					"parent": "main",
+					"name": "gWaist",
+					"parent": "gMain",
 					"pivot": [0, 19.06245, 2.45284],
 					"cubes": [
 						{"origin": [-3, 17.56245, 0.45284], "size": [6, 4, 4], "inflate": 0.2, "uv": [19, 44]}
@@ -384,7 +384,7 @@
 				},
 				{
 					"name": "gTail1",
-					"parent": "Waist",
+					"parent": "gWaist",
 					"pivot": [0, 19.56245, 2.95284],
 					"cubes": [
 						{"origin": [-1.5, 18.06245, 2.70284], "size": [3, 3, 7], "pivot": [0, 19.56245, 29.97784], "rotation": [0, 0, 45], "uv": [21, 52]},
@@ -500,7 +500,7 @@
 				},
 				{
 					"name": "gLeftLeg",
-					"parent": "Waist",
+					"parent": "gWaist",
 					"pivot": [2.7, 19.56245, 1.95284],
 					"rotation": [-22.5, 0, 0],
 					"cubes": [
@@ -565,7 +565,7 @@
 					]
 				},
 				{
-					"name": "gRightPinkyToe",
+					"name": "gLeftPinkyToe",
 					"parent": "gLeftFoot",
 					"pivot": [3.8196, -3.46527, 2.35633],
 					"rotation": [17.5, -22.5, 0],
@@ -576,7 +576,7 @@
 				},
 				{
 					"name": "gRightLeg",
-					"parent": "Waist",
+					"parent": "gWaist",
 					"pivot": [-2.7, 19.56245, 1.95284],
 					"rotation": [-22.5, 0, 0],
 					"cubes": [
@@ -641,7 +641,7 @@
 					]
 				},
 				{
-					"name": "gLeftPinkyToe",
+					"name": "gRightPinkyToe",
 					"parent": "gRightFoot",
 					"pivot": [-3.8196, -3.46527, 2.35633],
 					"rotation": [17.5, 22.5, 0],

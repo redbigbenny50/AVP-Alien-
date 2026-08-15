@@ -128,6 +128,8 @@ public class SpawnEggsCreativeModeTabInitializer {
     }
 
     private static void addIrradiatedXenomorphSpawnEggs(CreativeModeTab.Output output) {
+        CreativeModeTabUtil.accept(output, AlienSpawnEggItems.IRRADIATED_OVOMORPH_SPAWN_EGG);
+        CreativeModeTabUtil.accept(output, AlienSpawnEggItems.IRRADIATED_FACEHUGGER_SPAWN_EGG);
         CreativeModeTabUtil.accept(output, AlienSpawnEggItems.IRRADIATED_DRONE_SPAWN_EGG);
         CreativeModeTabUtil.accept(output, AlienSpawnEggItems.IRRADIATED_WARRIOR_SPAWN_EGG);
         CreativeModeTabUtil.accept(output, AlienSpawnEggItems.IRRADIATED_PRAETORIAN_SPAWN_EGG);
@@ -142,6 +144,10 @@ public class SpawnEggsCreativeModeTabInitializer {
         if (AVPPredator.MOD.isLoaded()) {
             CreativeModeTabUtil.accept(output, AlienSpawnEggItems.IRRADIATED_PREDALIEN_SPAWN_EGG);
         }
+
+        // ⚠ NO IRRADIATED BOILER EXISTS, so this strain has the spitter alone where nether and aberrant have a
+        // boiler+spitter pair. Its slot in the running order still matches theirs.
+        CreativeModeTabUtil.accept(output, AlienSpawnEggItems.IRRADIATED_SPITTER_SPAWN_EGG);
 
         CreativeModeTabUtil.accept(output, AlienSpawnEggItems.IRRADIATED_CHRYSALIS_SPAWN_EGG);
         CreativeModeTabUtil.accept(output, AlienSpawnEggItems.IRRADIATED_RAZOR_CLAW_SPAWN_EGG);

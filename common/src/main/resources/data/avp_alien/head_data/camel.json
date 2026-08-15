@@ -1,0 +1,15 @@
+{
+  "entity": "minecraft:camel",
+  "size": [
+    7.0,
+    8.0,
+    19.0
+  ],
+  "pivot": [
+    0.0,
+    23.0,
+    -9.0
+  ],
+  "vertical_offset": 5.3333,
+  "face_offset": 23
+}

@@ -1,0 +1,13 @@
+{
+  "replace": false,
+  "values": [
+    "avp_alien:irradiated_chitin_helmet",
+    "avp_alien:irradiated_chitin_chestplate",
+    "avp_alien:irradiated_chitin_leggings",
+    "avp_alien:irradiated_chitin_boots",
+    "avp_alien:plated_irradiated_chitin_helmet",
+    "avp_alien:plated_irradiated_chitin_chestplate",
+    "avp_alien:plated_irradiated_chitin_leggings",
+    "avp_alien:plated_irradiated_chitin_boots"
+  ]
+}

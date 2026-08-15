@@ -83,6 +83,9 @@ public class Facehugger extends Parasite implements EntitySenseCacheUser, GOAPUs
     public void tick() {
         super.tick();
 
+        // Spent hugger (embryo implanted): despawn after a Minecraft day if nothing eats it.
+        com.alien.common.gameplay.entity.living.alien.MoltFeeding.tickRemainsLifetime(this);
+
         if (!level().isClientSide()) {
             data.tick();
 
@@ -157,7 +160,7 @@ public class Facehugger extends Parasite implements EntitySenseCacheUser, GOAPUs
             case NORMAL -> AlienEntityTypes.FACEHUGGER.get();
             case NETHER -> AlienEntityTypes.NETHER_FACEHUGGER.get();
             case ABERRANT -> AlienEntityTypes.ABERRANT_FACEHUGGER.get();
-            case IRRADIATED -> null;
+            case IRRADIATED -> AlienEntityTypes.IRRADIATED_FACEHUGGER.get();
         };
     }
 }

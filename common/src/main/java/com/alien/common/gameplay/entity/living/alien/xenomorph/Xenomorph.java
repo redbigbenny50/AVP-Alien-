@@ -1,21 +1,32 @@
 package com.alien.common.gameplay.entity.living.alien.xenomorph;
 
+import com.alien.AlienResources;
+import com.alien.common.gameplay.block.entity.capture.anchor.AnchorBlockEntity;
 import com.alien.common.gameplay.entity.CrawlingManager;
 import com.alien.common.gameplay.entity.living.alien.Alien;
 import com.alien.common.gameplay.entity.living.alien.GrowthManager;
 import com.alien.common.gameplay.entity.living.alien.ResinManager;
+import com.alien.common.gameplay.entity.living.alien.ovomorph.Ovomorph;
 import com.alien.common.gameplay.entity.living.alien.xenomorph.ai.cocoon.CocoonGOAP;
+import com.alien.common.gameplay.entity.living.alien.xenomorph.queen.Queen;
+import com.alien.common.gameplay.hive.convoy.ConvoyMemberTracker;
 import com.alien.common.model.alien.variant.AlienVariant;
 import com.alien.common.model.resin.ResinProducer;
 import com.alien.common.registry.init.AlienDataSyncKeys;
+import com.alien.common.registry.init.AlienMobEffects;
 import com.alien.common.registry.init.AlienSoundEvents;
+import com.alien.common.registry.tag.AlienBlockTags;
 import com.alien.common.registry.tag.AlienEntityTypeTags;
 import com.alien.common.util.AlienPredicates;
+import com.blib.api.common.block.v1.BlockBreakProgressManager;
 import com.blib.api.common.data_sync.v1.DataAccessor;
+import com.blib.api.common.dismemberment.v1.Dismemberable;
+import com.blib.api.common.dismemberment.v1.LimbDefinitionRegistry;
 import com.blib.api.common.entity.v1.EntitySenseCache;
 import com.blib.api.common.entity.v1.EntitySenseCacheUser;
 import com.blib.api.common.goap.v1.GOAPUser;
 import com.blib.api.common.pathfinding.v1.cache.TerrainCacheRegistry;
+import com.blib.api.common.pathfinding.v1.evaluator.PathBlockBreakingConfig;
 import com.blib.api.common.pathfinding.v1.evaluator.PathCrawlConfig;
 import com.blib.api.common.pathfinding.v1.evaluator.PathWaterConfig;
 import com.blib.api.common.pathfinding.v1.evaluator.TerrainEvaluatorConfig;
@@ -28,11 +39,14 @@ import com.blib.api.common.pathfinding.v1.terrain.TerrainClassifiers;
 import com.blib.api.common.pathfinding.v1.terrain.TerrainType;
 import com.just.ai.goap.graph.Graph;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.sounds.SoundEvent;
 import net.minecraft.tags.FluidTags;
 import net.minecraft.tags.TagKey;
+import net.minecraft.util.Mth;
 import net.minecraft.world.damagesource.DamageSource;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityDimensions;
@@ -40,18 +54,28 @@ import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.MoverType;
 import net.minecraft.world.entity.Pose;
+import net.minecraft.world.entity.ai.attributes.AttributeModifier;
 import net.minecraft.world.entity.ai.attributes.Attributes;
 import net.minecraft.world.entity.vehicle.Boat;
 import net.minecraft.world.entity.vehicle.Minecart;
+import net.minecraft.world.level.ClipContext;
+import net.minecraft.world.level.GameRules;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.LevelReader;
+import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.gameevent.DynamicGameEventListener;
 import net.minecraft.world.level.material.Fluid;
+import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Objects;
+import java.util.UUID;
 import java.util.function.BiConsumer;
 
 public abstract class Xenomorph extends Alien implements ResinProducer, EntitySenseCacheUser, PathNavigatorUser {
@@ -64,9 +88,58 @@ public abstract class Xenomorph extends Alien implements ResinProducer, EntitySe
 
     private static final float UNDERWATER_HEIGHT_SCALE = 0.4f;
 
+    private static final float PATH_BLOCK_BREAK_MAX_HARDNESS = 6.0f;
+
+    private static final float PATH_BLOCK_BREAK_DAMAGE_PER_TICK = 50.0f;
+
+    private static final int FRENZIED_RAID_BREAKOUT_INTERVAL_TICKS = 4;
+
+    private static final int RAID_CONTAINMENT_BREAKOUT_INTERVAL_TICKS = 10;
+
+    private static final double RAID_CONTAINMENT_TARGET_RADIUS_BLOCKS = 24.0D;
+
+    private static final double RAID_CONTAINMENT_BREAK_RANGE_BLOCKS = 3.0D;
+
+    private static final double RAID_CONTAINMENT_NAVIGATION_SPEED = 1.25D;
+
+    private static final float RAID_BREAKOUT_BLOCK_DAMAGE_PER_ATTEMPT = 50.0F;
+
+    private static final int RAID_EGG_MAX_ATTEMPT_TICKS = 8 * 20;
+
+    private static final int RAID_EGG_NO_PROGRESS_TICKS = 3 * 20;
+
+    private static final int RAID_EGG_FAILED_COOLDOWN_TICKS = 30 * 20;
+
+    private static final int RAID_EGG_MAX_ATTACKERS = 2;
+
+    private static final double RAID_EGG_PROGRESS_EPSILON_SQR = 0.35D * 0.35D;
+
+    private static final ResourceLocation LOST_LIMB_MAX_HEALTH_MODIFIER = AlienResources.location("lost_limb_max_health");
+
+    private static final double MAX_HEALTH_REDUCTION_PER_LOST_LIMB = 0.1D;
+
+    /** How often to look for cobwebs. They are not urgent, and the scan is the expensive part. */
+    private static final int COBWEB_SWEEP_INTERVAL_TICKS = 10;
+
+    /** Limb count the max-health modifier currently reflects, so the attribute is only touched when it changes. */
+    private int lastAppliedDetachedLimbs = -1;
+
+    private static final PathBlockBreakingConfig PATH_BLOCK_BREAKING_CONFIG = new PathBlockBreakingConfig(
+        true,
+        2,
+        PATH_BLOCK_BREAK_MAX_HARDNESS,
+        4.0f,
+        8.0f,
+        PATH_BLOCK_BREAK_DAMAGE_PER_TICK,
+        Xenomorph::canPathBreakBlock
+    );
+
     public final DataAccessor<Integer> attackDurationInTicks;
 
     public final DataAccessor<Integer> attackId;
+
+    /** Server game time when the current attack began; used only to evaluate the matching hitbox pose. */
+    public final DataAccessor<Integer> attackStartedAtGameTime;
 
     public final DataAccessor<AttackType> attackType;
 
@@ -75,6 +148,14 @@ public abstract class Xenomorph extends Alien implements ResinProducer, EntitySe
     public final DataAccessor<Boolean> isCrawling;
 
     public final DataAccessor<CocoonState> cocoonState;
+
+    public final DataAccessor<CocoonSourceForm> cocoonSourceForm;
+
+    /** Queen-only in use: true while she is hibernating (front-end Stage 3); drives the client hibernate pose. */
+    public final DataAccessor<Boolean> isHibernating;
+
+    /** Queen-only in use: true while she is clip-digging to her anchor; drives the client dig animation. */
+    public final DataAccessor<Boolean> isDiggingSynced;
 
     public final DataAccessor<Integer> cocoonAnimationId;
 
@@ -96,6 +177,16 @@ public abstract class Xenomorph extends Alien implements ResinProducer, EntitySe
 
     private final XenomorphConfig config;
 
+    private final Map<UUID, Integer> failedRaidEggTargets = new HashMap<>();
+
+    private @Nullable UUID raidEggTargetId;
+
+    private int raidEggTargetStartedAtTick;
+
+    private int raidEggNoProgressTicks;
+
+    private double raidEggLastDistanceSqr = Double.MAX_VALUE;
+
     private final AttackCooldownTracker cooldownTracker;
 
     private @Nullable AttackType activeAttack;
@@ -115,13 +206,20 @@ public abstract class Xenomorph extends Alien implements ResinProducer, EntitySe
 
         this.attackDurationInTicks = new DataAccessor<>(this, AlienDataSyncKeys.XENOMORPH_ATTACK_DURATION_IN_TICKS.get());
         this.attackId = new DataAccessor<>(this, AlienDataSyncKeys.XENOMORPH_ATTACK_ID.get());
+        this.attackStartedAtGameTime = new DataAccessor<>(
+            this,
+            AlienDataSyncKeys.XENOMORPH_ATTACK_STARTED_AT_GAME_TIME.get()
+        );
         this.attackType = new DataAccessor<>(this, AlienDataSyncKeys.ATTACK_TYPE.get());
         this.isLunging = new DataAccessor<>(this, AlienDataSyncKeys.XENOMORPH_IS_LUNGING.get());
         this.isCrawling = new DataAccessor<>(this, AlienDataSyncKeys.XENOMORPH_IS_CRAWLING.get());
         this.cocoonState = new DataAccessor<>(this, AlienDataSyncKeys.XENOMORPH_COCOON_STATE.get());
+        this.cocoonSourceForm = new DataAccessor<>(this, AlienDataSyncKeys.XENOMORPH_COCOON_SOURCE_FORM.get());
+        this.isHibernating = new DataAccessor<>(this, AlienDataSyncKeys.XENOMORPH_IS_HIBERNATING.get());
+        this.isDiggingSynced = new DataAccessor<>(this, AlienDataSyncKeys.XENOMORPH_IS_DIGGING.get());
         this.cocoonAnimationId = new DataAccessor<>(this, AlienDataSyncKeys.XENOMORPH_COCOON_ANIMATION_ID.get());
 
-        this.crawlingManager = new CrawlingManager(this, isCrawling, config.canCrawl());
+        this.crawlingManager = new CrawlingManager(this, isCrawling, config.canCrawl(), config.canCrawlAfterLegLoss());
         this.cocoonManager = new CocoonManager(this);
         this.growthManager = new GrowthManager(this)
             .setGrowOverTime(false);
@@ -150,21 +248,30 @@ public abstract class Xenomorph extends Alien implements ResinProducer, EntitySe
     private PathNavigator createPathNavigator(Level level, XenomorphPathConfig pathConfig) {
         var followRange = (float) getAttributeValue(Attributes.FOLLOW_RANGE);
 
-        return createPathNavigator(level, pathConfig, SearchConfig.fromFollowRange(followRange));
+        return createPathNavigator(
+            level,
+            pathConfig,
+            SearchConfig.fromFollowRange(followRange).withElevationWeight(0.5f)
+        );
     }
 
     private PathNavigator createPathNavigator(Level level, XenomorphPathConfig pathConfig, SearchConfig searchConfig) {
         var crawlConfig = config.canCrawl()
             ? PathCrawlConfig.enabled(pathConfig.crawlHeight())
             : PathCrawlConfig.DISABLED;
-        var waterConfig = PathWaterConfig.enabled((int) Math.ceil(pathConfig.entityHeight() * UNDERWATER_HEIGHT_SCALE));
+        // AVOID means the navigator will not route through water at all — the BLib equivalent of the enderman's
+        // setPathfindingMalus(PathType.WATER, -1.0F). NEUTRAL and PREFER both path as every caste always has.
+        var waterConfig = pathConfig.waterAffinity() == XenomorphPathConfig.WaterAffinity.AVOID
+            ? PathWaterConfig.DISABLED
+            : PathWaterConfig.enabled((int) Math.ceil(pathConfig.entityHeight() * UNDERWATER_HEIGHT_SCALE));
         var evaluatorConfig = TerrainEvaluatorConfig.builder()
             .addTerrain(TerrainType.GROUND, 1.0f)
             .addTerrain(TerrainType.WATER, 1.5f)
-            .withTerrainClassifier(TerrainClassifiers.GROUND_AND_WATER)
+            .withTerrainClassifier((reader, pos) -> classifyGroundWaterAvoidingHumanRazorWire(reader, pos, pathConfig))
             .withEntitySize(pathConfig.entityWidth(), pathConfig.entityHeight())
             .withCrawlConfig(crawlConfig)
             .withWaterConfig(waterConfig)
+            .withBlockBreakingConfig(PATH_BLOCK_BREAKING_CONFIG)
             .withMaxFallDistance(14)
             .withCanOpenDoors(pathConfig.canOpenDoors())
             .build();
@@ -179,6 +286,61 @@ public abstract class Xenomorph extends Alien implements ResinProducer, EntitySe
         return new PathNavigator(level, navigatorConfig, classificationCache);
     }
 
+    private static @Nullable TerrainType classifyGroundWaterAvoidingHumanRazorWire(
+        LevelReader level,
+        BlockPos pos,
+        XenomorphPathConfig pathConfig
+    ) {
+        if (
+            hasBlockInPathVolume(
+                level,
+                pos,
+                pathConfig.entityWidth(),
+                pathConfig.entityHeight(),
+                AlienBlockTags.HUMAN_RAZOR_WIRE
+            )
+        ) {
+            return null;
+        }
+
+        return TerrainClassifiers.GROUND_AND_WATER.classify(level, pos);
+    }
+
+    private static boolean hasBlockInPathVolume(
+        LevelReader level,
+        BlockPos origin,
+        int width,
+        int height,
+        TagKey<Block> blockTag
+    ) {
+        var radius = Math.max(0, (width - 1) / 2);
+
+        for (var x = origin.getX() - radius; x <= origin.getX() + radius; x++) {
+            for (var y = origin.getY(); y < origin.getY() + height; y++) {
+                for (var z = origin.getZ() - radius; z <= origin.getZ() + radius; z++) {
+                    if (level.getBlockState(new BlockPos(x, y, z)).is(blockTag)) {
+                        return true;
+                    }
+                }
+            }
+        }
+
+        return false;
+    }
+
+    private static boolean canPathBreakBlock(LevelReader level, BlockPos pos, BlockState state) {
+        if (
+            !(level instanceof Level world)
+                || !world.getGameRules().getBoolean(GameRules.RULE_MOBGRIEFING)
+        ) {
+            return false;
+        }
+
+        return !state.hasBlockEntity()
+            && state.getDestroySpeed(level, pos) >= 0.0f
+            && !state.is(AlienBlockTags.XENOMORPH_IMMUNE);
+    }
+
     private SearchConfig createHiveIntruderSearchConfig() {
         var searchConfig = SearchConfig.fromFollowRange(HIVE_INTRUDER_PATH_SEARCH_RANGE);
 
@@ -186,7 +348,7 @@ public abstract class Xenomorph extends Alien implements ResinProducer, EntitySe
             searchConfig.maxSearchNodes(),
             searchConfig.heuristicWeight(),
             HIVE_INTRUDER_MAX_PATH_LENGTH,
-            searchConfig.elevationWeight()
+            0.5f
         );
     }
 
@@ -200,7 +362,8 @@ public abstract class Xenomorph extends Alien implements ResinProducer, EntitySe
     }
 
     private static boolean isPathActive(PathNavigator navigator) {
-        return navigator.isPathPending() || navigator.isNavigating();
+        var state = navigator.getState();
+        return state.isPathPending() || state.isNavigating();
     }
 
     @Override
@@ -211,6 +374,35 @@ public abstract class Xenomorph extends Alien implements ResinProducer, EntitySe
     @Override
     protected float getHealthRegenPerSecond() {
         return config.healthRegenPerSecond();
+    }
+
+    /**
+     * ⭐⭐ HOW FAST THIS XENOMORPH SWINGS. 1.0 is normal; 2.5 means every attack takes 1/2.5 of its authored ticks.
+     * <p>
+     * ⚠ THE ANIMATION FOLLOWS FOR FREE, and that is why this works at all: every animator computes its clip speed as
+     * {@code animation.length() / attackDurationInTicks}, reading the SYNCED duration. Shorten the duration and the
+     * clip speeds up to fit it, in lockstep, on every caste, with no per-caste change. Scaling the clip directly
+     * instead would have desynced the visible swing from the tick the damage lands on.
+     * </p>
+     * <p>
+     * ⚠ Applies to attacks whose executor honours it - see
+     * {@link AttackExecutor#totalDurationInTicks(Xenomorph, AttackType)}. Default is 1.0, so nothing changes for any
+     * caste that does not override this.
+     * </p>
+     */
+    public float attackSpeedMultiplier() {
+        return 1.0F;
+    }
+
+    /** Applies {@link #attackSpeedMultiplier()} to an authored tick count, never dropping below a single tick. */
+    public int scaleAttackDuration(int authoredTicks) {
+        var multiplier = attackSpeedMultiplier();
+
+        if (multiplier <= 1.0F) {
+            return authoredTicks;
+        }
+
+        return Math.max(1, Math.round(authoredTicks / multiplier));
     }
 
     @Override
@@ -225,7 +417,7 @@ public abstract class Xenomorph extends Alien implements ResinProducer, EntitySe
             return;
         }
 
-        var attack = attackConfig.selectRegular(random, cooldownTracker);
+        var attack = attackConfig.selectRegular(random, cooldownTracker, this);
 
         if (attack == null) {
             return;
@@ -247,12 +439,16 @@ public abstract class Xenomorph extends Alien implements ResinProducer, EntitySe
         return activeAttack != null && attackConfig != null && attackConfig.triggered().contains(activeAttack);
     }
 
+    public boolean canUseAttack(AttackType attack) {
+        return !attack.isNone() && attack.canUse(this);
+    }
+
     protected void resetAttackType() {
         attackType.set(AttackType.NONE);
     }
 
     public void startAttack(AttackType attack, @Nullable LivingEntity target) {
-        if (attack.isNone()) {
+        if (!canUseAttack(attack)) {
             return;
         }
 
@@ -261,7 +457,7 @@ public abstract class Xenomorph extends Alien implements ResinProducer, EntitySe
         }
 
         var executor = attack.executorFactory().get();
-        var totalTicks = executor.totalDurationInTicks(attack);
+        var totalTicks = executor.totalDurationInTicks(this, attack);
 
         activeAttack = attack;
         activeExecutor = executor;
@@ -314,20 +510,133 @@ public abstract class Xenomorph extends Alien implements ResinProducer, EntitySe
     public void beginAttack(int durationInTicks) {
         attackDurationInTicks.set(durationInTicks);
         attackId.set(attackId.get() + 1);
+        attackStartedAtGameTime.set((int) level().getGameTime());
     }
 
     /**
      * Transition the visible/synced attack-type without spinning up a new executor. Used by executors that want to swap
-     * animations mid-flight (e.g. windup → active charge).
+     * animations mid-flight (e.g. windup → active cleave).
      */
     public void transitionAttack(AttackType newAttackType, int newDurationInTicks) {
         attackType.set(newAttackType);
         beginAttack(newDurationInTicks);
     }
 
+    // ---- RULE-3 CRAWL RETREAT ------------------------------------------------------------------------------------
+    // [stated] "if a xeno morph is crawling and it loses its arms and so cant do basic attacks it will try to
+    // escape back to the hive. This can be trying to use a surface vent if one is close by or moving to an
+    // unloaded chunk. if it can get there and unload it will rejoin the reserves. if the reserves are full it will
+    // join the host born bank as a bonus." And on the bite: "when both arms are lost its merely used defensively
+    // if it gets attacked or an enemy gets too close. its priority is escaping not killing a target."
+    //
+    // The two escape routes map onto machinery that already exists: reaching a vent inside the hive footprint is
+    // BroodBankTask's marked-returner absorb (the crew-disband walk), and getting far enough away that the chunk
+    // unloads is HiveIdentityReserveUnloadHandler - both now carry the reserves-full -> brood-bonus fallback. This
+    // driver only supplies the missing middle: the mark, the defensive-only targeting, and the steering.
+
+    /** Enemy inside this range keeps (or justifies) a target while retreating - "an enemy gets too close". */
+    private static final double RETREAT_DEFENSE_RANGE_SQUARED = 6.0 * 6.0;
+
+    /** How long a hit keeps its attacker as a valid defensive target - "if it gets attacked". */
+    private static final int RETREAT_RETALIATION_TICKS = 100;
+
+    /** A vent within this range counts as "close by" and is walked to; beyond it, the xeno flees toward unload. */
+    private static final double RETREAT_VENT_RANGE_SQUARED = 64.0 * 64.0;
+
+    /** Whether the CURRENT reserve-return mark was set by the retreat rule (transient - re-derived after load). */
+    private boolean crawlRetreatMarked;
+
+    private long lastRetreatSteerTick;
+
+    private void tickCrawlRetreat() {
+        var retreating = getCrawlingManager().isCrawling()
+            && !XenomorphAttackLimbRequirement.ANY_ARM.isSatisfiedBy(this)
+            && !getType().is(AlienEntityTypeTags.QUEENS)
+            && convoyMembership() == null
+            && !hasCustomName();
+
+        com.alien.common.gameplay.hive.location.HiveLocation location = null;
+        if (retreating) {
+            location = com.alien.common.gameplay.hive.faction.HiveMemberLocationResolver.reserveReturnLocation(this);
+            // A hiveless stray has nowhere to crawl back to and nothing to rejoin - it keeps fighting instead.
+            retreating = location != null && location.isAlive();
+        }
+
+        if (!retreating) {
+            if (crawlRetreatMarked) {
+                crawlRetreatMarked = false;
+                clearReserveReturnMark();
+            }
+            return;
+        }
+
+        if (!crawlRetreatMarked) {
+            crawlRetreatMarked = true;
+            markForReserveReturn(level().getGameTime());
+        }
+
+        // DEFENSIVE-ONLY TARGETING. A target is kept only while it is genuinely a threat: it hit us recently, or
+        // it is within arm's - well, bite's - reach. Anything further is dropped, which is what turns the crawl
+        // bite (still usable, requiresHead) into a defensive tool: the normal attack machinery fires it against
+        // whatever qualifies here, and the crawl-preference selection already excludes the arm attacks the limbs
+        // can no longer satisfy. With no qualifying threat the target is null and the legs do the talking.
+        var target = getTarget();
+        if (target != null) {
+            var recentlyHitByTarget = getLastHurtByMob() == target
+                && tickCount - getLastHurtByMobTimestamp() <= RETREAT_RETALIATION_TICKS;
+            if (!recentlyHitByTarget && distanceToSqr(target) > RETREAT_DEFENSE_RANGE_SQUARED) {
+                setTarget(null);
+                target = null;
+            }
+        }
+        if (target != null) {
+            return; // defend where it stands; escape resumes the moment the threat lapses
+        }
+
+        // ESCAPE STEERING, re-issued once a second so the GOAP brain's idle wandering cannot unpick it. A vent
+        // close by is walked to (BroodBankTask absorbs marked returners at vents inside the footprint); otherwise
+        // it moves away from the nearest player, which is exactly the direction chunks unload in - and the unload
+        // handler banks it the moment they do.
+        var gameTime = level().getGameTime();
+        if (gameTime - lastRetreatSteerTick < 20L) {
+            return;
+        }
+        lastRetreatSteerTick = gameTime;
+
+        var vent = com.alien.common.gameplay.hive.economy.BroodBankTask.nearestVent(location, blockPosition());
+        if (vent != null && vent.distSqr(blockPosition()) <= RETREAT_VENT_RANGE_SQUARED) {
+            getNavigation().moveTo(vent.getX() + 0.5, vent.getY(), vent.getZ() + 0.5, 1.0);
+            return;
+        }
+
+        var nearestPlayer = level().getNearestPlayer(this, 128.0);
+        if (nearestPlayer != null) {
+            var away = net.minecraft.world.entity.ai.util.DefaultRandomPos.getPosAway(
+                this,
+                16,
+                7,
+                nearestPlayer.position()
+            );
+            if (away != null) {
+                getNavigation().moveTo(away.x, away.y, away.z, 1.0);
+            }
+        }
+        // No player within 128 blocks: stand still and let the chunk unload around it - that IS the escape.
+    }
+
     @Override
     public void tick() {
         super.tick();
+
+        if (!level().isClientSide) {
+            applyLostLimbMaxHealthPenalty();
+            breakIntersectingCobwebs();
+            escapeHumanRazorWire();
+            breakFrenziedRaidObstructions();
+            breakRaidContainmentTargets();
+            shoulderThroughObstructions();
+            jumpShortWallTowardTarget();
+        }
 
         crawlingManager.tick();
         cocoonManager.maintainLockedState();
@@ -341,10 +650,15 @@ public abstract class Xenomorph extends Alien implements ResinProducer, EntitySe
         if (!level().isClientSide) {
             cooldownTracker.tick();
             clearExpiredHiveIntruderTarget();
+            tickCrawlRetreat();
         }
 
         if (!level().isClientSide && isLunging.get() && onGround()) {
             isLunging.set(false);
+        }
+
+        if (!level().isClientSide && activeAttack != null && !canUseAttack(activeAttack)) {
+            completeActiveAttack();
         }
 
         if (!level().isClientSide && activeAttack != null && activeExecutor != null) {
@@ -366,6 +680,788 @@ public abstract class Xenomorph extends Alien implements ResinProducer, EntitySe
                 tryAlertNearbyXenomorphs();
             }
         }
+    }
+
+    private void applyLostLimbMaxHealthPenalty() {
+        var attributeInstance = getAttribute(Attributes.MAX_HEALTH);
+
+        if (attributeInstance == null) {
+            return;
+        }
+
+        var detachedLimbs = countDetachedLimbs();
+
+        // Nothing lost and nothing applied: leave the attribute map alone entirely. Previously this removed the
+        // modifier unconditionally EVERY TICK on EVERY xenomorph before checking whether it was needed - an attribute
+        // mutation and a recalculation each time, for the overwhelmingly common case of an alien with all its limbs.
+        if (detachedLimbs == lastAppliedDetachedLimbs) {
+            return;
+        }
+
+        lastAppliedDetachedLimbs = detachedLimbs;
+        attributeInstance.removeModifier(LOST_LIMB_MAX_HEALTH_MODIFIER);
+
+        if (detachedLimbs <= 0) {
+            return;
+        }
+
+        attributeInstance.addTransientModifier(
+            new AttributeModifier(
+                LOST_LIMB_MAX_HEALTH_MODIFIER,
+                -detachedLimbs * MAX_HEALTH_REDUCTION_PER_LOST_LIMB,
+                AttributeModifier.Operation.ADD_MULTIPLIED_TOTAL
+            )
+        );
+
+        if (getHealth() > getMaxHealth()) {
+            setHealth(getMaxHealth());
+        }
+    }
+
+    private int countDetachedLimbs() {
+        if (!(this instanceof Dismemberable dismemberable)) {
+            return 0;
+        }
+
+        var manager = dismemberable.getDismembermentManager();
+
+        if (manager == null || !manager.hasAnyDetached()) {
+            return 0;
+        }
+
+        var count = 0;
+
+        for (var definition : LimbDefinitionRegistry.getDefinitions(getType())) {
+            if (manager.isDetached(definition)) {
+                count++;
+            }
+        }
+
+        return count;
+    }
+
+    private void breakIntersectingCobwebs() {
+        // THROTTLED. This walked the whole hitbox volume every tick on every xenomorph - roughly 24,000 block reads
+        // a second across 100 drones, 90,000 if they are queens - almost always to discover there is no cobweb.
+        //
+        // Only the interval, not a "am I webbed" precondition: vanilla exposes no such check (it keeps the stuck-speed
+        // multiplier private and clears it every tick), and inventing one would mean tracking state that already
+        // exists somewhere less reliable. A cobweb slows an entity for far longer than half a second, so checking ten
+        // times less often loses nothing a player would notice and costs a tenth as much.
+        if (tickCount % COBWEB_SWEEP_INTERVAL_TICKS != 0) {
+            return;
+        }
+
+        var level = level();
+        var boundingBox = getBoundingBox();
+        var minX = Mth.floor(boundingBox.minX);
+        var minY = Mth.floor(boundingBox.minY);
+        var minZ = Mth.floor(boundingBox.minZ);
+        var maxX = Mth.floor(boundingBox.maxX);
+        var maxY = Mth.floor(boundingBox.maxY);
+        var maxZ = Mth.floor(boundingBox.maxZ);
+
+        for (var x = minX; x <= maxX; x++) {
+            for (var y = minY; y <= maxY; y++) {
+                for (var z = minZ; z <= maxZ; z++) {
+                    var pos = new BlockPos(x, y, z);
+
+                    if (level.getBlockState(pos).is(Blocks.COBWEB)) {
+                        level.destroyBlock(pos, false, this);
+                    }
+                }
+            }
+        }
+    }
+
+    private void escapeHumanRazorWire() {
+        var center = averageIntersectingBlockCenter(AlienBlockTags.HUMAN_RAZOR_WIRE);
+
+        if (center == null) {
+            return;
+        }
+
+        getNavigation().stop();
+        pathNavigator.stop();
+        hiveIntruderPathNavigator.stop();
+
+        var away = position().subtract(center.x, getY(), center.z);
+
+        if (away.horizontalDistanceSqr() < 1.0E-4D) {
+            away = Vec3.directionFromRotation(0.0F, getYRot());
+        }
+
+        var push = away.normalize().scale(0.18D);
+        setDeltaMovement(getDeltaMovement().add(push.x, 0.0D, push.z));
+    }
+
+    private void breakFrenziedRaidObstructions() {
+        if (tickCount % FRENZIED_RAID_BREAKOUT_INTERVAL_TICKS != 0) {
+            return;
+        }
+
+        if (!level().getGameRules().getBoolean(GameRules.RULE_MOBGRIEFING)) {
+            return;
+        }
+
+        if (!hasEffect(AlienMobEffects.getFrenzyHolder())) {
+            return;
+        }
+
+        var pos = firstIntersectingFrenzyBreakoutBlock();
+        if (pos == null) {
+            pos = firstLineOfSightFrenzyBreakoutBlock();
+        }
+        if (pos == null) {
+            return;
+        }
+
+        getNavigation().stop();
+        pathNavigator.stop();
+        hiveIntruderPathNavigator.stop();
+        damageRaidBreakoutBlock(pos);
+    }
+
+    private @Nullable BlockPos firstIntersectingFrenzyBreakoutBlock() {
+        var level = level();
+        var boundingBox = getBoundingBox().inflate(0.08D);
+        var minX = Mth.floor(boundingBox.minX);
+        var minY = Mth.floor(boundingBox.minY);
+        var minZ = Mth.floor(boundingBox.minZ);
+        var maxX = Mth.floor(boundingBox.maxX);
+        var maxY = Mth.floor(boundingBox.maxY);
+        var maxZ = Mth.floor(boundingBox.maxZ);
+
+        for (var x = minX; x <= maxX; x++) {
+            for (var y = minY; y <= maxY; y++) {
+                for (var z = minZ; z <= maxZ; z++) {
+                    var pos = new BlockPos(x, y, z);
+                    if (canFrenziedRaidBreakoutBlock(level.getBlockState(pos), pos)) {
+                        return pos;
+                    }
+                }
+            }
+        }
+
+        return null;
+    }
+
+    private @Nullable BlockPos firstLineOfSightFrenzyBreakoutBlock() {
+        var target = getTarget();
+        if (target == null || !target.isAlive() || getSensing().hasLineOfSight(target)) {
+            return null;
+        }
+
+        var clipContext = new ClipContext(
+            getEyePosition(),
+            target.getEyePosition(),
+            ClipContext.Block.COLLIDER,
+            ClipContext.Fluid.NONE,
+            this
+        );
+        var hit = level().clip(clipContext);
+        if (hit.getType() == HitResult.Type.MISS) {
+            return null;
+        }
+
+        var pos = hit.getBlockPos();
+        return canFrenziedRaidBreakoutBlock(level().getBlockState(pos), pos) ? pos : null;
+    }
+
+    /** The hardness ceiling an ordinary dig respects - kept identical to {@code DigToTargetGoal.DESTROY_TIME_LIMIT}. */
+    private static final float SHOULDER_BREAK_DESTROY_TIME_LIMIT = 6.0F;
+
+    /**
+     * Progress per pass while WALKING - [stated] "the walking should break them at the same rate as deliberately
+     * digging". Kept identical to {@code DigToTargetGoal.BREAKING_SPEED}, so simply walking into something is already
+     * as effective as setting out to dig it.
+     */
+    private static final float SHOULDER_BREAK_BASE_SPEED = 50.0F;
+
+    /** [stated] "running would be 4x that value" - so a charging queen goes through walls at four times a dig. */
+    private static final float SHOULDER_BREAK_RUN_MULTIPLIER = 4.0F;
+
+    /** How far above its own walk pace a caste counts as running. */
+    private static final double SHOULDER_BREAK_RUN_FACTOR = 1.15;
+
+    /** Below this the caste fits through the openings that trap the big ones, so it has no business smashing them. */
+    private static final float SHOULDER_BREAK_MIN_HEIGHT = 3.0F;
+
+    /** Half a second. Often enough to keep moving, rare enough not to scan every tick. */
+    // #########################
+    // ## SHORT-WALL JUMPING ##
+    // #########################
+
+    /**
+     * ⭐ THE WALL-JUMP DIAL. The tallest wall a drone or warrior will hop rather than be stopped by.
+     * <p>
+     * [stated] "we might want to let the drones and warriors jump up 3 block tall walls" and, on why 3 is modest,
+     * [stated] "we plan to add crawling up walls and ceilings later this is just a prelude to that eventually aliens
+     * could scale even a 7 block wall or more so a jump over 3 isnt too crazy."
+     * </p>
+     * <p>
+     * ⚠ THIS IS NOT {@code maxUpStep} AND MUST NOT BECOME IT. Every alien steps 1.5, and BOTH rush attacks are pinned
+     * to that figure - the Crusher's {@code MAX_TERRAIN_STEP_UP} (1.5) and the Chrysalis's {@code ROLL_WALL_HEIGHT}
+     * (2.0) draw their terrain-vs-wall line from it. Raising the step to 3 would make the Crusher read a 3-block wall
+     * as walkable terrain and never charge-stun, and would leave the roll's wall line BELOW its own step height. A jump
+     * is a velocity impulse and touches neither.
+     * </p>
+     */
+    private static final int WALL_JUMP_MAX_HEIGHT = 3;
+
+    /**
+     * Upward impulse, tuned to clear {@link #WALL_JUMP_MAX_HEIGHT} with a little margin.
+     * <p>
+     * Vanilla's 0.42 clears about 1.25 blocks, and apex height goes with the SQUARE of the impulse, so clearing ~3.5
+     * needs roughly 0.42 * sqrt(3.5 / 1.25). Raise this if they clip the lip of a 3-block wall.
+     * </p>
+     */
+    private static final double WALL_JUMP_IMPULSE = 0.72;
+
+    /** A nudge forward so they clear the lip and land ON the wall instead of sliding back down its face. */
+    private static final double WALL_JUMP_FORWARD_BOOST = 0.28;
+
+    private static final int WALL_JUMP_INTERVAL_TICKS = 10;
+
+    private static final int SHOULDER_BREAK_INTERVAL_TICKS = 10;
+
+    /** Roughly 0.05 blocks a tick - enough to tell walking from standing still and being shoved. */
+    private static final double SHOULDER_BREAK_MIN_SPEED_SQUARED = 0.0025;
+
+    /** A little past the hitbox, so it clears the way ahead rather than only what it is already inside. */
+    private static final double SHOULDER_BREAK_REACH = 0.25;
+
+    /**
+     * The big castes shoulder their way through low openings instead of standing in them looking foolish.
+     * <h2>Why the top half only</h2> [stated] "have it so the top half of the hitbox breaks any blocks the alien is
+     * normally able to break. That means that if its a wall the lower part 'legs' stops it from just plowing through it
+     * and making an uneeded tunnel."
+     * <p>
+     * So a 3-block arch, a low doorway or a stray floating block gets smashed as a harbinger comes through, while a
+     * solid wall still stops it - its legs meet the bottom half, which this never touches. A big xenomorph clears the
+     * ceiling, it does not bore a corridor.
+     * <h2>Who</h2> By HEIGHT, not by a list of castes, because the problem IS height. At 3.98 that is the queen,
+     * empress, harbinger, praetorian, predalien and carrier - [stated] "yeah for them too" - and any tall caste added
+     * later gets it for free. Ravagers, razor claws and chrysalises sit at 2.98 and fit through the gaps that trap the
+     * big ones, so they are naturally below the line. The ovipositor is excluded structurally: it extends Mob, not
+     * Xenomorph, and never pathfinds anyway.
+     * <h2>How fast</h2> PROGRESSIVE, not instant: blocks take damage through the same break-progress manager an
+     * ordinary dig uses, so a wall visibly cracks apart as something large leans into it. WALKING already matches the
+     * full dig rate, and RUNNING is four times that - a harbinger in pursuit does not slow down for architecture at
+     * all.
+     * <h2>When</h2> [stated] "any walking running or similar animation" - not only while chasing. A queen stuck on a
+     * stray block while merely walking looks just as silly. Gated on actually MOVING, so a stationary one never chews
+     * at its own architecture, and on {@code mobGriefing} - [stated] "if mobgriefing is off then i think we should
+     * respect their choice", which is also what every other breaking behaviour here does.
+     * <h2>What it may break</h2> [stated] "this method should also apply to the blocks they can walk and break too, so
+     * the behavior is the same whether they use an attack to break a block or just walk/run through it."
+     * <p>
+     * So this mirrors {@code DigToTargetGoal}'s rule EXACTLY - the one an ordinary dig uses - rather than either of the
+     * two special sets beside it. FRENZY_BREAKABLE is a RAID power and lets them through more than they normally
+     * manage; the containment rule is looser still, permitting anything with a collision shape so a captive can get out
+     * of a box. Walking through a doorway should be neither. A block a xenomorph could have chewed through is a block
+     * it can shoulder aside, and nothing more.
+     */
+    /**
+     * Hops a short wall that is between this xenomorph and its target.
+     * <p>
+     * A REACTION, NOT PATHFINDING. Aliens use the vanilla {@code WalkNodeEvaluator}, which only ever considers a
+     * one-block rise plus step height, so it will never PLAN a route over a wall however capable the mob is. Teaching
+     * it to would mean a custom node evaluator in the hottest code in the game. Instead this waits until they are
+     * actually stopped by something and answers it - which is the visible case anyway.
+     * </p>
+     * <p>
+     * ⚠ DRONES AND WARRIORS ONLY, and that is the point: {@code shoulderThroughObstructions} needs a body at least
+     * {@code SHOULDER_BREAK_MIN_HEIGHT} (3.0) tall, and both of these are 1.98 - so they CANNOT break a wall at all.
+     * Today a waist-high ledge stops them dead. Praetorians and up already answer walls by demolishing them and are
+     * deliberately left alone.
+     * </p>
+     * <p>
+     * TARGET-GATED [stated], so an idle hive does not hop about: they only jump when something is on the other side.
+     * </p>
+     */
+    private void jumpShortWallTowardTarget() {
+        if (tickCount % WALL_JUMP_INTERVAL_TICKS != 0 || !onGround() || Boolean.TRUE.equals(isCrawling.get())) {
+            return;
+        }
+
+        var target = getTarget();
+        if (target == null || !target.isAlive()) {
+            return;
+        }
+
+        // Only castes that cannot shoulder through. Anything tall enough to break a wall should break it.
+        if (getBbHeight() >= SHOULDER_BREAK_MIN_HEIGHT) {
+            return;
+        }
+
+        // Actually stopped by something, rather than merely near it - horizontalCollision is vanilla's own report
+        // that this tick's movement was clipped.
+        if (!horizontalCollision) {
+            return;
+        }
+
+        var toTarget = new Vec3(target.getX() - getX(), 0.0, target.getZ() - getZ());
+        if (toTarget.lengthSqr() < 1.0E-4) {
+            return;
+        }
+
+        var forward = toTarget.normalize();
+        var ahead = BlockPos.containing(getX() + forward.x, getY(), getZ() + forward.z);
+        var feetY = ahead.getY();
+
+        // Walk the column ahead: find the top of the obstruction, and refuse if it is taller than we can clear.
+        var topOffset = 0;
+        for (var offset = 0; offset <= WALL_JUMP_MAX_HEIGHT; offset++) {
+            if (!level().getBlockState(ahead.above(offset)).getCollisionShape(level(), ahead.above(offset)).isEmpty()) {
+                topOffset = offset + 1;
+            }
+        }
+
+        // Nothing there (the collision was something else), or too tall to clear - a 4-block wall is a job for a
+        // caste that can demolish it.
+        if (topOffset == 0 || topOffset > WALL_JUMP_MAX_HEIGHT) {
+            return;
+        }
+
+        // Somewhere to land: the space above the wall must be clear enough to stand in.
+        for (var clearance = 0; clearance < Math.max(1, Mth.ceil(getBbHeight())); clearance++) {
+            var landing = ahead.above(topOffset + clearance);
+            if (!level().getBlockState(landing).getCollisionShape(level(), landing).isEmpty()) {
+                return;
+            }
+        }
+
+        var motion = getDeltaMovement();
+        setDeltaMovement(
+            motion.x + forward.x * WALL_JUMP_FORWARD_BOOST,
+            WALL_JUMP_IMPULSE,
+            motion.z + forward.z * WALL_JUMP_FORWARD_BOOST
+        );
+        hasImpulse = true;
+    }
+
+    private void shoulderThroughObstructions() {
+        if (getBbHeight() < SHOULDER_BREAK_MIN_HEIGHT || tickCount % SHOULDER_BREAK_INTERVAL_TICKS != 0) {
+            return;
+        }
+
+        if (!level().getGameRules().getBoolean(GameRules.RULE_MOBGRIEFING)) {
+            return;
+        }
+
+        var motion = getDeltaMovement();
+        var speedSquared = motion.x * motion.x + motion.z * motion.z;
+        if (speedSquared < SHOULDER_BREAK_MIN_SPEED_SQUARED) {
+            return;
+        }
+
+        // [stated] "walking should break it at normal speed and running breaks it at 4x speed. that way running
+        // breaks the blocks faster while just walking carves it slower if at all."
+        //
+        // "Running" is measured against the caste's OWN walk speed rather than a flat number, so a queen and a
+        // predalien each get judged by their own gait instead of one threshold suiting neither.
+        var walkSpeed = getAttributeValue(net.minecraft.world.entity.ai.attributes.Attributes.MOVEMENT_SPEED);
+        var running = Math.sqrt(speedSquared) > walkSpeed * SHOULDER_BREAK_RUN_FACTOR;
+        var breakSpeed = SHOULDER_BREAK_BASE_SPEED * (running ? SHOULDER_BREAK_RUN_MULTIPLIER : 1.0F);
+
+        var box = getBoundingBox();
+        var shoulders = new net.minecraft.world.phys.AABB(
+            box.minX,
+            box.minY + box.getYsize() * 0.5,
+            box.minZ,
+            box.maxX,
+            box.maxY,
+            box.maxZ
+        ).inflate(SHOULDER_BREAK_REACH, 0.0, SHOULDER_BREAK_REACH);
+
+        for (
+            var pos : BlockPos.betweenClosed(
+                net.minecraft.core.BlockPos.containing(shoulders.minX, shoulders.minY, shoulders.minZ),
+                net.minecraft.core.BlockPos.containing(shoulders.maxX, shoulders.maxY, shoulders.maxZ)
+            )
+        ) {
+            if (canShoulderAside(pos)) {
+                com.blib.api.common.block.v1.BlockBreakProgressManager.damage(level(), pos, breakSpeed);
+            }
+        }
+    }
+
+    /**
+     * The SAME test an ordinary dig applies, so attacking a block and walking through it agree.
+     * <p>
+     * No block entities, nothing unbreakable, nothing tagged immune, and nothing harder than the dig limit - obsidian
+     * at 50 and iron at 5 are both well clear of a xenomorph's ordinary reach, and stay that way whether it swings at
+     * them or walks into them.
+     */
+    private boolean canShoulderAside(BlockPos pos) {
+        var state = level().getBlockState(pos);
+
+        return !state.isAir()
+            && !state.hasBlockEntity()
+            && state.getDestroySpeed(level(), pos) != -1.0F
+            && state.getBlock().defaultDestroyTime() < SHOULDER_BREAK_DESTROY_TIME_LIMIT
+            && !state.is(AlienBlockTags.XENOMORPH_IMMUNE)
+            // RESIN IS THEIR OWN HOUSE. [stated] "exclude resin for now, since the hive clears any obstructions in
+            // the hallways and chambers anyway as part of maintenance." Resin sits well under the hardness ceiling,
+            // so without this a queen jogging down her own corridor would strip the ceiling off it - and the hive
+            // would then rebuild exactly what she just removed.
+            && !state.is(AlienBlockTags.RESIN);
+    }
+
+    private boolean canFrenziedRaidBreakoutBlock(BlockState state, BlockPos pos) {
+        if (state.isAir() || state.hasBlockEntity()) {
+            return false;
+        }
+        if (state.getDestroySpeed(level(), pos) < 0.0F) {
+            return false;
+        }
+
+        return state.is(AlienBlockTags.XENOMORPH_FRENZY_BREAKABLE);
+    }
+
+    private void breakRaidContainmentTargets() {
+        if (tickCount % RAID_CONTAINMENT_BREAKOUT_INTERVAL_TICKS != 0) {
+            return;
+        }
+        if (!level().getGameRules().getBoolean(GameRules.RULE_MOBGRIEFING)) {
+            return;
+        }
+        if (!hasEffect(AlienMobEffects.getFrenzyHolder()) || !ConvoyMemberTracker.isRaidMember(this)) {
+            return;
+        }
+        if (this instanceof Queen) {
+            return;
+        }
+
+        if (tryBreakOutNearbyQueen()) {
+            clearRaidEggTarget();
+            return;
+        }
+        if (!tryBreakOutNearbyEgg()) {
+            clearRaidEggTarget();
+        }
+    }
+
+    private boolean tryBreakOutNearbyQueen() {
+        var bounds = getBoundingBox().inflate(RAID_CONTAINMENT_TARGET_RADIUS_BLOCKS);
+        var queens = level().getEntitiesOfClass(
+            Queen.class,
+            bounds,
+            queen -> queen != this
+                && queen.isAlive()
+                && !queen.isRemoved()
+                && (queen.isContained() || queen.isInhibited())
+                && queen.getVariant() == getVariant()
+        );
+
+        Queen nearest = null;
+        var nearestDistance = Double.MAX_VALUE;
+        for (var queen : queens) {
+            var distance = distanceToSqr(queen);
+            if (distance < nearestDistance) {
+                nearest = queen;
+                nearestDistance = distance;
+            }
+        }
+        if (nearest == null) {
+            return false;
+        }
+
+        var anchor = nearest.getBindManager()
+            .anchors()
+            .stream()
+            .filter(pos -> level().getBlockEntity(pos) instanceof AnchorBlockEntity)
+            .min((first, second) -> Double.compare(distanceToSqr(first.getCenter()), distanceToSqr(second.getCenter())))
+            .orElse(null);
+        if (anchor != null) {
+            return workOnAnchor(anchor);
+        }
+
+        var containment = firstTargetedContainmentBlockAround(nearest);
+        if (containment != null) {
+            breakOrMoveToContainment(containment);
+            return true;
+        }
+        moveToward(nearest.position());
+        return true;
+    }
+
+    private boolean workOnAnchor(BlockPos anchorPos) {
+        if (distanceToSqr(anchorPos.getCenter()) > RAID_CONTAINMENT_BREAK_RANGE_BLOCKS * RAID_CONTAINMENT_BREAK_RANGE_BLOCKS) {
+            moveToward(anchorPos.getCenter());
+            return true;
+        }
+
+        if (level().getBlockEntity(anchorPos) instanceof AnchorBlockEntity anchor) {
+            if (damageRaidBreakoutBlock(anchorPos) == BlockBreakProgressManager.Result.DESTROYED) {
+                anchor.release();
+            }
+            return true;
+        }
+        return false;
+    }
+
+    private boolean tryBreakOutNearbyEgg() {
+        clearExpiredRaidEggFailures();
+
+        var bounds = getBoundingBox().inflate(RAID_CONTAINMENT_TARGET_RADIUS_BLOCKS);
+        var eggs = level().getEntitiesOfClass(
+            Ovomorph.class,
+            bounds,
+            egg -> egg.isAlive()
+                && !egg.isRemoved()
+                && egg.getVariant() == getVariant()
+                && !egg.getHatchManager().isHatching()
+                && !egg.getHatchManager().isHatched()
+                && ConvoyMemberTracker.isNearActiveRaidContext(egg, RAID_CONTAINMENT_TARGET_RADIUS_BLOCKS)
+                && !isRaidEggFailureCoolingDown(egg.getUUID())
+        );
+
+        Ovomorph nearest = null;
+        var nearestDistance = Double.MAX_VALUE;
+        for (var egg : eggs) {
+            if (!canAttemptRaidEgg(egg)) {
+                continue;
+            }
+            var distance = distanceToSqr(egg);
+            if (distance < nearestDistance) {
+                nearest = egg;
+                nearestDistance = distance;
+            }
+        }
+        if (nearest == null) {
+            return false;
+        }
+
+        updateRaidEggProgress(nearest, nearestDistance);
+        if (shouldAbandonRaidEgg(nearest, nearestDistance)) {
+            failRaidEggTarget(nearest.getUUID());
+            return false;
+        }
+
+        var containment = firstTargetedContainmentBlockAround(nearest);
+        if (containment != null) {
+            breakOrMoveToContainment(containment);
+            return true;
+        }
+
+        if (distanceToSqr(nearest) <= RAID_CONTAINMENT_BREAK_RANGE_BLOCKS * RAID_CONTAINMENT_BREAK_RANGE_BLOCKS) {
+            nearest.tryHatch();
+            clearRaidEggTarget();
+        } else {
+            moveToward(nearest.position());
+        }
+        return true;
+    }
+
+    private boolean canAttemptRaidEgg(Ovomorph egg) {
+        if (raidEggHigherPriorityTargetCount(egg) >= RAID_EGG_MAX_ATTACKERS) {
+            return false;
+        }
+        if (firstTargetedContainmentBlockAround(egg) != null) {
+            return true;
+        }
+
+        var path = getNavigation().createPath(egg, 0);
+        return path != null && path.canReach();
+    }
+
+    private boolean isCurrentRaidEggTarget(Ovomorph egg) {
+        return raidEggTargetId != null && raidEggTargetId.equals(egg.getUUID());
+    }
+
+    private int raidEggHigherPriorityTargetCount(Ovomorph egg) {
+        var bounds = egg.getBoundingBox().inflate(RAID_CONTAINMENT_TARGET_RADIUS_BLOCKS);
+        var count = 0;
+
+        for (
+            var xenomorph : level().getEntitiesOfClass(
+                Xenomorph.class,
+                bounds,
+                xenomorph -> xenomorph != this
+                    && xenomorph.isAlive()
+                    && !xenomorph.isRemoved()
+                    && xenomorph.hasEffect(AlienMobEffects.getFrenzyHolder())
+                    && ConvoyMemberTracker.isRaidMember(xenomorph)
+            )
+        ) {
+            if (xenomorph.isCurrentRaidEggTarget(egg) && xenomorph.getUUID().compareTo(getUUID()) < 0) {
+                count++;
+            }
+        }
+
+        return count;
+    }
+
+    private void updateRaidEggProgress(Ovomorph egg, double distanceSqr) {
+        if (!isCurrentRaidEggTarget(egg)) {
+            raidEggTargetId = egg.getUUID();
+            raidEggTargetStartedAtTick = tickCount;
+            raidEggNoProgressTicks = 0;
+            raidEggLastDistanceSqr = distanceSqr;
+            return;
+        }
+
+        if (distanceSqr + RAID_EGG_PROGRESS_EPSILON_SQR < raidEggLastDistanceSqr) {
+            raidEggNoProgressTicks = 0;
+            raidEggLastDistanceSqr = distanceSqr;
+            return;
+        }
+
+        raidEggNoProgressTicks += RAID_CONTAINMENT_BREAKOUT_INTERVAL_TICKS;
+    }
+
+    private boolean shouldAbandonRaidEgg(Ovomorph egg, double distanceSqr) {
+        if (firstTargetedContainmentBlockAround(egg) != null) {
+            return false;
+        }
+        if (tickCount - raidEggTargetStartedAtTick > RAID_EGG_MAX_ATTEMPT_TICKS) {
+            return true;
+        }
+        if (raidEggNoProgressTicks > RAID_EGG_NO_PROGRESS_TICKS) {
+            return true;
+        }
+        if (distanceSqr <= RAID_CONTAINMENT_BREAK_RANGE_BLOCKS * RAID_CONTAINMENT_BREAK_RANGE_BLOCKS) {
+            return false;
+        }
+
+        var path = getNavigation().createPath(egg, 0);
+        return path == null || !path.canReach();
+    }
+
+    private boolean isRaidEggFailureCoolingDown(UUID eggId) {
+        var expiresAtTick = failedRaidEggTargets.get(eggId);
+        if (expiresAtTick == null) {
+            return false;
+        }
+        if (expiresAtTick <= tickCount) {
+            failedRaidEggTargets.remove(eggId);
+            return false;
+        }
+        return true;
+    }
+
+    private void failRaidEggTarget(UUID eggId) {
+        failedRaidEggTargets.put(eggId, tickCount + RAID_EGG_FAILED_COOLDOWN_TICKS);
+        clearRaidEggTarget();
+        getNavigation().stop();
+    }
+
+    private void clearRaidEggTarget() {
+        raidEggTargetId = null;
+        raidEggTargetStartedAtTick = 0;
+        raidEggNoProgressTicks = 0;
+        raidEggLastDistanceSqr = Double.MAX_VALUE;
+    }
+
+    private void clearExpiredRaidEggFailures() {
+        failedRaidEggTargets.entrySet().removeIf(entry -> entry.getValue() <= tickCount);
+    }
+
+    private @Nullable BlockPos firstTargetedContainmentBlockAround(Entity target) {
+        var base = target.blockPosition();
+        var orderedDirections = new Direction[] {
+            Direction.NORTH,
+            Direction.SOUTH,
+            Direction.WEST,
+            Direction.EAST,
+            Direction.UP,
+            Direction.DOWN
+        };
+
+        for (var direction : orderedDirections) {
+            var pos = base.relative(direction);
+            if (canBreakTargetedContainmentBlock(pos)) {
+                return pos;
+            }
+        }
+
+        var above = base.above(2);
+        if (canBreakTargetedContainmentBlock(above)) {
+            return above;
+        }
+        return null;
+    }
+
+    private boolean canBreakTargetedContainmentBlock(BlockPos pos) {
+        var state = level().getBlockState(pos);
+        if (state.isAir() || state.hasBlockEntity()) {
+            return false;
+        }
+        if (state.getDestroySpeed(level(), pos) < 0.0F || state.is(AlienBlockTags.XENOMORPH_IMMUNE)) {
+            return false;
+        }
+        return state.is(AlienBlockTags.XENOMORPH_FRENZY_BREAKABLE)
+            || state.isSuffocating(level(), pos)
+            || !state.getCollisionShape(level(), pos).isEmpty();
+    }
+
+    private void breakOrMoveToContainment(BlockPos pos) {
+        if (distanceToSqr(pos.getCenter()) > RAID_CONTAINMENT_BREAK_RANGE_BLOCKS * RAID_CONTAINMENT_BREAK_RANGE_BLOCKS) {
+            moveToward(pos.getCenter());
+            return;
+        }
+
+        getNavigation().stop();
+        pathNavigator.stop();
+        hiveIntruderPathNavigator.stop();
+        damageRaidBreakoutBlock(pos);
+    }
+
+    private BlockBreakProgressManager.Result damageRaidBreakoutBlock(BlockPos pos) {
+        var state = level().getBlockState(pos);
+        if (!canDamageRaidBreakoutBlock(state, pos)) {
+            return BlockBreakProgressManager.Result.NOT_DAMAGED;
+        }
+        return BlockBreakProgressManager.damage(level(), pos, RAID_BREAKOUT_BLOCK_DAMAGE_PER_ATTEMPT);
+    }
+
+    private boolean canDamageRaidBreakoutBlock(BlockState state, BlockPos pos) {
+        if (level().getBlockEntity(pos) instanceof AnchorBlockEntity) {
+            return state.getDestroySpeed(level(), pos) >= 0.0F && !state.is(AlienBlockTags.XENOMORPH_IMMUNE);
+        }
+        return canBreakTargetedContainmentBlock(pos) || canFrenziedRaidBreakoutBlock(state, pos);
+    }
+
+    private void moveToward(Vec3 pos) {
+        getNavigation().moveTo(pos.x, pos.y, pos.z, RAID_CONTAINMENT_NAVIGATION_SPEED);
+    }
+
+    private @Nullable Vec3 averageIntersectingBlockCenter(TagKey<Block> blockTag) {
+        var level = level();
+        var boundingBox = getBoundingBox();
+        var minX = Mth.floor(boundingBox.minX);
+        var minY = Mth.floor(boundingBox.minY);
+        var minZ = Mth.floor(boundingBox.minZ);
+        var maxX = Mth.floor(boundingBox.maxX);
+        var maxY = Mth.floor(boundingBox.maxY);
+        var maxZ = Mth.floor(boundingBox.maxZ);
+        var totalX = 0.0D;
+        var totalY = 0.0D;
+        var totalZ = 0.0D;
+        var count = 0;
+
+        for (var x = minX; x <= maxX; x++) {
+            for (var y = minY; y <= maxY; y++) {
+                for (var z = minZ; z <= maxZ; z++) {
+                    var pos = new BlockPos(x, y, z);
+
+                    if (level.getBlockState(pos).is(blockTag)) {
+                        totalX += x + 0.5D;
+                        totalY += y + 0.5D;
+                        totalZ += z + 0.5D;
+                        count++;
+                    }
+                }
+            }
+        }
+
+        if (count <= 0) {
+            return null;
+        }
+
+        return new Vec3(totalX / count, totalY / count, totalZ / count);
     }
 
     private void updateDimensionsBasedOnWaterState() {
@@ -390,6 +1486,15 @@ public abstract class Xenomorph extends Alien implements ResinProducer, EntitySe
         } else {
             super.travel(vec3);
         }
+    }
+
+    @Override
+    public void makeStuckInBlock(@NotNull BlockState blockState, @NotNull Vec3 movementMultiplier) {
+        if (blockState.is(Blocks.COBWEB) || blockState.is(AlienBlockTags.HUMAN_RAZOR_WIRE)) {
+            return;
+        }
+
+        super.makeStuckInBlock(blockState, movementMultiplier);
     }
 
     @Override
@@ -514,6 +1619,10 @@ public abstract class Xenomorph extends Alien implements ResinProducer, EntitySe
             if (
                 entity instanceof Xenomorph xenomorph
                     && xenomorph != this
+                    // Only rally OWN-STRAIN xenomorphs: strains are always hostile to one another, so a rival
+                    // strain never answers this one's distress - if anything it is glad someone else is doing
+                    // the hurting.
+                    && java.util.Objects.equals(xenomorph.getVariant(), getVariant())
                     && xenomorph.getTarget() == null
                     && AlienPredicates.canAcquireTarget(xenomorph, attacker)
             ) {
@@ -527,12 +1636,24 @@ public abstract class Xenomorph extends Alien implements ResinProducer, EntitySe
         return !cocoonManager.isLocked() && super.canAttack(target) && AlienPredicates.canContinueTargeting(this, target);
     }
 
+    /**
+     * ⭐⭐ EGGS ARE NO LONGER SHOVED. [stated] "eggs seem to get pushed inside the queens hitbox and they cant get to
+     * it."
+     * <p>
+     * An ovomorph is furniture, not traffic: it is placed deliberately, on a chosen cell, and nothing downstream
+     * expects it to move afterwards. The QUEEN is the worst offender because she is 2.6 blocks wide and shuffles
+     * constantly while laying - every nudge walks a nearby egg further under her, and once it is inside her bounding
+     * box no hauler can path to it. Facehuggers, chestbursters and adolescents were already exempt for the same reason;
+     * the egg was simply missed.
+     * </p>
+     */
     @Override
     protected void doPush(Entity entity) {
         if (
             !entity.getType().is(AlienEntityTypeTags.FACEHUGGERS)
                 && !entity.getType().is(AlienEntityTypeTags.CHESTBURSTERS)
                 && !entity.getType().is(AlienEntityTypeTags.ADOLESCENTS)
+                && !entity.getType().is(AlienEntityTypeTags.OVOMORPHS)
         ) {
             super.doPush(entity);
         }

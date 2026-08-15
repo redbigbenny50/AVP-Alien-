@@ -5,10 +5,11 @@ import com.alien.common.registry.init.block.AberrantAlienResinBlocks;
 import com.alien.common.registry.init.block.AlienBlocks;
 import com.alien.common.registry.init.block.AlienChitinBlocks;
 import com.alien.common.registry.init.block.AlienResinBlocks;
+import com.alien.common.registry.init.block.IrradiatedAlienChitinBlocks;
 import com.alien.common.registry.init.block.IrradiatedAlienResinBlocks;
 import com.alien.common.registry.init.block.NetherAlienChitinBlocks;
 import com.alien.common.registry.init.block.NetherAlienResinBlocks;
-import com.alien.common.registry.init.item.AlienItems;
+import com.alien.common.registry.init.item.AlienXenomorphHeadItems;
 import net.fabricmc.fabric.api.datagen.v1.FabricDataOutput;
 import net.fabricmc.fabric.api.datagen.v1.provider.FabricBlockLootTableProvider;
 import net.minecraft.core.HolderLookup;
@@ -39,45 +40,47 @@ public class BlockLootTableProvider extends FabricBlockLootTableProvider {
 
     private void generateOtherDrops() {
         dropOther(AberrantAlienResinBlocks.ABERRANT_RESIN_NODE, AberrantAlienResinBlocks.ABERRANT_RESIN);
-        dropOther(AberrantAlienResinBlocks.ABERRANT_RESIN_VEIN, AlienItems.ABERRANT_RESIN_BALL);
+        dropWhenShearsOrSilkTouch(AberrantAlienResinBlocks.ABERRANT_RESIN_VEIN);
         dropOther(AberrantAlienResinBlocks.ABERRANT_RESIN_VENT, AberrantAlienResinBlocks.ABERRANT_RESIN);
-        dropOther(AberrantAlienResinBlocks.ABERRANT_RESIN_WEB, AlienItems.ABERRANT_RESIN_BALL);
+        dropWhenShearsOrSilkTouch(AberrantAlienResinBlocks.ABERRANT_RESIN_WEB);
         dropOther(IrradiatedAlienResinBlocks.IRRADIATED_RESIN_NODE, IrradiatedAlienResinBlocks.IRRADIATED_RESIN);
-        dropOther(IrradiatedAlienResinBlocks.IRRADIATED_RESIN_VEIN, AlienItems.IRRADIATED_RESIN_BALL);
+        dropWhenShearsOrSilkTouch(IrradiatedAlienResinBlocks.IRRADIATED_RESIN_VEIN);
         dropOther(IrradiatedAlienResinBlocks.IRRADIATED_RESIN_VENT, IrradiatedAlienResinBlocks.IRRADIATED_RESIN);
-        dropOther(IrradiatedAlienResinBlocks.IRRADIATED_RESIN_WEB, AlienItems.IRRADIATED_RESIN_BALL);
+        dropWhenShearsOrSilkTouch(IrradiatedAlienResinBlocks.IRRADIATED_RESIN_WEB);
         dropOther(NetherAlienResinBlocks.NETHER_RESIN_NODE, NetherAlienResinBlocks.NETHER_RESIN);
-        dropOther(NetherAlienResinBlocks.NETHER_RESIN_VEIN, AlienItems.NETHER_RESIN_BALL);
+        dropWhenShearsOrSilkTouch(NetherAlienResinBlocks.NETHER_RESIN_VEIN);
         dropOther(NetherAlienResinBlocks.NETHER_RESIN_VENT, NetherAlienResinBlocks.NETHER_RESIN);
-        dropOther(NetherAlienResinBlocks.NETHER_RESIN_WEB, AlienItems.NETHER_RESIN_BALL);
+        dropWhenShearsOrSilkTouch(NetherAlienResinBlocks.NETHER_RESIN_WEB);
         dropOther(AlienResinBlocks.RESIN_NODE, AlienResinBlocks.RESIN);
-        dropOther(AlienResinBlocks.RESIN_VEIN, AlienItems.RESIN_BALL);
+        dropWhenShearsOrSilkTouch(AlienResinBlocks.RESIN_VEIN);
         dropOther(AlienResinBlocks.RESIN_VENT, AlienResinBlocks.RESIN);
-        dropOther(AlienResinBlocks.RESIN_WEB, AlienItems.RESIN_BALL);
+        dropWhenShearsOrSilkTouch(AlienResinBlocks.RESIN_WEB);
 
-        // Queen head blocks (floor + wall) drop the matching head item. Both block forms map to the same
+        // Head blocks (floor + wall) drop the matching head item. Both block forms map to the same
         // item — `StandingAndWallBlockItem` placement re-derives floor-vs-wall from the placement context.
-        dropOther(AlienBlocks.QUEEN_HEAD, AlienItems.QUEEN_HEAD);
-        dropOther(AlienBlocks.QUEEN_WALL_HEAD, AlienItems.QUEEN_HEAD);
-        dropOther(AlienBlocks.ABERRANT_QUEEN_HEAD, AlienItems.ABERRANT_QUEEN_HEAD);
-        dropOther(AlienBlocks.ABERRANT_QUEEN_WALL_HEAD, AlienItems.ABERRANT_QUEEN_HEAD);
-        dropOther(AlienBlocks.IRRADIATED_QUEEN_HEAD, AlienItems.IRRADIATED_QUEEN_HEAD);
-        dropOther(AlienBlocks.IRRADIATED_QUEEN_WALL_HEAD, AlienItems.IRRADIATED_QUEEN_HEAD);
-        dropOther(AlienBlocks.NETHER_QUEEN_HEAD, AlienItems.NETHER_QUEEN_HEAD);
-        dropOther(AlienBlocks.NETHER_QUEEN_WALL_HEAD, AlienItems.NETHER_QUEEN_HEAD);
-
-        dropOther(AlienBlocks.CRUSHER_HEAD, AlienItems.CRUSHER_HEAD);
-        dropOther(AlienBlocks.CRUSHER_WALL_HEAD, AlienItems.CRUSHER_HEAD);
-        dropOther(AlienBlocks.ABERRANT_CRUSHER_HEAD, AlienItems.ABERRANT_CRUSHER_HEAD);
-        dropOther(AlienBlocks.ABERRANT_CRUSHER_WALL_HEAD, AlienItems.ABERRANT_CRUSHER_HEAD);
-        dropOther(AlienBlocks.IRRADIATED_CRUSHER_HEAD, AlienItems.IRRADIATED_CRUSHER_HEAD);
-        dropOther(AlienBlocks.IRRADIATED_CRUSHER_WALL_HEAD, AlienItems.IRRADIATED_CRUSHER_HEAD);
-        dropOther(AlienBlocks.NETHER_CRUSHER_HEAD, AlienItems.NETHER_CRUSHER_HEAD);
-        dropOther(AlienBlocks.NETHER_CRUSHER_WALL_HEAD, AlienItems.NETHER_CRUSHER_HEAD);
+        AlienXenomorphHeadItems.ALL.forEach(entry -> {
+            dropOther(entry.standingBlock(), entry.head());
+            dropOther(entry.wallBlock(), entry.head());
+        });
     }
 
     private void generateSelfDrops() {
+        // ⭐ The four resin containers - shulker rules, see dropSelfWithContents.
+        dropSelfWithContents(AlienBlocks.RESIN_CONTAINER);
+        dropSelfWithContents(AlienBlocks.NETHER_RESIN_CONTAINER);
+        dropSelfWithContents(AlienBlocks.ABERRANT_RESIN_CONTAINER);
+        dropSelfWithContents(AlienBlocks.IRRADIATED_RESIN_CONTAINER);
         dropSelf(AberrantAlienResinBlocks.ABERRANT_RESIN);
+        dropSelf(AberrantAlienResinBlocks.ABERRANT_RESIN_BONE);
+        dropSelf(AberrantAlienResinBlocks.ABERRANT_RESIN_BONE_STAIRS);
+        dropSelf(AberrantAlienResinBlocks.ABERRANT_RESIN_DOORWAY);
+        dropSelf(AberrantAlienResinBlocks.ABERRANT_RESIN_ETCHED);
+        dropSelf(AberrantAlienResinBlocks.ABERRANT_RESIN_ETCHED_STAIRS);
+        dropSelf(AberrantAlienResinBlocks.ABERRANT_RESIN_SPINE);
+        dropSelf(AberrantAlienResinBlocks.ABERRANT_RESIN_STRETCHED);
+        dropSelf(AberrantAlienResinBlocks.ABERRANT_RESIN_STRETCHED_STAIRS);
+        dropSelf(AberrantAlienResinBlocks.ABERRANT_RESIN_TENDRIL);
+        dropSelf(AberrantAlienResinBlocks.ABERRANT_RESIN_TENDRIL_STAIRS);
         dropSelf(AberrantAlienResinBlocks.ABERRANT_RESIN_BRICKS);
         dropSelf(AberrantAlienResinBlocks.ABERRANT_RESIN_BRICK_STAIRS);
         dropSelf(AberrantAlienResinBlocks.ABERRANT_RESIN_BRICK_WALL);
@@ -95,12 +98,43 @@ public class BlockLootTableProvider extends FabricBlockLootTableProvider {
         dropSelf(AberrantAlienChitinBlocks.POLISHED_ABERRANT_CHITIN_WALL);
 
         dropSelf(IrradiatedAlienResinBlocks.IRRADIATED_RESIN);
+        dropSelf(IrradiatedAlienResinBlocks.IRRADIATED_RESIN_BONE);
+        dropSelf(IrradiatedAlienResinBlocks.IRRADIATED_RESIN_BONE_STAIRS);
+        dropSelf(IrradiatedAlienResinBlocks.IRRADIATED_RESIN_DOORWAY);
+        dropSelf(IrradiatedAlienResinBlocks.IRRADIATED_RESIN_ETCHED);
+        dropSelf(IrradiatedAlienResinBlocks.IRRADIATED_RESIN_ETCHED_STAIRS);
+        dropSelf(IrradiatedAlienResinBlocks.IRRADIATED_RESIN_SPINE);
+        dropSelf(IrradiatedAlienResinBlocks.IRRADIATED_RESIN_STRETCHED);
+        dropSelf(IrradiatedAlienResinBlocks.IRRADIATED_RESIN_STRETCHED_STAIRS);
+        dropSelf(IrradiatedAlienResinBlocks.IRRADIATED_RESIN_TENDRIL);
+        dropSelf(IrradiatedAlienResinBlocks.IRRADIATED_RESIN_TENDRIL_STAIRS);
         dropSelf(IrradiatedAlienResinBlocks.IRRADIATED_RESIN_BRICKS);
         dropSelf(IrradiatedAlienResinBlocks.IRRADIATED_RESIN_BRICK_STAIRS);
         dropSelf(IrradiatedAlienResinBlocks.IRRADIATED_RESIN_BRICK_WALL);
         dropSelf(IrradiatedAlienResinBlocks.IRRADIATED_RESIN_STAIRS);
+        dropSelf(IrradiatedAlienChitinBlocks.IRRADIATED_CHITIN_BLOCK);
+        dropSelf(IrradiatedAlienChitinBlocks.IRRADIATED_CHITIN_BLOCK_STAIRS);
+        dropSelf(IrradiatedAlienChitinBlocks.IRRADIATED_CHITIN_BLOCK_WALL);
+        dropSelf(IrradiatedAlienChitinBlocks.IRRADIATED_CHITIN_BRICKS);
+        dropSelf(IrradiatedAlienChitinBlocks.IRRADIATED_CHITIN_BRICK_STAIRS);
+        dropSelf(IrradiatedAlienChitinBlocks.IRRADIATED_CHITIN_BRICK_WALL);
+        dropSelf(IrradiatedAlienChitinBlocks.CHISELED_IRRADIATED_CHITIN_BRICKS);
+        dropSelf(IrradiatedAlienChitinBlocks.CHISELED_IRRADIATED_CHITIN_BRICKS_EMBRYO);
+        dropSelf(IrradiatedAlienChitinBlocks.POLISHED_IRRADIATED_CHITIN);
+        dropSelf(IrradiatedAlienChitinBlocks.POLISHED_IRRADIATED_CHITIN_STAIRS);
+        dropSelf(IrradiatedAlienChitinBlocks.POLISHED_IRRADIATED_CHITIN_WALL);
 
         dropSelf(NetherAlienResinBlocks.NETHER_RESIN);
+        dropSelf(NetherAlienResinBlocks.NETHER_RESIN_BONE);
+        dropSelf(NetherAlienResinBlocks.NETHER_RESIN_BONE_STAIRS);
+        dropSelf(NetherAlienResinBlocks.NETHER_RESIN_DOORWAY);
+        dropSelf(NetherAlienResinBlocks.NETHER_RESIN_ETCHED);
+        dropSelf(NetherAlienResinBlocks.NETHER_RESIN_ETCHED_STAIRS);
+        dropSelf(NetherAlienResinBlocks.NETHER_RESIN_SPINE);
+        dropSelf(NetherAlienResinBlocks.NETHER_RESIN_STRETCHED);
+        dropSelf(NetherAlienResinBlocks.NETHER_RESIN_STRETCHED_STAIRS);
+        dropSelf(NetherAlienResinBlocks.NETHER_RESIN_TENDRIL);
+        dropSelf(NetherAlienResinBlocks.NETHER_RESIN_TENDRIL_STAIRS);
         dropSelf(NetherAlienResinBlocks.NETHER_RESIN_BRICKS);
         dropSelf(NetherAlienResinBlocks.NETHER_RESIN_BRICK_STAIRS);
         dropSelf(NetherAlienResinBlocks.NETHER_RESIN_BRICK_WALL);
@@ -118,10 +152,21 @@ public class BlockLootTableProvider extends FabricBlockLootTableProvider {
         dropSelf(NetherAlienChitinBlocks.POLISHED_NETHER_CHITIN_WALL);
 
         dropSelf(AlienResinBlocks.RESIN);
+        dropSelf(AlienResinBlocks.RESIN_BONE);
+        dropSelf(AlienResinBlocks.RESIN_ETCHED);
+        dropSelf(AlienResinBlocks.RESIN_STRETCHED);
+        dropWhenSilkTouch(AlienBlocks.JELLY_VAT);
+        dropSelf(AlienResinBlocks.RESIN_TENDRIL);
+        dropSelf(AlienResinBlocks.RESIN_SPINE);
+        dropSelf(AlienResinBlocks.RESIN_DOORWAY);
         dropSelf(AlienResinBlocks.RESIN_BRICKS);
         dropSelf(AlienResinBlocks.RESIN_BRICK_STAIRS);
         dropSelf(AlienResinBlocks.RESIN_BRICK_WALL);
         dropSelf(AlienResinBlocks.RESIN_STAIRS);
+        dropSelf(AlienResinBlocks.RESIN_BONE_STAIRS);
+        dropSelf(AlienResinBlocks.RESIN_ETCHED_STAIRS);
+        dropSelf(AlienResinBlocks.RESIN_STRETCHED_STAIRS);
+        dropSelf(AlienResinBlocks.RESIN_TENDRIL_STAIRS);
         dropSelf(AlienChitinBlocks.CHITIN_BLOCK);
         dropSelf(AlienChitinBlocks.CHITIN_BLOCK_STAIRS);
         dropSelf(AlienChitinBlocks.CHITIN_BLOCK_WALL);
@@ -135,9 +180,13 @@ public class BlockLootTableProvider extends FabricBlockLootTableProvider {
         dropSelf(AlienChitinBlocks.POLISHED_CHITIN_WALL);
 
         dropSelf(AberrantAlienResinBlocks.RIBBED_ABERRANT_RESIN);
+        dropSelf(AberrantAlienResinBlocks.RIBBED_ABERRANT_RESIN_STAIRS);
         dropSelf(IrradiatedAlienResinBlocks.RIBBED_IRRADIATED_RESIN);
+        dropSelf(IrradiatedAlienResinBlocks.RIBBED_IRRADIATED_RESIN_STAIRS);
         dropSelf(NetherAlienResinBlocks.RIBBED_NETHER_RESIN);
+        dropSelf(NetherAlienResinBlocks.RIBBED_NETHER_RESIN_STAIRS);
         dropSelf(AlienResinBlocks.RIBBED_RESIN);
+        dropSelf(AlienResinBlocks.RIBBED_RESIN_STAIRS);
 
         dropSelf(AberrantAlienResinBlocks.SMOOTH_ABERRANT_RESIN);
         dropSelf(AberrantAlienResinBlocks.SMOOTH_ABERRANT_RESIN_STAIRS);
@@ -153,12 +202,21 @@ public class BlockLootTableProvider extends FabricBlockLootTableProvider {
         dropSelf(AlienResinBlocks.SMOOTH_RESIN_WALL);
 
         dropSelf(AlienBlocks.ROYAL_JELLY_BLOCK);
+        // SCOURGE_JELLY_BLOCK had no loot table at all - breaking one dropped nothing. Pre-existing, fixed here
+        // while adding its irradiated sibling.
+        dropSelf(AlienBlocks.SCOURGE_JELLY_BLOCK);
+        dropSelf(AlienBlocks.IRRADIATED_JELLY_BLOCK);
     }
 
     private void generateSlabDrops() {
         dropSlab(AberrantAlienResinBlocks.ABERRANT_RESIN_SLAB);
         dropSlab(AberrantAlienResinBlocks.ABERRANT_RESIN_BRICK_SLAB);
         dropSlab(AberrantAlienResinBlocks.SMOOTH_ABERRANT_RESIN_SLAB);
+        dropSlab(AberrantAlienResinBlocks.RIBBED_ABERRANT_RESIN_SLAB);
+        dropSlab(AberrantAlienResinBlocks.ABERRANT_RESIN_BONE_SLAB);
+        dropSlab(AberrantAlienResinBlocks.ABERRANT_RESIN_ETCHED_SLAB);
+        dropSlab(AberrantAlienResinBlocks.ABERRANT_RESIN_STRETCHED_SLAB);
+        dropSlab(AberrantAlienResinBlocks.ABERRANT_RESIN_TENDRIL_SLAB);
 
         dropSlab(AberrantAlienChitinBlocks.ABERRANT_CHITIN_BLOCK_SLAB);
         dropSlab(AberrantAlienChitinBlocks.ABERRANT_CHITIN_BRICK_SLAB);
@@ -168,15 +226,34 @@ public class BlockLootTableProvider extends FabricBlockLootTableProvider {
         dropSlab(IrradiatedAlienResinBlocks.IRRADIATED_RESIN_BRICK_SLAB);
         dropSlab(IrradiatedAlienResinBlocks.SMOOTH_IRRADIATED_RESIN_SLAB);
 
+        dropSlab(IrradiatedAlienChitinBlocks.IRRADIATED_CHITIN_BLOCK_SLAB);
+        dropSlab(IrradiatedAlienChitinBlocks.IRRADIATED_CHITIN_BRICK_SLAB);
+        dropSlab(IrradiatedAlienChitinBlocks.POLISHED_IRRADIATED_CHITIN_SLAB);
+        dropSlab(IrradiatedAlienResinBlocks.RIBBED_IRRADIATED_RESIN_SLAB);
+        dropSlab(IrradiatedAlienResinBlocks.IRRADIATED_RESIN_BONE_SLAB);
+        dropSlab(IrradiatedAlienResinBlocks.IRRADIATED_RESIN_ETCHED_SLAB);
+        dropSlab(IrradiatedAlienResinBlocks.IRRADIATED_RESIN_STRETCHED_SLAB);
+        dropSlab(IrradiatedAlienResinBlocks.IRRADIATED_RESIN_TENDRIL_SLAB);
+
         dropSlab(NetherAlienResinBlocks.NETHER_RESIN_SLAB);
         dropSlab(NetherAlienResinBlocks.NETHER_RESIN_BRICK_SLAB);
         dropSlab(NetherAlienResinBlocks.SMOOTH_NETHER_RESIN_SLAB);
+        dropSlab(NetherAlienResinBlocks.RIBBED_NETHER_RESIN_SLAB);
+        dropSlab(NetherAlienResinBlocks.NETHER_RESIN_BONE_SLAB);
+        dropSlab(NetherAlienResinBlocks.NETHER_RESIN_ETCHED_SLAB);
+        dropSlab(NetherAlienResinBlocks.NETHER_RESIN_STRETCHED_SLAB);
+        dropSlab(NetherAlienResinBlocks.NETHER_RESIN_TENDRIL_SLAB);
 
         dropSlab(NetherAlienChitinBlocks.NETHER_CHITIN_BLOCK_SLAB);
         dropSlab(NetherAlienChitinBlocks.NETHER_CHITIN_BRICK_SLAB);
         dropSlab(NetherAlienChitinBlocks.POLISHED_NETHER_CHITIN_SLAB);
 
         dropSlab(AlienResinBlocks.RESIN_SLAB);
+        dropSlab(AlienResinBlocks.RIBBED_RESIN_SLAB);
+        dropSlab(AlienResinBlocks.RESIN_BONE_SLAB);
+        dropSlab(AlienResinBlocks.RESIN_ETCHED_SLAB);
+        dropSlab(AlienResinBlocks.RESIN_STRETCHED_SLAB);
+        dropSlab(AlienResinBlocks.RESIN_TENDRIL_SLAB);
         dropSlab(AlienResinBlocks.RESIN_BRICK_SLAB);
         dropSlab(AlienResinBlocks.SMOOTH_RESIN_SLAB);
 
@@ -191,9 +268,72 @@ public class BlockLootTableProvider extends FabricBlockLootTableProvider {
         TOUCHED_ENTRIES.add(block);
     }
 
+    /**
+     * ⭐⭐ SHULKER RULES: the block drops itself CARRYING ITS INVENTORY. [stated] "keep like shulker box".
+     * <p>
+     * ⚠⚠ THIS IS THE SECOND HALF OF A TWO-PART MECHANISM AND NEITHER HALF WORKS ALONE.
+     * {@code ResinContainerBlock.playerWillDestroy} calls {@code setChanged()} to commit the inventory into the block
+     * entity's components; THIS copies that component onto the dropped stack. Without the first the component is stale,
+     * without this it never reaches the item - and both failures look identical in game: a container that seemed full
+     * comes back empty.
+     * </p>
+     * <p>
+     * ⚠ {@code applyExplosionCondition} is deliberately kept: it is about the LOOT TABLE's explosion-decay rule, not
+     * about the block surviving a blast. The block's 1200 blast resistance means an explosion never breaks it in the
+     * first place, so this branch only matters if something one day destroys it another way.
+     * </p>
+     */
+    public void dropSelfWithContents(Supplier<? extends Block> blockSupplier) {
+        var block = blockSupplier.get();
+        add(
+            block,
+            LootTable.lootTable()
+                .withPool(
+                    this.applyExplosionCondition(
+                        block,
+                        net.minecraft.world.level.storage.loot.LootPool.lootPool()
+                            .setRolls(net.minecraft.world.level.storage.loot.providers.number.ConstantValue.exactly(1.0F))
+                            .add(
+                                net.minecraft.world.level.storage.loot.entries.LootItem.lootTableItem(block)
+                                    .apply(
+                                        net.minecraft.world.level.storage.loot.functions.CopyComponentsFunction
+                                            .copyComponents(
+                                                net.minecraft.world.level.storage.loot.functions.CopyComponentsFunction.Source.BLOCK_ENTITY
+                                            )
+                                            .include(net.minecraft.core.component.DataComponents.CONTAINER)
+                                    )
+                            )
+                    )
+                )
+        );
+        TOUCHED_ENTRIES.add(block);
+    }
+
     public void dropOther(Supplier<? extends Block> blockSupplier, Supplier<? extends ItemLike> itemLikeSupplier) {
         var block = blockSupplier.get();
         dropOther(block, itemLikeSupplier.get());
+        TOUCHED_ENTRIES.add(block);
+    }
+
+    public void dropWhenSilkTouch(Supplier<? extends Block> blockSupplier) {
+        var block = blockSupplier.get();
+        dropWhenSilkTouch(block);
+        TOUCHED_ENTRIES.add(block);
+    }
+
+    /** Leaves-style harvesting: the block drops itself when broken with shears OR a silk-touch tool, else nothing. */
+    public void dropWhenShearsOrSilkTouch(Supplier<? extends Block> blockSupplier) {
+        var block = blockSupplier.get();
+        add(
+            block,
+            LootTable.lootTable()
+                .withPool(
+                    net.minecraft.world.level.storage.loot.LootPool.lootPool()
+                        .setRolls(net.minecraft.world.level.storage.loot.providers.number.ConstantValue.exactly(1.0F))
+                        .when(HAS_SHEARS.or(hasSilkTouch()))
+                        .add(net.minecraft.world.level.storage.loot.entries.LootItem.lootTableItem(block))
+                )
+        );
         TOUCHED_ENTRIES.add(block);
     }
 

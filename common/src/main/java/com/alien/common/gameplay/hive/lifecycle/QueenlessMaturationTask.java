@@ -10,6 +10,7 @@ import com.alien.common.gameplay.hive.location.HiveLocationRegistry;
 import com.alien.common.model.lifecycle.growth.GrowthStage;
 import com.alien.common.registry.GrowthStageRegistry;
 import com.alien.common.registry.tag.AlienEntityTypeTags;
+import com.alien.common.util.AlienPredicates;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.tags.TagKey;
@@ -26,8 +27,8 @@ import org.jetbrains.annotations.Nullable;
  * <li>Reads the location's current leader via
  * {@link com.alien.common.gameplay.hive.location.HiveLocationLeadership}.</li>
  * <li>If the leader UUID has changed since the last advance — either first time or because a cocoon transition produced
- * a fresh entity — resets {@link HiveLocation#queenlessLeaderSnapshot} and
- * {@link HiveLocation#queenlessMaturationLastAdvanceTick}, then waits one full interval before advancing.</li>
+ * a fresh entity — resets {@code queenlessLeaderSnapshot} and {@code queenlessMaturationLastAdvanceTick}, then waits
+ * one full interval before advancing.</li>
  * <li>Otherwise, when {@code currentTick - lastAdvanceTick >= protoHiveStageInterval}, picks the queen-track growth
  * stage and calls {@link com.alien.common.gameplay.entity.living.alien.GrowthManager#forceGrow} on the leader.</li>
  * <li>Skips while the leader is currently cocooning (let the in-flight molt finish).</li>
@@ -65,6 +66,10 @@ public final class QueenlessMaturationTask {
             }
 
             for (var location : new java.util.ArrayList<>(lineage.locationsById().values())) {
+                if (com.alien.common.gameplay.hive.dimension.EndStyleHiveRules.isEndStyle(server, location)) {
+                    continue; // END-STYLE: maturation is the firewall economy - the End's succession is the regent
+                              // praetorian
+                }
                 if (!location.isAlive()) {
                     continue;
                 }
@@ -88,6 +93,10 @@ public final class QueenlessMaturationTask {
         }
         var advanced = 0;
         for (var location : new java.util.ArrayList<>(lineage.locationsById().values())) {
+            if (com.alien.common.gameplay.hive.dimension.EndStyleHiveRules.isEndStyle(server, location)) {
+                continue; // END-STYLE: maturation is the firewall economy - the End's succession is the regent
+                          // praetorian
+            }
             if (!location.isAlive()) {
                 continue;
             }
@@ -145,6 +154,13 @@ public final class QueenlessMaturationTask {
         }
         // Already a queen / empress — nothing to mature. (EmpressEmergenceTask handles empress promotion if 2+
         // locations.)
+        // ⚠ A CHILD CANNOT BE PROMOTED, AND MUST NOT BLOCK THE PROMOTION. An adolescent leader would walk its growth
+        // chain looking for the queen track, find only drone/runner/spitter, and quietly return - leaving a queenless
+        // hive with nothing maturing. Skipping it lets the task look past a juvenile leader instead of stalling on one.
+        if (AlienPredicates.isJuvenile(entity)) {
+            return;
+        }
+
         if (entity.getType().is(AlienEntityTypeTags.QUEENS) || entity.getType().is(AlienEntityTypeTags.EMPRESSES)) {
             return;
         }
@@ -161,6 +177,85 @@ public final class QueenlessMaturationTask {
         if (stage == null) {
             // No reachable next form — e.g., a non-xenomorph or a dead-end caste. Stop maturing this leader.
             return;
+        }
+
+        if (stage.to().is(AlienEntityTypeTags.QUEENS)) {
+            // This is the crowning molt itself — gated behind the firewall fund (per
+            // AVP_Queen_Lifecycle_Design.md § 6). A fresh location's fund starts available, so a location's first-ever
+            // queen loss always crowns normally; only a second loss before the fund refills gets denied here. Earlier,
+            // non-queen growth stages toward queen-track (drone→warrior→praetorian, etc.) are never gated — only the
+            // final step is.
+            var config = HiveLocationRegistry.INSTANCE.config();
+
+            // Rescue hold: while this location has an unresolved rescue campaign for its captured queen, the hive
+            // holds out hope and won't crown a replacement. RescueCampaignTask clears the campaign on success, on
+            // conversion (queen died), or on exhaustion (3 failed attempts) — only then does crowning proceed.
+            // [stated] no ordinary queen replacement while two empires are at war: the hive that loses its queen has
+            // lost, and the crown counts it. Sits ABOVE the fund and rescue checks so it holds whether or not the
+            // firewall still has anything in it.
+            if (com.alien.common.gameplay.hive.war.AlienTerritoryWarSystem.isExcludedFromQueenReplacement(location)) {
+                Alien.LOGGER.info(
+                    "Hive: crowning denied for leader {} (lineage {}) — {}",
+                    leaderId,
+                    lineageId,
+                    location.hasLostAWar()
+                        ? "the hive lost its war and is left to die rather than waste a slot"
+                        : "the hive is at war - the fund and the jelly are needed for the fighting"
+                );
+                return;
+            }
+
+            if (location.rescueCampaign() != null) {
+                Alien.LOGGER.info(
+                    "Hive: crowning held for leader {} (lineage {}) — rescue campaign still active for the lost queen",
+                    leaderId,
+                    lineageId
+                );
+                return;
+            }
+
+            // An empress will refill a spent fund from a healthy sibling's rather than let the hive be written off.
+            // Reallocation, not immunity: the donor surrenders its own safety net. Bounded per hive and
+            // network-wide, and the second rescue into one hive gives her position away.
+            if (!location.firewallFundAvailable()) {
+                com.alien.common.gameplay.hive.empress.EmpressRescueService.tryRescue(
+                    serverLevel,
+                    location,
+                    lineage,
+                    config
+                );
+            }
+
+            if (!location.firewallFundAvailable()) {
+                Alien.LOGGER.info(
+                    "Hive: crowning denied for leader {} (lineage {}) — firewall fund still spent, {}/{} stable ticks accrued",
+                    leaderId,
+                    lineageId,
+                    location.firewallStableAccruedTicks(),
+                    config.firewallCooldownTicks()
+                );
+                return;
+            }
+
+            var jellyCost = config.firewallCrowningJellyCost();
+            // Crowning may tap the vat stores when the bank alone can't cover it (vats are the last resort).
+            com.alien.common.gameplay.hive.economy.JellyVatDisplay.coverShortfall(serverLevel, location, jellyCost);
+            if (location.royalJelly() < jellyCost) {
+                Alien.LOGGER.info(
+                    "Hive: crowning denied for leader {} (lineage {}) — insufficient royal jelly ({}/{})",
+                    leaderId,
+                    lineageId,
+                    location.royalJelly(),
+                    jellyCost
+                );
+                return;
+            }
+
+            location.setRoyalJelly(location.royalJelly() - jellyCost);
+            location.setFirewallFundAvailable(false);
+            location.setFirewallStableAccruedTicks(0L);
+            location.setFirewallBiomassSampleTick(Long.MIN_VALUE);
+            location.setFirewallBiomassSampleValue(0);
         }
 
         var result = xenomorph.getGrowthManager().forceGrow(stage);

@@ -59,6 +59,19 @@ public final class HiveLocationRegistry {
 
     private HiveConfig config = HiveConfig.defaults();
 
+    /**
+     * False until {@link #rebuildFromFactions()} has completed at least once this server session.
+     * <p>
+     * The registry is not persisted - it is rebuilt from BLib faction data on {@code onFactionsLoaded}. Entity
+     * persistence ({@code Alien.isPersistenceRequired}) depends on this registry: a hive member is persistent because
+     * the registry can place it in a hive. But on world load, entities can tick - and run their vanilla despawn check -
+     * BEFORE BLib has loaded and this rebuild has run. In that window every member resolves to "no hive", reads as
+     * non-persistent, and vanilla despawns it. That is the "on join, every xeno but the queen vanished" bug: the queen
+     * has her own registry-independent persistence, the rank and file do not. This latch lets members hold persistent
+     * through the load window until the registry is genuinely ready to answer.
+     */
+    private boolean hasRebuilt = false;
+
     private long ticksSinceLastScan = 0L;
 
     /** Reinforcement dispatcher fires on a coarser-than-tick cadence — every 5 seconds is plenty. */
@@ -292,6 +305,11 @@ public final class HiveLocationRegistry {
      * Walk every loaded lineage's nested locations and (re)build all four indexes from scratch. Intended for the
      * server-started callback.
      */
+    /** True once the registry has been built from faction data at least once - see {@link #hasRebuilt}. */
+    public boolean hasRebuilt() {
+        return hasRebuilt;
+    }
+
     public void rebuildFromFactions() {
         byId.clear();
         byLineage.clear();
@@ -301,6 +319,7 @@ public final class HiveLocationRegistry {
         ticksSinceLastDispatch = 0L;
         ticksSinceLastHiveSpawn = 0L;
         HiveLocationSlowTickTask.reset();
+        hasRebuilt = true;
 
         var allIds = Alien.MOD.factions().getAllIds();
         var lineageIdCount = 0;
@@ -340,6 +359,7 @@ public final class HiveLocationRegistry {
             if (lineageData.factionId() == null) {
                 lineageData.setFactionId(factionId);
             }
+            com.alien.common.gameplay.hive.faction.FactionAesthetics.ensureClaimMapStyle(faction, lineageData.variant());
 
             // Backfill lineage path name + monotonic number.
             if (lineageData.lineageNumber() < 0) {
@@ -382,6 +402,7 @@ public final class HiveLocationRegistry {
             if (!expectedName.equals(variantFaction.name())) {
                 variantFaction.setName(expectedName);
             }
+            com.alien.common.gameplay.hive.faction.FactionAesthetics.ensureClaimMapStyle(variantFaction, variant);
         }
 
         // Self-heal: delete any LocationFactionData whose backing HiveLocation is missing. These orphans accumulate
@@ -424,8 +445,52 @@ public final class HiveLocationRegistry {
                 continue;
             }
 
+            // Load-time healing: re-claim any built-structure chunk whose claim was lost (the old disconnection
+            // pruner amputated room claims in existing worlds - this repairs those saves on their next load). Runs
+            // BEFORE the sync loop below so the reclaimed chunks are in claimedChunks() when it iterates, and so
+            // reclaim's own additions never mutate the set mid-iteration.
+            com.alien.common.gameplay.hive.growth.HiveLocationClaims.reclaimStructureChunks(
+                level,
+                location,
+                level.getGameTime()
+            );
+
             for (var chunk : location.claimedChunks()) {
+                // DIAGNOSTIC (queen bug 2 - "relog makes the claim contested"). syncTerritoryClaim strips only
+                // LINEAGE- and VARIANT-tier claims before adding this location's own, so any OTHER location-tier
+                // claimant already sitting on the chunk survives and the chunk ends up with two -> contested.
+                // This names both ids at the moment it happens. Remove once the culprit is identified.
+                var priorClaimants = Alien.MOD.territory().getClaimants(level, chunk);
+                if (
+                    priorClaimants.size() > 1
+                        || (priorClaimants.size() == 1 && !priorClaimants.contains(location.id().value()))
+                ) {
+                    Alien.LOGGER.warn(
+                        "CLAIM-DIAG repair {} chunk {} incoming={} priorClaimants={} (foreign={})",
+                        level.dimension().location(),
+                        chunk,
+                        location.id().value(),
+                        priorClaimants,
+                        priorClaimants.stream()
+                            .filter(id -> !id.equals(location.id().value()))
+                            .map(ResourceLocation::toString)
+                            .toList()
+                    );
+                }
+
                 HiveLocationClaims.syncTerritoryClaim(level, location, chunk);
+
+                var afterClaimants = Alien.MOD.territory().getClaimants(level, chunk);
+                if (afterClaimants.size() > 1) {
+                    Alien.LOGGER.warn(
+                        "CLAIM-DIAG repair LEFT {} CLAIMANTS on {} chunk {}: {} - this chunk is now CONTESTED",
+                        afterClaimants.size(),
+                        level.dimension().location(),
+                        chunk,
+                        afterClaimants
+                    );
+                }
+
                 reconciledChunks++;
             }
         }
@@ -467,7 +532,23 @@ public final class HiveLocationRegistry {
         // Order matters: location dormancy first so per-location rules fire before lineage-empty cleanup picks up
         // newly-zero-location lineages this tick.
         com.alien.common.gameplay.hive.lifecycle.LocationDormancyTask.scanAll(server);
+        // END-STYLE: the leadership duel sweep - rare-event cheap, per end-style level only.
+        for (var duelLevel : server.getAllLevels()) {
+            com.alien.common.gameplay.hive.empress.EndEmpressDuel.tick(duelLevel);
+        }
         com.alien.common.gameplay.hive.lifecycle.LineageDeathHandler.scanAndKill(server);
+
+        // An empress collecting on a hive lost to a nuke. Cheap when nothing is pending, which is almost always.
+        com.alien.common.gameplay.hive.lifecycle.NukeRetribution.tick(server);
+
+        // Irradiated ground, walls and cargo leaking into whoever is near them. Throttled to once a second inside.
+        com.alien.common.gameplay.radiation.IrradiatedExposureTask.tick(server);
+
+        // A converted hive turning its own walls irradiated, a budget of blocks at a time.
+        com.alien.common.gameplay.hive.lifecycle.IrradiatedConversionSweep.tick(server);
+
+        // A newborn irradiated hive coming for everyone who made it, two days on.
+        com.alien.common.gameplay.hive.lifecycle.IrradiatedBirthRaid.tick(server);
 
         // § 13 economy: jelly production then balance buys. Per-tick, no throttling.
         com.alien.common.gameplay.hive.economy.JellyProduction.scanAndProduce(server);
@@ -486,6 +567,20 @@ public final class HiveLocationRegistry {
             com.alien.common.gameplay.hive.convoy.MigrationDispatch.scanAndDispatch(server);
             com.alien.common.gameplay.hive.convoy.RaidDispatch.scanAndDispatch(server);
             com.alien.common.gameplay.hive.empress.EmpressEmergenceTask.scanAndStart(server);
+            // Corridor membership BEFORE influence: the network decides which lineages carry her empressId, and
+            // influence is derived from that id. Reversed, a lineage severed this sweep would keep her buffs for
+            // one more pass.
+            com.alien.common.gameplay.hive.empress.EmpressNetworkSync.syncAll(server);
+            // Re-assert the router's memory-only empress-influence set. Reconciled rather than pushed, so it
+            // survives restarts and needs no hook on every event that could change the answer.
+            com.alien.common.gameplay.hive.empress.EmpressInfluenceSync.syncAll(server);
+        }
+
+        if (server.overworld().getGameTime() % Math.max(1L, config.contestTickWindow()) == 0L) {
+            com.alien.common.gameplay.hive.war.AlienTerritoryWarSystem.scanAndApply(server);
+            // Open wars are resolved on the same cadence, off the registry rather than a loaded tick: a war between
+            // two hives nobody is standing near still has to reach a victor.
+            com.alien.common.gameplay.hive.war.AlienTerritoryWarSystem.tickWars(server);
         }
 
         ticksSinceLastScan++;
@@ -524,8 +619,32 @@ public final class HiveLocationRegistry {
         }
 
         for (var lineageId : orphanLineages) {
+            // REPAIR FIRST, delete last: a hard crash can roll the BLib faction store and the hive-location
+            // store back to different moments, leaving real, structure-bearing hives "orphaned". Deleting them
+            // amplifies a one-tick save race into permanent hive loss (a queen left seated on her ovipositor
+            // with no claim under her). If any location of the lineage still has substance (structure or
+            // claims), the missing lineage faction is RECREATED instead; only true husks are removed.
+            boolean substance = false;
+            for (var orphan : byLineage.get(lineageId)) {
+                var orphanLocation = byId.get(orphan);
+                if (
+                    orphanLocation != null
+                        && (!orphanLocation.structurePieceByChunk().isEmpty() || !orphanLocation.claimedChunks().isEmpty())
+                ) {
+                    substance = true;
+                    break;
+                }
+            }
+            if (substance) {
+                Alien.LOGGER.warn(
+                    "HiveLocationRegistry.validate: lineage {} missing but its locations still have substance - recreating the lineage faction.",
+                    lineageId
+                );
+                Alien.MOD.factions().getOrCreate(lineageId, com.alien.common.registry.init.AlienFactionDataTypes.LINEAGE);
+                continue;
+            }
             Alien.LOGGER.warn(
-                "HiveLocationRegistry.validate: lineage {} has {} orphaned locations; cleaning up.",
+                "HiveLocationRegistry.validate: lineage {} has {} orphaned husk locations; cleaning up.",
                 lineageId,
                 byLineage.get(lineageId).size()
             );
@@ -614,6 +733,7 @@ public final class HiveLocationRegistry {
         ticksSinceLastScan = 0L;
         ticksSinceLastDispatch = 0L;
         ticksSinceLastHiveSpawn = 0L;
+        hasRebuilt = false;
     }
 
     public int locationCount() {

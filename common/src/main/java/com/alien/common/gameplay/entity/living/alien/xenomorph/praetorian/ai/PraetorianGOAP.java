@@ -9,6 +9,7 @@ public class PraetorianGOAP {
 
     public static final Graph<Praetorian> GRAPH = Graph.<Praetorian>builder()
         .apply(XenomorphGOAP::applyBaseGraph)
+        .apply(XenomorphGOAP::addAnchorBreakPackage)
         .build();
 
     public static Agent.Builder<Praetorian> applyAgentProperties(Agent.Builder<Praetorian> agentBuilder) {

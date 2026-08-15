@@ -1,0 +1,1652 @@
+{
+  "values": [
+    {
+      "id": "avp_human:white_industrial_concrete",
+      "required": false
+    },
+    {
+      "id": "avp_human:orange_industrial_concrete",
+      "required": false
+    },
+    {
+      "id": "avp_human:magenta_industrial_concrete",
+      "required": false
+    },
+    {
+      "id": "avp_human:light_blue_industrial_concrete",
+      "required": false
+    },
+    {
+      "id": "avp_human:yellow_industrial_concrete",
+      "required": false
+    },
+    {
+      "id": "avp_human:lime_industrial_concrete",
+      "required": false
+    },
+    {
+      "id": "avp_human:pink_industrial_concrete",
+      "required": false
+    },
+    {
+      "id": "avp_human:gray_industrial_concrete",
+      "required": false
+    },
+    {
+      "id": "avp_human:light_gray_industrial_concrete",
+      "required": false
+    },
+    {
+      "id": "avp_human:cyan_industrial_concrete",
+      "required": false
+    },
+    {
+      "id": "avp_human:purple_industrial_concrete",
+      "required": false
+    },
+    {
+      "id": "avp_human:blue_industrial_concrete",
+      "required": false
+    },
+    {
+      "id": "avp_human:brown_industrial_concrete",
+      "required": false
+    },
+    {
+      "id": "avp_human:green_industrial_concrete",
+      "required": false
+    },
+    {
+      "id": "avp_human:red_industrial_concrete",
+      "required": false
+    },
+    {
+      "id": "avp_human:black_industrial_concrete",
+      "required": false
+    },
+    {
+      "id": "avp_human:white_industrial_concrete_slab",
+      "required": false
+    },
+    {
+      "id": "avp_human:orange_industrial_concrete_slab",
+      "required": false
+    },
+    {
+      "id": "avp_human:magenta_industrial_concrete_slab",
+      "required": false
+    },
+    {
+      "id": "avp_human:light_blue_industrial_concrete_slab",
+      "required": false
+    },
+    {
+      "id": "avp_human:yellow_industrial_concrete_slab",
+      "required": false
+    },
+    {
+      "id": "avp_human:lime_industrial_concrete_slab",
+      "required": false
+    },
+    {
+      "id": "avp_human:pink_industrial_concrete_slab",
+      "required": false
+    },
+    {
+      "id": "avp_human:gray_industrial_concrete_slab",
+      "required": false
+    },
+    {
+      "id": "avp_human:light_gray_industrial_concrete_slab",
+      "required": false
+    },
+    {
+      "id": "avp_human:cyan_industrial_concrete_slab",
+      "required": false
+    },
+    {
+      "id": "avp_human:purple_industrial_concrete_slab",
+      "required": false
+    },
+    {
+      "id": "avp_human:blue_industrial_concrete_slab",
+      "required": false
+    },
+    {
+      "id": "avp_human:brown_industrial_concrete_slab",
+      "required": false
+    },
+    {
+      "id": "avp_human:green_industrial_concrete_slab",
+      "required": false
+    },
+    {
+      "id": "avp_human:red_industrial_concrete_slab",
+      "required": false
+    },
+    {
+      "id": "avp_human:black_industrial_concrete_slab",
+      "required": false
+    },
+    {
+      "id": "avp_human:white_industrial_concrete_stairs",
+      "required": false
+    },
+    {
+      "id": "avp_human:orange_industrial_concrete_stairs",
+      "required": false
+    },
+    {
+      "id": "avp_human:magenta_industrial_concrete_stairs",
+      "required": false
+    },
+    {
+      "id": "avp_human:light_blue_industrial_concrete_stairs",
+      "required": false
+    },
+    {
+      "id": "avp_human:yellow_industrial_concrete_stairs",
+      "required": false
+    },
+    {
+      "id": "avp_human:lime_industrial_concrete_stairs",
+      "required": false
+    },
+    {
+      "id": "avp_human:pink_industrial_concrete_stairs",
+      "required": false
+    },
+    {
+      "id": "avp_human:gray_industrial_concrete_stairs",
+      "required": false
+    },
+    {
+      "id": "avp_human:light_gray_industrial_concrete_stairs",
+      "required": false
+    },
+    {
+      "id": "avp_human:cyan_industrial_concrete_stairs",
+      "required": false
+    },
+    {
+      "id": "avp_human:purple_industrial_concrete_stairs",
+      "required": false
+    },
+    {
+      "id": "avp_human:blue_industrial_concrete_stairs",
+      "required": false
+    },
+    {
+      "id": "avp_human:brown_industrial_concrete_stairs",
+      "required": false
+    },
+    {
+      "id": "avp_human:green_industrial_concrete_stairs",
+      "required": false
+    },
+    {
+      "id": "avp_human:red_industrial_concrete_stairs",
+      "required": false
+    },
+    {
+      "id": "avp_human:black_industrial_concrete_stairs",
+      "required": false
+    },
+    {
+      "id": "avp_human:white_industrial_concrete_wall",
+      "required": false
+    },
+    {
+      "id": "avp_human:orange_industrial_concrete_wall",
+      "required": false
+    },
+    {
+      "id": "avp_human:magenta_industrial_concrete_wall",
+      "required": false
+    },
+    {
+      "id": "avp_human:light_blue_industrial_concrete_wall",
+      "required": false
+    },
+    {
+      "id": "avp_human:yellow_industrial_concrete_wall",
+      "required": false
+    },
+    {
+      "id": "avp_human:lime_industrial_concrete_wall",
+      "required": false
+    },
+    {
+      "id": "avp_human:pink_industrial_concrete_wall",
+      "required": false
+    },
+    {
+      "id": "avp_human:gray_industrial_concrete_wall",
+      "required": false
+    },
+    {
+      "id": "avp_human:light_gray_industrial_concrete_wall",
+      "required": false
+    },
+    {
+      "id": "avp_human:cyan_industrial_concrete_wall",
+      "required": false
+    },
+    {
+      "id": "avp_human:purple_industrial_concrete_wall",
+      "required": false
+    },
+    {
+      "id": "avp_human:blue_industrial_concrete_wall",
+      "required": false
+    },
+    {
+      "id": "avp_human:brown_industrial_concrete_wall",
+      "required": false
+    },
+    {
+      "id": "avp_human:green_industrial_concrete_wall",
+      "required": false
+    },
+    {
+      "id": "avp_human:red_industrial_concrete_wall",
+      "required": false
+    },
+    {
+      "id": "avp_human:black_industrial_concrete_wall",
+      "required": false
+    },
+    {
+      "id": "avp_human:industrial_glass",
+      "required": false
+    },
+    {
+      "id": "avp_human:white_industrial_glass",
+      "required": false
+    },
+    {
+      "id": "avp_human:orange_industrial_glass",
+      "required": false
+    },
+    {
+      "id": "avp_human:magenta_industrial_glass",
+      "required": false
+    },
+    {
+      "id": "avp_human:light_blue_industrial_glass",
+      "required": false
+    },
+    {
+      "id": "avp_human:yellow_industrial_glass",
+      "required": false
+    },
+    {
+      "id": "avp_human:lime_industrial_glass",
+      "required": false
+    },
+    {
+      "id": "avp_human:pink_industrial_glass",
+      "required": false
+    },
+    {
+      "id": "avp_human:gray_industrial_glass",
+      "required": false
+    },
+    {
+      "id": "avp_human:light_gray_industrial_glass",
+      "required": false
+    },
+    {
+      "id": "avp_human:cyan_industrial_glass",
+      "required": false
+    },
+    {
+      "id": "avp_human:purple_industrial_glass",
+      "required": false
+    },
+    {
+      "id": "avp_human:blue_industrial_glass",
+      "required": false
+    },
+    {
+      "id": "avp_human:brown_industrial_glass",
+      "required": false
+    },
+    {
+      "id": "avp_human:green_industrial_glass",
+      "required": false
+    },
+    {
+      "id": "avp_human:red_industrial_glass",
+      "required": false
+    },
+    {
+      "id": "avp_human:black_industrial_glass",
+      "required": false
+    },
+    {
+      "id": "avp_human:industrial_glass_pane",
+      "required": false
+    },
+    {
+      "id": "avp_human:white_industrial_glass_pane",
+      "required": false
+    },
+    {
+      "id": "avp_human:orange_industrial_glass_pane",
+      "required": false
+    },
+    {
+      "id": "avp_human:magenta_industrial_glass_pane",
+      "required": false
+    },
+    {
+      "id": "avp_human:light_blue_industrial_glass_pane",
+      "required": false
+    },
+    {
+      "id": "avp_human:yellow_industrial_glass_pane",
+      "required": false
+    },
+    {
+      "id": "avp_human:lime_industrial_glass_pane",
+      "required": false
+    },
+    {
+      "id": "avp_human:pink_industrial_glass_pane",
+      "required": false
+    },
+    {
+      "id": "avp_human:gray_industrial_glass_pane",
+      "required": false
+    },
+    {
+      "id": "avp_human:light_gray_industrial_glass_pane",
+      "required": false
+    },
+    {
+      "id": "avp_human:cyan_industrial_glass_pane",
+      "required": false
+    },
+    {
+      "id": "avp_human:purple_industrial_glass_pane",
+      "required": false
+    },
+    {
+      "id": "avp_human:blue_industrial_glass_pane",
+      "required": false
+    },
+    {
+      "id": "avp_human:brown_industrial_glass_pane",
+      "required": false
+    },
+    {
+      "id": "avp_human:green_industrial_glass_pane",
+      "required": false
+    },
+    {
+      "id": "avp_human:red_industrial_glass_pane",
+      "required": false
+    },
+    {
+      "id": "avp_human:black_industrial_glass_pane",
+      "required": false
+    },
+    {
+      "id": "avp_human:industrial_glass_door",
+      "required": false
+    },
+    {
+      "id": "avp_human:industrial_glass_slab",
+      "required": false
+    },
+    {
+      "id": "avp_human:industrial_glass_stairs",
+      "required": false
+    },
+    {
+      "id": "avp_human:industrial_glass_trapdoor",
+      "required": false
+    },
+    {
+      "id": "avp_human:white_cut_plastic",
+      "required": false
+    },
+    {
+      "id": "avp_human:orange_cut_plastic",
+      "required": false
+    },
+    {
+      "id": "avp_human:magenta_cut_plastic",
+      "required": false
+    },
+    {
+      "id": "avp_human:light_blue_cut_plastic",
+      "required": false
+    },
+    {
+      "id": "avp_human:yellow_cut_plastic",
+      "required": false
+    },
+    {
+      "id": "avp_human:lime_cut_plastic",
+      "required": false
+    },
+    {
+      "id": "avp_human:pink_cut_plastic",
+      "required": false
+    },
+    {
+      "id": "avp_human:gray_cut_plastic",
+      "required": false
+    },
+    {
+      "id": "avp_human:light_gray_cut_plastic",
+      "required": false
+    },
+    {
+      "id": "avp_human:cyan_cut_plastic",
+      "required": false
+    },
+    {
+      "id": "avp_human:purple_cut_plastic",
+      "required": false
+    },
+    {
+      "id": "avp_human:blue_cut_plastic",
+      "required": false
+    },
+    {
+      "id": "avp_human:brown_cut_plastic",
+      "required": false
+    },
+    {
+      "id": "avp_human:green_cut_plastic",
+      "required": false
+    },
+    {
+      "id": "avp_human:red_cut_plastic",
+      "required": false
+    },
+    {
+      "id": "avp_human:black_cut_plastic",
+      "required": false
+    },
+    {
+      "id": "avp_human:white_cut_plastic_slab",
+      "required": false
+    },
+    {
+      "id": "avp_human:orange_cut_plastic_slab",
+      "required": false
+    },
+    {
+      "id": "avp_human:magenta_cut_plastic_slab",
+      "required": false
+    },
+    {
+      "id": "avp_human:light_blue_cut_plastic_slab",
+      "required": false
+    },
+    {
+      "id": "avp_human:yellow_cut_plastic_slab",
+      "required": false
+    },
+    {
+      "id": "avp_human:lime_cut_plastic_slab",
+      "required": false
+    },
+    {
+      "id": "avp_human:pink_cut_plastic_slab",
+      "required": false
+    },
+    {
+      "id": "avp_human:gray_cut_plastic_slab",
+      "required": false
+    },
+    {
+      "id": "avp_human:light_gray_cut_plastic_slab",
+      "required": false
+    },
+    {
+      "id": "avp_human:cyan_cut_plastic_slab",
+      "required": false
+    },
+    {
+      "id": "avp_human:purple_cut_plastic_slab",
+      "required": false
+    },
+    {
+      "id": "avp_human:blue_cut_plastic_slab",
+      "required": false
+    },
+    {
+      "id": "avp_human:brown_cut_plastic_slab",
+      "required": false
+    },
+    {
+      "id": "avp_human:green_cut_plastic_slab",
+      "required": false
+    },
+    {
+      "id": "avp_human:red_cut_plastic_slab",
+      "required": false
+    },
+    {
+      "id": "avp_human:black_cut_plastic_slab",
+      "required": false
+    },
+    {
+      "id": "avp_human:white_cut_plastic_stairs",
+      "required": false
+    },
+    {
+      "id": "avp_human:orange_cut_plastic_stairs",
+      "required": false
+    },
+    {
+      "id": "avp_human:magenta_cut_plastic_stairs",
+      "required": false
+    },
+    {
+      "id": "avp_human:light_blue_cut_plastic_stairs",
+      "required": false
+    },
+    {
+      "id": "avp_human:yellow_cut_plastic_stairs",
+      "required": false
+    },
+    {
+      "id": "avp_human:lime_cut_plastic_stairs",
+      "required": false
+    },
+    {
+      "id": "avp_human:pink_cut_plastic_stairs",
+      "required": false
+    },
+    {
+      "id": "avp_human:gray_cut_plastic_stairs",
+      "required": false
+    },
+    {
+      "id": "avp_human:light_gray_cut_plastic_stairs",
+      "required": false
+    },
+    {
+      "id": "avp_human:cyan_cut_plastic_stairs",
+      "required": false
+    },
+    {
+      "id": "avp_human:purple_cut_plastic_stairs",
+      "required": false
+    },
+    {
+      "id": "avp_human:blue_cut_plastic_stairs",
+      "required": false
+    },
+    {
+      "id": "avp_human:brown_cut_plastic_stairs",
+      "required": false
+    },
+    {
+      "id": "avp_human:green_cut_plastic_stairs",
+      "required": false
+    },
+    {
+      "id": "avp_human:red_cut_plastic_stairs",
+      "required": false
+    },
+    {
+      "id": "avp_human:black_cut_plastic_stairs",
+      "required": false
+    },
+    {
+      "id": "avp_human:white_framed_plastic",
+      "required": false
+    },
+    {
+      "id": "avp_human:orange_framed_plastic",
+      "required": false
+    },
+    {
+      "id": "avp_human:magenta_framed_plastic",
+      "required": false
+    },
+    {
+      "id": "avp_human:light_blue_framed_plastic",
+      "required": false
+    },
+    {
+      "id": "avp_human:yellow_framed_plastic",
+      "required": false
+    },
+    {
+      "id": "avp_human:lime_framed_plastic",
+      "required": false
+    },
+    {
+      "id": "avp_human:pink_framed_plastic",
+      "required": false
+    },
+    {
+      "id": "avp_human:gray_framed_plastic",
+      "required": false
+    },
+    {
+      "id": "avp_human:light_gray_framed_plastic",
+      "required": false
+    },
+    {
+      "id": "avp_human:cyan_framed_plastic",
+      "required": false
+    },
+    {
+      "id": "avp_human:purple_framed_plastic",
+      "required": false
+    },
+    {
+      "id": "avp_human:blue_framed_plastic",
+      "required": false
+    },
+    {
+      "id": "avp_human:brown_framed_plastic",
+      "required": false
+    },
+    {
+      "id": "avp_human:green_framed_plastic",
+      "required": false
+    },
+    {
+      "id": "avp_human:red_framed_plastic",
+      "required": false
+    },
+    {
+      "id": "avp_human:black_framed_plastic",
+      "required": false
+    },
+    {
+      "id": "avp_human:white_pitted_plastic",
+      "required": false
+    },
+    {
+      "id": "avp_human:orange_pitted_plastic",
+      "required": false
+    },
+    {
+      "id": "avp_human:magenta_pitted_plastic",
+      "required": false
+    },
+    {
+      "id": "avp_human:light_blue_pitted_plastic",
+      "required": false
+    },
+    {
+      "id": "avp_human:yellow_pitted_plastic",
+      "required": false
+    },
+    {
+      "id": "avp_human:lime_pitted_plastic",
+      "required": false
+    },
+    {
+      "id": "avp_human:pink_pitted_plastic",
+      "required": false
+    },
+    {
+      "id": "avp_human:gray_pitted_plastic",
+      "required": false
+    },
+    {
+      "id": "avp_human:light_gray_pitted_plastic",
+      "required": false
+    },
+    {
+      "id": "avp_human:cyan_pitted_plastic",
+      "required": false
+    },
+    {
+      "id": "avp_human:purple_pitted_plastic",
+      "required": false
+    },
+    {
+      "id": "avp_human:blue_pitted_plastic",
+      "required": false
+    },
+    {
+      "id": "avp_human:brown_pitted_plastic",
+      "required": false
+    },
+    {
+      "id": "avp_human:green_pitted_plastic",
+      "required": false
+    },
+    {
+      "id": "avp_human:red_pitted_plastic",
+      "required": false
+    },
+    {
+      "id": "avp_human:black_pitted_plastic",
+      "required": false
+    },
+    {
+      "id": "avp_human:white_pitted_plastic_slab",
+      "required": false
+    },
+    {
+      "id": "avp_human:orange_pitted_plastic_slab",
+      "required": false
+    },
+    {
+      "id": "avp_human:magenta_pitted_plastic_slab",
+      "required": false
+    },
+    {
+      "id": "avp_human:light_blue_pitted_plastic_slab",
+      "required": false
+    },
+    {
+      "id": "avp_human:yellow_pitted_plastic_slab",
+      "required": false
+    },
+    {
+      "id": "avp_human:lime_pitted_plastic_slab",
+      "required": false
+    },
+    {
+      "id": "avp_human:pink_pitted_plastic_slab",
+      "required": false
+    },
+    {
+      "id": "avp_human:gray_pitted_plastic_slab",
+      "required": false
+    },
+    {
+      "id": "avp_human:light_gray_pitted_plastic_slab",
+      "required": false
+    },
+    {
+      "id": "avp_human:cyan_pitted_plastic_slab",
+      "required": false
+    },
+    {
+      "id": "avp_human:purple_pitted_plastic_slab",
+      "required": false
+    },
+    {
+      "id": "avp_human:blue_pitted_plastic_slab",
+      "required": false
+    },
+    {
+      "id": "avp_human:brown_pitted_plastic_slab",
+      "required": false
+    },
+    {
+      "id": "avp_human:green_pitted_plastic_slab",
+      "required": false
+    },
+    {
+      "id": "avp_human:red_pitted_plastic_slab",
+      "required": false
+    },
+    {
+      "id": "avp_human:black_pitted_plastic_slab",
+      "required": false
+    },
+    {
+      "id": "avp_human:white_pitted_plastic_stairs",
+      "required": false
+    },
+    {
+      "id": "avp_human:orange_pitted_plastic_stairs",
+      "required": false
+    },
+    {
+      "id": "avp_human:magenta_pitted_plastic_stairs",
+      "required": false
+    },
+    {
+      "id": "avp_human:light_blue_pitted_plastic_stairs",
+      "required": false
+    },
+    {
+      "id": "avp_human:yellow_pitted_plastic_stairs",
+      "required": false
+    },
+    {
+      "id": "avp_human:lime_pitted_plastic_stairs",
+      "required": false
+    },
+    {
+      "id": "avp_human:pink_pitted_plastic_stairs",
+      "required": false
+    },
+    {
+      "id": "avp_human:gray_pitted_plastic_stairs",
+      "required": false
+    },
+    {
+      "id": "avp_human:light_gray_pitted_plastic_stairs",
+      "required": false
+    },
+    {
+      "id": "avp_human:cyan_pitted_plastic_stairs",
+      "required": false
+    },
+    {
+      "id": "avp_human:purple_pitted_plastic_stairs",
+      "required": false
+    },
+    {
+      "id": "avp_human:blue_pitted_plastic_stairs",
+      "required": false
+    },
+    {
+      "id": "avp_human:brown_pitted_plastic_stairs",
+      "required": false
+    },
+    {
+      "id": "avp_human:green_pitted_plastic_stairs",
+      "required": false
+    },
+    {
+      "id": "avp_human:red_pitted_plastic_stairs",
+      "required": false
+    },
+    {
+      "id": "avp_human:black_pitted_plastic_stairs",
+      "required": false
+    },
+    {
+      "id": "avp_human:white_plastic",
+      "required": false
+    },
+    {
+      "id": "avp_human:orange_plastic",
+      "required": false
+    },
+    {
+      "id": "avp_human:magenta_plastic",
+      "required": false
+    },
+    {
+      "id": "avp_human:light_blue_plastic",
+      "required": false
+    },
+    {
+      "id": "avp_human:yellow_plastic",
+      "required": false
+    },
+    {
+      "id": "avp_human:lime_plastic",
+      "required": false
+    },
+    {
+      "id": "avp_human:pink_plastic",
+      "required": false
+    },
+    {
+      "id": "avp_human:gray_plastic",
+      "required": false
+    },
+    {
+      "id": "avp_human:light_gray_plastic",
+      "required": false
+    },
+    {
+      "id": "avp_human:cyan_plastic",
+      "required": false
+    },
+    {
+      "id": "avp_human:purple_plastic",
+      "required": false
+    },
+    {
+      "id": "avp_human:blue_plastic",
+      "required": false
+    },
+    {
+      "id": "avp_human:brown_plastic",
+      "required": false
+    },
+    {
+      "id": "avp_human:green_plastic",
+      "required": false
+    },
+    {
+      "id": "avp_human:red_plastic",
+      "required": false
+    },
+    {
+      "id": "avp_human:black_plastic",
+      "required": false
+    },
+    {
+      "id": "avp_human:white_plastic_grate",
+      "required": false
+    },
+    {
+      "id": "avp_human:orange_plastic_grate",
+      "required": false
+    },
+    {
+      "id": "avp_human:magenta_plastic_grate",
+      "required": false
+    },
+    {
+      "id": "avp_human:light_blue_plastic_grate",
+      "required": false
+    },
+    {
+      "id": "avp_human:yellow_plastic_grate",
+      "required": false
+    },
+    {
+      "id": "avp_human:lime_plastic_grate",
+      "required": false
+    },
+    {
+      "id": "avp_human:pink_plastic_grate",
+      "required": false
+    },
+    {
+      "id": "avp_human:gray_plastic_grate",
+      "required": false
+    },
+    {
+      "id": "avp_human:light_gray_plastic_grate",
+      "required": false
+    },
+    {
+      "id": "avp_human:cyan_plastic_grate",
+      "required": false
+    },
+    {
+      "id": "avp_human:purple_plastic_grate",
+      "required": false
+    },
+    {
+      "id": "avp_human:blue_plastic_grate",
+      "required": false
+    },
+    {
+      "id": "avp_human:brown_plastic_grate",
+      "required": false
+    },
+    {
+      "id": "avp_human:green_plastic_grate",
+      "required": false
+    },
+    {
+      "id": "avp_human:red_plastic_grate",
+      "required": false
+    },
+    {
+      "id": "avp_human:black_plastic_grate",
+      "required": false
+    },
+    {
+      "id": "avp_human:white_plastic_grate_slab",
+      "required": false
+    },
+    {
+      "id": "avp_human:orange_plastic_grate_slab",
+      "required": false
+    },
+    {
+      "id": "avp_human:magenta_plastic_grate_slab",
+      "required": false
+    },
+    {
+      "id": "avp_human:light_blue_plastic_grate_slab",
+      "required": false
+    },
+    {
+      "id": "avp_human:yellow_plastic_grate_slab",
+      "required": false
+    },
+    {
+      "id": "avp_human:lime_plastic_grate_slab",
+      "required": false
+    },
+    {
+      "id": "avp_human:pink_plastic_grate_slab",
+      "required": false
+    },
+    {
+      "id": "avp_human:gray_plastic_grate_slab",
+      "required": false
+    },
+    {
+      "id": "avp_human:light_gray_plastic_grate_slab",
+      "required": false
+    },
+    {
+      "id": "avp_human:cyan_plastic_grate_slab",
+      "required": false
+    },
+    {
+      "id": "avp_human:purple_plastic_grate_slab",
+      "required": false
+    },
+    {
+      "id": "avp_human:blue_plastic_grate_slab",
+      "required": false
+    },
+    {
+      "id": "avp_human:brown_plastic_grate_slab",
+      "required": false
+    },
+    {
+      "id": "avp_human:green_plastic_grate_slab",
+      "required": false
+    },
+    {
+      "id": "avp_human:red_plastic_grate_slab",
+      "required": false
+    },
+    {
+      "id": "avp_human:black_plastic_grate_slab",
+      "required": false
+    },
+    {
+      "id": "avp_human:white_plastic_grate_stairs",
+      "required": false
+    },
+    {
+      "id": "avp_human:orange_plastic_grate_stairs",
+      "required": false
+    },
+    {
+      "id": "avp_human:magenta_plastic_grate_stairs",
+      "required": false
+    },
+    {
+      "id": "avp_human:light_blue_plastic_grate_stairs",
+      "required": false
+    },
+    {
+      "id": "avp_human:yellow_plastic_grate_stairs",
+      "required": false
+    },
+    {
+      "id": "avp_human:lime_plastic_grate_stairs",
+      "required": false
+    },
+    {
+      "id": "avp_human:pink_plastic_grate_stairs",
+      "required": false
+    },
+    {
+      "id": "avp_human:gray_plastic_grate_stairs",
+      "required": false
+    },
+    {
+      "id": "avp_human:light_gray_plastic_grate_stairs",
+      "required": false
+    },
+    {
+      "id": "avp_human:cyan_plastic_grate_stairs",
+      "required": false
+    },
+    {
+      "id": "avp_human:purple_plastic_grate_stairs",
+      "required": false
+    },
+    {
+      "id": "avp_human:blue_plastic_grate_stairs",
+      "required": false
+    },
+    {
+      "id": "avp_human:brown_plastic_grate_stairs",
+      "required": false
+    },
+    {
+      "id": "avp_human:green_plastic_grate_stairs",
+      "required": false
+    },
+    {
+      "id": "avp_human:red_plastic_grate_stairs",
+      "required": false
+    },
+    {
+      "id": "avp_human:black_plastic_grate_stairs",
+      "required": false
+    },
+    {
+      "id": "avp_human:white_plastic_slab",
+      "required": false
+    },
+    {
+      "id": "avp_human:orange_plastic_slab",
+      "required": false
+    },
+    {
+      "id": "avp_human:magenta_plastic_slab",
+      "required": false
+    },
+    {
+      "id": "avp_human:light_blue_plastic_slab",
+      "required": false
+    },
+    {
+      "id": "avp_human:yellow_plastic_slab",
+      "required": false
+    },
+    {
+      "id": "avp_human:lime_plastic_slab",
+      "required": false
+    },
+    {
+      "id": "avp_human:pink_plastic_slab",
+      "required": false
+    },
+    {
+      "id": "avp_human:gray_plastic_slab",
+      "required": false
+    },
+    {
+      "id": "avp_human:light_gray_plastic_slab",
+      "required": false
+    },
+    {
+      "id": "avp_human:cyan_plastic_slab",
+      "required": false
+    },
+    {
+      "id": "avp_human:purple_plastic_slab",
+      "required": false
+    },
+    {
+      "id": "avp_human:blue_plastic_slab",
+      "required": false
+    },
+    {
+      "id": "avp_human:brown_plastic_slab",
+      "required": false
+    },
+    {
+      "id": "avp_human:green_plastic_slab",
+      "required": false
+    },
+    {
+      "id": "avp_human:red_plastic_slab",
+      "required": false
+    },
+    {
+      "id": "avp_human:black_plastic_slab",
+      "required": false
+    },
+    {
+      "id": "avp_human:white_plastic_stairs",
+      "required": false
+    },
+    {
+      "id": "avp_human:orange_plastic_stairs",
+      "required": false
+    },
+    {
+      "id": "avp_human:magenta_plastic_stairs",
+      "required": false
+    },
+    {
+      "id": "avp_human:light_blue_plastic_stairs",
+      "required": false
+    },
+    {
+      "id": "avp_human:yellow_plastic_stairs",
+      "required": false
+    },
+    {
+      "id": "avp_human:lime_plastic_stairs",
+      "required": false
+    },
+    {
+      "id": "avp_human:pink_plastic_stairs",
+      "required": false
+    },
+    {
+      "id": "avp_human:gray_plastic_stairs",
+      "required": false
+    },
+    {
+      "id": "avp_human:light_gray_plastic_stairs",
+      "required": false
+    },
+    {
+      "id": "avp_human:cyan_plastic_stairs",
+      "required": false
+    },
+    {
+      "id": "avp_human:purple_plastic_stairs",
+      "required": false
+    },
+    {
+      "id": "avp_human:blue_plastic_stairs",
+      "required": false
+    },
+    {
+      "id": "avp_human:brown_plastic_stairs",
+      "required": false
+    },
+    {
+      "id": "avp_human:green_plastic_stairs",
+      "required": false
+    },
+    {
+      "id": "avp_human:red_plastic_stairs",
+      "required": false
+    },
+    {
+      "id": "avp_human:black_plastic_stairs",
+      "required": false
+    },
+    {
+      "id": "avp_human:aisle_hazard_plastic",
+      "required": false
+    },
+    {
+      "id": "avp_human:aisle_hazard_plastic_stairs",
+      "required": false
+    },
+    {
+      "id": "avp_human:aisle_hazard_plastic_slab",
+      "required": false
+    },
+    {
+      "id": "avp_human:aisle_hazard_plastic_wall",
+      "required": false
+    },
+    {
+      "id": "avp_human:alien_hazard_plastic",
+      "required": false
+    },
+    {
+      "id": "avp_human:alien_hazard_plastic_stairs",
+      "required": false
+    },
+    {
+      "id": "avp_human:alien_hazard_plastic_slab",
+      "required": false
+    },
+    {
+      "id": "avp_human:alien_hazard_plastic_wall",
+      "required": false
+    },
+    {
+      "id": "avp_human:fire_hazard_plastic",
+      "required": false
+    },
+    {
+      "id": "avp_human:fire_hazard_plastic_stairs",
+      "required": false
+    },
+    {
+      "id": "avp_human:fire_hazard_plastic_slab",
+      "required": false
+    },
+    {
+      "id": "avp_human:fire_hazard_plastic_wall",
+      "required": false
+    },
+    {
+      "id": "avp_human:hazard_plastic",
+      "required": false
+    },
+    {
+      "id": "avp_human:hazard_plastic_stairs",
+      "required": false
+    },
+    {
+      "id": "avp_human:hazard_plastic_slab",
+      "required": false
+    },
+    {
+      "id": "avp_human:hazard_plastic_wall",
+      "required": false
+    },
+    {
+      "id": "avp_human:machine_hazard_plastic",
+      "required": false
+    },
+    {
+      "id": "avp_human:machine_hazard_plastic_stairs",
+      "required": false
+    },
+    {
+      "id": "avp_human:machine_hazard_plastic_slab",
+      "required": false
+    },
+    {
+      "id": "avp_human:machine_hazard_plastic_wall",
+      "required": false
+    },
+    {
+      "id": "avp_human:radiation_hazard_plastic",
+      "required": false
+    },
+    {
+      "id": "avp_human:radiation_hazard_plastic_stairs",
+      "required": false
+    },
+    {
+      "id": "avp_human:radiation_hazard_plastic_slab",
+      "required": false
+    },
+    {
+      "id": "avp_human:radiation_hazard_plastic_wall",
+      "required": false
+    },
+    {
+      "id": "avp_human:safety_plastic",
+      "required": false
+    },
+    {
+      "id": "avp_human:safety_plastic_stairs",
+      "required": false
+    },
+    {
+      "id": "avp_human:safety_plastic_slab",
+      "required": false
+    },
+    {
+      "id": "avp_human:safety_plastic_wall",
+      "required": false
+    },
+    {
+      "id": "avp_human:traffic_hazard_plastic",
+      "required": false
+    },
+    {
+      "id": "avp_human:traffic_hazard_plastic_stairs",
+      "required": false
+    },
+    {
+      "id": "avp_human:traffic_hazard_plastic_slab",
+      "required": false
+    },
+    {
+      "id": "avp_human:traffic_hazard_plastic_wall",
+      "required": false
+    },
+    {
+      "id": "avp_human:chiseled_steel",
+      "required": false
+    },
+    {
+      "id": "avp_human:cut_steel",
+      "required": false
+    },
+    {
+      "id": "avp_human:cut_steel_slab",
+      "required": false
+    },
+    {
+      "id": "avp_human:cut_steel_stairs",
+      "required": false
+    },
+    {
+      "id": "avp_human:steel_bars",
+      "required": false
+    },
+    {
+      "id": "avp_human:steel_block",
+      "required": false
+    },
+    {
+      "id": "avp_human:steel_button",
+      "required": false
+    },
+    {
+      "id": "avp_human:steel_chain_fence",
+      "required": false
+    },
+    {
+      "id": "avp_human:steel_column",
+      "required": false
+    },
+    {
+      "id": "avp_human:steel_door",
+      "required": false
+    },
+    {
+      "id": "avp_human:steel_fastened_siding",
+      "required": false
+    },
+    {
+      "id": "avp_human:steel_fastened_siding_slab",
+      "required": false
+    },
+    {
+      "id": "avp_human:steel_fastened_siding_stairs",
+      "required": false
+    },
+    {
+      "id": "avp_human:steel_fastened_standing",
+      "required": false
+    },
+    {
+      "id": "avp_human:steel_fastened_standing_slab",
+      "required": false
+    },
+    {
+      "id": "avp_human:steel_fastened_standing_stairs",
+      "required": false
+    },
+    {
+      "id": "avp_human:steel_grate",
+      "required": false
+    },
+    {
+      "id": "avp_human:steel_grate_slab",
+      "required": false
+    },
+    {
+      "id": "avp_human:steel_grate_stairs",
+      "required": false
+    },
+    {
+      "id": "avp_human:steel_plating",
+      "required": false
+    },
+    {
+      "id": "avp_human:steel_plating_slab",
+      "required": false
+    },
+    {
+      "id": "avp_human:steel_plating_stairs",
+      "required": false
+    },
+    {
+      "id": "avp_human:steel_pressure_plate",
+      "required": false
+    },
+    {
+      "id": "avp_human:steel_siding",
+      "required": false
+    },
+    {
+      "id": "avp_human:steel_siding_slab",
+      "required": false
+    },
+    {
+      "id": "avp_human:steel_siding_stairs",
+      "required": false
+    },
+    {
+      "id": "avp_human:steel_slab",
+      "required": false
+    },
+    {
+      "id": "avp_human:steel_stairs",
+      "required": false
+    },
+    {
+      "id": "avp_human:steel_standing",
+      "required": false
+    },
+    {
+      "id": "avp_human:steel_standing_slab",
+      "required": false
+    },
+    {
+      "id": "avp_human:steel_standing_stairs",
+      "required": false
+    },
+    {
+      "id": "avp_human:steel_trapdoor",
+      "required": false
+    },
+    {
+      "id": "avp_human:steel_tread",
+      "required": false
+    },
+    {
+      "id": "avp_human:steel_tread_slab",
+      "required": false
+    },
+    {
+      "id": "avp_human:steel_tread_stairs",
+      "required": false
+    },
+    {
+      "id": "avp_human:chiseled_titanium",
+      "required": false
+    },
+    {
+      "id": "avp_human:cut_titanium",
+      "required": false
+    },
+    {
+      "id": "avp_human:cut_titanium_slab",
+      "required": false
+    },
+    {
+      "id": "avp_human:cut_titanium_stairs",
+      "required": false
+    },
+    {
+      "id": "avp_human:titanium_block",
+      "required": false
+    },
+    {
+      "id": "avp_human:titanium_button",
+      "required": false
+    },
+    {
+      "id": "avp_human:titanium_chain_fence",
+      "required": false
+    },
+    {
+      "id": "avp_human:titanium_column",
+      "required": false
+    },
+    {
+      "id": "avp_human:titanium_door",
+      "required": false
+    },
+    {
+      "id": "avp_human:titanium_fastened_siding",
+      "required": false
+    },
+    {
+      "id": "avp_human:titanium_fastened_siding_slab",
+      "required": false
+    },
+    {
+      "id": "avp_human:titanium_fastened_siding_stairs",
+      "required": false
+    },
+    {
+      "id": "avp_human:titanium_fastened_standing",
+      "required": false
+    },
+    {
+      "id": "avp_human:titanium_fastened_standing_slab",
+      "required": false
+    },
+    {
+      "id": "avp_human:titanium_fastened_standing_stairs",
+      "required": false
+    },
+    {
+      "id": "avp_human:titanium_grate",
+      "required": false
+    },
+    {
+      "id": "avp_human:titanium_grate_slab",
+      "required": false
+    },
+    {
+      "id": "avp_human:titanium_grate_stairs",
+      "required": false
+    },
+    {
+      "id": "avp_human:titanium_plating",
+      "required": false
+    },
+    {
+      "id": "avp_human:titanium_plating_slab",
+      "required": false
+    },
+    {
+      "id": "avp_human:titanium_plating_stairs",
+      "required": false
+    },
+    {
+      "id": "avp_human:titanium_pressure_plate",
+      "required": false
+    },
+    {
+      "id": "avp_human:titanium_siding",
+      "required": false
+    },
+    {
+      "id": "avp_human:titanium_siding_slab",
+      "required": false
+    },
+    {
+      "id": "avp_human:titanium_siding_stairs",
+      "required": false
+    },
+    {
+      "id": "avp_human:titanium_slab",
+      "required": false
+    },
+    {
+      "id": "avp_human:titanium_stairs",
+      "required": false
+    },
+    {
+      "id": "avp_human:titanium_standing",
+      "required": false
+    },
+    {
+      "id": "avp_human:titanium_standing_slab",
+      "required": false
+    },
+    {
+      "id": "avp_human:titanium_standing_stairs",
+      "required": false
+    },
+    {
+      "id": "avp_human:titanium_trapdoor",
+      "required": false
+    },
+    {
+      "id": "avp_human:titanium_tread",
+      "required": false
+    },
+    {
+      "id": "avp_human:titanium_tread_slab",
+      "required": false
+    },
+    {
+      "id": "avp_human:titanium_tread_stairs",
+      "required": false
+    },
+    {
+      "id": "avp_human:uranium_block",
+      "required": false
+    }
+  ]
+}

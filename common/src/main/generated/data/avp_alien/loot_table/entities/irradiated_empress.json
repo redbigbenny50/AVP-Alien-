@@ -26,7 +26,7 @@
               "function": "minecraft:enchanted_count_increase"
             }
           ],
-          "name": "avp_alien:raw_royal_jelly"
+          "name": "avp_alien:raw_irradiated_jelly"
         }
       ],
       "rolls": 1.0
@@ -83,6 +83,23 @@
             }
           ],
           "name": "avp_alien:plated_irradiated_chitin"
+        }
+      ],
+      "rolls": 1.0
+    },
+    {
+      "bonus_rolls": 0.0,
+      "entries": [
+        {
+          "type": "minecraft:item",
+          "functions": [
+            {
+              "add": false,
+              "count": 1.0,
+              "function": "minecraft:set_count"
+            }
+          ],
+          "name": "avp_alien:irradiated_empress_head"
         }
       ],
       "rolls": 1.0

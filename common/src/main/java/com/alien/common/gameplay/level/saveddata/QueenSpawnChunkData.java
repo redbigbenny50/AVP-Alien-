@@ -30,9 +30,24 @@ public class QueenSpawnChunkData extends SavedData {
 
     private static final String NBT_SPAWN_COOLDOWN_IN_TICKS = "spawnCooldownInTicks";
 
+    private static final String NBT_WILD_QUEEN_CHUNKS = "wildQueenChunks";
+
+    private static final String NBT_FIRST_QUEEN_SPAWNED = "firstQueenSpawned";
+
+    private static final String NBT_FIRST_QUEEN_DEADLINE = "firstQueenDeadlineGameTime";
+
     private final Map<RegionPos, BitSet> regionChunkBits;
 
     private final Cooldown spawnCooldown;
+
+    /** Chunks where a naturally spawned (wild) queen took root — used to keep wild queens far apart. */
+    private final java.util.Set<Long> wildQueenChunks = new java.util.HashSet<>();
+
+    /** True once any wild queen has taken root in this level — satisfies the first-queen guarantee. */
+    private boolean firstQueenSpawned;
+
+    /** Game time by which the first wild queen must exist or one is forced; -1 until the clock is armed. */
+    private long firstQueenDeadlineGameTime = -1L;
 
     private QueenSpawnChunkData() {
         this(Map.of());
@@ -46,6 +61,42 @@ public class QueenSpawnChunkData extends SavedData {
 
     public void tick() {
         spawnCooldown.tick();
+    }
+
+    public void addWildQueenChunk(ChunkPos pos) {
+        wildQueenChunks.add(pos.toLong());
+        setDirty();
+    }
+
+    public boolean isFirstQueenSpawned() {
+        return firstQueenSpawned;
+    }
+
+    public void markFirstQueenSpawned() {
+        if (!firstQueenSpawned) {
+            firstQueenSpawned = true;
+            setDirty();
+        }
+    }
+
+    public long getFirstQueenDeadlineGameTime() {
+        return firstQueenDeadlineGameTime;
+    }
+
+    public void setFirstQueenDeadlineGameTime(long gameTime) {
+        this.firstQueenDeadlineGameTime = gameTime;
+        setDirty();
+    }
+
+    /** True when no wild queen has taken root within {@code minChebyshevChunks} chunks of {@code pos}. */
+    public boolean isFarFromWildQueenChunks(ChunkPos pos, int minChebyshevChunks) {
+        for (var packed : wildQueenChunks) {
+            var other = new ChunkPos(packed);
+            if (Math.max(Math.abs(other.x - pos.x), Math.abs(other.z - pos.z)) < minChebyshevChunks) {
+                return false;
+            }
+        }
+        return true;
     }
 
     public void addChunkToBlacklist(BlockPos pos) {
@@ -94,6 +145,9 @@ public class QueenSpawnChunkData extends SavedData {
 
         compoundTag.put(NBT_REGIONS, regionsTag);
         spawnCooldown.save(compoundTag);
+        compoundTag.putLongArray(NBT_WILD_QUEEN_CHUNKS, wildQueenChunks.stream().mapToLong(Long::longValue).toArray());
+        compoundTag.putBoolean(NBT_FIRST_QUEEN_SPAWNED, firstQueenSpawned);
+        compoundTag.putLong(NBT_FIRST_QUEEN_DEADLINE, firstQueenDeadlineGameTime);
 
         return compoundTag;
     }
@@ -117,6 +171,15 @@ public class QueenSpawnChunkData extends SavedData {
         var queenSpawnChunkData = new QueenSpawnChunkData(regionMap);
 
         queenSpawnChunkData.spawnCooldown.load(compoundTag);
+
+        for (var packed : compoundTag.getLongArray(NBT_WILD_QUEEN_CHUNKS)) {
+            queenSpawnChunkData.wildQueenChunks.add(packed);
+        }
+
+        queenSpawnChunkData.firstQueenSpawned = compoundTag.getBoolean(NBT_FIRST_QUEEN_SPAWNED);
+        queenSpawnChunkData.firstQueenDeadlineGameTime = compoundTag.contains(NBT_FIRST_QUEEN_DEADLINE)
+            ? compoundTag.getLong(NBT_FIRST_QUEEN_DEADLINE)
+            : -1L;
 
         return queenSpawnChunkData;
     }

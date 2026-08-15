@@ -1,0 +1,26 @@
+{
+  "parent": "avp_alien:aliens/root",
+  "criteria": {
+    "eat_raw_scourge_jelly": {
+      "trigger": "minecraft:impossible"
+    }
+  },
+  "display": {
+    "description": {
+      "translate": "advancements.aliens.eat_raw_scourge_jelly.description"
+    },
+    "icon": {
+      "count": 1,
+      "id": "avp_alien:raw_scourge_jelly"
+    },
+    "title": {
+      "translate": "advancements.aliens.eat_raw_scourge_jelly.title"
+    }
+  },
+  "requirements": [
+    [
+      "eat_raw_scourge_jelly"
+    ]
+  ],
+  "sends_telemetry_event": true
+}

@@ -1,4 +1,16 @@
 {
+  "conditions": [
+    {
+      "type": "min_entity_count_in_location",
+      "entity": "avp_alien:nether_harbinger",
+      "value": 1
+    },
+    {
+      "type": "max_entity_count_in_location",
+      "entity": "avp_alien:nether_crusher",
+      "value": 20
+    }
+  ],
   "input_entities": [
     {
       "count": 1,

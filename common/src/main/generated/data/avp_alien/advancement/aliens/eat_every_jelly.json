@@ -1,0 +1,27 @@
+{
+  "parent": "avp_alien:aliens/root",
+  "criteria": {
+    "eat_every_jelly": {
+      "trigger": "minecraft:impossible"
+    }
+  },
+  "display": {
+    "description": {
+      "translate": "advancements.aliens.eat_every_jelly.description"
+    },
+    "frame": "goal",
+    "icon": {
+      "count": 1,
+      "id": "avp_alien:raw_royal_jelly"
+    },
+    "title": {
+      "translate": "advancements.aliens.eat_every_jelly.title"
+    }
+  },
+  "requirements": [
+    [
+      "eat_every_jelly"
+    ]
+  ],
+  "sends_telemetry_event": true
+}

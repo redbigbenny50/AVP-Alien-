@@ -2,6 +2,8 @@ package com.alien.fabric.data.recipe.impl;
 
 import com.alien.common.registry.init.block.AlienBlocks;
 import com.alien.common.registry.init.item.AlienItems;
+import com.alien.common.registry.init.item.AlienXenomorphHeadItems;
+import com.alien.common.registry.tag.AlienItemTags;
 import com.alien.fabric.compatibility.avp_human.AVPHumanFabric;
 import com.blib.fabric.data.recipe.RecipeConstants;
 import com.blib.fabric.data.recipe.builder.RecipeBuilder;
@@ -28,6 +30,13 @@ public class MiscellaneousRecipeProvider {
             .pattern("III")
             .into(1, AlienBlocks.ROYAL_JELLY_BLOCK);
 
+        // Field manual: a book plus a resin ball of ANY strain - the tag is what makes "any variant" work.
+        builder.shapeless()
+            .withCategory(RecipeCategory.TOOLS)
+            .requires(1, Items.BOOK)
+            .requires(1, AlienItemTags.RESIN_BALLS)
+            .into(1, AlienItems.FIELD_MANUAL);
+
         builder.shapeless()
             .withCategory(RecipeCategory.MISC)
             .requires(1, AlienBlocks.ROYAL_JELLY_BLOCK)
@@ -46,67 +55,93 @@ public class MiscellaneousRecipeProvider {
             .requires(1, AlienBlocks.SCOURGE_JELLY_BLOCK)
             .into(9, AlienItems.RAW_SCOURGE_JELLY);
 
+        builder.shaped()
+            .withCategory(RecipeCategory.MISC)
+            .define('I', AlienItems.RAW_IRRADIATED_JELLY)
+            .pattern("III")
+            .pattern("III")
+            .pattern("III")
+            .into(1, AlienBlocks.IRRADIATED_JELLY_BLOCK);
+
+        builder.shapeless()
+            .withCategory(RecipeCategory.MISC)
+            .requires(1, AlienBlocks.IRRADIATED_JELLY_BLOCK)
+            .into(9, AlienItems.RAW_IRRADIATED_JELLY);
+
         builder.shapeless()
             .withCategory(RecipeCategory.MISC)
             .requires(1, Items.POISONOUS_POTATO)
             .requires(1, AlienItems.RAW_ROYAL_JELLY)
             .into(1, AlienItems.POISON_JELLY);
 
+        // Inhibitor: an iron frame (ingots top-centre + both bottom corners, nuggets mid-sides) around poison jelly.
+        builder.shaped()
+            .withCategory(RecipeCategory.TOOLS)
+            .define('I', Items.IRON_INGOT)
+            .define('N', Items.IRON_NUGGET)
+            .define('J', AlienItems.POISON_JELLY)
+            .pattern(" I ")
+            .pattern("NJN")
+            .pattern("I I")
+            .into(1, AlienItems.INHIBITOR);
+
+        // Capture chain: three vanilla chains stacked in a column.
+        builder.shaped()
+            .withCategory(RecipeCategory.TOOLS)
+            .define('C', Items.CHAIN)
+            .pattern("C")
+            .pattern("C")
+            .pattern("C")
+            .into(2, AlienItems.CAPTURE_CHAIN);
+
+        // Anchor: an iron ingot centred over a row of three iron blocks -> 8 anchors.
+        builder.shaped()
+            .withCategory(RecipeCategory.MISC)
+            .define('I', Items.IRON_INGOT)
+            .define('B', Items.IRON_BLOCK)
+            .pattern(" I ")
+            .pattern("BBB")
+            .into(8, AlienItems.ANCHOR);
+
+        // Tracker + tracking PDA are HUMAN TECH - locked behind the human module like the rest of the
+        // AVPHuman-gated content ([stated] "lock the pda and tracker behind the human module like the other
+        // things that get unlocked when avp human is installed but hidden without it"). Same conditioned-builder
+        // mechanism as the irradiated recipes: emits fabric:load_conditions + neoforge:conditions on avp_human.
+        var humanTech = builder.withCondition(AVPHumanFabric.IS_LOADED);
+
+        // Tracker tag: redstone + amethyst shard + glowstone dust + iron ingot.
+        humanTech.shapeless()
+            .withCategory(RecipeCategory.TOOLS)
+            .requires(1, Items.REDSTONE)
+            .requires(1, Items.AMETHYST_SHARD)
+            .requires(1, Items.GLOWSTONE_DUST)
+            .requires(1, Items.IRON_INGOT)
+            .into(1, AlienItems.TRACKER);
+
+        // Tracking PDA: redstone, amethyst shard, observer stacked in a column.
+        humanTech.shaped()
+            .withCategory(RecipeCategory.TOOLS)
+            .define('R', Items.REDSTONE)
+            .define('A', Items.AMETHYST_SHARD)
+            .define('O', Items.OBSERVER)
+            .pattern("R")
+            .pattern("A")
+            .pattern("O")
+            .into(1, AlienItems.TRACKING_PDA);
+
         builder.shapeless()
             .withCategory(RecipeCategory.MISC)
             .requires(9, AlienItems.ALIEN_MUSIC_DISC_1_FRAGMENT)
             .into(1, AlienItems.ALIEN_MUSIC_DISC_1);
 
-        // Queen head trophy + vanilla shield -> queen head shield. One-way conversion: there's no recipe
-        // back to the wearable head, so crafting commits to the combat utility.
-        builder.shapeless()
-            .withCategory(RecipeCategory.COMBAT)
-            .requires(1, AlienItems.QUEEN_HEAD)
-            .requires(1, Items.SHIELD)
-            .into(1, AlienItems.QUEEN_HEAD_SHIELD);
-
-        builder.shapeless()
-            .withCategory(RecipeCategory.COMBAT)
-            .requires(1, AlienItems.ABERRANT_QUEEN_HEAD)
-            .requires(1, Items.SHIELD)
-            .into(1, AlienItems.ABERRANT_QUEEN_HEAD_SHIELD);
-
-        builder.shapeless()
-            .withCategory(RecipeCategory.COMBAT)
-            .requires(1, AlienItems.IRRADIATED_QUEEN_HEAD)
-            .requires(1, Items.SHIELD)
-            .into(1, AlienItems.IRRADIATED_QUEEN_HEAD_SHIELD);
-
-        builder.shapeless()
-            .withCategory(RecipeCategory.COMBAT)
-            .requires(1, AlienItems.NETHER_QUEEN_HEAD)
-            .requires(1, Items.SHIELD)
-            .into(1, AlienItems.NETHER_QUEEN_HEAD_SHIELD);
-
-        // Crusher head trophy + vanilla shield -> crusher head shield. Mirrors the queen recipe family.
-        builder.shapeless()
-            .withCategory(RecipeCategory.COMBAT)
-            .requires(1, AlienItems.CRUSHER_HEAD)
-            .requires(1, Items.SHIELD)
-            .into(1, AlienItems.CRUSHER_HEAD_SHIELD);
-
-        builder.shapeless()
-            .withCategory(RecipeCategory.COMBAT)
-            .requires(1, AlienItems.ABERRANT_CRUSHER_HEAD)
-            .requires(1, Items.SHIELD)
-            .into(1, AlienItems.ABERRANT_CRUSHER_HEAD_SHIELD);
-
-        builder.shapeless()
-            .withCategory(RecipeCategory.COMBAT)
-            .requires(1, AlienItems.IRRADIATED_CRUSHER_HEAD)
-            .requires(1, Items.SHIELD)
-            .into(1, AlienItems.IRRADIATED_CRUSHER_HEAD_SHIELD);
-
-        builder.shapeless()
-            .withCategory(RecipeCategory.COMBAT)
-            .requires(1, AlienItems.NETHER_CRUSHER_HEAD)
-            .requires(1, Items.SHIELD)
-            .into(1, AlienItems.NETHER_CRUSHER_HEAD_SHIELD);
+        // Head trophy + vanilla shield -> head shield. One-way conversion: crafting commits to combat utility.
+        AlienXenomorphHeadItems.ALL.forEach(
+            entry -> builder.shapeless()
+                .withCategory(RecipeCategory.COMBAT)
+                .requires(1, entry.head())
+                .requires(1, Items.SHIELD)
+                .into(1, entry.headShield())
+        );
     }
 
     private static void provideMiscellaneousNetherRecipes(RecipeBuilder builder) {

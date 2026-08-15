@@ -1,0 +1,4 @@
+{
+  "parent": "avp_alien:templates/spitter_head_shield",
+  "texture": "avp_alien:textures/entity/aberrant_spitter.png"
+}

@@ -27,6 +27,9 @@ public class AlienSoundEvents {
 
     public static final BLibHolder<SoundEvent> ENTITY_CHESTBURSTER_BURST = create("entity.chestburster.burst");
 
+    /** A facehugger is torn off a face. */
+    public static final BLibHolder<SoundEvent> ENTITY_FACEHUGGER_ESCAPE = create("entity.facehugger.escape");
+
     public static final BLibHolder<SoundEvent> ENTITY_OVOMORPH_HATCH = create("entity.ovomorph.hatch");
 
     public static final BLibHolder<SoundEvent> ENTITY_OVOMORPH_LAID = create("entity.ovomorph.laid");
@@ -35,9 +38,25 @@ public class AlienSoundEvents {
 
     public static final BLibHolder<SoundEvent> ENTITY_OVOMORPH_SHEAR = create("entity.ovomorph.shear");
 
+    /**
+     * The harbinger's roar. Numbered because MORE ARE COMING - [stated] the previous pass shipped none at all, and this
+     * is the first harbinger sound in the mod.
+     * <p>
+     * Registered as its OWN event rather than folded into a shared `entity.harbinger.roar` list, deliberately: a
+     * sounds.json entry with several files picks one at RANDOM, and the irradiated hive's birth raid is specified to
+     * use THIS roar. When roar1 and roar2 arrive they can either get their own events or share a random set alongside
+     * this one - but this event must keep resolving to roar3 alone.
+     */
+    public static final BLibHolder<SoundEvent> ENTITY_HARBINGER_ROAR_3 = create("entity.harbinger.roar3");
+
     public static final BLibHolder<SoundEvent> ENTITY_QUEEN_ARM_ATTACK = create("entity.queen.arm_attack");
 
     public static final BLibHolder<SoundEvent> ENTITY_QUEEN_BACK_HAND_ATTACK = create("entity.queen.back_hand_attack");
+
+    /** Chain-strain loops for a fully bound queen. Alternated per loop of the bound_struggle animation. */
+    public static final BLibHolder<SoundEvent> ENTITY_QUEEN_CHAIN_STRUGGLE_1 = create("entity.queen.chain_struggle_1");
+
+    public static final BLibHolder<SoundEvent> ENTITY_QUEEN_CHAIN_STRUGGLE_2 = create("entity.queen.chain_struggle_2");
 
     public static final BLibHolder<SoundEvent> ENTITY_QUEEN_DEATH = create("entity.queen.death");
 
@@ -77,6 +96,15 @@ public class AlienSoundEvents {
 
     public static final BLibHolder<SoundEvent> ENTITY_XENOMORPH_ATTACK = create("entity.xenomorph.attack");
 
+    /** A captive tears free of the drone carrying it off. */
+    public static final BLibHolder<SoundEvent> ENTITY_XENOMORPH_ESCAPE_HOST = create("entity.xenomorph.escape_host");
+
+    /**
+     * A drone seizes a host. NOTE: this fires once per capture - if you hear it STUTTER, a carrier is grabbing and
+     * dropping its captive in a loop, which is a bug signature worth chasing.
+     */
+    public static final BLibHolder<SoundEvent> ENTITY_XENOMORPH_GRAB_HOST = create("entity.xenomorph.grab_host");
+
     public static final BLibHolder<SoundEvent> ENTITY_XENOMORPH_DEATH = create("entity.xenomorph.death");
 
     public static final BLibHolder<SoundEvent> ENTITY_XENOMORPH_HISS = create("entity.xenomorph.hiss");
@@ -90,6 +118,22 @@ public class AlienSoundEvents {
     public static final BLibHolder<SoundEvent> ITEM_ARMOR_EQUIP_CHITIN = create("item.armor.equip_chitin");
 
     public static final BLibHolder<SoundEvent> JUKEBOX_SOUNDS_ALIEN_MUSIC_1 = create("jukebox_sounds.alien_music_1");
+
+    public static final BLibHolder<SoundEvent> UI_TERMINAL_OPEN = create("ui.terminal.open");
+
+    public static final BLibHolder<SoundEvent> UI_TERMINAL_CLOSE = create("ui.terminal.close");
+
+    /** Morse SOS carried on the emergency band - a hive war has opened somewhere in the world. */
+    public static final BLibHolder<SoundEvent> BROADCAST_WAR_SOS = create("broadcast.war.sos");
+
+    /** Morse all-clear - the war those coordinates belonged to is over. */
+    public static final BLibHolder<SoundEvent> BROADCAST_WAR_ALL_CLEAR = create("broadcast.war.all_clear");
+
+    public static final BLibHolder<SoundEvent> UI_TERMINAL_MOUSEOVER = create("ui.terminal.mouseover");
+
+    public static final BLibHolder<SoundEvent> UI_TERMINAL_CLICK = create("ui.terminal.click");
+
+    public static final BLibHolder<SoundEvent> UI_TERMINAL_EXECUTE = create("ui.terminal.execute");
 
     private static BLibHolder<SoundEvent> create(String path) {
         return REGISTRY.createHolder(path, () -> SoundEvent.createVariableRangeEvent(AlienResources.location(path)));

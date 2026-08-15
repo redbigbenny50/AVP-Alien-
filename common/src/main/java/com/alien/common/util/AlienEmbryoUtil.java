@@ -2,8 +2,11 @@ package com.alien.common.util;
 
 import com.alien.common.gameplay.entity.living.alien.Alien;
 import com.alien.common.model.alien.Host;
+import com.alien.common.registry.init.AlienEntityTypes;
+import com.alien.common.registry.init.AlienGameRules;
 import com.alien.common.registry.init.AlienSoundEvents;
 import com.alien.common.registry.key.AlienDamageTypeKeys;
+import com.alien.common.registry.tag.AlienMobEffectTags;
 import com.alien.compatibility.avp_human.AVPHuman;
 import com.alien.compatibility.avp_human.GeneContainerProxy;
 import com.human.common.model.GeneCarrier;
@@ -13,9 +16,12 @@ import net.minecraft.world.Difficulty;
 import net.minecraft.world.effect.MobEffectInstance;
 import net.minecraft.world.effect.MobEffects;
 import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.Mob;
 import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
@@ -23,6 +29,14 @@ import java.util.List;
 import java.util.concurrent.TimeUnit;
 
 public class AlienEmbryoUtil {
+
+    /**
+     * Gestation length: when {@code embryoGrowthTimeInTicks} passes this, the chest-bursting phase begins. Public so
+     * the Metamorphosis effect can slam the clock here (burst now) and the Growth Suppression effect can rewind
+     * relative to it (five days out).
+     */
+    // TODO: Use data pack values here.
+    public static final int BURST_TIME_IN_TICKS = (int) (TimeUnit.MINUTES.toSeconds(5) * 20);
 
     public static void runAlienEmbryoRoutines(LivingEntity hostEntity) {
         var host = (Host) hostEntity;
@@ -38,9 +52,25 @@ public class AlienEmbryoUtil {
         }
 
         if (host.getEmbryoType().isSome()) {
+            markIrradiatedEmbryo(hostEntity, host);
             tickAlienEmbryoGrowth(hostEntity);
         } else {
             host.removeEmbryo();
+        }
+    }
+
+    /**
+     * A host carrying an embryo who takes AVPHuman radiation marks that embryo for life: it will emerge destined for
+     * BOILER, and it will emerge even if the rads kill its host first. The mark is one-way - curing the host later does
+     * not un-mutate what is already growing. Soft dependency: no avp_human, no marking.
+     */
+    private static void markIrradiatedEmbryo(LivingEntity hostEntity, Host host) {
+        if (host.isEmbryoIrradiated()) {
+            return;
+        }
+        var radiation = Alien.radiationEffect();
+        if (radiation.isPresent() && hostEntity.hasEffect(radiation.get())) {
+            host.setEmbryoIrradiated(true);
         }
     }
 
@@ -54,8 +84,7 @@ public class AlienEmbryoUtil {
 
         host.incrementEmbryoGrowthTimeInTicks();
 
-        // TODO: Use data pack values here.
-        var burstTimeInTicks = TimeUnit.MINUTES.toSeconds(5) * 20;
+        var burstTimeInTicks = BURST_TIME_IN_TICKS;
         if (host.getEmbryoGrowthTimeInTicks() <= burstTimeInTicks) {
 
             if (hostEntity instanceof Player player) {
@@ -88,38 +117,47 @@ public class AlienEmbryoUtil {
                 if (hostEntity.tickCount % 10 == 0) {
                     hostEntity.level()
                         .playSound(null, hostEntity, AlienSoundEvents.EFFECT_BONE_CRUNCH.get(), SoundSource.HOSTILE, 0.2F, 1);
-                    hostEntity.hurt(hostEntity.damageSources().source(AlienDamageTypeKeys.CHESTBURSTING), 0.01F);
+                    hurtChestbursting(hostEntity, 0.01F);
                 }
             }
 
             return;
         }
 
-        var embryos = AlienEmbryoUtil.birthEmbryos(hostEntity);
+        var totemPlayer = chestbursterTotemPlayer(hostEntity);
+        var embryos = AlienEmbryoUtil.birthEmbryos(hostEntity, totemPlayer != null);
 
         embryos.forEach(embryo -> {});
 
         hostEntity.level().playSound(null, hostEntity, AlienSoundEvents.ENTITY_CHESTBURSTER_BURST.get(), SoundSource.HOSTILE, 0.25F, 1);
 
-        hostEntity.hurt(hostEntity.damageSources().source(AlienDamageTypeKeys.CHESTBURSTING), Float.MAX_VALUE);
+        if (totemPlayer == null) {
+            hurtChestbursting(hostEntity, Float.MAX_VALUE);
+        } else {
+            consumeTotem(totemPlayer);
+        }
 
         // Remove the embryo no matter what.
         host.removeEmbryo();
     }
 
     public static List<Entity> birthEmbryos(LivingEntity parentEntity) {
+        return birthEmbryos(parentEntity, false);
+    }
+
+    private static List<Entity> birthEmbryos(LivingEntity parentEntity, boolean preferAberrantEmbryo) {
         if (AVPHuman.MOD.isLoaded()) {
             if (((Host) parentEntity).getOrCreateParasiteGeneContainer() instanceof GeneContainerProxy.Wrapper(var geneContainer)) {
                 return EmbryoUtil.birthEmbryos(
                     parentEntity,
                     geneContainer,
-                    AlienEmbryoUtil::alienEmbryoFactory,
+                    host -> AlienEmbryoUtil.alienEmbryoFactory(host, preferAberrantEmbryo),
                     1
                 );
             }
         }
 
-        var alienEmbryo = AlienEmbryoUtil.alienEmbryoFactory(parentEntity);
+        var alienEmbryo = AlienEmbryoUtil.alienEmbryoFactory(parentEntity, preferAberrantEmbryo);
 
         return alienEmbryo == null
             ? List.of()
@@ -127,6 +165,10 @@ public class AlienEmbryoUtil {
     }
 
     public static @Nullable Entity alienEmbryoFactory(@NotNull LivingEntity hostEntity) {
+        return alienEmbryoFactory(hostEntity, false);
+    }
+
+    private static @Nullable Entity alienEmbryoFactory(@NotNull LivingEntity hostEntity, boolean preferAberrantEmbryo) {
         var level = hostEntity.level();
         var host = (Host) hostEntity;
         var embryoTypeOption = host.getEmbryoType();
@@ -135,7 +177,7 @@ public class AlienEmbryoUtil {
             return null;
         }
 
-        var embryo = embryoTypeOption.unwrap().create(level);
+        var embryo = aberrantEquivalent(embryoTypeOption.unwrap(), preferAberrantEmbryo).create(level);
 
         if (embryo == null) {
             return null;
@@ -143,6 +185,24 @@ public class AlienEmbryoUtil {
 
         if (embryo instanceof Mob mob) {
             mob.setPersistenceRequired();
+        }
+
+        if (embryo instanceof Alien hostBornAlien) {
+            // Born of a host, not simulated out of a reserve bank. The flag is NBT-persisted and rides every growth
+            // transition, so the eventual ADULT still knows - which is what feeds the brood bank (hosts are real
+            // gains the hive earned, banked separately, uncapped, and drawn on before the main reserves).
+            hostBornAlien.setHostBorn(true);
+        }
+
+        if (embryo instanceof Alien witheredCandidate && host.isEmbryoWithered()) {
+            // The death sentence marked this embryo: it emerges withered - the player played god and made a demon.
+            witheredCandidate.setWithered(true);
+        }
+
+        if (embryo instanceof Alien irradiatedCandidate && host.isEmbryoIrradiated()) {
+            // Cooked in an irradiated womb: this one grows into a BOILER instead of the drone or runner its host
+            // would otherwise have produced. The mark rides every growth step to the adolescent -> adult transition.
+            irradiatedCandidate.setBoilerDestined(true);
         }
 
         if (embryo instanceof Alien alien) {
@@ -166,8 +226,15 @@ public class AlienEmbryoUtil {
 
         if (embryo instanceof LivingEntity livingEmbryo) {
             // TODO: The genes are assigned once here, but if they're removed they don't appear on the embryo again.
-            // Copies effects from previous entity to the next
+            // Whatever the host was carrying when it burst becomes part of what came out, permanently. That is
+            // deliberate - EXCEPT for the host's own lifecycle state, which describes the pregnancy rather than the
+            // child and turns pathological at an endless duration. Jelly sickness alone left the newborn in a
+            // permanent wither-damage stall: never dying, bleeding acid forever.
             for (var effect : hostEntity.getActiveEffects()) {
+                if (effect.getEffect().is(AlienMobEffectTags.NOT_INHERITED_BY_EMBRYO)) {
+                    continue;
+                }
+
                 livingEmbryo.addEffect(new MobEffectInstance(effect.getEffect(), Integer.MAX_VALUE, effect.getAmplifier(), false, false));
             }
         }
@@ -175,5 +242,67 @@ public class AlienEmbryoUtil {
         level.addFreshEntity(embryo);
 
         return embryo;
+    }
+
+    private static EntityType<?> aberrantEquivalent(EntityType<?> original, boolean preferAberrantEmbryo) {
+        if (!preferAberrantEmbryo) {
+            return original;
+        }
+        if (original == AlienEntityTypes.CHESTBURSTER.get()) {
+            return AlienEntityTypes.ABERRANT_CHESTBURSTER.get();
+        }
+        if (original == AlienEntityTypes.ROYAL_CHESTBURSTER.get()) {
+            return AlienEntityTypes.ROYAL_ABERRANT_CHESTBURSTER.get();
+        }
+        if (original == AlienEntityTypes.PREDALIEN_CHESTBURSTER.get()) {
+            return AlienEntityTypes.ABERRANT_PREDALIEN_CHESTBURSTER.get();
+        }
+        return original;
+    }
+
+    private static boolean hurtChestbursting(LivingEntity hostEntity, float amount) {
+        if (
+            amount >= hostEntity.getHealth()
+                && chestbursterTotemPlayer(hostEntity) != null
+        ) {
+            hostEntity.setHealth(Math.max(1.0F, hostEntity.getHealth()));
+            return false;
+        }
+
+        return hostEntity.hurt(hostEntity.damageSources().source(AlienDamageTypeKeys.CHESTBURSTING), amount);
+    }
+
+    private static @Nullable Player chestbursterTotemPlayer(LivingEntity hostEntity) {
+        if (!(hostEntity instanceof Player player)) {
+            return null;
+        }
+        if (!hostEntity.level().getGameRules().getBoolean(AlienGameRules.AVP_ALIEN_TOTEMS_PREVENT_CHESTBURSTER_DEATH)) {
+            return null;
+        }
+        return findTotem(player) == null ? null : player;
+    }
+
+    private static @Nullable ItemStack findTotem(Player player) {
+        if (player.getMainHandItem().is(Items.TOTEM_OF_UNDYING)) {
+            return player.getMainHandItem();
+        }
+        if (player.getOffhandItem().is(Items.TOTEM_OF_UNDYING)) {
+            return player.getOffhandItem();
+        }
+        return null;
+    }
+
+    private static void consumeTotem(Player player) {
+        var totem = findTotem(player);
+        if (totem != null) {
+            totem.shrink(1);
+        }
+
+        player.setHealth(1.0F);
+        player.removeAllEffects();
+        player.addEffect(new MobEffectInstance(MobEffects.REGENERATION, 900, 1));
+        player.addEffect(new MobEffectInstance(MobEffects.ABSORPTION, 100, 1));
+        player.addEffect(new MobEffectInstance(MobEffects.FIRE_RESISTANCE, 800, 0));
+        player.level().broadcastEntityEvent(player, (byte) 35);
     }
 }

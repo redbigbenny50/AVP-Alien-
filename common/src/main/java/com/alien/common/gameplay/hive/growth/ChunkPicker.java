@@ -38,7 +38,7 @@ public final class ChunkPicker {
         }
 
         var centerChunk = new ChunkPos(location.centerPos());
-        var frontier = collectFrontier(level, location, true);
+        var frontier = collectFrontier(level, location, true, config);
 
         if (frontier.isEmpty()) {
             return null;
@@ -63,7 +63,7 @@ public final class ChunkPicker {
             return null;
         }
 
-        var frontier = new ArrayList<>(collectFrontier(level, location, false));
+        var frontier = new ArrayList<>(collectFrontier(level, location, false, config));
         if (frontier.isEmpty()) {
             return null;
         }
@@ -71,16 +71,32 @@ public final class ChunkPicker {
         return frontier.get(level.random.nextInt(frontier.size()));
     }
 
-    private static Set<ChunkPos> collectFrontier(ServerLevel level, HiveLocation location, boolean requireLoadedMember) {
+    private static Set<ChunkPos> collectFrontier(
+        ServerLevel level,
+        HiveLocation location,
+        boolean requireLoadedMember,
+        HiveConfig config
+    ) {
         var dimension = location.dimension();
         var frontier = new HashSet<ChunkPos>();
         var locationFaction = Alien.MOD.factions().get(location.id().value());
+        var centerChunk = new ChunkPos(location.centerPos());
+        var maxRadius = config.maxTerritoryRadiusChunks();
 
         for (var owned : location.claimedChunks()) {
             for (var offset : CARDINAL_OFFSETS) {
                 var candidate = new ChunkPos(owned.x + offset[0], owned.z + offset[1]);
 
                 if (location.claimedChunks().contains(candidate)) {
+                    continue;
+                }
+
+                // Reject any candidate outside the max territory footprint (Chebyshev distance from the queen's
+                // center chunk) — a 3x3 core (radius 1) extending out to radius maxRadius, e.g. radius 9 => 19x19.
+                // This is a spatial bound distinct from maxChunksPerLocation's simple count cap, and prevents thin
+                // "snake" claims from sprawling arbitrarily far from the hive's seat. Empress-influenced hives are
+                // intended to expand this cap later (parked).
+                if (chebyshev(candidate, centerChunk) > maxRadius) {
                     continue;
                 }
 

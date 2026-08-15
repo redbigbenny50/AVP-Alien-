@@ -18,7 +18,7 @@
 - Reworked alien growth.
   - Adult-stage growth now requires the Metamorphosis effect.
   - Scourge growth paths now require the Scourge effect.
-  - Growth is now tied into molting phases and data-driven form size scale data.
+  - Growth is now tied into molting phases and data-driven molting profile data.
 - Reworked xenomorph AI/pathfinding around the new GOAP stack.
   - Existing xenomorph castes were ported to the new combat, idle, swimming, resin, vent, egg, lunge, digging, and path interception behaviors.
   - Attack timing is now server-driven instead of depending on client animation timing.
@@ -246,7 +246,7 @@
 - Added `avp_alien:raid_waves/default`.
 - Added variant raid wave profiles for normal, aberrant, and nether raids.
 - Added `avp_alien:hive_recipes/*` data for hive reserve growth.
-- Added `avp_alien:form_size_scale/*` data for alien scaling and molting.
+- Added `avp_alien:molting_profiles/*` data for alien scaling and molting.
 - Added damage types:
   - `avp_alien:acid_spit`
   - `avp_alien:ravager_claw`
@@ -278,7 +278,7 @@
   - `#avp_alien:does_not_hurt_aliens`
 - Removed `#minecraft:is_end` from `#avp_alien:has_xenomorphs`.
 - Removed generated NeoForge biome modifiers for vanilla xenomorph spawning.
-- Added generated recipes, advancements, models, loot tables, and language entries for Scourge content, jelly resources, heads, shields, potions, tipped arrows, spawn eggs, raid waves, hive recipes, and form size scale data.
+- Added generated recipes, advancements, models, loot tables, and language entries for Scourge content, jelly resources, heads, shields, potions, tipped arrows, spawn eggs, raid waves, hive recipes, and molting profile data.
 
 ## 🧩 API / Mod Integration
 - Added a hive policy modifier API.

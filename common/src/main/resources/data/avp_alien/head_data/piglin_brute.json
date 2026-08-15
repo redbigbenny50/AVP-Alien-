@@ -1,0 +1,15 @@
+{
+  "entity": "minecraft:piglin_brute",
+  "size": [
+    10.0,
+    8.0,
+    8.0
+  ],
+  "pivot": [
+    0.0,
+    24.0,
+    0.0
+  ],
+  "vertical_offset": -10,
+  "face_offset": 4
+}

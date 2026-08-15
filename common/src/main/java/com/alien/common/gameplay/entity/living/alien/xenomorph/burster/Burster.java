@@ -3,6 +3,7 @@ package com.alien.common.gameplay.entity.living.alien.xenomorph.burster;
 import com.alien.common.gameplay.entity.living.alien.Alien;
 import com.alien.common.gameplay.entity.living.alien.EggCarrier;
 import com.alien.common.gameplay.entity.living.alien.xenomorph.AttackType;
+import com.alien.common.gameplay.entity.living.alien.xenomorph.CrawlAttack;
 import com.alien.common.gameplay.entity.living.alien.xenomorph.EggPickupManager;
 import com.alien.common.gameplay.entity.living.alien.xenomorph.ExplosiveXenomorphUtil;
 import com.alien.common.gameplay.entity.living.alien.xenomorph.VentBuilder;
@@ -16,6 +17,7 @@ import com.alien.common.model.alien.variant.AlienVariant;
 import com.alien.common.registry.init.AlienEntityTypes;
 import com.alien.common.registry.init.AlienSoundEvents;
 import com.alien.common.registry.tag.AlienEntityTypeTags;
+import com.blib.api.common.dismemberment.v1.LimbDismemberer;
 import com.blib.api.common.entity.v1.EntityUtil;
 import com.blib.api.common.entity.v1.PlayerStatConstants;
 import com.blib.api.common.goap.v1.GOAPUser;
@@ -30,6 +32,7 @@ import net.minecraft.world.entity.ai.attributes.AttributeSupplier;
 import net.minecraft.world.entity.ai.attributes.Attributes;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.gameevent.DynamicGameEventListener;
+import net.minecraft.world.phys.Vec3;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
@@ -43,29 +46,64 @@ public class Burster extends Xenomorph implements EggCarrier, GOAPUser<Burster>,
 
     private static final int ACID_AMOUNT = 3;
 
+    private static final double LIMB_HORIZONTAL_VELOCITY = 0.18D;
+
+    private static final double LIMB_VERTICAL_VELOCITY = 0.14D;
+
+    /**
+     * ⭐⭐ THE PRONE ATTACKS. [stated] "the spitter loses one leg and still stands to attack with arms and tail attack it
+     * should only resort to crawl attacks."
+     * <p>
+     * ⚠⚠ THE CLIPS AND THE DISPATCHER METHODS ALREADY EXISTED - what was missing was the ATTACK TYPES. The crawl
+     * preference in {@code XenomorphAttackConfig} restricts a crawling caste to crawl attacks ONLY IF it has any; with
+     * none registered there was nothing to restrict to and it fell straight through to the standing set. A one-legged
+     * burster stood up to swing because there was literally nothing prone to pick.
+     * </p>
+     */
+    /** ⚠ Slightly softer than a standing swing, matching the predalien's existing crawl claw. */
+    private static final float CRAWL_DAMAGE_FRACTION = 0.8F;
+
+    public static final AttackType CRAWL_CLAW = CrawlAttack.create(
+        "burster_crawl_claw",
+        CRAWL_DAMAGE_FRACTION,
+        CrawlAttack.Limb.ARM,
+        16
+    );
+
+    /** ⚠ HEAD, NOT ARM - so a crawling burster that has also lost both arms still has a bite. */
+    public static final AttackType CRAWL_BITE = CrawlAttack.create(
+        "burster_crawl_bite",
+        CRAWL_DAMAGE_FRACTION,
+        CrawlAttack.Limb.HEAD,
+        14
+    );
+
     public static final AttackType CLAW = AttackType.builder("burster_claw")
+        .requiresAnyArm()
         .defaultDurationInTicks(10)
         .sound(AlienSoundEvents.ENTITY_XENOMORPH_ATTACK)
         .build();
 
     public static final AttackType BITE = AttackType.builder("burster_bite")
-        .defaultDurationInTicks(8)
+        .requiresHead()
+        .defaultDurationInTicks(10)
         .sound(AlienSoundEvents.ENTITY_XENOMORPH_ATTACK)
         .build();
 
     public static final AttackType TAIL = AttackType.builder("burster_tail")
-        .defaultDurationInTicks(12)
+        .requiresTail()
+        .defaultDurationInTicks(17)
         .sound(AlienSoundEvents.ENTITY_XENOMORPH_ATTACK)
         .build();
 
     public static AttributeSupplier.Builder createBursterAttributes() {
         return Alien.createAlienAttributes()
-            .add(Attributes.ARMOR, 4.0F)
+            .add(Attributes.ARMOR, 0.0F)
             .add(Attributes.ARMOR_TOUGHNESS, 0f)
-            .add(Attributes.ATTACK_DAMAGE, PlayerStatConstants.BASE_HEALTH * 0.25F)
+            .add(Attributes.ATTACK_DAMAGE, PlayerStatConstants.BASE_HEALTH * 0.3F)
             .add(Attributes.FOLLOW_RANGE, 35F)
             .add(Attributes.KNOCKBACK_RESISTANCE, 0.3f)
-            .add(Attributes.MAX_HEALTH, PlayerStatConstants.BASE_HEALTH * 2F)
+            .add(Attributes.MAX_HEALTH, PlayerStatConstants.BASE_HEALTH * 3F)
             .add(Attributes.MOVEMENT_SPEED, PlayerStatConstants.BASE_WALK_SPEED * 1.2F);
     }
 
@@ -86,6 +124,8 @@ public class Burster extends Xenomorph implements EggCarrier, GOAPUser<Burster>,
                     XenomorphAttackConfig.builder()
                         .addRegular(CLAW)
                         .addRegular(BITE)
+                        .addRegular(CRAWL_CLAW)
+                        .addRegular(CRAWL_BITE)
                         .addRegular(TAIL)
                         .build()
                 )
@@ -151,7 +191,29 @@ public class Burster extends Xenomorph implements EggCarrier, GOAPUser<Burster>,
         }
 
         hasExploded = true;
+        detachAllLimbs();
         ExplosiveXenomorphUtil.explodeWithAcid(this, EXPLOSION_RADIUS, ACID_AMOUNT);
+    }
+
+    private void detachAllLimbs() {
+        var randomSource = getRandom();
+        var bodyCenter = position().add(0.0D, getBbHeight() * 0.5D, 0.0D);
+
+        for (var definition : LimbDismemberer.getRemainingDefinitions(this)) {
+            var angle = randomSource.nextDouble() * Math.TAU;
+            var horizontalVelocity = LIMB_HORIZONTAL_VELOCITY * (0.65D + randomSource.nextDouble() * 0.7D);
+            var verticalVelocity = LIMB_VERTICAL_VELOCITY * (0.65D + randomSource.nextDouble() * 0.7D);
+            var velocity = new Vec3(
+                Math.cos(angle) * horizontalVelocity,
+                verticalVelocity,
+                Math.sin(angle) * horizontalVelocity
+            );
+
+            LimbDismemberer.detach(this, definition.id(), limb -> {
+                limb.moveTo(bodyCenter, getYRot(), getXRot());
+                limb.launch(velocity);
+            });
+        }
     }
 
     @Override

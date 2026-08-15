@@ -1,0 +1,29 @@
+{
+  "limbs": [
+    {
+      "category": "blib:head",
+      "fatal": true,
+      "id": "avp_alien:warrior_head"
+    },
+    {
+      "category": "blib:arm",
+      "id": "avp_alien:warrior_left_arm"
+    },
+    {
+      "category": "blib:arm",
+      "id": "avp_alien:warrior_right_arm"
+    },
+    {
+      "category": "blib:leg",
+      "id": "avp_alien:warrior_left_leg"
+    },
+    {
+      "category": "blib:leg",
+      "id": "avp_alien:warrior_right_leg"
+    },
+    {
+      "category": "blib:tail",
+      "id": "avp_alien:warrior_tail"
+    }
+  ]
+}

@@ -28,5 +28,50 @@ public interface Host {
         setEmbryoType(null);
         setEmbryoGrowthTimeInTicks(0);
         getOrCreateParasiteGeneContainer().clear();
+
+        // The suppression gamble is per-implantation: everything resets when the embryo leaves the body.
+        setSuppressionDoseCount(0);
+        setJellyToxicity(0);
+        setSuppressionSpent(false);
+        setEmbryoWithered(false);
+        setEmbryoIrradiated(false);
     }
+
+    /** Growth Suppression doses taken during this implantation (drives the escalating sickness chance). */
+    int getSuppressionDoseCount();
+
+    void setSuppressionDoseCount(int doseCount);
+
+    /** Hidden jelly toxicity tier 0-4 accumulated this implantation; 4 arms the coin flip. */
+    int getJellyToxicity();
+
+    void setJellyToxicity(int toxicity);
+
+    /** True once a cheated death sentence spent the potion for this implantation - further doses do nothing. */
+    boolean isSuppressionSpent();
+
+    void setSuppressionSpent(boolean spent);
+
+    /** True once the death sentence marked this embryo: whenever and however it emerges, it emerges withered. */
+    /**
+     * Set once the host takes AVPHuman radiation while carrying this embryo, and never unset until the embryo leaves
+     * the body - a dose is a dose, curing the host afterwards does not un-mutate what is already growing. Two
+     * consequences: the burster emerges DESTINED FOR BOILER (see {@code Alien.isBoilerDestined}), and the embryo
+     * survives the host's death - a host that dies early to the rads still gives birth.
+     */
+    boolean isEmbryoIrradiated();
+
+    void setEmbryoIrradiated(boolean irradiated);
+
+    boolean isEmbryoWithered();
+
+    void setEmbryoWithered(boolean withered);
+
+    /**
+     * World game time this host was embedded in a host chamber (drives the egg-delivery settle delay); Long.MIN_VALUE
+     * if never.
+     */
+    long getEmbedGameTime();
+
+    void setEmbedGameTime(long gameTime);
 }

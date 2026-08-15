@@ -1,0 +1,16 @@
+{
+  "type": "minecraft:crafting_shapeless",
+  "category": "equipment",
+  "ingredients": [
+    {
+      "item": "minecraft:book"
+    },
+    {
+      "tag": "avp_alien:resin_balls"
+    }
+  ],
+  "result": {
+    "count": 1,
+    "id": "avp_alien:field_manual"
+  }
+}

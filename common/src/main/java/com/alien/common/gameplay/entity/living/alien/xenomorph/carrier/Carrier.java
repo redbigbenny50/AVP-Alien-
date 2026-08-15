@@ -1,8 +1,10 @@
 package com.alien.common.gameplay.entity.living.alien.xenomorph.carrier;
 
 import com.alien.common.gameplay.entity.living.alien.Alien;
+import com.alien.common.gameplay.entity.living.alien.ovomorph.Ovomorph;
 import com.alien.common.gameplay.entity.living.alien.parasite.facehugger.Facehugger;
 import com.alien.common.gameplay.entity.living.alien.xenomorph.AttackType;
+import com.alien.common.gameplay.entity.living.alien.xenomorph.CrawlAttack;
 import com.alien.common.gameplay.entity.living.alien.xenomorph.Xenomorph;
 import com.alien.common.gameplay.entity.living.alien.xenomorph.XenomorphAttackConfig;
 import com.alien.common.gameplay.entity.living.alien.xenomorph.XenomorphConfig;
@@ -29,37 +31,70 @@ import org.jetbrains.annotations.Nullable;
 
 public class Carrier extends Xenomorph implements GOAPUser<Carrier> {
 
+    /**
+     * ⭐⭐ THE PRONE ATTACKS. [stated] "the spitter loses one leg and still stands to attack with arms and tail attack it
+     * should only resort to crawl attacks."
+     * <p>
+     * ⚠⚠ THE CLIPS AND THE DISPATCHER METHODS ALREADY EXISTED - what was missing was the ATTACK TYPES. The crawl
+     * preference in {@code XenomorphAttackConfig} restricts a crawling caste to crawl attacks ONLY IF it has any; with
+     * none registered there was nothing to restrict to and it fell straight through to the standing set. A one-legged
+     * carrier stood up to swing because there was literally nothing prone to pick.
+     * </p>
+     */
+    /** ⚠ Slightly softer than a standing swing, matching the predalien's existing crawl claw. */
+    private static final float CRAWL_DAMAGE_FRACTION = 0.8F;
+
+    public static final AttackType CRAWL_CLAW = CrawlAttack.create(
+        "carrier_crawl_claw",
+        CRAWL_DAMAGE_FRACTION,
+        CrawlAttack.Limb.ARM,
+        16
+    );
+
+    /** ⚠ HEAD, NOT ARM - so a crawling carrier that has also lost both arms still has a bite. */
+    public static final AttackType CRAWL_BITE = CrawlAttack.create(
+        "carrier_crawl_bite",
+        CRAWL_DAMAGE_FRACTION,
+        CrawlAttack.Limb.HEAD,
+        14
+    );
+
     public static final AttackType CLAW = AttackType.builder("carrier_claw")
-        .defaultDurationInTicks(10)
+        .requiresAnyArm()
+        .defaultDurationInTicks(20)
         .sound(AlienSoundEvents.ENTITY_XENOMORPH_ATTACK)
         .build();
 
     public static final AttackType BITE = AttackType.builder("carrier_bite")
-        .defaultDurationInTicks(8)
+        .requiresHead()
+        .defaultDurationInTicks(14)
         .sound(AlienSoundEvents.ENTITY_XENOMORPH_ATTACK)
         .build();
 
     public static final AttackType TAIL = AttackType.builder("carrier_tail")
-        .defaultDurationInTicks(12)
+        .requiresTail()
+        .defaultDurationInTicks(19)
         .sound(AlienSoundEvents.ENTITY_XENOMORPH_ATTACK)
         .build();
 
     public static final AttackType THROW = AttackType.builder("carrier_throw")
+        .requiresAnyArm()
         .defaultDurationInTicks(20)
         .build();
 
     public static final AttackType SCREAM = AttackType.builder("carrier_scream")
+        .requiresHead()
         .defaultDurationInTicks(35)
         .build();
 
     public static AttributeSupplier.Builder createCarrierAttributes() {
         return Alien.createAlienAttributes()
-            .add(Attributes.ARMOR, 12.0F)
-            .add(Attributes.ARMOR_TOUGHNESS, 12.0F)
-            .add(Attributes.ATTACK_DAMAGE, PlayerStatConstants.BASE_HEALTH * 0.75F)
+            .add(Attributes.ARMOR, 8.0F)
+            .add(Attributes.ARMOR_TOUGHNESS, 8.0F)
+            .add(Attributes.ATTACK_DAMAGE, PlayerStatConstants.BASE_HEALTH * 0.4F)
             .add(Attributes.FOLLOW_RANGE, 35F)
             .add(Attributes.KNOCKBACK_RESISTANCE, 0.7f)
-            .add(Attributes.MAX_HEALTH, PlayerStatConstants.BASE_HEALTH * 5F)
+            .add(Attributes.MAX_HEALTH, PlayerStatConstants.BASE_HEALTH * 4F)
             .add(Attributes.MOVEMENT_SPEED, PlayerStatConstants.BASE_WALK_SPEED * 1.2F);
     }
 
@@ -76,6 +111,8 @@ public class Carrier extends Xenomorph implements GOAPUser<Carrier> {
                     XenomorphAttackConfig.builder()
                         .addRegular(CLAW)
                         .addRegular(BITE)
+                        .addRegular(CRAWL_CLAW)
+                        .addRegular(CRAWL_BITE)
                         .addRegular(TAIL)
                         .build()
                 )
@@ -178,6 +215,22 @@ public class Carrier extends Xenomorph implements GOAPUser<Carrier> {
         carrierData.setReserveFacehuggerPayloadPending(true);
     }
 
+    /**
+     * The reserve to debit an egg from, or null when this carrier arms for free.
+     * <p>
+     * Only an irradiated carrier pays: its eggs are finite ordnance rather than a renewable nursery stock, so the bank
+     * has to actually shrink. Returns null - meaning "arm for free" - for every other strain, and also when the carrier
+     * has no hive to draw from, since a stray should not be left permanently unarmed.
+     */
+    private @Nullable com.alien.common.gameplay.hive.location.HiveLocationReserves irradiatedEggBankOrNull() {
+        if (getVariant() != com.alien.common.model.alien.variant.AlienVariant.IRRADIATED) {
+            return null;
+        }
+
+        var location = com.alien.common.gameplay.hive.faction.HiveMemberLocationResolver.reserveReturnLocation(this);
+        return location == null ? null : location.localReserves();
+    }
+
     private void fillReserveFacehuggerPayloadIfPending() {
         if (!carrierData.isReserveFacehuggerPayloadPending()) {
             return;
@@ -189,14 +242,32 @@ public class Carrier extends Xenomorph implements GOAPUser<Carrier> {
             return;
         }
 
+        // An IRRADIATED carrier arms itself from the hive's leftover egg bank, one egg per hugger, and that bank
+        // never restocks. [stated] "partial uses whatevers left - if theres only 4 then it empties the bank." The
+        // loop below already handles that: it simply stops early. Released huggers never return to the spine, so a
+        // raid permanently spends up to six eggs.
+        //
+        // Every other strain keeps the free top-up it always had - their nurseries refill.
+        var eggBank = irradiatedEggBankOrNull();
+
         while (getRidingFacehuggerCount() < CarrierSpine.COUNT) {
+            if (eggBank != null && !eggBank.trySpawn(Ovomorph.getType(getVariant(), false))) {
+                break;
+            }
+
             var facehugger = facehuggerType.create(level());
             if (facehugger == null) {
                 return;
             }
 
             facehugger.moveTo(getX(), getY(), getZ(), getYRot(), getXRot());
-            facehugger.setPersistenceRequired();
+            // NO setPersistenceRequired - deliberately removed (Aug 1). While riding the spine a hugger is already
+            // despawn-proof (vanilla Mob.requiresCustomPersistence() is literally isPassenger()), and one attached
+            // to a host is protected by Facehugger.isPersistenceRequired's own override. The flag's only real
+            // effect was on RELEASED huggers, which it made immortal - every scatter permanently added up to six
+            // never-despawning facehuggers, the accumulation behind the tester-reported overpop. Released strays
+            // are now ordinary mobs: they hunt while a player is near and despawn like anything else once the
+            // fight moves on. "Released huggers are gone for good" still holds - they never return to the spine.
             level().addFreshEntity(facehugger);
 
             if (!facehugger.startRiding(this, true)) {

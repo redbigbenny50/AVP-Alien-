@@ -9,6 +9,7 @@ import mods.cybercat.gigeresque.common.tags.GigTags;
 import net.fabricmc.fabric.api.datagen.v1.FabricDataOutput;
 import net.fabricmc.fabric.api.datagen.v1.provider.FabricTagProvider;
 import net.minecraft.core.HolderLookup;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.tags.EntityTypeTags;
 import net.minecraft.world.entity.EntityType;
 
@@ -24,6 +25,7 @@ public class AlienEntityTypeTagProvider extends FabricTagProvider.EntityTypeTagP
     protected void addTags(HolderLookup.Provider wrapperLookup) {
         addAberrantAliens();
         addAcidImmune();
+        addCaptureChainBlacklist();
         addPredalienAdolescents();
         addAdolescents();
         addAliens();
@@ -44,6 +46,7 @@ public class AlienEntityTypeTagProvider extends FabricTagProvider.EntityTypeTagP
         addRunnerHosts();
         addHosts();
         addIgnoredByXenomorphs();
+        addXenomorphThreatTiers();
         addIrradiatedAliens();
         addNetherAliens();
         addNormalAliens();
@@ -62,6 +65,11 @@ public class AlienEntityTypeTagProvider extends FabricTagProvider.EntityTypeTagP
         addSpitters();
         addWarriors();
         addXenomorphs();
+
+        // ⚠⚠ NOT INSIDE THE AVPHuman GUARD BELOW. juvenile_prey is a list of VANILLA mobs (chicken, fox,
+        // axolotl...) and has nothing to do with avp_human; putting it there meant it only generated when that mod
+        // happened to be loaded during datagen, which is why two runs produced no file.
+        addJuvenilePrey();
 
         // Compatibility
         addCompatibilityTags();
@@ -131,10 +139,14 @@ public class AlienEntityTypeTagProvider extends FabricTagProvider.EntityTypeTagP
             .addTag(AlienEntityTypeTags.ROYAL_ALIENS);
     }
 
+    // Who answers a xenomorph's cry for help. BURSTERS were dropped July 26/27: they are SCOURGE, and a cry is
+    // a defence call, not a scourge sortie - answering it spent scourge stock on ordinary skirmishes and was the
+    // only scourge caste in the roster (razor claws, chrysalises, carriers and ravagers were never in it).
+    // PRAETORIANS were added the same day so a developed hive answers with something heavier than a young one.
     private void addAnswersXenomorphCriesForHelp() {
         getOrCreateTagBuilder(AlienEntityTypeTags.ANSWERS_XENOMORPH_CRIES_FOR_HELP)
-            .addTag(AlienEntityTypeTags.BURSTERS)
             .addTag(AlienEntityTypeTags.DRONES)
+            .addTag(AlienEntityTypeTags.PRAETORIANS)
             .addTag(AlienEntityTypeTags.PROWLERS)
             .addTag(AlienEntityTypeTags.RUNNERS)
             .addTag(AlienEntityTypeTags.SPITTERS)
@@ -197,6 +209,7 @@ public class AlienEntityTypeTagProvider extends FabricTagProvider.EntityTypeTagP
     private void addFacehuggers() {
         getOrCreateTagBuilder(AlienEntityTypeTags.FACEHUGGERS)
             .add(
+                AlienEntityTypes.IRRADIATED_FACEHUGGER.get(),
                 AlienEntityTypes.ABERRANT_FACEHUGGER.get(),
                 AlienEntityTypes.FACEHUGGER.get(),
                 AlienEntityTypes.NETHER_FACEHUGGER.get(),
@@ -214,6 +227,13 @@ public class AlienEntityTypeTagProvider extends FabricTagProvider.EntityTypeTagP
                 AlienEntityTypes.IRRADIATED_HARBINGER.get(),
                 AlienEntityTypes.NETHER_HARBINGER.get()
             );
+    }
+
+    private void addCaptureChainBlacklist() {
+        getOrCreateTagBuilder(AlienEntityTypeTags.CAPTURE_CHAIN_BLACKLIST)
+            .add(EntityType.ENDER_DRAGON)
+            .add(EntityType.WARDEN)
+            .add(EntityType.WITHER);
     }
 
     private void addHatedByXenomorphs() {
@@ -265,7 +285,54 @@ public class AlienEntityTypeTagProvider extends FabricTagProvider.EntityTypeTagP
                 EntityType.VILLAGER,
                 EntityType.WANDERING_TRADER,
                 EntityType.WITCH
-            );
+            )
+            // ⭐⭐ CROSS-MOD HOSTS, BUILT IN so the datapacks are not needed. ⚠ RE-APPLIED Aug 14 after an edit made
+            // in another chat overwrote this file - the generated tag JSON still held them, so the loss was silent
+            // until the next runDatagen would have deleted them.
+            // ⚠ addOptional: an id that does not resolve is DROPPED at load, never a validation failure.
+            .addOptional(ResourceLocation.fromNamespaceAndPath("minecolonies", "citizen"))
+            .addOptional(ResourceLocation.fromNamespaceAndPath("minecolonies", "visitor"))
+            .addOptional(ResourceLocation.fromNamespaceAndPath("minecolonies", "mercenary"))
+            .addOptional(ResourceLocation.fromNamespaceAndPath("minecolonies", "barbarian"))
+            .addOptional(ResourceLocation.fromNamespaceAndPath("minecolonies", "archerbarbarian"))
+            .addOptional(ResourceLocation.fromNamespaceAndPath("minecolonies", "chiefbarbarian"))
+            .addOptional(ResourceLocation.fromNamespaceAndPath("minecolonies", "pirate"))
+            .addOptional(ResourceLocation.fromNamespaceAndPath("minecolonies", "archerpirate"))
+            .addOptional(ResourceLocation.fromNamespaceAndPath("minecolonies", "chiefpirate"))
+            .addOptional(ResourceLocation.fromNamespaceAndPath("minecolonies", "drownedpirate"))
+            .addOptional(ResourceLocation.fromNamespaceAndPath("minecolonies", "drownedarcherpirate"))
+            .addOptional(ResourceLocation.fromNamespaceAndPath("minecolonies", "drownedchiefpirate"))
+            .addOptional(ResourceLocation.fromNamespaceAndPath("minecolonies", "mummy"))
+            .addOptional(ResourceLocation.fromNamespaceAndPath("minecolonies", "archermummy"))
+            .addOptional(ResourceLocation.fromNamespaceAndPath("minecolonies", "pharao"))
+            .addOptional(ResourceLocation.fromNamespaceAndPath("minecolonies", "amazon"))
+            .addOptional(ResourceLocation.fromNamespaceAndPath("minecolonies", "amazonspearman"))
+            .addOptional(ResourceLocation.fromNamespaceAndPath("minecolonies", "amazonchief"))
+            .addOptional(ResourceLocation.fromNamespaceAndPath("minecolonies", "shieldmaiden"))
+            .addOptional(ResourceLocation.fromNamespaceAndPath("minecolonies", "norsemenarcher"))
+            .addOptional(ResourceLocation.fromNamespaceAndPath("minecolonies", "norsemenchief"))
+            .addOptional(ResourceLocation.fromNamespaceAndPath("minecolonies", "campbarbarian"))
+            .addOptional(ResourceLocation.fromNamespaceAndPath("minecolonies", "camparcherbarbarian"))
+            .addOptional(ResourceLocation.fromNamespaceAndPath("minecolonies", "campchiefbarbarian"))
+            .addOptional(ResourceLocation.fromNamespaceAndPath("minecolonies", "camppirate"))
+            .addOptional(ResourceLocation.fromNamespaceAndPath("minecolonies", "camparcherpirate"))
+            .addOptional(ResourceLocation.fromNamespaceAndPath("minecolonies", "campchiefpirate"))
+            .addOptional(ResourceLocation.fromNamespaceAndPath("minecolonies", "campdrownedpirate"))
+            .addOptional(ResourceLocation.fromNamespaceAndPath("minecolonies", "campdrownedarcherpirate"))
+            .addOptional(ResourceLocation.fromNamespaceAndPath("minecolonies", "campdrownedchiefpirate"))
+            .addOptional(ResourceLocation.fromNamespaceAndPath("minecolonies", "campmummy"))
+            .addOptional(ResourceLocation.fromNamespaceAndPath("minecolonies", "camparchermummy"))
+            .addOptional(ResourceLocation.fromNamespaceAndPath("minecolonies", "camppharao"))
+            .addOptional(ResourceLocation.fromNamespaceAndPath("minecolonies", "campamazon"))
+            .addOptional(ResourceLocation.fromNamespaceAndPath("minecolonies", "campamazonspearman"))
+            .addOptional(ResourceLocation.fromNamespaceAndPath("minecolonies", "campamazonchief"))
+            .addOptional(ResourceLocation.fromNamespaceAndPath("minecolonies", "campshieldmaiden"))
+            .addOptional(ResourceLocation.fromNamespaceAndPath("minecolonies", "campnorsemenarcher"))
+            .addOptional(ResourceLocation.fromNamespaceAndPath("minecolonies", "campnorsemenchief"))
+            // Stellaris.
+            .addOptional(ResourceLocation.fromNamespaceAndPath("stellaris", "alien"))
+            .addOptional(ResourceLocation.fromNamespaceAndPath("stellaris", "pygro"))
+            .addOptional(ResourceLocation.fromNamespaceAndPath("stellaris", "pygro_brute"));
     }
 
     private void addIgnoredByXenomorphs() {
@@ -274,6 +341,7 @@ public class AlienEntityTypeTagProvider extends FabricTagProvider.EntityTypeTagP
                 EntityType.ALLAY,
                 EntityType.AXOLOTL,
                 EntityType.BAT,
+                EntityType.BEE,
                 EntityType.COD,
                 EntityType.CREEPER,
                 EntityType.GLOW_SQUID,
@@ -286,9 +354,92 @@ public class AlienEntityTypeTagProvider extends FabricTagProvider.EntityTypeTagP
             );
     }
 
+    private void addXenomorphThreatTiers() {
+        getOrCreateTagBuilder(AlienEntityTypeTags.XENOMORPH_THREAT_1_PASSIVE)
+            .addTag(AlienEntityTypeTags.HOSTS)
+            .add(
+                EntityType.CAMEL,
+                EntityType.CAT,
+                EntityType.CHICKEN,
+                EntityType.COW,
+                EntityType.DONKEY,
+                EntityType.FOX,
+                EntityType.GOAT,
+                EntityType.HORSE,
+                EntityType.MOOSHROOM,
+                EntityType.MULE,
+                EntityType.OCELOT,
+                EntityType.PANDA,
+                EntityType.PARROT,
+                EntityType.PIG,
+                EntityType.POLAR_BEAR,
+                EntityType.RABBIT,
+                EntityType.SHEEP,
+                EntityType.SNIFFER,
+                EntityType.STRIDER,
+                EntityType.TURTLE
+            );
+
+        getOrCreateTagBuilder(AlienEntityTypeTags.XENOMORPH_THREAT_2_LOW_DANGER)
+            .add(
+                EntityType.BLAZE,
+                EntityType.BOGGED,
+                EntityType.BREEZE,
+                EntityType.CAVE_SPIDER,
+                EntityType.DROWNED,
+                EntityType.ELDER_GUARDIAN,
+                EntityType.ENDERMAN,
+                EntityType.ENDERMITE,
+                EntityType.EVOKER,
+                EntityType.GHAST,
+                EntityType.GIANT,
+                EntityType.GUARDIAN,
+                EntityType.HOGLIN,
+                EntityType.HUSK,
+                EntityType.ILLUSIONER,
+                EntityType.IRON_GOLEM,
+                EntityType.MAGMA_CUBE,
+                EntityType.PHANTOM,
+                EntityType.PIGLIN,
+                EntityType.PIGLIN_BRUTE,
+                EntityType.PILLAGER,
+                EntityType.RAVAGER,
+                EntityType.SHULKER,
+                EntityType.SILVERFISH,
+                EntityType.SKELETON,
+                EntityType.SLIME,
+                EntityType.SPIDER,
+                EntityType.STRAY,
+                EntityType.VINDICATOR,
+                EntityType.WARDEN,
+                EntityType.WITCH,
+                EntityType.WITHER_SKELETON,
+                EntityType.WOLF,
+                EntityType.ZOGLIN,
+                EntityType.ZOMBIE,
+                EntityType.ZOMBIE_VILLAGER,
+                EntityType.ZOMBIFIED_PIGLIN
+            );
+
+        getOrCreateTagBuilder(AlienEntityTypeTags.XENOMORPH_THREAT_3_HIGH_DANGER)
+            .add(EntityType.PLAYER)
+            .addOptional(ResourceLocation.fromNamespaceAndPath("avp_human", "marine"))
+            // ⚠ A turret is not a monster and was in no tier at all, so it fell through to the untagged catch-all -
+            // which is LOW DANGER, and low danger is only hunted when the hive is short on biomass or the alien is in
+            // a hunting party. Everywhere else the ONLY route to it was the retaliation override, i.e. after it had
+            // already opened fire. That is the delay: aliens were waiting to be shot before they would answer.
+            .addOptional(ResourceLocation.fromNamespaceAndPath("avp_human", "sentry_turret"))
+            .addOptional(ResourceLocation.fromNamespaceAndPath("avp_predator", "predator"))
+            .addOptional(ResourceLocation.fromNamespaceAndPath("avp_predator", "yautja"))
+            .addOptionalTag(ResourceLocation.fromNamespaceAndPath("avp_predator", "predators"));
+    }
+
     private void addIrradiatedAliens() {
         getOrCreateTagBuilder(AlienEntityTypeTags.IRRADIATED_ALIENS)
             .add(
+                AlienEntityTypes.IRRADIATED_SPITTER.get(),
+                AlienEntityTypes.IRRADIATED_FACEHUGGER.get(),
+                AlienEntityTypes.IRRADIATED_OVOMORPH.get(),
                 AlienEntityTypes.IRRADIATED_CARRIER.get(),
                 AlienEntityTypes.IRRADIATED_CHRYSALIS.get(),
                 AlienEntityTypes.IRRADIATED_CRUSHER.get(),
@@ -309,6 +460,9 @@ public class AlienEntityTypeTagProvider extends FabricTagProvider.EntityTypeTagP
 
     private void addNetherAliens() {
         getOrCreateTagBuilder(AlienEntityTypeTags.NETHER_ALIENS)
+            // Was missing entirely. Besides fire immunity this tag also gates nether-resin spawn validity, so the
+            // cocoon was excluded from both.
+            .add(AlienEntityTypes.NETHER_ROYAL_COCOON.get())
             .add(
                 AlienEntityTypes.NETHER_ADOLESCENT.get(),
                 AlienEntityTypes.NETHER_BOILER.get(),
@@ -376,6 +530,7 @@ public class AlienEntityTypeTagProvider extends FabricTagProvider.EntityTypeTagP
     private void addOvomorphs() {
         getOrCreateTagBuilder(AlienEntityTypeTags.OVOMORPHS)
             .add(
+                AlienEntityTypes.IRRADIATED_OVOMORPH.get(),
                 AlienEntityTypes.ABERRANT_OVOMORPH.get(),
                 AlienEntityTypes.NETHER_OVOMORPH.get(),
                 AlienEntityTypes.OVOMORPH.get(),
@@ -533,6 +688,10 @@ public class AlienEntityTypeTagProvider extends FabricTagProvider.EntityTypeTagP
             .add(
                 EntityType.CAMEL,
                 EntityType.COW,
+                // The Nether's only breeding fleshy megafauna - nether cattle. Makes crimson forests real hunting
+                // grounds and gives nether hives a sustainable food chain (design decision July 25). Zoglins stay
+                // off the menu: undead.
+                EntityType.HOGLIN,
                 EntityType.DONKEY,
                 EntityType.FOX,
                 EntityType.GOAT,
@@ -546,7 +705,27 @@ public class AlienEntityTypeTagProvider extends FabricTagProvider.EntityTypeTagP
                 EntityType.SHEEP,
                 EntityType.SNIFFER,
                 EntityType.WOLF
-            );
+            )
+            // ⭐ CROSS-MOD RUNNER HOSTS - four-legged fauna, same addOptional safety.
+            .addOptional(ResourceLocation.fromNamespaceAndPath("naturalist", "alligator"))
+            .addOptional(ResourceLocation.fromNamespaceAndPath("naturalist", "bear"))
+            .addOptional(ResourceLocation.fromNamespaceAndPath("naturalist", "boar"))
+            .addOptional(ResourceLocation.fromNamespaceAndPath("naturalist", "deer"))
+            .addOptional(ResourceLocation.fromNamespaceAndPath("naturalist", "elephant"))
+            .addOptional(ResourceLocation.fromNamespaceAndPath("naturalist", "giraffe"))
+            .addOptional(ResourceLocation.fromNamespaceAndPath("naturalist", "hippo"))
+            .addOptional(ResourceLocation.fromNamespaceAndPath("naturalist", "lion"))
+            .addOptional(ResourceLocation.fromNamespaceAndPath("naturalist", "rhino"))
+            .addOptional(ResourceLocation.fromNamespaceAndPath("naturalist", "tortoise"))
+            .addOptional(ResourceLocation.fromNamespaceAndPath("naturalist", "zebra"))
+            .addOptional(ResourceLocation.fromNamespaceAndPath("naturalist", "black_bear"))
+            .addOptional(ResourceLocation.fromNamespaceAndPath("naturalist", "capybara"))
+            .addOptional(ResourceLocation.fromNamespaceAndPath("naturalist", "komodo_dragon"))
+            .addOptional(ResourceLocation.fromNamespaceAndPath("naturalist", "tiger"))
+            .addOptional(ResourceLocation.fromNamespaceAndPath("naturalist", "mammoth"))
+            // Stellaris.
+            .addOptional(ResourceLocation.fromNamespaceAndPath("stellaris", "martian_raptor"))
+            .addOptional(ResourceLocation.fromNamespaceAndPath("stellaris", "mogler"));
     }
 
     private void addRunners() {
@@ -562,6 +741,7 @@ public class AlienEntityTypeTagProvider extends FabricTagProvider.EntityTypeTagP
     private void addSpitters() {
         getOrCreateTagBuilder(AlienEntityTypeTags.SPITTERS)
             .add(
+                AlienEntityTypes.IRRADIATED_SPITTER.get(),
                 AlienEntityTypes.ABERRANT_SPITTER.get(),
                 AlienEntityTypes.NETHER_SPITTER.get(),
                 AlienEntityTypes.SPITTER.get()
@@ -610,13 +790,72 @@ public class AlienEntityTypeTagProvider extends FabricTagProvider.EntityTypeTagP
         getOrCreateTagBuilder(GigTags.FACEHUGGER_BLACKLIST)
             .addTag(AlienEntityTypeTags.ALIENS);
 
+        // Nothing in the species breathes. The ALIENS tag covers every entity that extends Alien; the rest are
+        // listed by hand because they are plain Mobs and no strain tag will ever hold them - the same blind spot
+        // that left nether cocoons flammable. The ovipositors were remembered here and the royal cocoons were not,
+        // so a royal molting in vacuum suffocated inside her own shell.
+        //
+        // Acid and acid spit are deliberately absent: neither is a LivingEntity, so suffocation cannot apply.
         getOrCreateTagBuilder(StellarisEntityTypeTags.NO_OXYGEN_NEEDED)
             .addTag(AlienEntityTypeTags.ALIENS)
-            .add(AlienEntityTypes.OVIPOSITOR.get());
+            .add(
+                AlienEntityTypes.OVIPOSITOR.get(),
+                AlienEntityTypes.EMPRESS_OVIPOSITOR.get(),
+                AlienEntityTypes.ROYAL_COCOON.get(),
+                AlienEntityTypes.ABERRANT_ROYAL_COCOON.get(),
+                AlienEntityTypes.NETHER_ROYAL_COCOON.get()
+            );
+    }
+
+    /**
+     * Who AVP: Human's radiation cannot touch. The rule is "every alien EXCEPT the aberrant strain".
+     * <p>
+     * Aberrants are the weak line, and their vulnerability to radiation is exactly why they cannot convert to
+     * irradiated the way normal and nether do - a nuke or a splash of Irradiation kills them outright instead of
+     * transmuting them. This used to add XENOMORPHS wholesale, which covered aberrant ones too.
+     * <p>
+     * The three strain tags partition the species perfectly: together they hold all 69 non-aberrant aliens and nothing
+     * else, so this stays a RULE rather than a list and any alien added to a strain later inherits immunity for free.
+     * Do NOT rewrite it as ALIENS plus exceptions - tags cannot subtract, and an attempt that reached for
+     * ROYAL_XENOMORPHS and the predalien tags leaked six aberrants straight back in, because those are CASTE tags that
+     * span every strain.
+     */
+    /**
+     * ⭐ THE JUVENILE MENU. [stated] "chickens, cats, axolotls, baby animals, a fox is the largest thing they would
+     * probably try to eat. everything else they would run from."
+     * <p>
+     * ⚠ THE FOX IS THE CEILING AND THE CEILING IS ABOUT SIZE. Nothing is here for being easy: no baby zombies, no
+     * wolves, no hoglin calves. Baby animals are NOT listed - {@code JuvenilePrey} handles them as a rule, so a calf is
+     * prey without the cow it becomes being prey.
+     * </p>
+     * <p>
+     * ⚠ NO {@code addOptionalTag(EntityTypeTags.*)} SHORTCUT EXISTS FOR THIS. Vanilla has no "small passive" tag, and
+     * the nearest thing ({@code EntityTypeTags.AQUATIC}) would hand a land-bound child a menu of things it cannot
+     * reach. Explicit list, deliberately.
+     * </p>
+     */
+    private void addJuvenilePrey() {
+        getOrCreateTagBuilder(AlienEntityTypeTags.JUVENILE_PREY)
+            .add(
+                EntityType.AXOLOTL,
+                EntityType.BAT,
+                EntityType.CAT,
+                EntityType.CHICKEN,
+                EntityType.COD,
+                EntityType.FOX,
+                EntityType.FROG,
+                EntityType.OCELOT,
+                EntityType.PARROT,
+                EntityType.RABBIT,
+                EntityType.SALMON,
+                EntityType.TROPICAL_FISH
+            );
     }
 
     private void addRadiationResistant() {
         getOrCreateTagBuilder(HumanEntityTypeTags.RADIATION_RESISTANT)
-            .addTag(AlienEntityTypeTags.XENOMORPHS);
+            .addTag(AlienEntityTypeTags.NORMAL_ALIENS)
+            .addTag(AlienEntityTypeTags.NETHER_ALIENS)
+            .addTag(AlienEntityTypeTags.IRRADIATED_ALIENS);
     }
 }

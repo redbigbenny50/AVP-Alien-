@@ -1,0 +1,29 @@
+{
+  "limbs": [
+    {
+      "category": "blib:head",
+      "fatal": true,
+      "id": "avp_alien:praetorian_head"
+    },
+    {
+      "category": "blib:arm",
+      "id": "avp_alien:praetorian_left_arm"
+    },
+    {
+      "category": "blib:arm",
+      "id": "avp_alien:praetorian_right_arm"
+    },
+    {
+      "category": "blib:leg",
+      "id": "avp_alien:praetorian_left_leg"
+    },
+    {
+      "category": "blib:leg",
+      "id": "avp_alien:praetorian_right_leg"
+    },
+    {
+      "category": "blib:tail",
+      "id": "avp_alien:praetorian_tail"
+    }
+  ]
+}

@@ -21,6 +21,8 @@ public class EnUsSoundEventProvider {
 
         addSound(builder, AlienSoundEvents.ENTITY_CHESTBURSTER_BURST, "Chestburster bursting");
 
+        addSound(builder, AlienSoundEvents.ENTITY_FACEHUGGER_ESCAPE, "Facehugger torn off");
+
         addSound(builder, AlienSoundEvents.ENTITY_OVOMORPH_HATCH, "Ovomorph hatches");
         addSound(builder, AlienSoundEvents.ENTITY_OVOMORPH_LAID, "Queen lays egg");
         addSound(builder, AlienSoundEvents.ENTITY_OVOMORPH_ROOT, "Ovomorph takes root");
@@ -29,6 +31,7 @@ public class EnUsSoundEventProvider {
         addSound(builder, AlienSoundEvents.ENTITY_QUEEN_ARM_ATTACK, "Queen attacks");
         addSound(builder, AlienSoundEvents.ENTITY_QUEEN_BACK_HAND_ATTACK, "Queen back hand attacks");
         addSound(builder, AlienSoundEvents.ENTITY_QUEEN_RAM_ATTACK, "Queen ram attacks");
+        addSound(builder, AlienSoundEvents.ENTITY_HARBINGER_ROAR_3, "Harbinger roars");
         addSound(builder, AlienSoundEvents.ENTITY_QUEEN_SCREAM, "Queen screams");
         addSound(builder, AlienSoundEvents.ENTITY_QUEEN_TAIL_ATTACK, "Queen tail attacks");
         addSound(builder, AlienSoundEvents.ENTITY_QUEEN_DEATH, "Queen dies");
@@ -48,6 +51,8 @@ public class EnUsSoundEventProvider {
         addSound(builder, AlienSoundEvents.ENTITY_EMPRESS_STEP_THUMP, "Empress steps");
         addSound(builder, AlienSoundEvents.ENTITY_EMPRESS_STEP_THUMP_ROCK, "Empress steps");
 
+        addSound(builder, AlienSoundEvents.ENTITY_XENOMORPH_GRAB_HOST, "Xenomorph seizes a host");
+        addSound(builder, AlienSoundEvents.ENTITY_XENOMORPH_ESCAPE_HOST, "Host tears free");
         addSound(builder, AlienSoundEvents.ENTITY_XENOMORPH_ATTACK, "Xenomorph attacks");
         addSound(builder, AlienSoundEvents.ENTITY_XENOMORPH_DEATH, "Xenomorph dies");
         addSound(builder, AlienSoundEvents.ENTITY_XENOMORPH_HISS, "Xenomorph hisses");
@@ -58,6 +63,15 @@ public class EnUsSoundEventProvider {
         addSound(builder, AlienSoundEvents.ITEM_ARMOR_EQUIP_CHITIN, "Chitin armor squishes");
 
         addSound(builder, AlienSoundEvents.JUKEBOX_SOUNDS_ALIEN_MUSIC_1, "Silver Smile plays");
+
+        addSound(builder, AlienSoundEvents.UI_TERMINAL_OPEN, "Terminal powers on");
+        addSound(builder, AlienSoundEvents.UI_TERMINAL_CLOSE, "Terminal powers off");
+        addSound(builder, AlienSoundEvents.UI_TERMINAL_MOUSEOVER, "Terminal blip");
+        addSound(builder, AlienSoundEvents.BROADCAST_WAR_SOS, "Emergency broadcast: distress signal");
+        addSound(builder, AlienSoundEvents.BROADCAST_WAR_ALL_CLEAR, "Emergency broadcast: all clear");
+
+        addSound(builder, AlienSoundEvents.UI_TERMINAL_CLICK, "Terminal selects");
+        addSound(builder, AlienSoundEvents.UI_TERMINAL_EXECUTE, "Terminal confirms");
     };
 
     private static void addSound(

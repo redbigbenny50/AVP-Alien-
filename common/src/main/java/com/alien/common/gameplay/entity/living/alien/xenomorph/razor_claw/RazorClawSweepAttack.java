@@ -34,6 +34,7 @@ public final class RazorClawSweepAttack {
     private static final int REQUIRED_MELEE_TARGET_COUNT = 3;
 
     public static final AttackType ATTACK = AttackType.builder("razor_claw_sweep")
+        .requiresAnyArm()
         .defaultDurationInTicks(DURATION_IN_TICKS)
         .damageThresholdPercent(0F)
         .cooldownInTicks(COOLDOWN_IN_TICKS)

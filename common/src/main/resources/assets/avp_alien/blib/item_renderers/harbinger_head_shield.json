@@ -1,0 +1,4 @@
+{
+  "parent": "avp_alien:templates/harbinger_head_shield",
+  "texture": "avp_alien:textures/entity/harbinger.png"
+}

@@ -78,7 +78,7 @@ public class CombatActions {
         var xenomorph = context.getActor();
 
         var interceptPos = computeInterceptPoint(xenomorph, attackTarget);
-        var result = NeoMoveToPosAction.perform(context, interceptPos, 1.1);
+        var result = NeoMoveToPosAction.perform(context, interceptPos, 1.1, true);
 
         return switch (result) {
             case FINISHED, MOVING -> Action.Signal.CONTINUE;

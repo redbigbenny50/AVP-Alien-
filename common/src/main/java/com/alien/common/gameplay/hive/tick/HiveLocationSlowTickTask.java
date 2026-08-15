@@ -75,6 +75,11 @@ public final class HiveLocationSlowTickTask {
             return;
         }
 
+        // Inhibited (severed contained-breeder) locations expand and accrue nothing while unloaded either.
+        if (location.isInhibited()) {
+            return;
+        }
+
         var currentTick = level != null ? level.getGameTime() : server.overworld().getGameTime();
         if (level != null) {
             CatchUpEngine.catchUpUnloadedTo(level, location, lineage, currentTick);

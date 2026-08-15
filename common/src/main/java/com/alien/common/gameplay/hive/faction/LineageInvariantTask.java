@@ -3,6 +3,7 @@ package com.alien.common.gameplay.hive.faction;
 import com.alien.Alien;
 import com.alien.common.gameplay.hive.growth.ContestResolutionTask;
 import com.alien.common.gameplay.hive.id.LineageIds;
+import com.alien.common.gameplay.hive.lifecycle.FirewallStabilityTask;
 import com.alien.common.gameplay.hive.lifecycle.QueenlessMaturationTask;
 import com.blib.api.common.faction.v1.FactionMember;
 import net.minecraft.server.MinecraftServer;
@@ -41,9 +42,18 @@ public final class LineageInvariantTask {
         // 1. Variant invariants — evict variant-mismatched members.
         scanVariantInvariants();
 
+        // 1b. Rescue campaigns — promote/dispatch/resolve recovery for captured queens BEFORE maturation, so a
+        // resolved-or-exhausted campaign no longer blocks the firewall crowning this same scan.
+        com.alien.common.gameplay.hive.party.RescueCampaignTask.scanAll(server);
+
         // 2. Queenless lineage maturation — lets queenless lineages advance their leader through the queen-track
         // growth stages over time.
         QueenlessMaturationTask.scanAll(server);
+
+        // 2b. Firewall fund tracking — for locations whose queen-replacement fund is currently spent, accrues
+        // stability progress toward refill (or pauses under sustained pressure). Runs after maturation so a queen
+        // crowned this same scan starts its fund-spent tracking fresh next cycle rather than double-counting.
+        FirewallStabilityTask.scanAll(server);
 
         // 3. Contested chunk resolution.
         ContestResolutionTask.scanAll(server);

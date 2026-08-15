@@ -1,0 +1,38 @@
+{
+  "fabric:load_conditions": [
+    {
+      "condition": "fabric:all_mods_loaded",
+      "values": [
+        "avp_human"
+      ]
+    }
+  ],
+  "type": "minecraft:crafting_shaped",
+  "category": "equipment",
+  "key": {
+    "A": {
+      "item": "minecraft:amethyst_shard"
+    },
+    "O": {
+      "item": "minecraft:observer"
+    },
+    "R": {
+      "item": "minecraft:redstone"
+    }
+  },
+  "neoforge:conditions": [
+    {
+      "type": "neoforge:mod_loaded",
+      "modid": "avp_human"
+    }
+  ],
+  "pattern": [
+    "R",
+    "A",
+    "O"
+  ],
+  "result": {
+    "count": 1,
+    "id": "avp_alien:tracking_pda"
+  }
+}

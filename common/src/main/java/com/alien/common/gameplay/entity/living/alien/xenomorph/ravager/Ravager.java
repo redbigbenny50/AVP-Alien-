@@ -25,7 +25,14 @@ import net.minecraft.world.entity.ai.attributes.Attributes;
 import net.minecraft.world.level.Level;
 import org.jetbrains.annotations.Nullable;
 
-public class Ravager extends Xenomorph implements GOAPUser<Ravager> {
+import java.util.Arrays;
+
+public class Ravager extends Xenomorph implements GOAPUser<Ravager>, com.alien.common.gameplay.entity.CrawlPostureTransitionListener {
+
+    @Override
+    public int crawlPostureTransitionTicks(boolean enteringCrawl) {
+        return enteringCrawl ? RavagerAnimationRefs.CRAWL_DOWN_TICKS : RavagerAnimationRefs.CRAWL_UP_TICKS;
+    }
 
     public static final double FRONT_AOE_RANGE_IN_BLOCKS = 5.0;
 
@@ -50,28 +57,50 @@ public class Ravager extends Xenomorph implements GOAPUser<Ravager> {
     };
 
     public static final AttackType CLAW = AttackType.builder("ravager_claw")
+        .requiresAnyArm()
         .defaultDurationInTicks(10 * ATTACK_DURATION_MULTIPLIER)
         .sound(AlienSoundEvents.ENTITY_XENOMORPH_ATTACK)
         .damageApplicator(SINGLE_CLAW_APPLICATOR)
         .build();
 
+    /**
+     * ⚠⚠ `requiresAnyArm`, NOT `requiresBothArms`. [stated] "if one arm is missing it will still play at 50% damage and
+     * wont play at all with no arms." `requiresBothArms` refused the swing the moment either arm went, so the 50% case
+     * could never happen - the gate ate the rule. The penalty lives in {@code RavagerClawAttackActions.doubleClaw}
+     * instead; this gate now only enforces the "no arms at all" half.
+     */
     public static final AttackType CLAW_DOUBLE = AttackType.builder("ravager_claw_double")
+        .requiresAnyArm()
         .defaultDurationInTicks(10 * ATTACK_DURATION_MULTIPLIER)
         .sound(AlienSoundEvents.ENTITY_XENOMORPH_ATTACK)
         .damageApplicator(DOUBLE_CLAW_APPLICATOR)
         .build();
 
     public static final AttackType BITE = AttackType.builder("ravager_bite")
+        .requiresHead()
         .defaultDurationInTicks(8 * ATTACK_DURATION_MULTIPLIER)
         .sound(AlienSoundEvents.ENTITY_XENOMORPH_ATTACK)
         .build();
 
     public static final AttackType TAIL = AttackType.builder("ravager_tail")
+        .requiresTail()
         .defaultDurationInTicks(12 * ATTACK_DURATION_MULTIPLIER)
         .sound(AlienSoundEvents.ENTITY_XENOMORPH_ATTACK)
         .build();
 
+    /**
+     * Its prone attack. {@code requiresAnyArm} is rule 2 at the logic level - one arm is enough, and only losing BOTH
+     * disarms it, at which point it can no longer attack at all and should retreat.
+     */
+    public static final AttackType CRAWL_ATTACK = AttackType.builder("ravager_crawl_attack")
+        .crawlAttack()
+        .requiresAnyArm()
+        .defaultDurationInTicks(10 * ATTACK_DURATION_MULTIPLIER)
+        .sound(AlienSoundEvents.ENTITY_XENOMORPH_ATTACK)
+        .build();
+
     public static final AttackType SWIM_ATTACK = AttackType.builder("ravager_swim_attack")
+        .requiresTail()
         .defaultDurationInTicks(10 * ATTACK_DURATION_MULTIPLIER)
         .sound(AlienSoundEvents.ENTITY_XENOMORPH_ATTACK)
         .build();
@@ -79,7 +108,7 @@ public class Ravager extends Xenomorph implements GOAPUser<Ravager> {
     private static final XenomorphConfig CONFIG = XenomorphConfig.builder(XenomorphPathConfig.LARGE, Ravager::getType)
         .attackConfig(
             XenomorphAttackConfig.builder()
-                .addTriggered(RavagerChargeAttack.ATTACK)
+                .addTriggered(RavagerSpecialCleaveAttack.ATTACK)
                 .build()
         )
         .parallelDigCount(2)
@@ -88,12 +117,12 @@ public class Ravager extends Xenomorph implements GOAPUser<Ravager> {
 
     public static AttributeSupplier.Builder createRavagerAttributes() {
         return Alien.createAlienAttributes()
-            .add(Attributes.ARMOR, 12.0F)
-            .add(Attributes.ARMOR_TOUGHNESS, 12.0F)
+            .add(Attributes.ARMOR, 16.0F)
+            .add(Attributes.ARMOR_TOUGHNESS, 18.0F)
             .add(Attributes.ATTACK_DAMAGE, PlayerStatConstants.BASE_HEALTH * 0.75F)
             .add(Attributes.FOLLOW_RANGE, 35F)
             .add(Attributes.KNOCKBACK_RESISTANCE, 0.7f)
-            .add(Attributes.MAX_HEALTH, PlayerStatConstants.BASE_HEALTH * 5F)
+            .add(Attributes.MAX_HEALTH, PlayerStatConstants.BASE_HEALTH * 8F)
             .add(Attributes.MOVEMENT_SPEED, PlayerStatConstants.BASE_WALK_SPEED * 1.2F);
     }
 
@@ -116,24 +145,47 @@ public class Ravager extends Xenomorph implements GOAPUser<Ravager> {
 
     @Override
     public void runAttackAnimations() {
-        startAttack(selectAttack(), getTarget());
+        var attack = selectAttack();
+
+        if (attack != null) {
+            startAttack(attack, getTarget());
+        }
     }
 
-    private AttackType selectAttack() {
-        if (isUnderWater()) {
+    private @Nullable AttackType selectAttack() {
+        // A CRAWLER NEVER FALLS THROUGH TO THE STANDING SET. Returning null when it has no usable crawl attack is
+        // the point: it must not stand up to swing, and having nothing left is what hands it to the retreat
+        // behaviour. The posture gate in AttackType.canUse would reject the standing attacks anyway; this makes
+        // the intent explicit at the selection site rather than relying on every branch below to be safe.
+        if (getCrawlingManager().isCrawling()) {
+            return canUseAttack(CRAWL_ATTACK) ? CRAWL_ATTACK : null;
+        }
+
+        if (isUnderWater() && canUseAttack(SWIM_ATTACK)) {
             return SWIM_ATTACK;
         }
 
         if (getNearbyCloseAttackTargetCount() > 1) {
-            return random.nextBoolean() ? CLAW : CLAW_DOUBLE;
+            var closeAttack = selectRandomUsableAttack(CLAW, CLAW_DOUBLE);
+
+            if (closeAttack != null) {
+                return closeAttack;
+            }
         }
 
-        return switch (random.nextInt(0, 4)) {
-            case 0 -> CLAW;
-            case 1 -> CLAW_DOUBLE;
-            case 2 -> BITE;
-            default -> TAIL;
-        };
+        return selectRandomUsableAttack(CLAW, CLAW_DOUBLE, BITE, TAIL);
+    }
+
+    private @Nullable AttackType selectRandomUsableAttack(AttackType... attacks) {
+        var usableAttacks = Arrays.stream(attacks)
+            .filter(this::canUseAttack)
+            .toList();
+
+        if (usableAttacks.isEmpty()) {
+            return null;
+        }
+
+        return usableAttacks.get(random.nextInt(usableAttacks.size()));
     }
 
     private long getNearbyCloseAttackTargetCount() {

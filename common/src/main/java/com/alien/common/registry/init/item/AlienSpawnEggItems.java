@@ -231,6 +231,16 @@ public class AlienSpawnEggItems {
 
     public static final BLibHolder<SpawnEggItem> NETHER_OVOMORPH_SPAWN_EGG = create("nether_ovomorph", AlienEntityTypes.NETHER_OVOMORPH);
 
+    public static final BLibHolder<SpawnEggItem> IRRADIATED_FACEHUGGER_SPAWN_EGG = create(
+        "irradiated_facehugger",
+        AlienEntityTypes.IRRADIATED_FACEHUGGER
+    );
+
+    public static final BLibHolder<SpawnEggItem> IRRADIATED_OVOMORPH_SPAWN_EGG = create(
+        "irradiated_ovomorph",
+        AlienEntityTypes.IRRADIATED_OVOMORPH
+    );
+
     public static final BLibHolder<SpawnEggItem> NETHER_PRAETORIAN_SPAWN_EGG = create(
         "nether_praetorian",
         AlienEntityTypes.NETHER_PRAETORIAN
@@ -255,6 +265,11 @@ public class AlienSpawnEggItems {
     public static final BLibHolder<SpawnEggItem> NETHER_RUNNER_SPAWN_EGG = create("nether_runner", AlienEntityTypes.NETHER_RUNNER);
 
     public static final BLibHolder<SpawnEggItem> NETHER_SPITTER_SPAWN_EGG = create("nether_spitter", AlienEntityTypes.NETHER_SPITTER);
+
+    public static final BLibHolder<SpawnEggItem> IRRADIATED_SPITTER_SPAWN_EGG = create(
+        "irradiated_spitter",
+        AlienEntityTypes.IRRADIATED_SPITTER
+    );
 
     public static final BLibHolder<SpawnEggItem> NETHER_WARRIOR_SPAWN_EGG = create("nether_warrior", AlienEntityTypes.NETHER_WARRIOR);
 

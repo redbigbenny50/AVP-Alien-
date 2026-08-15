@@ -13,8 +13,13 @@ import com.alien.client.render.armor.PlatedAberrantChitinArmorRenderer;
 import com.alien.client.render.armor.PlatedChitinArmorRenderer;
 import com.alien.client.render.armor.PlatedIrradiatedChitinArmorRenderer;
 import com.alien.client.render.armor.PlatedNetherChitinArmorRenderer;
+import com.alien.client.render.block.AnchorBlockEntityRenderer;
 import com.alien.client.render.block.CrusherHeadBlockEntityRenderer;
+import com.alien.client.render.block.JellyVatBlockEntityRenderer;
 import com.alien.client.render.block.QueenHeadBlockEntityRenderer;
+import com.alien.client.render.block.ResinContainerBlockEntityRenderer;
+import com.alien.client.render.block.XenomorphHeadBlockEntityRenderer;
+import com.alien.client.render.dismemberment.PraetorianRenderedLimbPicker;
 import com.alien.client.render.entity.AcidRenderer;
 import com.alien.client.render.entity.AcidSpitRenderer;
 import com.alien.client.render.entity.AdolescentRenderer;
@@ -25,6 +30,7 @@ import com.alien.client.render.entity.ChestbursterRenderer;
 import com.alien.client.render.entity.ChrysalisRenderer;
 import com.alien.client.render.entity.CrusherRenderer;
 import com.alien.client.render.entity.DroneRenderer;
+import com.alien.client.render.entity.EmpressOvipositorRenderer;
 import com.alien.client.render.entity.EmpressRenderer;
 import com.alien.client.render.entity.HarbingerRenderer;
 import com.alien.client.render.entity.OvipositorRenderer;
@@ -37,14 +43,18 @@ import com.alien.client.render.entity.ProwlerRenderer;
 import com.alien.client.render.entity.QueenRenderer;
 import com.alien.client.render.entity.RavagerRenderer;
 import com.alien.client.render.entity.RazorClawRenderer;
+import com.alien.client.render.entity.RoyalCocoonRenderer;
 import com.alien.client.render.entity.RunnerRenderer;
 import com.alien.client.render.entity.SpitterRenderer;
 import com.alien.client.render.entity.WarriorRenderer;
-import com.alien.client.render.entity.head.AlienEntityHeadData;
-import com.alien.client.render.entity.head.EntityHeadDataCache;
-import com.alien.client.render.entity.parasite.attachment.AlienParasiteHeadAttachmentOffsetData;
-import com.alien.client.render.entity.parasite.attachment.ParasiteHeadAttachmentOffsetDataCache;
 import com.alien.client.render.entity.parasite.facehugger.FacehuggerRenderer;
+import com.alien.client.render.item.AberrantResinContainerItemRenderer;
+import com.alien.client.render.item.AnchorItemRenderer;
+import com.alien.client.render.item.InhibitorItemRenderer;
+import com.alien.client.render.item.IrradiatedResinContainerItemRenderer;
+import com.alien.client.render.item.NetherResinContainerItemRenderer;
+import com.alien.client.render.item.ResinContainerItemRenderer;
+import com.alien.client.render.item.TrackerItemRenderer;
 import com.alien.common.registry.init.AlienBlockEntityTypes;
 import com.alien.common.registry.init.AlienEntityTypes;
 import com.alien.common.registry.init.AlienParticleTypes;
@@ -55,11 +65,13 @@ import com.alien.common.registry.init.block.IrradiatedAlienResinBlocks;
 import com.alien.common.registry.init.block.NetherAlienResinBlocks;
 import com.alien.common.registry.init.item.AlienArmorItems;
 import com.alien.common.registry.init.item.AlienItems;
+import com.alien.common.registry.init.item.AlienXenomorphHeadItems;
+import com.alien.common.registry.init.item.block.AlienBlockItems;
 import com.alien.compatibility.blib_engine.BLibEngine;
 import com.blib.api.client.mod.v1.BLibClientMod;
+import com.blib.api.common.dismemberment.v1.hitbox.LimbHitPredictionRegistry;
 import com.blib.api.common.registry.v1.BLibHolder;
 import net.minecraft.client.renderer.RenderType;
-import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.item.Item;
 
 import java.util.List;
@@ -79,15 +91,11 @@ public class AlienClient {
         registerItemRenderers();
         registerBlockEntityRenderers();
         registerParticleProviderFactories();
+        LimbHitPredictionRegistry.registerClientProvider(new PraetorianRenderedLimbPicker());
 
         // Engine workspace: add hive-specific inspector sections under the generic faction inspector so picking an AVP
         // faction in the FactionBrowser reveals biomass/jelly/caste/territory/leadership/vigilance data.
         BLibEngine.registerInspectorSections();
-
-        MOD.events().onClientSetup().register(() -> {
-            registerEntityHeadData();
-            registerParasiteHeadAttachmentOffsetData();
-        });
     }
 
     private static void registerArmorRenderers() {
@@ -174,54 +182,21 @@ public class AlienClient {
     }
 
     private static void registerBlockRenderLayers() {
-        MOD.registries().registerBlockRenderLayer(AlienResinBlocks.RESIN_VEIN, RenderType.cutout());
-        MOD.registries().registerBlockRenderLayer(AlienResinBlocks.RESIN_WEB, RenderType.cutout());
+        MOD.registries().registerBlockRenderLayer(AlienResinBlocks.RESIN_VEIN, RenderType.translucent());
+        MOD.registries().registerBlockRenderLayer(AlienResinBlocks.RESIN_WEB, RenderType.translucent());
 
-        MOD.registries().registerBlockRenderLayer(NetherAlienResinBlocks.NETHER_RESIN_VEIN, RenderType.cutout());
-        MOD.registries().registerBlockRenderLayer(NetherAlienResinBlocks.NETHER_RESIN_WEB, RenderType.cutout());
+        MOD.registries().registerBlockRenderLayer(NetherAlienResinBlocks.NETHER_RESIN_VEIN, RenderType.translucent());
+        MOD.registries().registerBlockRenderLayer(NetherAlienResinBlocks.NETHER_RESIN_WEB, RenderType.translucent());
 
-        MOD.registries().registerBlockRenderLayer(AberrantAlienResinBlocks.ABERRANT_RESIN_VEIN, RenderType.cutout());
-        MOD.registries().registerBlockRenderLayer(AberrantAlienResinBlocks.ABERRANT_RESIN_WEB, RenderType.cutout());
+        MOD.registries().registerBlockRenderLayer(AberrantAlienResinBlocks.ABERRANT_RESIN_VEIN, RenderType.translucent());
+        MOD.registries().registerBlockRenderLayer(AberrantAlienResinBlocks.ABERRANT_RESIN_WEB, RenderType.translucent());
 
-        MOD.registries().registerBlockRenderLayer(IrradiatedAlienResinBlocks.IRRADIATED_RESIN_VEIN, RenderType.cutout());
-        MOD.registries().registerBlockRenderLayer(IrradiatedAlienResinBlocks.IRRADIATED_RESIN_WEB, RenderType.cutout());
+        MOD.registries().registerBlockRenderLayer(IrradiatedAlienResinBlocks.IRRADIATED_RESIN_VEIN, RenderType.translucent());
+        MOD.registries().registerBlockRenderLayer(IrradiatedAlienResinBlocks.IRRADIATED_RESIN_WEB, RenderType.translucent());
 
         MOD.registries().registerBlockRenderLayer(AlienBlocks.ROYAL_JELLY_BLOCK, RenderType.translucent());
         MOD.registries().registerBlockRenderLayer(AlienBlocks.SCOURGE_JELLY_BLOCK, RenderType.translucent());
-    }
-
-    private static void registerEntityHeadData() {
-        EntityHeadDataCache.put(EntityType.CAMEL, AlienEntityHeadData.CAMEL);
-        EntityHeadDataCache.put(EntityType.COW, AlienEntityHeadData.COW);
-        EntityHeadDataCache.put(EntityType.DONKEY, AlienEntityHeadData.HORSE);
-        EntityHeadDataCache.put(EntityType.DOLPHIN, AlienEntityHeadData.DOLPHIN);
-        EntityHeadDataCache.put(EntityType.EVOKER, AlienEntityHeadData.VILLAGER);
-        EntityHeadDataCache.put(EntityType.FOX, AlienEntityHeadData.FOX);
-        EntityHeadDataCache.put(EntityType.GOAT, AlienEntityHeadData.GOAT);
-        EntityHeadDataCache.put(EntityType.HOGLIN, AlienEntityHeadData.HOGLIN);
-        EntityHeadDataCache.put(EntityType.HORSE, AlienEntityHeadData.HORSE);
-        EntityHeadDataCache.put(EntityType.ILLUSIONER, AlienEntityHeadData.VILLAGER);
-        EntityHeadDataCache.put(EntityType.LLAMA, AlienEntityHeadData.LLAMA);
-        EntityHeadDataCache.put(EntityType.MOOSHROOM, AlienEntityHeadData.COW);
-        EntityHeadDataCache.put(EntityType.MULE, AlienEntityHeadData.HORSE);
-        EntityHeadDataCache.put(EntityType.PANDA, AlienEntityHeadData.PANDA);
-        EntityHeadDataCache.put(EntityType.PIG, AlienEntityHeadData.PIG);
-        EntityHeadDataCache.put(EntityType.PIGLIN, AlienEntityHeadData.PIGLIN);
-        EntityHeadDataCache.put(EntityType.PIGLIN_BRUTE, AlienEntityHeadData.PIGLIN);
-        EntityHeadDataCache.put(EntityType.PILLAGER, AlienEntityHeadData.VILLAGER);
-        EntityHeadDataCache.put(EntityType.PLAYER, AlienEntityHeadData.PLAYER);
-        EntityHeadDataCache.put(EntityType.POLAR_BEAR, AlienEntityHeadData.POLAR_BEAR);
-        EntityHeadDataCache.put(EntityType.RAVAGER, AlienEntityHeadData.RAVAGER);
-        EntityHeadDataCache.put(EntityType.SHEEP, AlienEntityHeadData.SHEEP);
-        EntityHeadDataCache.put(EntityType.SNIFFER, AlienEntityHeadData.SNIFFER);
-        EntityHeadDataCache.put(EntityType.TRADER_LLAMA, AlienEntityHeadData.LLAMA);
-        EntityHeadDataCache.put(EntityType.VILLAGER, AlienEntityHeadData.VILLAGER);
-        EntityHeadDataCache.put(EntityType.VINDICATOR, AlienEntityHeadData.VILLAGER);
-        EntityHeadDataCache.put(EntityType.WITCH, AlienEntityHeadData.VILLAGER);
-        EntityHeadDataCache.put(EntityType.WANDERING_TRADER, AlienEntityHeadData.VILLAGER);
-        EntityHeadDataCache.put(EntityType.WOLF, AlienEntityHeadData.WOLF);
-        EntityHeadDataCache.put(EntityType.ZOGLIN, AlienEntityHeadData.HOGLIN);
-        EntityHeadDataCache.put(EntityType.ZOMBIE_VILLAGER, AlienEntityHeadData.VILLAGER);
+        MOD.registries().registerBlockRenderLayer(AlienBlocks.IRRADIATED_JELLY_BLOCK, RenderType.translucent());
     }
 
     private static void registerEntityRenderers() {
@@ -290,6 +265,8 @@ public class AlienClient {
         MOD.registries().registerEntityRenderer(AlienEntityTypes.NETHER_CHRYSALIS, ChrysalisRenderer::new);
         MOD.registries().registerEntityRenderer(AlienEntityTypes.NETHER_CRUSHER, CrusherRenderer::new);
         MOD.registries().registerEntityRenderer(AlienEntityTypes.NETHER_DRONE, DroneRenderer::new);
+        MOD.registries().registerEntityRenderer(AlienEntityTypes.IRRADIATED_FACEHUGGER, FacehuggerRenderer::new);
+        MOD.registries().registerEntityRenderer(AlienEntityTypes.IRRADIATED_OVOMORPH, OvomorphRenderer::new);
         MOD.registries().registerEntityRenderer(AlienEntityTypes.NETHER_FACEHUGGER, FacehuggerRenderer::new);
         MOD.registries().registerEntityRenderer(AlienEntityTypes.NETHER_HARBINGER, HarbingerRenderer::new);
         MOD.registries().registerEntityRenderer(AlienEntityTypes.NETHER_OVOMORPH, OvomorphRenderer::new);
@@ -309,8 +286,13 @@ public class AlienClient {
         MOD.registries().registerEntityRenderer(AlienEntityTypes.NETHER_BURSTER, BursterRenderer::new);
         MOD.registries().registerEntityRenderer(AlienEntityTypes.NETHER_RUNNER, RunnerRenderer::new);
         MOD.registries().registerEntityRenderer(AlienEntityTypes.NETHER_SPITTER, SpitterRenderer::new);
+        MOD.registries().registerEntityRenderer(AlienEntityTypes.IRRADIATED_SPITTER, SpitterRenderer::new);
         MOD.registries().registerEntityRenderer(AlienEntityTypes.NETHER_WARRIOR, WarriorRenderer::new);
         MOD.registries().registerEntityRenderer(AlienEntityTypes.OVIPOSITOR, OvipositorRenderer::new);
+        MOD.registries().registerEntityRenderer(AlienEntityTypes.EMPRESS_OVIPOSITOR, EmpressOvipositorRenderer::new);
+        MOD.registries().registerEntityRenderer(AlienEntityTypes.ROYAL_COCOON, RoyalCocoonRenderer::new);
+        MOD.registries().registerEntityRenderer(AlienEntityTypes.ABERRANT_ROYAL_COCOON, RoyalCocoonRenderer::new);
+        MOD.registries().registerEntityRenderer(AlienEntityTypes.NETHER_ROYAL_COCOON, RoyalCocoonRenderer::new);
         MOD.registries().registerEntityRenderer(AlienEntityTypes.OVOMORPH, OvomorphRenderer::new);
         MOD.registries().registerEntityRenderer(AlienEntityTypes.PRAETORIAN, PraetorianRenderer::new);
         MOD.registries().registerEntityRenderer(AlienEntityTypes.PREDALIEN, PredalienRenderer::new);
@@ -338,64 +320,38 @@ public class AlienClient {
         MOD.registries().registerEntityRenderer(AlienEntityTypes.WARRIOR, WarriorRenderer::new);
     }
 
-    private static void registerParasiteHeadAttachmentOffsetData() {
-        ParasiteHeadAttachmentOffsetDataCache.put(EntityType.CAMEL, AlienParasiteHeadAttachmentOffsetData.CAMEL);
-        ParasiteHeadAttachmentOffsetDataCache.put(EntityType.COW, AlienParasiteHeadAttachmentOffsetData.COW);
-        ParasiteHeadAttachmentOffsetDataCache.put(EntityType.DONKEY, AlienParasiteHeadAttachmentOffsetData.DONKEY);
-        ParasiteHeadAttachmentOffsetDataCache.put(EntityType.DOLPHIN, AlienParasiteHeadAttachmentOffsetData.DOLPHIN);
-        ParasiteHeadAttachmentOffsetDataCache.put(EntityType.EVOKER, AlienParasiteHeadAttachmentOffsetData.VILLAGER);
-        ParasiteHeadAttachmentOffsetDataCache.put(EntityType.FOX, AlienParasiteHeadAttachmentOffsetData.FOX);
-        ParasiteHeadAttachmentOffsetDataCache.put(EntityType.GOAT, AlienParasiteHeadAttachmentOffsetData.GOAT);
-        ParasiteHeadAttachmentOffsetDataCache.put(EntityType.HOGLIN, AlienParasiteHeadAttachmentOffsetData.HOGLIN);
-        ParasiteHeadAttachmentOffsetDataCache.put(EntityType.HORSE, AlienParasiteHeadAttachmentOffsetData.HORSE);
-        ParasiteHeadAttachmentOffsetDataCache.put(EntityType.ILLUSIONER, AlienParasiteHeadAttachmentOffsetData.VILLAGER);
-        ParasiteHeadAttachmentOffsetDataCache.put(EntityType.LLAMA, AlienParasiteHeadAttachmentOffsetData.LLAMA);
-        ParasiteHeadAttachmentOffsetDataCache.put(EntityType.MOOSHROOM, AlienParasiteHeadAttachmentOffsetData.COW);
-        ParasiteHeadAttachmentOffsetDataCache.put(EntityType.MULE, AlienParasiteHeadAttachmentOffsetData.MULE);
-        ParasiteHeadAttachmentOffsetDataCache.put(EntityType.PANDA, AlienParasiteHeadAttachmentOffsetData.PANDA);
-        ParasiteHeadAttachmentOffsetDataCache.put(EntityType.PIG, AlienParasiteHeadAttachmentOffsetData.PIG);
-        ParasiteHeadAttachmentOffsetDataCache.put(EntityType.PIGLIN, AlienParasiteHeadAttachmentOffsetData.VILLAGER);
-        ParasiteHeadAttachmentOffsetDataCache.put(EntityType.PIGLIN_BRUTE, AlienParasiteHeadAttachmentOffsetData.VILLAGER);
-        ParasiteHeadAttachmentOffsetDataCache.put(EntityType.PILLAGER, AlienParasiteHeadAttachmentOffsetData.VILLAGER);
-        ParasiteHeadAttachmentOffsetDataCache.put(EntityType.PLAYER, AlienParasiteHeadAttachmentOffsetData.PLAYER);
-        ParasiteHeadAttachmentOffsetDataCache.put(EntityType.POLAR_BEAR, AlienParasiteHeadAttachmentOffsetData.POLAR_BEAR);
-        ParasiteHeadAttachmentOffsetDataCache.put(EntityType.RAVAGER, AlienParasiteHeadAttachmentOffsetData.RAVAGER);
-        ParasiteHeadAttachmentOffsetDataCache.put(EntityType.SHEEP, AlienParasiteHeadAttachmentOffsetData.SHEEP);
-        ParasiteHeadAttachmentOffsetDataCache.put(EntityType.SNIFFER, AlienParasiteHeadAttachmentOffsetData.SNIFFER);
-        ParasiteHeadAttachmentOffsetDataCache.put(EntityType.TRADER_LLAMA, AlienParasiteHeadAttachmentOffsetData.LLAMA);
-        ParasiteHeadAttachmentOffsetDataCache.put(EntityType.VILLAGER, AlienParasiteHeadAttachmentOffsetData.VILLAGER);
-        ParasiteHeadAttachmentOffsetDataCache.put(EntityType.VINDICATOR, AlienParasiteHeadAttachmentOffsetData.VILLAGER);
-        ParasiteHeadAttachmentOffsetDataCache.put(EntityType.WANDERING_TRADER, AlienParasiteHeadAttachmentOffsetData.VILLAGER);
-        ParasiteHeadAttachmentOffsetDataCache.put(EntityType.WITCH, AlienParasiteHeadAttachmentOffsetData.WITCH);
-        ParasiteHeadAttachmentOffsetDataCache.put(EntityType.WOLF, AlienParasiteHeadAttachmentOffsetData.WOLF);
-        ParasiteHeadAttachmentOffsetDataCache.put(EntityType.ZOGLIN, AlienParasiteHeadAttachmentOffsetData.HOGLIN);
-        ParasiteHeadAttachmentOffsetDataCache.put(EntityType.ZOMBIE_VILLAGER, AlienParasiteHeadAttachmentOffsetData.VILLAGER);
-    }
-
     private static void registerItemRenderers() {
-        // Queen heads — trophy + shield variants. Trophies have no blocking transforms; the shared
-        // blocking predicate is harmless for them since the renderer short-circuits when there are no
-        // blocking transforms. Shields use the same predicate for actual raise-to-block behavior.
-        registerAsset(AlienItems.QUEEN_HEAD, "queen_head");
-        registerAsset(AlienItems.ABERRANT_QUEEN_HEAD, "aberrant_queen_head");
-        registerAsset(AlienItems.IRRADIATED_QUEEN_HEAD, "irradiated_queen_head");
-        registerAsset(AlienItems.NETHER_QUEEN_HEAD, "nether_queen_head");
+        AlienXenomorphHeadItems.ALL.forEach(entry -> {
+            registerAsset(entry.head(), entry.itemPath());
+            registerAsset(entry.headShield(), entry.shieldItemPath());
+        });
+        registerAsset(AlienItems.JELLY_VAT, "jelly_vat");
 
-        registerAsset(AlienItems.QUEEN_HEAD_SHIELD, "queen_head_shield");
-        registerAsset(AlienItems.ABERRANT_QUEEN_HEAD_SHIELD, "aberrant_queen_head_shield");
-        registerAsset(AlienItems.IRRADIATED_QUEEN_HEAD_SHIELD, "irradiated_queen_head_shield");
-        registerAsset(AlienItems.NETHER_QUEEN_HEAD_SHIELD, "nether_queen_head_shield");
+        // ANCHOR, INHIBITOR AND TRACKER USE AzItemRenderer INSTEAD, not the geo-bone/template path above.
+        // The template renderer replaces vanilla display handling with BLib's own transform system - block
+        // units instead of sixteenths, no implicit centring - so every Blockbench value has to be re-derived by
+        // hand, per item, per context. AzItemRenderer leaves vanilla's display block alone, so models/item/*.json
+        // is the raw Blockbench export and behaves as previewed. Animation still works through it.
+        // ⚠ THE CONTAINERS NEED AN ITEM RENDERER TOO. Their model is builtin/entity, so registering only the
+        // BlockEntityRenderer left the ITEM form with nothing to draw it - invisible in the GUI and in hand.
+        MOD.registries()
+            .registerItemRenderer(AlienBlockItems.RESIN_CONTAINER, name -> ResinContainerItemRenderer::new);
+        MOD.registries()
+            .registerItemRenderer(AlienBlockItems.NETHER_RESIN_CONTAINER, name -> NetherResinContainerItemRenderer::new);
+        MOD.registries()
+            .registerItemRenderer(
+                AlienBlockItems.ABERRANT_RESIN_CONTAINER,
+                name -> AberrantResinContainerItemRenderer::new
+            );
+        MOD.registries()
+            .registerItemRenderer(
+                AlienBlockItems.IRRADIATED_RESIN_CONTAINER,
+                name -> IrradiatedResinContainerItemRenderer::new
+            );
 
-        // Crusher heads — same shape, sourced from the crusher geo + per-tint textures.
-        registerAsset(AlienItems.CRUSHER_HEAD, "crusher_head");
-        registerAsset(AlienItems.ABERRANT_CRUSHER_HEAD, "aberrant_crusher_head");
-        registerAsset(AlienItems.IRRADIATED_CRUSHER_HEAD, "irradiated_crusher_head");
-        registerAsset(AlienItems.NETHER_CRUSHER_HEAD, "nether_crusher_head");
-
-        registerAsset(AlienItems.CRUSHER_HEAD_SHIELD, "crusher_head_shield");
-        registerAsset(AlienItems.ABERRANT_CRUSHER_HEAD_SHIELD, "aberrant_crusher_head_shield");
-        registerAsset(AlienItems.IRRADIATED_CRUSHER_HEAD_SHIELD, "irradiated_crusher_head_shield");
-        registerAsset(AlienItems.NETHER_CRUSHER_HEAD_SHIELD, "nether_crusher_head_shield");
+        MOD.registries().registerItemRenderer(AlienItems.ANCHOR, name -> AnchorItemRenderer::new);
+        MOD.registries().registerItemRenderer(AlienItems.INHIBITOR, name -> InhibitorItemRenderer::new);
+        MOD.registries().registerItemRenderer(AlienItems.TRACKER, name -> TrackerItemRenderer::new);
     }
 
     private static void registerAsset(BLibHolder<Item> holder, String configPath) {
@@ -403,6 +359,13 @@ public class AlienClient {
     }
 
     private static void registerBlockEntityRenderers() {
+        // ⚠ ONE registration for all four strains - they share a block entity type, and the renderer picks the
+        // texture off whichever block it finds itself in.
+        MOD.registries()
+            .registerBlockEntityRenderer(
+                AlienBlockEntityTypes.RESIN_CONTAINER,
+                ctx -> new ResinContainerBlockEntityRenderer()
+            );
         MOD.registries()
             .registerBlockEntityRenderer(
                 AlienBlockEntityTypes.QUEEN_HEAD,
@@ -412,6 +375,21 @@ public class AlienClient {
             .registerBlockEntityRenderer(
                 AlienBlockEntityTypes.CRUSHER_HEAD,
                 ctx -> new CrusherHeadBlockEntityRenderer()
+            );
+        MOD.registries()
+            .registerBlockEntityRenderer(
+                AlienBlockEntityTypes.XENOMORPH_HEAD,
+                ctx -> new XenomorphHeadBlockEntityRenderer()
+            );
+        MOD.registries()
+            .registerBlockEntityRenderer(
+                AlienBlockEntityTypes.ANCHOR,
+                ctx -> new AnchorBlockEntityRenderer()
+            );
+        MOD.registries()
+            .registerBlockEntityRenderer(
+                AlienBlockEntityTypes.JELLY_VAT,
+                ctx -> new JellyVatBlockEntityRenderer()
             );
     }
 

@@ -1,0 +1,8 @@
+{
+  "parent": "minecraft:block/slab_top",
+  "textures": {
+    "bottom": "avp_alien:block/resin_bone",
+    "side": "avp_alien:block/resin_bone",
+    "top": "avp_alien:block/resin_bone"
+  }
+}

@@ -1,6 +1,7 @@
 package com.alien.common.gameplay.entity.projectile;
 
 import com.alien.common.gameplay.entity.living.alien.Alien;
+import com.alien.common.model.alien.variant.AlienVariant;
 import com.alien.common.registry.init.AlienEntityTypes;
 import com.alien.common.registry.init.AlienParticleTypes;
 import com.alien.common.registry.key.AlienDamageTypeKeys;
@@ -18,6 +19,18 @@ import net.minecraft.world.phys.EntityHitResult;
 import org.jetbrains.annotations.NotNull;
 
 public class AcidSpit extends ThrowableProjectile {
+
+    /**
+     * Acid does not burn - matching {@code Acid}, which overrides this the same way.
+     * <p>
+     * The last entity in the mod that did not extend {@code Alien} and so inherited none of its fire immunity. A thrown
+     * projectile is unlikely to meet fire in its short life, but a nether spitter firing across lava is exactly the
+     * case where it would, and there is no reason for the shot to be more flammable than the thing that spat it.
+     */
+    @Override
+    public boolean fireImmune() {
+        return true;
+    }
 
     private static final int MAX_LIFETIME_IN_TICKS = 60;
 
@@ -43,9 +56,18 @@ public class AcidSpit extends ThrowableProjectile {
         super(AlienEntityTypes.ACID_SPIT.get(), owner, level);
 
         if (owner instanceof Alien alien) {
-            entityData.set(IS_NETHER_AFFLICTED, alien.isNetherAfflicted());
-            entityData.set(IS_IRRADIATED, alien.isIrradiated());
+            setVariant(alien.getVariant());
         }
+    }
+
+    public AcidSpit(LivingEntity owner, Level level, AlienVariant variant) {
+        this(owner, level);
+        setVariant(variant);
+    }
+
+    public void setVariant(AlienVariant variant) {
+        entityData.set(IS_NETHER_AFFLICTED, variant == AlienVariant.NETHER);
+        entityData.set(IS_IRRADIATED, variant == AlienVariant.IRRADIATED);
     }
 
     @Override

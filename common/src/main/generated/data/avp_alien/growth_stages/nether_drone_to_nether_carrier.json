@@ -1,4 +1,5 @@
 {
+  "alternate": "avp_alien:nether_razor_claw",
   "from": "avp_alien:nether_drone",
   "requirements": [
     {

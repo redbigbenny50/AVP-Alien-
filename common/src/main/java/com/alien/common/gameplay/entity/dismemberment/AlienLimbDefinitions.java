@@ -1,130 +1,82 @@
 package com.alien.common.gameplay.entity.dismemberment;
 
 import com.alien.common.registry.init.AlienEntityTypes;
+import com.blib.api.common.dismemberment.v1.LimbCategories;
+import com.blib.api.common.dismemberment.v1.LimbDefinition;
 
-/**
- * Aggregates AVP-Alien limb definition registrations. Vanilla mob limb defs (zombie/skeleton/cow/wolf/etc.) are
- * provided by BLib's {@code BuiltInLimbDefinitions} and registered automatically during BLib's mod init — this class
- * only has to wire up our custom xenomorph entities.
- */
+/** Aggregates AVP-Alien server-side limb registration. */
 public final class AlienLimbDefinitions {
 
     public static void initialize() {
-        QueenLimbDefinitions.initialize();
-        registerXenomorphs();
+        registerXenomorphSpawnOffsets();
+        registerExplosiveDeathLimbs();
+        registerPraetorianLimbs();
+        registerDroneHitboxes();
+        AdultXenomorphHitboxCatalog.registerRuntimeHitboxes();
     }
 
-    private static void registerXenomorphs() {
-        XenomorphLimbs.register(
-            "drone",
-            AlienEntityTypes.DRONE,
-            AlienEntityTypes.ABERRANT_DRONE,
-            AlienEntityTypes.NETHER_DRONE,
-            AlienEntityTypes.IRRADIATED_DRONE
+    private static void registerXenomorphSpawnOffsets() {
+        AdultXenomorphHitboxCatalog.registerSpawnOffsets();
+    }
+
+    /**
+     * Boilers and Bursters are intentionally not firearm limb targets. Their acid-death burst still needs visual limb
+     * definitions, however, because
+     * {@link com.blib.api.common.dismemberment.v1.LimbDismemberer#getRemainingDefinitions} uses that registry to launch
+     * each piece when they explode.
+     */
+    private static void registerExplosiveDeathLimbs() {
+        registerExplosiveDeathLimbs(AlienEntityTypes.BOILER, "boiler");
+        registerExplosiveDeathLimbs(AlienEntityTypes.ABERRANT_BOILER, "boiler");
+        registerExplosiveDeathLimbs(AlienEntityTypes.NETHER_BOILER, "boiler");
+        registerExplosiveDeathLimbs(AlienEntityTypes.BURSTER, "burster");
+        registerExplosiveDeathLimbs(AlienEntityTypes.ABERRANT_BURSTER, "burster");
+        registerExplosiveDeathLimbs(AlienEntityTypes.IRRADIATED_BURSTER, "burster");
+        registerExplosiveDeathLimbs(AlienEntityTypes.NETHER_BURSTER, "burster");
+    }
+
+    private static void registerExplosiveDeathLimbs(
+        com.blib.api.common.registry.v1.BLibHolder<? extends net.minecraft.world.entity.EntityType<?>> type,
+        String prefix
+    ) {
+        LimbDefinition.builder(type, AdultXenomorphHitboxCatalog.limbId(prefix, "head"), "gHead", LimbCategories.HEAD).build();
+        LimbDefinition.builder(type, AdultXenomorphHitboxCatalog.limbId(prefix, "left_arm"), "gLeftShoulder", LimbCategories.ARM).build();
+        LimbDefinition.builder(type, AdultXenomorphHitboxCatalog.limbId(prefix, "right_arm"), "gRightShoulder", LimbCategories.ARM).build();
+        LimbDefinition.builder(type, AdultXenomorphHitboxCatalog.limbId(prefix, "left_leg"), "gLeftLeg", LimbCategories.LEG).build();
+        LimbDefinition.builder(type, AdultXenomorphHitboxCatalog.limbId(prefix, "right_leg"), "gRightLeg", LimbCategories.LEG).build();
+        LimbDefinition.builder(type, AdultXenomorphHitboxCatalog.limbId(prefix, "tail"), "gTail1", LimbCategories.TAIL).build();
+    }
+
+    private static void registerPraetorianLimbs() {
+        registerPraetorianLimbs(AlienEntityTypes.PRAETORIAN);
+        registerPraetorianLimbs(AlienEntityTypes.ABERRANT_PRAETORIAN);
+        registerPraetorianLimbs(AlienEntityTypes.IRRADIATED_PRAETORIAN);
+        registerPraetorianLimbs(AlienEntityTypes.NETHER_PRAETORIAN);
+        PraetorianLimbHitboxes.register(
+            AlienEntityTypes.PRAETORIAN.getResourceLocation(),
+            AlienEntityTypes.ABERRANT_PRAETORIAN.getResourceLocation(),
+            AlienEntityTypes.IRRADIATED_PRAETORIAN.getResourceLocation(),
+            AlienEntityTypes.NETHER_PRAETORIAN.getResourceLocation()
         );
-        XenomorphLimbs.register(
-            "warrior",
-            AlienEntityTypes.WARRIOR,
-            AlienEntityTypes.ABERRANT_WARRIOR,
-            AlienEntityTypes.NETHER_WARRIOR,
-            AlienEntityTypes.IRRADIATED_WARRIOR
+    }
+
+    private static void registerDroneHitboxes() {
+        DroneLimbHitboxes.register(
+            AlienEntityTypes.DRONE.getResourceLocation(),
+            AlienEntityTypes.ABERRANT_DRONE.getResourceLocation(),
+            AlienEntityTypes.IRRADIATED_DRONE.getResourceLocation(),
+            AlienEntityTypes.NETHER_DRONE.getResourceLocation()
         );
-        XenomorphLimbs.register(
-            "runner",
-            AlienEntityTypes.RUNNER,
-            AlienEntityTypes.ABERRANT_RUNNER,
-            AlienEntityTypes.NETHER_RUNNER,
-            AlienEntityTypes.IRRADIATED_RUNNER
-        );
-        XenomorphLimbs.register(
-            "spitter",
-            AlienEntityTypes.SPITTER,
-            AlienEntityTypes.ABERRANT_SPITTER,
-            AlienEntityTypes.NETHER_SPITTER
-        );
-        XenomorphLimbs.register(
-            "praetorian",
-            AlienEntityTypes.PRAETORIAN,
-            AlienEntityTypes.ABERRANT_PRAETORIAN,
-            AlienEntityTypes.NETHER_PRAETORIAN,
-            AlienEntityTypes.IRRADIATED_PRAETORIAN
-        );
-        XenomorphLimbs.register(
-            "crusher",
-            AlienEntityTypes.CRUSHER,
-            AlienEntityTypes.ABERRANT_CRUSHER,
-            AlienEntityTypes.NETHER_CRUSHER,
-            AlienEntityTypes.IRRADIATED_CRUSHER
-        );
-        XenomorphLimbs.register(
-            "boiler",
-            AlienEntityTypes.BOILER,
-            AlienEntityTypes.ABERRANT_BOILER,
-            AlienEntityTypes.NETHER_BOILER
-        );
-        XenomorphLimbs.register(
-            "razor_claw",
-            AlienEntityTypes.RAZOR_CLAW,
-            AlienEntityTypes.ABERRANT_RAZOR_CLAW,
-            AlienEntityTypes.NETHER_RAZOR_CLAW,
-            AlienEntityTypes.IRRADIATED_RAZOR_CLAW
-        );
-        XenomorphLimbs.register(
-            "ravager",
-            AlienEntityTypes.RAVAGER,
-            AlienEntityTypes.ABERRANT_RAVAGER,
-            AlienEntityTypes.NETHER_RAVAGER,
-            AlienEntityTypes.IRRADIATED_RAVAGER
-        );
-        XenomorphLimbs.register(
-            "prowler",
-            AlienEntityTypes.PROWLER,
-            AlienEntityTypes.ABERRANT_PROWLER,
-            AlienEntityTypes.NETHER_PROWLER,
-            AlienEntityTypes.IRRADIATED_PROWLER
-        );
-        XenomorphLimbs.register(
-            "carrier",
-            AlienEntityTypes.CARRIER,
-            AlienEntityTypes.ABERRANT_CARRIER,
-            AlienEntityTypes.NETHER_CARRIER,
-            AlienEntityTypes.IRRADIATED_CARRIER
-        );
-        XenomorphLimbs.register(
-            "chrysalis",
-            AlienEntityTypes.CHRYSALIS,
-            AlienEntityTypes.ABERRANT_CHRYSALIS,
-            AlienEntityTypes.NETHER_CHRYSALIS,
-            AlienEntityTypes.IRRADIATED_CHRYSALIS
-        );
-        XenomorphLimbs.register(
-            "predalien",
-            AlienEntityTypes.PREDALIEN,
-            AlienEntityTypes.ABERRANT_PREDALIEN,
-            AlienEntityTypes.NETHER_PREDALIEN,
-            AlienEntityTypes.IRRADIATED_PREDALIEN
-        );
-        XenomorphLimbs.register(
-            "burster",
-            AlienEntityTypes.BURSTER,
-            AlienEntityTypes.ABERRANT_BURSTER,
-            AlienEntityTypes.NETHER_BURSTER,
-            AlienEntityTypes.IRRADIATED_BURSTER
-        );
-        XenomorphLimbs.register(
-            "empress",
-            AlienEntityTypes.EMPRESS,
-            AlienEntityTypes.ABERRANT_EMPRESS,
-            AlienEntityTypes.NETHER_EMPRESS,
-            AlienEntityTypes.IRRADIATED_EMPRESS
-        );
-        XenomorphLimbs.register(
-            "harbinger",
-            AlienEntityTypes.HARBINGER,
-            AlienEntityTypes.ABERRANT_HARBINGER,
-            AlienEntityTypes.NETHER_HARBINGER,
-            AlienEntityTypes.IRRADIATED_HARBINGER
-        );
+    }
+
+    private static void registerPraetorianLimbs(
+        com.blib.api.common.registry.v1.BLibHolder<? extends net.minecraft.world.entity.EntityType<?>> type
+    ) {
+        LimbDefinition.builder(type, PraetorianLimbHitboxes.LEFT_ARM, "gLeftShoulder", LimbCategories.ARM).build();
+        LimbDefinition.builder(type, PraetorianLimbHitboxes.RIGHT_ARM, "gRightShoulder", LimbCategories.ARM).build();
+        LimbDefinition.builder(type, PraetorianLimbHitboxes.LEFT_LEG, "gLeftLeg", LimbCategories.LEG).build();
+        LimbDefinition.builder(type, PraetorianLimbHitboxes.RIGHT_LEG, "gRightLeg", LimbCategories.LEG).build();
+        LimbDefinition.builder(type, PraetorianLimbHitboxes.TAIL, "gTail1", LimbCategories.TAIL).build();
     }
 
     private AlienLimbDefinitions() {}

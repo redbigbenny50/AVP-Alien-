@@ -1,5 +1,6 @@
 package com.alien.fabric.data.advancement;
 
+import com.alien.fabric.compatibility.avp_human.AVPHumanFabric;
 import net.fabricmc.fabric.api.datagen.v1.FabricDataOutput;
 import net.fabricmc.fabric.api.datagen.v1.provider.FabricAdvancementProvider;
 import net.minecraft.advancements.AdvancementHolder;
@@ -16,6 +17,10 @@ public class AdvancementProvider extends FabricAdvancementProvider {
 
     @Override
     public void generateAdvancement(HolderLookup.Provider registryLookup, Consumer<AdvancementHolder> consumer) {
-        AlienAdvancementProvider.generateAdvancements(registryLookup, consumer);
+        AlienAdvancementProvider.generateAdvancements(
+            registryLookup,
+            consumer,
+            withConditions(consumer, AVPHumanFabric.IS_LOADED)
+        );
     }
 }

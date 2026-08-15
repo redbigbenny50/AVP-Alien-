@@ -3,6 +3,7 @@ package com.alien.common.gameplay.entity.living.alien.xenomorph.runner;
 import com.alien.common.gameplay.entity.living.alien.Alien;
 import com.alien.common.gameplay.entity.living.alien.EggCarrier;
 import com.alien.common.gameplay.entity.living.alien.xenomorph.AttackType;
+import com.alien.common.gameplay.entity.living.alien.xenomorph.CrawlAttack;
 import com.alien.common.gameplay.entity.living.alien.xenomorph.EggPickupManager;
 import com.alien.common.gameplay.entity.living.alien.xenomorph.VentBuilder;
 import com.alien.common.gameplay.entity.living.alien.xenomorph.VentData;
@@ -33,20 +34,50 @@ import org.jetbrains.annotations.Nullable;
 
 import java.util.function.BiConsumer;
 
-public class Runner extends Xenomorph implements EggCarrier, GOAPUser<Runner>, VentBuilder {
+public class Runner extends Xenomorph implements EggCarrier, GOAPUser<Runner>, VentBuilder, com.alien.common.gameplay.hive.structure.carve.CarveWorker {
+
+    /**
+     * ⭐⭐ THE PRONE ATTACKS. [stated] "when either leg is shot off it has to crawl there should be no other
+     * alternatives... the attacks they can do are only the crawl ones."
+     * <p>
+     * ⚠⚠ THE CLIPS AND THE DISPATCHER METHODS ALREADY EXISTED - what was missing was the ATTACK TYPES, so the crawl
+     * preference in {@code XenomorphAttackConfig} had nothing to restrict to and fell through to the standing set. A
+     * one-legged runner stood up to swing because there was literally nothing prone to pick.
+     * </p>
+     */
+    /** ⚠ Slightly softer than a standing swing, matching the predalien's existing crawl claw. */
+    private static final float CRAWL_DAMAGE_FRACTION = 0.8F;
+
+    public static final AttackType CRAWL_CLAW = CrawlAttack.create(
+        "runner_crawl_claw",
+        CRAWL_DAMAGE_FRACTION,
+        CrawlAttack.Limb.ARM,
+        16
+    );
+
+    /** ⚠ HEAD, NOT ARM - so a crawling runner that has also lost both arms still has a bite. */
+    public static final AttackType CRAWL_BITE = CrawlAttack.create(
+        "runner_crawl_bite",
+        CRAWL_DAMAGE_FRACTION,
+        CrawlAttack.Limb.HEAD,
+        14
+    );
 
     public static final AttackType CLAW = AttackType.builder("runner_claw")
+        .requiresAnyArm()
         .defaultDurationInTicks(10)
         .sound(AlienSoundEvents.ENTITY_XENOMORPH_ATTACK)
         .build();
 
     public static final AttackType BITE = AttackType.builder("runner_bite")
-        .defaultDurationInTicks(8)
+        .requiresHead()
+        .defaultDurationInTicks(10)
         .sound(AlienSoundEvents.ENTITY_XENOMORPH_ATTACK)
         .build();
 
     public static final AttackType TAIL_QUAD = AttackType.builder("runner_tail_quad")
-        .defaultDurationInTicks(10)
+        .requiresTail()
+        .defaultDurationInTicks(17)
         .sound(AlienSoundEvents.ENTITY_XENOMORPH_ATTACK)
         .build();
 
@@ -60,6 +91,9 @@ public class Runner extends Xenomorph implements EggCarrier, GOAPUser<Runner>, V
             .add(Attributes.MAX_HEALTH, PlayerStatConstants.BASE_HEALTH * 2F)
             .add(Attributes.MOVEMENT_SPEED, PlayerStatConstants.BASE_WALK_SPEED * 1.1F);
     }
+
+    /** Synced crew gait, same contract as the drone's: 0 idle, 1 digging, 2 placing. */
+    public final com.blib.api.common.data_sync.v1.DataAccessor<Integer> carveDigMode;
 
     private final RunnerAnimationDispatcher animationDispatcher;
 
@@ -76,12 +110,18 @@ public class Runner extends Xenomorph implements EggCarrier, GOAPUser<Runner>, V
                     XenomorphAttackConfig.builder()
                         .addRegular(CLAW)
                         .addRegular(BITE)
+                        .addRegular(CRAWL_CLAW)
+                        .addRegular(CRAWL_BITE)
                         .addRegular(TAIL_QUAD)
                         .build()
                 )
                 .build()
         );
         this.animationDispatcher = new RunnerAnimationDispatcher(this);
+        this.carveDigMode = new com.blib.api.common.data_sync.v1.DataAccessor<>(
+            this,
+            com.alien.common.registry.init.AlienDataSyncKeys.RUNNER_CARVE_DIG_MODE.get()
+        );
         this.eggPickupManager = new EggPickupManager(this);
         this.ventData = new VentData();
     }
@@ -145,6 +185,11 @@ public class Runner extends Xenomorph implements EggCarrier, GOAPUser<Runner>, V
     public void addAdditionalSaveData(@NotNull CompoundTag compoundTag) {
         super.addAdditionalSaveData(compoundTag);
         ventData.save(compoundTag);
+    }
+
+    @Override
+    public com.blib.api.common.data_sync.v1.DataAccessor<Integer> carveDigMode() {
+        return carveDigMode;
     }
 
     public RunnerAnimationDispatcher getAnimationDispatcher() {

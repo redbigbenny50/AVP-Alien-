@@ -32,6 +32,7 @@ public class AcidBlockDamageUtil {
     }
 
     private static void damageBlock(Acid acid, BlockPos blockPos, Level level) {
+        var blockStateBeforeDamage = level.getBlockState(blockPos);
         var result = BlockBreakProgressManager.damage(level, blockPos, 0.2F * acid.getMultiplier());
 
         switch (result) {
@@ -47,7 +48,20 @@ public class AcidBlockDamageUtil {
             }
             case DESTROYED -> {
                 if (acid.isIrradiated()) {
-                    level.setBlockAndUpdate(blockPos, Blocks.BLUE_ICE.defaultBlockState());
+                    // Freezing blood: veins and webs it destroys simply perish; solid nether resin becomes
+                    // netherrack; anything else it eats through freezes over as blue ice.
+                    if (
+                        blockStateBeforeDamage.is(AlienBlockTags.RESIN_VEINS)
+                            || blockStateBeforeDamage.is(AlienBlockTags.RESIN_WEBS)
+                    ) {
+                        break;
+                    }
+
+                    var frozenBlock = blockStateBeforeDamage.is(AlienBlockTags.NETHER_RESIN)
+                        ? Blocks.NETHERRACK
+                        : Blocks.BLUE_ICE;
+
+                    level.setBlockAndUpdate(blockPos, frozenBlock.defaultBlockState());
                 }
             }
         }
@@ -89,7 +103,9 @@ public class AcidBlockDamageUtil {
         }
 
         if (acid.isIrradiated()) {
-            return !blockState.is(AlienBlockTags.IRRADIATED_ACID_IMMUNE);
+            // Nether resin is carved out of the immunity umbrella for irradiated blood specifically: the freezing
+            // blood converts it to netherrack (see damageBlock) instead of leaving it untouched.
+            return blockState.is(AlienBlockTags.NETHER_RESIN) || !blockState.is(AlienBlockTags.IRRADIATED_ACID_IMMUNE);
         }
 
         return !blockState.is(AlienBlockTags.ACID_IMMUNE);

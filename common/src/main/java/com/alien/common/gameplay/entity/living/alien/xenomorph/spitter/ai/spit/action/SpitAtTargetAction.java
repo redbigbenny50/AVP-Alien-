@@ -1,7 +1,7 @@
 package com.alien.common.gameplay.entity.living.alien.xenomorph.spitter.ai.spit.action;
 
 import com.alien.common.gameplay.entity.living.alien.xenomorph.spitter.Spitter;
-import com.alien.common.gameplay.entity.projectile.AcidSpit;
+import com.alien.common.gameplay.entity.living.alien.xenomorph.spitter.SpitterSpitAttack;
 import com.blib.api.common.goap.v1.GOAPSensors;
 import com.just.ai.goap.StateKey;
 import com.just.ai.goap.action.Action;
@@ -12,17 +12,13 @@ import net.minecraft.world.entity.LivingEntity;
 
 public class SpitAtTargetAction {
 
-    private static final float PROJECTILE_POWER = 1.5F;
-
-    private static final float PROJECTILE_INACCURACY = 2.0F;
-
-    private static final double ARC_COMPENSATION_FACTOR = 0.1;
-
     private static final int WIND_UP_TICKS = 10;
 
     private static final StateKey<Integer> KEY_WIND_UP_REMAINING = StateKey.sensed("spit_wind_up_remaining");
 
     private static final StateKey<Boolean> KEY_HAS_FIRED = StateKey.sensed("spit_has_fired");
+
+    private static final StateKey<Boolean> KEY_ANIMATION_STARTED = StateKey.sensed("spit_animation_started");
 
     public static Action.Signal perform(Action.Context<? extends Spitter> context) {
         var spitter = context.getActor();
@@ -55,33 +51,20 @@ public class SpitAtTargetAction {
 
         var windUpRemaining = blackboard.getOrDefault(KEY_WIND_UP_REMAINING, WIND_UP_TICKS);
 
+        if (!blackboard.getOrDefault(KEY_ANIMATION_STARTED, false)) {
+            spitter.startAttack(Spitter.SPIT, target);
+            blackboard.set(KEY_ANIMATION_STARTED, true);
+        }
+
         if (windUpRemaining > 0) {
             blackboard.set(KEY_WIND_UP_REMAINING, windUpRemaining - 1);
             return Action.Signal.CONTINUE;
         }
 
-        fireProjectile(spitter, target);
+        SpitterSpitAttack.shootAtTarget(spitter, target);
         blackboard.set(KEY_HAS_FIRED, true);
 
         return Action.Signal.ABORT;
-    }
-
-    private static void fireProjectile(Spitter spitter, LivingEntity target) {
-        var spit = new AcidSpit(spitter, spitter.level());
-        var targetEyePos = target.getEyePosition();
-        var directionX = targetEyePos.x - spitter.getX();
-        var directionY = targetEyePos.y - spitter.getEyeY();
-        var directionZ = targetEyePos.z - spitter.getZ();
-        var gravityCompensation = computeGravityCompensation(directionX, directionZ);
-
-        spit.shoot(directionX, directionY + gravityCompensation, directionZ, PROJECTILE_POWER, PROJECTILE_INACCURACY);
-        spitter.level().addFreshEntity(spit);
-        spitter.getSpitterData().setLastSpitTick(spitter.tickCount);
-    }
-
-    private static double computeGravityCompensation(double directionX, double directionZ) {
-        var horizontalDistance = Math.sqrt(directionX * directionX + directionZ * directionZ);
-        return horizontalDistance * ARC_COMPENSATION_FACTOR;
     }
 
     private SpitAtTargetAction() {

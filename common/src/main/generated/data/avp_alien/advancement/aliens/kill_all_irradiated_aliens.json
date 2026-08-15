@@ -1,5 +1,13 @@
 {
-  "parent": "avp_alien:aliens/kill_a_royal_alien",
+  "fabric:load_conditions": [
+    {
+      "condition": "fabric:all_mods_loaded",
+      "values": [
+        "avp_human"
+      ]
+    }
+  ],
+  "parent": "avp_alien:aliens/kill_a_lineage",
   "criteria": {
     "avp_alien:irradiated_burster": {
       "conditions": {
@@ -225,6 +233,12 @@
       "translate": "advancements.aliens.kill_all_irradiated_aliens.title"
     }
   },
+  "neoforge:conditions": [
+    {
+      "type": "neoforge:mod_loaded",
+      "modid": "avp_human"
+    }
+  ],
   "requirements": [
     [
       "avp_alien:irradiated_carrier"

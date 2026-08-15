@@ -1,0 +1,15 @@
+{
+  "entity": "minecraft:pig",
+  "size": [
+    8.0,
+    8.0,
+    8.0
+  ],
+  "pivot": [
+    0.0,
+    12.0,
+    -6.0
+  ],
+  "vertical_offset": -8,
+  "face_offset": 14
+}

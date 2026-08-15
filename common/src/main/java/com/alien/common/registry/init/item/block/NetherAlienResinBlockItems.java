@@ -99,6 +99,86 @@ public class NetherAlienResinBlockItems {
         NetherAlienResinBlocks.SMOOTH_NETHER_RESIN_WALL
     );
 
+    public static final BLibHolder<BlockItem> RIBBED_NETHER_RESIN_SLAB = create(
+        "ribbed_nether_resin_slab",
+        NetherAlienResinBlocks.RIBBED_NETHER_RESIN_SLAB
+    );
+
+    public static final BLibHolder<BlockItem> RIBBED_NETHER_RESIN_STAIRS = create(
+        "ribbed_nether_resin_stairs",
+        NetherAlienResinBlocks.RIBBED_NETHER_RESIN_STAIRS
+    );
+
+    public static final BLibHolder<BlockItem> NETHER_RESIN_BONE = create(
+        "nether_resin_bone",
+        NetherAlienResinBlocks.NETHER_RESIN_BONE
+    );
+
+    public static final BLibHolder<BlockItem> NETHER_RESIN_BONE_SLAB = create(
+        "nether_resin_bone_slab",
+        NetherAlienResinBlocks.NETHER_RESIN_BONE_SLAB
+    );
+
+    public static final BLibHolder<BlockItem> NETHER_RESIN_BONE_STAIRS = create(
+        "nether_resin_bone_stairs",
+        NetherAlienResinBlocks.NETHER_RESIN_BONE_STAIRS
+    );
+
+    public static final BLibHolder<BlockItem> NETHER_RESIN_DOORWAY = create(
+        "nether_resin_doorway",
+        NetherAlienResinBlocks.NETHER_RESIN_DOORWAY
+    );
+
+    public static final BLibHolder<BlockItem> NETHER_RESIN_ETCHED = create(
+        "nether_resin_etched",
+        NetherAlienResinBlocks.NETHER_RESIN_ETCHED
+    );
+
+    public static final BLibHolder<BlockItem> NETHER_RESIN_ETCHED_SLAB = create(
+        "nether_resin_etched_slab",
+        NetherAlienResinBlocks.NETHER_RESIN_ETCHED_SLAB
+    );
+
+    public static final BLibHolder<BlockItem> NETHER_RESIN_ETCHED_STAIRS = create(
+        "nether_resin_etched_stairs",
+        NetherAlienResinBlocks.NETHER_RESIN_ETCHED_STAIRS
+    );
+
+    public static final BLibHolder<BlockItem> NETHER_RESIN_SPINE = create(
+        "nether_resin_spine",
+        NetherAlienResinBlocks.NETHER_RESIN_SPINE
+    );
+
+    public static final BLibHolder<BlockItem> NETHER_RESIN_STRETCHED = create(
+        "nether_resin_stretched",
+        NetherAlienResinBlocks.NETHER_RESIN_STRETCHED
+    );
+
+    public static final BLibHolder<BlockItem> NETHER_RESIN_STRETCHED_SLAB = create(
+        "nether_resin_stretched_slab",
+        NetherAlienResinBlocks.NETHER_RESIN_STRETCHED_SLAB
+    );
+
+    public static final BLibHolder<BlockItem> NETHER_RESIN_STRETCHED_STAIRS = create(
+        "nether_resin_stretched_stairs",
+        NetherAlienResinBlocks.NETHER_RESIN_STRETCHED_STAIRS
+    );
+
+    public static final BLibHolder<BlockItem> NETHER_RESIN_TENDRIL = create(
+        "nether_resin_tendril",
+        NetherAlienResinBlocks.NETHER_RESIN_TENDRIL
+    );
+
+    public static final BLibHolder<BlockItem> NETHER_RESIN_TENDRIL_SLAB = create(
+        "nether_resin_tendril_slab",
+        NetherAlienResinBlocks.NETHER_RESIN_TENDRIL_SLAB
+    );
+
+    public static final BLibHolder<BlockItem> NETHER_RESIN_TENDRIL_STAIRS = create(
+        "nether_resin_tendril_stairs",
+        NetherAlienResinBlocks.NETHER_RESIN_TENDRIL_STAIRS
+    );
+
     private static BLibHolder<BlockItem> create(String id, Supplier<? extends Block> blockSupplier) {
         return create(id, blockSupplier, new Item.Properties());
     }

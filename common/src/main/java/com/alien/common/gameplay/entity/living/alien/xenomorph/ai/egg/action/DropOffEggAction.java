@@ -2,6 +2,13 @@ package com.alien.common.gameplay.entity.living.alien.xenomorph.ai.egg.action;
 
 import com.alien.common.gameplay.entity.living.alien.ovomorph.Ovomorph;
 import com.alien.common.gameplay.entity.living.alien.xenomorph.Xenomorph;
+import com.alien.common.gameplay.entity.living.alien.xenomorph.ai.egg.EggSpotClaims;
+import com.alien.common.gameplay.entity.living.alien.xenomorph.ai.egg.QueenEggZone;
+import com.alien.common.gameplay.entity.living.alien.xenomorph.queen.Queen;
+import com.alien.common.gameplay.hive.location.HiveLocationRegistry;
+import com.alien.common.gameplay.hive.structure.HiveChamberSlots;
+import com.alien.common.gameplay.hive.structure.HostEggDelivery;
+import com.alien.common.gameplay.hive.vent.HiveVents;
 import com.alien.common.registry.init.AlienSoundEvents;
 import com.alien.common.registry.tag.AlienEntityTypeTags;
 import com.blib.api.common.goap.v1.action.impl.NeoMoveToPosAction;
@@ -9,7 +16,9 @@ import com.just.ai.goap.StateKey;
 import com.just.ai.goap.action.Action;
 import com.just.ai.goap.state.Blackboard;
 import net.minecraft.core.BlockPos;
+import net.minecraft.server.level.ServerLevel;
 import net.minecraft.sounds.SoundSource;
+import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
@@ -32,13 +41,91 @@ public class DropOffEggAction {
 
     private static final StateKey<Integer> KEY_NEXT_SEARCH_TICK = StateKey.sensed("egg_drop_next_search_tick");
 
+    private static final StateKey<BlockPos> KEY_VENT_ENTRY = StateKey.sensed("egg_drop_vent_entry");
+
+    private static final StateKey<BlockPos> KEY_VENT_EXIT = StateKey.sensed("egg_drop_vent_exit");
+
+    private static final StateKey<Integer> KEY_TARGET_SET_TICK = StateKey.sensed("egg_drop_target_set_tick");
+
+    /** How many times this hauler has abandoned its STAMPED host-drop target on this haul. */
+    private static final StateKey<Integer> KEY_STAMP_ATTEMPTS = StateKey.sensed("egg_drop_stamp_attempts");
+
+    /**
+     * A stamped delivery survives this many abandons (stuck, no-path, truncated walk) before the stamp is cleared and
+     * the egg falls back to the nursery. Early abandons do NOT blacklist the cell: the stuck path has already unlocked
+     * the vents (KEY_WALK_FAILED), so the re-search re-picks the SAME cell and tries the duct instead of walking the
+     * egg straight back to a nursery bed - the U-turn the tester kept watching.
+     */
+    private static final int STAMP_MAX_ATTEMPTS = 3;
+
+    /** Walk attempts spent on the CURRENT nursery bed before it is written off. See {@code abandonTarget}. */
+    private static final StateKey<Integer> KEY_BED_ATTEMPTS = StateKey.sensed("egg_drop_bed_attempts");
+
+    /** One walk, then one ducted retry, then the bed is blacklisted. */
+    private static final int BED_MAX_ATTEMPTS = 2;
+
     private static final double DROP_OFF_RANGE_SQUARED = 2.0 * 2.0;
 
+    private static final double VENT_REACH_SQUARED = 2.5 * 2.5; // close enough to slip into a vent
+
+    /** Abandon the duct shortcut and walk instead if the entry vent is not reached in this long (anti-freeze). */
+    private static final int VENT_LEG_TIMEOUT_TICKS = 200;
+
+    private static final StateKey<Integer> KEY_VENT_LEG_START_TICK = StateKey.sensed("egg_dropoff_vent_leg_start");
+
+    /** Entry vents this hauler could not reach on this run - never offered to it again for this haul. */
+    private static final StateKey<Set<BlockPos>> KEY_FAILED_VENTS = StateKey.sensed("egg_dropoff_failed_vents");
+
+    /**
+     * Set once a hauler has FAILED to walk to a spot. From then on the duct is on the table no matter how near the next
+     * target looks: proximity is what made it choose to walk in the first place, and walking is what failed.
+     */
+    private static final StateKey<Boolean> KEY_WALK_FAILED = StateKey.sensed("egg_dropoff_walk_failed");
+
+    private static final double VENT_WORTHWHILE_DIST_SQUARED = 32.0 * 32.0; // shorter hauls just walk
+
+    /**
+     * The ducted route must beat the direct walk by at least this many blocks to be worth taking. A margin (not just
+     * "any shorter") keeps a hauler from flip-flopping between duct and walk when the two are near-equal.
+     */
+    private static final double VENT_MIN_SHORTCUT_BLOCKS = 8.0;
+
+    private static final int VENT_SEARCH_RADIUS_CHUNKS = 1; // vents within ~a chunk of each endpoint
+
     private static final int SEARCH_RETRY_DELAY_TICKS = 20;
+
+    /**
+     * Consecutive fully-exhausted searches (every bed, host drop, and queen-zone cell refused) before the hauler gives
+     * up and SHELVES the egg where it stands. A couple of empties can be transient - a chamber chunk mid-load, a race
+     * on the last bed - but this many in a row means the hive genuinely has nowhere to put an egg (testers: 24/24 beds
+     * occupied and the queen dead). Rooting the egg at the hauler's feet generalizes the existing "eggs accumulate
+     * around the queen once the nursery is full" rule to the queenless case, and rooting flips canBeHeld() false, so a
+     * shelved egg stops broadcasting pickup requests - no haul-shelve-haul loop.
+     */
+    private static final int SHELVE_AFTER_EXHAUSTED_SEARCHES = 6;
+
+    /**
+     * ⭐⭐ THE EXHAUSTION COUNT LIVES ON THE ENTITY, NOT THE BLACKBOARD, AND THAT IS THE WHOLE FIX.
+     * <p>
+     * It used to be a {@code StateKey.sensed} blackboard value. Sensed keys do not survive the sensor pass between
+     * planning cycles, so every retry read back 0, the counter never reached {@link #SHELVE_AFTER_EXHAUSTED_SEARCHES},
+     * and the shelve safety net below was UNREACHABLE. The symptom in the field is exactly what it looks like: haulers
+     * standing frozen holding eggs, several piled on the same block, logging "Egg haul STUCK" forever. Razorem's log
+     * has 62 STUCK lines from two haulers and **zero** SHELVED lines.
+     * </p>
+     * <p>
+     * ⚠ A WeakHashMap keyed on the entity, deliberately: it outlives the blackboard, costs nothing when the hauler
+     * unloads, and needs no NBT - a reload resetting the count just gives the hive a few more seconds of grace, which
+     * is the correct behaviour anyway.
+     * </p>
+     */
+    private static final java.util.Map<Xenomorph, Integer> EXHAUSTED_SEARCHES = new java.util.WeakHashMap<>();
 
     private static final int MAX_REMEMBERED_FAILED_SPOTS = 32;
 
     private static final int MAX_PATH_VALIDATION_ATTEMPTS = 24;
+
+    private static final int STUCK_TIMEOUT_TICKS = 200; // ~10s pursuing one spot without arriving -> re-pick
 
     private static final int EGG_GRID_SPACING_BLOCKS = 3;
 
@@ -60,58 +147,216 @@ public class DropOffEggAction {
         if (!hasSearched || targetPos == null) {
             var nextSearchTick = blackboard.getOrDefault(KEY_NEXT_SEARCH_TICK, 0);
 
-            if (xenomorph.tickCount < nextSearchTick) {
+            // Entity tickCount RESETS TO 0 when the entity reloads, but the blackboard can still hold a retry tick
+            // from the previous session (e.g. 50000). "tickCount < nextSearchTick" was then true FOREVER: the
+            // hauler bailed out here every tick - never searching, never moving, never logging - and just stood
+            // holding its egg. Anything further out than the retry delay is stale, so search immediately.
+            var waitRemaining = nextSearchTick - xenomorph.tickCount;
+            if (waitRemaining > 0 && waitRemaining <= SEARCH_RETRY_DELAY_TICKS) {
                 return Action.Signal.CONTINUE;
             }
 
             blackboard.set(KEY_HAS_SEARCHED, true);
 
             var failedSpots = getFailedSpots(blackboard);
-            var freeSpot = findFreeEggSpot(
-                xenomorph,
-                xenomorph.level(),
-                xenomorph.blockPosition(),
-                pos -> xenomorph.level().getBlockState(pos).entityCanStandOn(xenomorph.level(), pos, xenomorph),
-                failedSpots
-            );
+            // Amnesty: a large failed set means the whole nursery got poisoned (range quirks, temporary
+            // blockages). Forget and retry rather than falling back to the queen forever.
+            if (failedSpots.size() > 24) {
+                failedSpots.clear();
+            }
+            // STORAGE FIRST: haul the egg to a free bed in an egg chamber while any exists - eggs only accumulate
+            // around the queen (the original spiral search below) once the nursery chambers are full or unreachable.
+            // HOST DELIVERY FIRST: an embedded host awaiting an egg outranks nursery storage - the egg opens in
+            // front of it and the facehugger attaches. Falls through to nursery/spiral when no host needs one.
+            java.util.Optional<net.minecraft.core.BlockPos> hostDrop = java.util.Optional.empty();
+            if (xenomorph.level() instanceof net.minecraft.server.level.ServerLevel hostDropLevel) {
+                var hostDropLocation = resolveLocation(hostDropLevel, xenomorph);
+                var ownEgg = getPassengerOvomorphs(xenomorph).stream().findFirst().orElse(null);
+                if (hostDropLocation != null && ownEgg != null) {
+                    // STAMP FIRST: an egg the ferry (or a previous search) designated for a host cell already KNOWS
+                    // where it is going - no query runs, so nothing else in the hive can hide the destination. Only
+                    // re-validate that the host still wants it; a served/dead host clears the stamp and the egg
+                    // becomes an ordinary nursery haul again.
+                    var stamped = ownEgg.getHostDropTarget();
+                    if (stamped != null) {
+                        if (HostEggDelivery.isHostDropStillValid(hostDropLevel, hostDropLocation, stamped)) {
+                            hostDrop = java.util.Optional.of(stamped);
+                        } else {
+                            ownEgg.setHostDropTarget(null);
+                        }
+                    }
+                    if (hostDrop.isEmpty() && ownEgg.getHostDropTarget() == null) {
+                        // UNSTAMPED egg (e.g. a fresh clutch egg being hauled to the nursery): it may still serve a
+                        // waiting host opportunistically. The carrier-aware query ignores our own egg; a spot another
+                        // hauler is already on its way to is NOT free (three drones once queued on ONE webbed host).
+                        hostDrop = HostEggDelivery.findHostDropForCarrier(hostDropLevel, hostDropLocation, ownEgg)
+                            .filter(spot -> !isClaimedByOther(xenomorph, spot));
+                        // Self-stamp on the spot: from this instant the delivery is visible to the ferry gate and
+                        // every other carrier, so no duplicate egg is released or routed for this cell.
+                        hostDrop.ifPresent(ownEgg::setHostDropTarget);
+                    }
+                }
+            }
+
+            var isHostDrop = hostDrop.isPresent();
+            var freeSpot = isHostDrop
+                ? hostDrop
+                : findChamberBedSpot(xenomorph, failedSpots);
+            var isChamberBed = !isHostDrop && freeSpot.isPresent();
+            if (freeSpot.isEmpty()) {
+                // OVERFLOW: nurseries full/unreachable -> the queen's clutch zone (a bounded patch in FRONT of
+                // her). The old fallback spiralled outward from the HAULER's position, which pushed overflow eggs
+                // into hallways and doorways. The zone is anchored to the queen and eggs can never leave it.
+                freeSpot = findQueenZoneSpot(xenomorph, failedSpots);
+            }
             setFailedSpots(blackboard, failedSpots);
 
             if (freeSpot.isEmpty()) {
+                // Nowhere to put this egg. Report WHY - a hauler frozen holding an egg with no log was the single
+                // hardest thing to troubleshoot in testing.
+                logNoEggDestination(xenomorph, blackboard);
+
+                // AMNESTY ON EXHAUSTION. The size-based amnesty above can only fire while the failed set is still
+                // GROWING - and growth stops at exactly the moment the hauler gets stuck: once every bed is
+                // blacklisted no target is ever chosen, so no new failure is ever recorded. The set froze short of
+                // the threshold (testers saw 14-21 entries against 12-17 genuinely FREE beds) and every retry
+                // re-ran against the same poisoned list, leaving runners standing around holding eggs forever.
+                // Reaching here means nothing at all was accepted, so the blacklist has no value left: drop it and
+                // let the next retry reconsider the whole nursery. Spots that really are bad simply fail again.
+                blackboard.set(KEY_FAILED_SPOTS, List.<BlockPos>of());
+
+                // A FROZEN HAULER IS THE ONE FORBIDDEN OUTCOME. Count consecutive exhausted searches; past the
+                // threshold, root the egg right here and finish - the runner returns to its normal duties and the
+                // egg sits shelved like any nursery-overflow clutch egg until something hatches it or clears it.
+                var exhausted = EXHAUSTED_SEARCHES.merge(xenomorph, 1, Integer::sum);
+                if (exhausted >= SHELVE_AFTER_EXHAUSTED_SEARCHES) {
+                    // ⭐⭐ BANK IT FIRST. [stated] "if there is a bonus or overflow of eggs... they can be banked if
+                    // the bank is capped put them in anyway as a bonus." An egg in the reserve is a real asset the
+                    // hive spends later; an egg rooted on the floor is litter nothing ever collects. So the shelf
+                    // below is now only the LAST resort - when the reserve refuses the egg outright.
+                    if (bankOverflowEgg(xenomorph)) {
+                        EXHAUSTED_SEARCHES.remove(xenomorph);
+                        return Action.Signal.ABORT;
+                    }
+
+                    var shelf = findShelfSpot(xenomorph);
+                    placeEggs(xenomorph, shelf);
+                    com.alien.Alien.LOGGER.info(
+                        "Egg haul SHELVED at {}: no destination after {} exhausted searches - egg rooted in place, "
+                            + "hauler released.",
+                        BlockPos.containing(shelf),
+                        exhausted
+                    );
+                    EXHAUSTED_SEARCHES.remove(xenomorph);
+                    return Action.Signal.ABORT;
+                }
+
                 scheduleSearchRetry(blackboard, xenomorph.tickCount);
                 return Action.Signal.CONTINUE;
             }
 
+            // A destination exists again - the drought is over, so the shelve countdown starts fresh.
+            EXHAUSTED_SEARCHES.remove(xenomorph);
+
+            // Ours now - other haulers will look elsewhere. The claim expires by itself if we never arrive.
+            claimSpot(xenomorph, freeSpot.get());
             targetPos = freeSpot.get().getCenter();
             blackboard.set(KEY_TARGET_POS, targetPos);
+            blackboard.set(KEY_TARGET_SET_TICK, xenomorph.tickCount);
+            if (isChamberBed || isHostDrop) {
+                planVentLeg(xenomorph, freeSpot.get(), blackboard);
+            }
         }
 
         if (targetPos == null) {
             return Action.Signal.ABORT;
         }
 
+        // Duct leg: while an entry vent is planned, head there first; on reaching it the drone (egg riding
+        // along) duct-travels to the exit vent near the chamber, and the normal walk to the bed resumes from
+        // there. Any pathing trouble on this leg just abandons the duct and walks the whole way.
+        var ventEntry = blackboard.getOrDefault(KEY_VENT_ENTRY, (BlockPos) null);
+        if (ventEntry != null) {
+            // Approach a STANDABLE spot beside/below the vent, never the vent block itself: vents sit IN walls,
+            // often 2-3 blocks up, so a hauler pathing at the vent centre can never reach it - NeoMoveToPos
+            // returned MOVING forever and the drone stood frozen holding its egg with a perfectly valid target.
+            var ventApproach = HiveVents.emergencePosNear(xenomorph.level(), ventEntry);
+            var ventTarget = ventApproach != null
+                ? Vec3.atBottomCenterOf(ventApproach)
+                : Vec3.atCenterOf(ventEntry);
+            var ventResult = NeoMoveToPosAction.perform(context, ventTarget, 0.5);
+            if (xenomorph.distanceToSqr(ventTarget) <= VENT_REACH_SQUARED) {
+                var ventExit = blackboard.getOrDefault(KEY_VENT_EXIT, (BlockPos) null);
+                blackboard.set(KEY_VENT_ENTRY, (BlockPos) null);
+                blackboard.set(KEY_VENT_EXIT, (BlockPos) null);
+                NeoMoveToPosAction.onFinish(context);
+                if (ventExit != null) {
+                    HiveVents.ductTravel(xenomorph, ventEntry, ventExit);
+                }
+                return Action.Signal.CONTINUE;
+            }
+            // Give up on the duct if the entry vent is not reached in time: a hauler must never be trapped by its
+            // own shortcut. Falls through to walking the whole way.
+            var ventLegStart = blackboard.getOrDefault(KEY_VENT_LEG_START_TICK, xenomorph.tickCount);
+            blackboard.set(KEY_VENT_LEG_START_TICK, ventLegStart);
+            var ventLegElapsed = xenomorph.tickCount - ventLegStart;
+            if (ventLegElapsed < 0 || ventLegElapsed > VENT_LEG_TIMEOUT_TICKS) {
+                // Could not reach this entry vent (blocked, unreachable, bad geometry). Blacklist it for this
+                // haul and re-plan onto the NEXT-nearest vent rather than abandoning the shortcut outright -
+                // one bad vent should not cost the hauler its duct. Only when no usable vent remains does it walk.
+                var failedVents = getFailedVents(blackboard);
+                failedVents.add(ventEntry);
+                setFailedVents(blackboard, failedVents);
+                blackboard.set(KEY_VENT_ENTRY, (BlockPos) null);
+                blackboard.set(KEY_VENT_EXIT, (BlockPos) null);
+                blackboard.set(KEY_VENT_LEG_START_TICK, xenomorph.tickCount);
+                NeoMoveToPosAction.onFinish(context);
+                planVentLeg(xenomorph, BlockPos.containing(targetPos), blackboard);
+                return Action.Signal.CONTINUE;
+            }
+            switch (ventResult) {
+                case MOVING -> { /* still walking to the vent */ }
+                default -> {
+                    blackboard.set(KEY_VENT_ENTRY, (BlockPos) null);
+                    blackboard.set(KEY_VENT_EXIT, (BlockPos) null);
+                    NeoMoveToPosAction.onFinish(context);
+                }
+            }
+            return Action.Signal.CONTINUE;
+        }
+
         var result = NeoMoveToPosAction.perform(context, targetPos, 0.5);
+        var arrived = xenomorph.distanceToSqr(targetPos) <= DROP_OFF_RANGE_SQUARED;
 
         return switch (result) {
-            case FINISHED, MOVING -> {
-                if (xenomorph.distanceToSqr(targetPos) <= DROP_OFF_RANGE_SQUARED) {
-                    placeEggs(xenomorph, targetPos);
-                    yield Action.Signal.CONTINUE;
+            case MOVING -> {
+                if (arrived) {
+                    yield arriveAtTarget(context, xenomorph, blackboard, targetPos);
                 }
-
+                // Wedged against another hauler, or orbiting a node it can't quite reach: after a generous window
+                // give up on this spot and pick a different bed instead of freezing here holding the egg forever.
+                if (isTargetStale(blackboard, xenomorph.tickCount)) {
+                    // Could not WALK there in time. Unlock the duct for the rest of this haul: a nursery or host
+                    // chamber only a short way off can still be unreachable on foot (a dead-end room, a wall, a
+                    // drop), and simply re-picking another NEARBY spot walks straight back into the same trap.
+                    // Carriers were filing into a dead-end room beside the queen and standing there forever,
+                    // never reconsidering the vents, because proximity ruled ducting out before they set off.
+                    blackboard.set(KEY_WALK_FAILED, true);
+                    yield abandonTarget(context, blackboard, targetPos, xenomorph.tickCount);
+                }
                 yield Action.Signal.CONTINUE;
             }
-            case NO_PATH -> {
-                rememberFailedSpot(blackboard, BlockPos.containing(targetPos));
-                scheduleSearchRetry(blackboard, xenomorph.tickCount);
-                NeoMoveToPosAction.onFinish(context);
-                yield Action.Signal.CONTINUE;
+            case FINISHED -> {
+                if (arrived) {
+                    yield arriveAtTarget(context, xenomorph, blackboard, targetPos);
+                }
+                // Navigation completed but the drone is still short of the bed - the path was truncated (bed boxed
+                // in, or another drone/egg blocking the final step). Without this branch the drone re-finishes every
+                // tick and freezes holding the egg. Blacklist the spot and re-search.
+                yield abandonTarget(context, blackboard, targetPos, xenomorph.tickCount);
             }
-            default -> {
-                rememberFailedSpot(blackboard, BlockPos.containing(targetPos));
-                scheduleSearchRetry(blackboard, xenomorph.tickCount);
-                NeoMoveToPosAction.onFinish(context);
-                yield Action.Signal.CONTINUE;
-            }
+            case NO_PATH -> abandonTarget(context, blackboard, targetPos, xenomorph.tickCount);
+            default -> abandonTarget(context, blackboard, targetPos, xenomorph.tickCount);
         };
     }
 
@@ -119,10 +364,117 @@ public class DropOffEggAction {
         NeoMoveToPosAction.onFinish(context);
     }
 
+    /** Root the carried egg(s) at the target, unless another drone claimed the spot mid-approach (then re-search). */
+    private static Action.Signal arriveAtTarget(
+        Action.Context<? extends Xenomorph> context,
+        Xenomorph xenomorph,
+        Blackboard blackboard,
+        Vec3 targetPos
+    ) {
+        if (isSpotTaken(xenomorph, targetPos)) {
+            return abandonTarget(context, blackboard, targetPos, xenomorph.tickCount);
+        }
+        placeEggs(xenomorph, targetPos);
+        EggSpotClaims.release(BlockPos.containing(targetPos)); // delivered - release the reservation
+        blackboard.set(KEY_WALK_FAILED, false); // delivered - stop forcing the duct
+        blackboard.set(KEY_STAMP_ATTEMPTS, 0); // delivered - the next stamped haul starts with a clean slate
+        blackboard.set(KEY_BED_ATTEMPTS, 0); // delivered - the next bed starts with its full retry budget
+        return Action.Signal.CONTINUE;
+    }
+
+    /** Give up on the current target: blacklist it, clear the search so a fresh spot is picked, stop navigating. */
+    private static Action.Signal abandonTarget(
+        Action.Context<? extends Xenomorph> context,
+        Blackboard blackboard,
+        Vec3 targetPos,
+        int currentTick
+    ) {
+        var target = BlockPos.containing(targetPos);
+        // A STAMPED host delivery is not given up lightly: early abandons keep the cell OFF the failed list so the
+        // re-search re-picks it (with the vents now unlocked via KEY_WALK_FAILED). Only after the attempt cap does
+        // the stamp clear - the egg goes to a nursery and the ferry re-serves the host after its cooldown.
+        var stampedEgg = getPassengerOvomorphs(context.getActor())
+            .stream()
+            .filter(egg -> target.equals(egg.getHostDropTarget()))
+            .findFirst()
+            .orElse(null);
+        if (stampedEgg != null) {
+            var attempts = blackboard.getOrDefault(KEY_STAMP_ATTEMPTS, 0) + 1;
+            blackboard.set(KEY_STAMP_ATTEMPTS, attempts);
+            if (attempts < STAMP_MAX_ATTEMPTS) {
+                EggSpotClaims.release(target); // giving up this leg - but NOT the delivery
+                scheduleSearchRetry(blackboard, currentTick);
+                NeoMoveToPosAction.onFinish(context);
+                return Action.Signal.CONTINUE;
+            }
+            stampedEgg.setHostDropTarget(null);
+            blackboard.set(KEY_STAMP_ATTEMPTS, 0);
+        }
+        // NURSERY BED, WALK FAILED: give the DUCT its turn before writing the bed off. KEY_WALK_FAILED was just
+        // set, which unlocks ducting for this haul - but blacklisting the bed in the same breath meant the
+        // re-search could never pick it again, so the ducted route to THAT bed was never attempted. Only stamped
+        // host deliveries got the retry the design intended; ordinary nursery hauls were written off on the first
+        // failed walk. A bed that is unreachable on foot but fine through the hive's own ducts therefore poisoned
+        // the failed list one entry at a time until nothing was left to choose.
+        var walkFailed = blackboard.getOrDefault(KEY_WALK_FAILED, false);
+        var bedAttempts = blackboard.getOrDefault(KEY_BED_ATTEMPTS, 0) + 1;
+        if (walkFailed && bedAttempts < BED_MAX_ATTEMPTS) {
+            blackboard.set(KEY_BED_ATTEMPTS, bedAttempts);
+            EggSpotClaims.release(target); // release the claim, but keep the bed selectable
+            scheduleSearchRetry(blackboard, currentTick);
+            NeoMoveToPosAction.onFinish(context);
+            return Action.Signal.CONTINUE;
+        }
+        blackboard.set(KEY_BED_ATTEMPTS, 0);
+
+        rememberFailedSpot(blackboard, target);
+        EggSpotClaims.release(target); // giving up - let another hauler have it
+        scheduleSearchRetry(blackboard, currentTick);
+        NeoMoveToPosAction.onFinish(context);
+        return Action.Signal.CONTINUE;
+    }
+
+    /** True once the drone has been pursuing the current target longer than the stuck window without arriving. */
+    private static boolean isTargetStale(Blackboard blackboard, int currentTick) {
+        var setTick = blackboard.getOrDefault(KEY_TARGET_SET_TICK, currentTick);
+        // A set-tick in the FUTURE means the entity reloaded and its tickCount reset. Treat the target as stale
+        // instead of letting it live forever, which froze haulers holding eggs across a relog.
+        if (setTick > currentTick) {
+            return true;
+        }
+        return currentTick - setTick > STUCK_TIMEOUT_TICKS;
+    }
+
+    /** True when another ovomorph already occupies (or a race just claimed) the spot - the caller re-searches. */
+    private static boolean isClaimedByOther(Xenomorph xenomorph, BlockPos spot) {
+        if (!(xenomorph.level() instanceof ServerLevel serverLevel)) {
+            return false;
+        }
+        return EggSpotClaims.isClaimedByOther(serverLevel, spot, xenomorph.getUUID());
+    }
+
+    private static void claimSpot(Xenomorph xenomorph, BlockPos spot) {
+        if (xenomorph.level() instanceof ServerLevel serverLevel) {
+            EggSpotClaims.claim(serverLevel, spot, xenomorph.getUUID());
+        }
+    }
+
+    private static boolean isSpotTaken(Xenomorph xenomorph, Vec3 center) {
+        var box = new AABB(center.x - 0.6, center.y - 0.5, center.z - 0.6, center.x + 0.6, center.y + 1.5, center.z + 0.6);
+        return !xenomorph.level()
+            .getEntitiesOfClass(
+                Ovomorph.class,
+                box,
+                e -> e.isAlive() && e.getVehicle() != xenomorph
+            )
+            .isEmpty();
+    }
+
     private static void placeEggs(Xenomorph xenomorph, Vec3 center) {
         getPassengerOvomorphs(xenomorph).forEach(ovomorph -> {
             xenomorph.level()
                 .playSound(null, ovomorph, AlienSoundEvents.ENTITY_OVOMORPH_ROOT.get(), SoundSource.HOSTILE, 1.0F, 1.0F);
+            ovomorph.setHostDropTarget(null); // rooted = no longer in transit, wherever it landed
             ovomorph.isRooted.set(true);
             ovomorph.stopRiding();
             ovomorph.setPos(center.x, center.y, center.z);
@@ -138,6 +490,102 @@ public class DropOffEggAction {
         });
     }
 
+    /**
+     * ⭐⭐ BANKS A HELD EGG THE NURSERY HAS NO BED FOR, and DELIBERATELY IGNORES `RESERVE_EGG_CAP`.
+     * <p>
+     * [stated] "if the bank is capped put them in anyway as a bonus." `HiveLocationReserves.tryAdd` is itself uncapped
+     * - the 100-egg ceiling lives only in the LAYING sensor, which decides whether the queen should keep producing.
+     * That separation is exactly right here: the queen must stop at the cap, but an egg that ALREADY exists and is
+     * being carried around should never be thrown away for being over it.
+     * </p>
+     * <p>
+     * ⚠ THE CARRIED OVOMORPHS ARE DISCARDED, NOT DROPPED. They are becoming an abstract reserve entry - leaving the
+     * entities in the world as well would duplicate them.
+     * </p>
+     * <p>
+     * ⚠ RETURNS FALSE FOR AN END-STYLE HIVE or a variant mismatch, and the caller falls back to shelving. [stated] "no
+     * eggs only adults in the end" - so an End hive genuinely cannot bank one.
+     * </p>
+     */
+    private static boolean bankOverflowEgg(Xenomorph xenomorph) {
+        if (!(xenomorph.level() instanceof ServerLevel serverLevel)) {
+            return false;
+        }
+
+        var location = resolveLocation(serverLevel, xenomorph);
+
+        if (location == null || location.isEndStyleHive()) {
+            return false;
+        }
+
+        var carried = xenomorph.getPassengers()
+            .stream()
+            .filter(passenger -> passenger instanceof Ovomorph)
+            .map(passenger -> (Ovomorph) passenger)
+            .toList();
+
+        if (carried.isEmpty()) {
+            return false;
+        }
+
+        var banked = 0;
+
+        for (var ovomorph : carried) {
+            if (!location.localReserves().tryAdd(ovomorph.getType(), 1)) {
+                continue;
+            }
+
+            ovomorph.stopRiding();
+            ovomorph.discard();
+            banked++;
+        }
+
+        if (banked <= 0) {
+            return false;
+        }
+
+        com.alien.Alien.LOGGER.info(
+            "Egg haul BANKED at {}: nursery full, {} egg(s) added to the reserve (over cap is allowed) - hauler released.",
+            xenomorph.blockPosition(),
+            banked
+        );
+        return true;
+    }
+
+    /**
+     * Where to root an egg the hive has no home for: the hauler's own feet when nothing else claims that spot,
+     * otherwise the first free horizontal neighbor with solid footing. Falls back to the feet even when crowded - two
+     * overlapping shelved eggs beat one eternally frozen hauler.
+     */
+    private static Vec3 findShelfSpot(Xenomorph xenomorph) {
+        var feet = xenomorph.blockPosition();
+        var level = xenomorph.level();
+        var candidates = new BlockPos[] {
+            feet,
+            feet.north(),
+            feet.south(),
+            feet.east(),
+            feet.west(),
+            feet.north().east(),
+            feet.north().west(),
+            feet.south().east(),
+            feet.south().west()
+        };
+        for (var candidate : candidates) {
+            if (!level.getBlockState(candidate.below()).isSolid()) {
+                continue;
+            }
+            if (!level.getBlockState(candidate).getCollisionShape(level, candidate).isEmpty()) {
+                continue;
+            }
+            var center = Vec3.atBottomCenterOf(candidate);
+            if (!isSpotTaken(xenomorph, center)) {
+                return center;
+            }
+        }
+        return Vec3.atBottomCenterOf(feet);
+    }
+
     private static boolean isCarryingOvomorph(Xenomorph xenomorph) {
         return !getPassengerOvomorphs(xenomorph).isEmpty();
     }
@@ -148,6 +596,220 @@ public class DropOffEggAction {
             .filter(passenger -> passenger instanceof Ovomorph)
             .map(passenger -> (Ovomorph) passenger)
             .toList();
+    }
+
+    /**
+     * Plans the duct leg for a long chamber haul: nearest vent to the drone as entry, nearest vent to the bed as exit -
+     * only when both exist, differ, the walk is long enough to be worth it, and the exit genuinely shortens the
+     * remaining trip.
+     */
+    private static Set<BlockPos> getFailedVents(Blackboard blackboard) {
+        var failed = blackboard.getOrDefault(KEY_FAILED_VENTS, (Set<BlockPos>) null);
+        return failed == null ? new HashSet<>() : new HashSet<>(failed);
+    }
+
+    private static void setFailedVents(Blackboard blackboard, Set<BlockPos> failedVents) {
+        blackboard.set(KEY_FAILED_VENTS, failedVents);
+    }
+
+    /**
+     * Delegates to the shared planner. The walk-failed override survives as the {@code ignoreProximity} flag: once a
+     * walk to the bed has failed, the duct stops being an optimisation and becomes the only route left, so the
+     * worthwhile-distance test must not veto it.
+     */
+    private static void planVentLeg(Xenomorph xenomorph, BlockPos bed, Blackboard blackboard) {
+        var walkFailed = blackboard.getOrDefault(KEY_WALK_FAILED, false);
+
+        HiveVents.planInteriorLeg(xenomorph, bed, walkFailed).ifPresent(leg -> {
+            blackboard.set(KEY_VENT_ENTRY, leg.entry());
+            blackboard.set(KEY_VENT_EXIT, leg.exit());
+        });
+    }
+
+    /**
+     * The nearest free, reachable egg-chamber bed in the drone's hive: chambers sorted by distance, beds read from the
+     * tendril-floor slots, a bed counting as free when no rooted ovomorph sits on it. Unreachable beds join the
+     * failed-spot memory so retries skip them; empty result means the nursery is full/absent and the caller falls back
+     * to the around-the-queen spiral.
+     */
+    /** A free cell in the queen's clutch zone (bounded patch in front of her), nearest to her first. */
+    private static Optional<BlockPos> findQueenZoneSpot(Xenomorph xenomorph, Set<BlockPos> failedSpots) {
+        if (!(xenomorph.level() instanceof ServerLevel serverLevel)) {
+            return Optional.empty();
+        }
+        var location = resolveLocation(serverLevel, xenomorph);
+        if (location == null || location.founderId() == null) {
+            return Optional.empty();
+        }
+        var queen = serverLevel.getEntity(location.founderId()) instanceof Queen q ? q : null;
+        if (queen == null) {
+            return Optional.empty();
+        }
+        for (var pos : QueenEggZone.candidates(serverLevel, queen)) {
+            // Claim check inside the loop for the same reason as the bed search above - one claimed cell must
+            // not hide the other forty.
+            if (failedSpots.contains(pos) || isClaimedByOther(xenomorph, pos)) {
+                continue;
+            }
+            return Optional.of(pos);
+        }
+        return Optional.empty();
+    }
+
+    /**
+     * The hive this hauler belongs to. getByChunk only resolves CLAIMED chunks, so a hauler standing a chunk outside
+     * the claim (or in a not-yet-claimed pocket) resolved to null - every destination search then came back empty and
+     * the drone froze holding its egg. Fall back to the nearest hive in this dimension.
+     */
+    /** Blackboard key: last tick we logged a "nowhere to put this egg" diagnostic (rate limit). */
+    private static final StateKey<Integer> KEY_LAST_NO_DEST_LOG = StateKey.sensed("egg_no_destination_log_tick");
+
+    private static final int NO_DEST_LOG_INTERVAL_TICKS = 200; // at most once per 10s per hauler
+
+    /**
+     * Explain why a hauler holding an egg has nowhere to put it: which of the three destinations (host drop, nursery
+     * bed, queen clutch zone) refused, and the counts behind each refusal.
+     */
+    private static void logNoEggDestination(Xenomorph xenomorph, Blackboard blackboard) {
+        int now = xenomorph.tickCount;
+        int last = blackboard.getOrDefault(KEY_LAST_NO_DEST_LOG, -NO_DEST_LOG_INTERVAL_TICKS - 1);
+        // NB: do NOT default to Integer.MIN_VALUE - (now - MIN_VALUE) OVERFLOWS to a negative number, which is
+        // always < the interval, so this rate-limiter silently suppressed the diagnostic FOREVER.
+        if (last <= now && now - last < NO_DEST_LOG_INTERVAL_TICKS) {
+            return;
+        }
+        blackboard.set(KEY_LAST_NO_DEST_LOG, now);
+
+        if (!(xenomorph.level() instanceof ServerLevel serverLevel)) {
+            return;
+        }
+        var location = resolveLocation(serverLevel, xenomorph);
+        if (location == null) {
+            com.alien.Alien.LOGGER.info(
+                "Egg haul STUCK: {} at {} is holding an egg but belongs to NO hive location.",
+                xenomorph.getType().getDescriptionId(),
+                xenomorph.blockPosition()
+            );
+            return;
+        }
+
+        int eggChambers = 0;
+        int freeBeds = 0;
+        int occupiedBeds = 0;
+        int unloadedChambers = 0;
+        for (var entry : location.structurePieceByChunk().entrySet()) {
+            if (!entry.getValue().contains("chamber_egg")) {
+                continue;
+            }
+            eggChambers++;
+            var chamber = entry.getKey();
+            if (!serverLevel.isLoaded(chamber.getWorldPosition())) {
+                unloadedChambers++;
+                continue;
+            }
+            for (var bed : HiveChamberSlots.eggBedSlots(serverLevel, location, chamber)) {
+                if (isBedOccupied(serverLevel, bed)) {
+                    occupiedBeds++;
+                } else {
+                    freeBeds++;
+                }
+            }
+        }
+
+        var failedSpots = getFailedSpots(blackboard);
+        Queen queen = null;
+        if (location.founderId() != null && serverLevel.getEntity(location.founderId()) instanceof Queen q) {
+            queen = q;
+        }
+        int queenZoneFree = queen == null ? -1 : QueenEggZone.candidates(serverLevel, queen).size();
+
+        com.alien.Alien.LOGGER.info(
+            "Egg haul STUCK at {}: hive {} has {} egg chamber(s) ({} unloaded), {} free bed(s), {} occupied; "
+                + "queen clutch zone has {} free cell(s) (queen {}); {} spot(s) on this hauler's failed list. "
+                + "No destination accepted the egg.",
+            xenomorph.blockPosition(),
+            location.id(),
+            eggChambers,
+            unloadedChambers,
+            freeBeds,
+            occupiedBeds,
+            queenZoneFree,
+            queen == null ? "MISSING" : "alive",
+            failedSpots.size()
+        );
+    }
+
+    private static com.alien.common.gameplay.hive.location.HiveLocation resolveLocation(
+        ServerLevel serverLevel,
+        Xenomorph xenomorph
+    ) {
+        var byChunk = HiveLocationRegistry.INSTANCE.getByChunk(
+            serverLevel.dimension(),
+            xenomorph.chunkPosition()
+        );
+        if (byChunk != null) {
+            return byChunk;
+        }
+        return HiveLocationRegistry.INSTANCE.findNearestInDim(
+            serverLevel.dimension(),
+            xenomorph.blockPosition()
+        );
+    }
+
+    private static Optional<BlockPos> findChamberBedSpot(Xenomorph xenomorph, Set<BlockPos> failedSpots) {
+        if (!(xenomorph.level() instanceof ServerLevel serverLevel)) {
+            return Optional.empty();
+        }
+        var location = resolveLocation(serverLevel, xenomorph);
+        if (location == null) {
+            return Optional.empty();
+        }
+        var chambers = new ArrayList<ChunkPos>();
+        for (var entry : location.structurePieceByChunk().entrySet()) {
+            if (entry.getValue().contains("chamber_egg")) {
+                chambers.add(entry.getKey());
+            }
+        }
+        if (chambers.isEmpty()) {
+            return Optional.empty();
+        }
+        var here = xenomorph.chunkPosition();
+        chambers.sort(Comparator.comparingInt(c -> Math.max(Math.abs(c.x - here.x), Math.abs(c.z - here.z))));
+
+        for (var chamber : chambers) {
+            if (!serverLevel.isLoaded(chamber.getWorldPosition())) {
+                continue;
+            }
+            for (var bed : HiveChamberSlots.eggBedSlots(serverLevel, location, chamber)) {
+                // The claim check MUST live inside this loop. It used to be a .filter() on the returned
+                // Optional at the call site, which meant that if the single nearest free bed happened to be
+                // claimed by another hauler the whole search collapsed to empty - with two dozen other free
+                // beds untouched. Worse, the rejected bed was never TARGETED, so it never entered failedSpots,
+                // so the next retry picked the same bed and failed the same way. Every hauler converging on one
+                // nursery livelocked together and shelved its egg where it stood. Razorem: eggs rooted on top of
+                // each other while the log reported 25 free beds and 0 spots on the failed list.
+                if (failedSpots.contains(bed) || isBedOccupied(serverLevel, bed) || isClaimedByOther(xenomorph, bed)) {
+                    continue;
+                }
+                // NO path pre-check: the navigator's follow-range makes distant beds read "unreachable" at
+                // search time even though the walk (or the vent duct) handles them fine - the pre-check was
+                // poisoning every bed into the failed set and stranding all eggs at the queen. Real navigation
+                // failures still land in failedSpots through the NO_PATH branch.
+                return Optional.of(bed);
+            }
+        }
+        return Optional.empty();
+    }
+
+    /** A bed is occupied while a rooted ovomorph sits within a block of it. */
+    private static boolean isBedOccupied(ServerLevel level, BlockPos bed) {
+        var center = bed.getCenter();
+        var box = new AABB(center.x - 1.0, bed.getY() - 1.0, center.z - 1.0, center.x + 1.0, bed.getY() + 2.0, center.z + 1.0);
+        return !level.getEntitiesOfClass(
+            Ovomorph.class,
+            box,
+            entity -> entity.getType().is(AlienEntityTypeTags.OVOMORPHS) && entity.isRooted.get()
+        ).isEmpty();
     }
 
     private static Optional<BlockPos> findFreeEggSpot(

@@ -1,5 +1,5 @@
 {
-  "parent": "avp_alien:aliens/kill_a_royal_alien",
+  "parent": "avp_alien:aliens/kill_a_lineage",
   "criteria": {
     "avp_alien:nether_adolescent": {
       "conditions": {

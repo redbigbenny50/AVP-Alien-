@@ -91,6 +91,17 @@ public class CryForHelpListener implements GameEventListener {
         if (location == null || !location.isAlive()) {
             return false;
         }
+        if (location.isInCombatRespite()) {
+            return false;
+        }
+
+        // Strain gate: a vent only answers cries from ITS OWN strain. Without this, an alien crying for help next
+        // to a RIVAL strain's hive would summon that hive's defenders to its rescue - strains are always hostile to
+        // one another and never come to each other's aid.
+        var crierVariantType = AlienVariantTypes.getForOrNull(sourceEntity);
+        if (crierVariantType == null || !java.util.Objects.equals(location.lineageVariantOrNull(), crierVariantType.variant())) {
+            return false;
+        }
 
         // Cap concurrent helpers per location.
         var loadedXenomorphCount = location.loadedMembersByType()

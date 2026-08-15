@@ -1,28 +1,22 @@
 package com.alien.common.data.loot;
 
-import com.alien.common.registry.init.item.AlienItems;
 import net.minecraft.core.HolderLookup;
-import net.minecraft.world.level.storage.loot.LootPool;
 import net.minecraft.world.level.storage.loot.LootTable;
-import net.minecraft.world.level.storage.loot.entries.LootItem;
-import net.minecraft.world.level.storage.loot.functions.EnchantedCountIncreaseFunction;
-import net.minecraft.world.level.storage.loot.functions.SetItemCountFunction;
-import net.minecraft.world.level.storage.loot.providers.number.ConstantValue;
-import net.minecraft.world.level.storage.loot.providers.number.UniformGenerator;
 
+/**
+ * The ovipositor drops NOTHING.
+ * <p>
+ * It used to hand over 2-4 raw royal jelly, which made it a renewable jelly source rather than a piece of the queen:
+ * her eggsack can be cut away and she grows another, so the table paid out again every time. Jelly is meant to come off
+ * royalty that had to be killed for it.
+ * <p>
+ * The table is still registered, empty, rather than removed - {@code getDefaultLootTable()} would otherwise point at a
+ * table that does not exist. The {@code provider} parameter is kept so this matches every sibling loot table's shape.
+ */
 public class OvipositorLootTable {
 
     public static LootTable.Builder create(HolderLookup.Provider provider) {
-        return LootTable.lootTable()
-            .withPool(
-                LootPool.lootPool()
-                    .setRolls(ConstantValue.exactly(1))
-                    .add(
-                        LootItem.lootTableItem(AlienItems.RAW_ROYAL_JELLY.get())
-                            .apply(SetItemCountFunction.setCount(UniformGenerator.between(2, 4)))
-                            .apply(EnchantedCountIncreaseFunction.lootingMultiplier(provider, UniformGenerator.between(0, 1)))
-                    )
-            );
+        return LootTable.lootTable();
     }
 
     private OvipositorLootTable() {

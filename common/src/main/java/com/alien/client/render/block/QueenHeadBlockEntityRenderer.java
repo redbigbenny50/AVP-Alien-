@@ -81,15 +81,14 @@ public class QueenHeadBlockEntityRenderer implements BlockEntityRenderer<QueenHe
             return;
         }
 
-        // Flip BLib's wall-block flag so the geo-bone item renderer picks `.fixedWall(...)` instead of
-        // the floor `.fixed(...)` when this stack flows through the FIXED display context. Wrapped in
-        // try/finally so an exception in renderStatic doesn't leave the flag stuck on for subsequent
-        // renders this frame.
+        // Flip BLib's fixed-surface flags so the geo-bone item renderer picks the block-placement transform that
+        // matches
+        // this render. Wrapped in try/finally so an exception in renderStatic doesn't leak the flag to later renders.
         var mc = Minecraft.getInstance();
-
-        if (isWall) {
-            BLibItemTransformOverrides.setRenderAsWallBlock(true);
-        }
+        var priorWall = BLibItemTransformOverrides.isRenderAsWallBlock();
+        var priorGround = BLibItemTransformOverrides.isRenderAsGroundBlock();
+        BLibItemTransformOverrides.setRenderAsWallBlock(isWall);
+        BLibItemTransformOverrides.setRenderAsGroundBlock(!isWall);
 
         try {
             mc.getItemRenderer()
@@ -104,9 +103,8 @@ public class QueenHeadBlockEntityRenderer implements BlockEntityRenderer<QueenHe
                     0
                 );
         } finally {
-            if (isWall) {
-                BLibItemTransformOverrides.setRenderAsWallBlock(false);
-            }
+            BLibItemTransformOverrides.setRenderAsWallBlock(priorWall);
+            BLibItemTransformOverrides.setRenderAsGroundBlock(priorGround);
         }
 
         poseStack.popPose();

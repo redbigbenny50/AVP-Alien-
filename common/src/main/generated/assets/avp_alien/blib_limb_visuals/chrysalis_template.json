@@ -1,0 +1,72 @@
+{
+  "visuals": {
+    "avp_alien:chrysalis_head": {
+      "render_offset": [
+        0.0,
+        0.125,
+        0.0
+      ],
+      "root_bone": "gHead"
+    },
+    "avp_alien:chrysalis_left_arm": {
+      "render_offset": [
+        0.0,
+        0.25,
+        0.0
+      ],
+      "render_rotation": [
+        -135.0,
+        0.0,
+        0.0
+      ],
+      "root_bone": "gLeftShoulder"
+    },
+    "avp_alien:chrysalis_left_leg": {
+      "render_offset": [
+        0.0,
+        0.5,
+        0.0
+      ],
+      "render_rotation": [
+        -90.0,
+        0.0,
+        0.0
+      ],
+      "root_bone": "gLeftLeg"
+    },
+    "avp_alien:chrysalis_right_arm": {
+      "render_offset": [
+        0.0,
+        0.25,
+        0.0
+      ],
+      "render_rotation": [
+        -135.0,
+        0.0,
+        0.0
+      ],
+      "root_bone": "gRightShoulder"
+    },
+    "avp_alien:chrysalis_right_leg": {
+      "render_offset": [
+        0.0,
+        0.5,
+        0.0
+      ],
+      "render_rotation": [
+        -90.0,
+        0.0,
+        0.0
+      ],
+      "root_bone": "gRightLeg"
+    },
+    "avp_alien:chrysalis_tail": {
+      "render_offset": [
+        0.0,
+        0.65,
+        0.0
+      ],
+      "root_bone": "gTail1"
+    }
+  }
+}

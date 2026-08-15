@@ -1,0 +1,16 @@
+{
+  "variants": {
+    "axis=x": {
+      "model": "avp_alien:block/resin_doorway_horizontal",
+      "x": 90,
+      "y": 90
+    },
+    "axis=y": {
+      "model": "avp_alien:block/resin_doorway"
+    },
+    "axis=z": {
+      "model": "avp_alien:block/resin_doorway_horizontal",
+      "x": 90
+    }
+  }
+}

@@ -9,6 +9,8 @@ public class AlienCreativeModeTabKeys {
 
     public static final ResourceKey<CreativeModeTab> BLOCKS_KEY = createResourceKey("alien_blocks");
 
+    public static final ResourceKey<CreativeModeTab> FUNCTIONAL_BLOCKS_KEY = createResourceKey("alien_functional_blocks");
+
     public static final ResourceKey<CreativeModeTab> COMBAT_KEY = createResourceKey("alien_combat");
 
     public static final ResourceKey<CreativeModeTab> INGREDIENTS_KEY = createResourceKey("alien_ingredients");

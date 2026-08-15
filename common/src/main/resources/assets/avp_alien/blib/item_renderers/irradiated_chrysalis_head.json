@@ -1,0 +1,4 @@
+{
+  "parent": "avp_alien:templates/chrysalis_head_trophy",
+  "texture": "avp_alien:textures/entity/irradiated_chrysalis.png"
+}

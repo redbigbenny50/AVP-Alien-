@@ -13,7 +13,20 @@ public class AlienEntityTypeTags {
 
     public static final TagKey<EntityType<?>> ADOLESCENTS = create("adolescents");
 
+    /**
+     * ⭐ WHAT AN ADOLESCENT WILL HUNT. [stated] "chickens, cats, axolotls, baby animals, a fox is the largest thing they
+     * would probably try to eat."
+     * <p>
+     * A SIZE ceiling, not a strength one - nothing belongs here for being weak. Baby animals are handled in code rather
+     * than listed, because the rule has to hold for species whose adults are far too big.
+     * </p>
+     */
+    public static final TagKey<EntityType<?>> JUVENILE_PREY = create("juvenile_prey");
+
     public static final TagKey<EntityType<?>> ALIENS = create("aliens");
+
+    /** Mobs the capture chain refuses to grab or chain — bosses and the like. Datapack-overridable. */
+    public static final TagKey<EntityType<?>> CAPTURE_CHAIN_BLACKLIST = create("capture_chain_blacklist");
 
     public static final TagKey<EntityType<?>> ANSWERS_XENOMORPH_CRIES_FOR_HELP = create("answers_xenomorph_cries_for_help");
 
@@ -40,6 +53,12 @@ public class AlienEntityTypeTags {
     public static final TagKey<EntityType<?>> HOSTS = create("hosts");
 
     public static final TagKey<EntityType<?>> IGNORED_BY_XENOMORPHS = create("ignored_by_xenomorphs");
+
+    public static final TagKey<EntityType<?>> XENOMORPH_THREAT_1_PASSIVE = create("xenomorph_threat_1_passive");
+
+    public static final TagKey<EntityType<?>> XENOMORPH_THREAT_2_LOW_DANGER = create("xenomorph_threat_2_low_danger");
+
+    public static final TagKey<EntityType<?>> XENOMORPH_THREAT_3_HIGH_DANGER = create("xenomorph_threat_3_high_danger");
 
     public static final TagKey<EntityType<?>> IRRADIATED_ALIENS = create("irradiated_aliens");
 
