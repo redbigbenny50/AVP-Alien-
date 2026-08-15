@@ -48,6 +48,19 @@ public class GrowthManager implements NBTSerializable {
 
     private final Alien entity;
 
+    /**
+     * ⭐ THE DIAL. 0.10 = ten meals skips a whole stage, whichever stage it is.
+     * <p>
+     * Deliberately not enough for one lucky chicken to matter: a juvenile that hunts steadily grows visibly faster than
+     * one that does not, but it still has to actually hunt. RAISE IT if feeding feels pointless, LOWER IT if a player
+     * with a chicken farm can mature a brood in a minute.
+     * </p>
+     */
+    public static final float GROWTH_PER_MEAL_FRACTION = 0.10F;
+
+    /** Floor, so a very short stage still moves perceptibly on a meal. */
+    private static final int MIN_GROWTH_PER_MEAL_TICKS = 100;
+
     private boolean growOverTime;
 
     private int growthTimeInTicks;
@@ -164,6 +177,50 @@ public class GrowthManager implements NBTSerializable {
         this.readyToGrow = true;
     }
 
+    /**
+     * ⭐⭐ A MEAL BUYS TIME. [stated] "if the adol eats anything it jumps ahead its growth time."
+     * <p>
+     * ⚠ A FRACTION OF THE STAGE, NOT A FLAT NUMBER OF TICKS, and that is the whole reason this lives on the manager
+     * rather than in the adolescent. The stages are not the same length - a spitter-line adolescent owes 1500 ticks, a
+     * drone-line one 3000, a predalien adolescent 6000 - so a flat bonus would be a third of one childhood and a tenth
+     * of another. At {@link #GROWTH_PER_MEAL_FRACTION} every juvenile needs the same NUMBER of meals to skip its stage,
+     * whatever that stage costs, and any stage added later is priced correctly for free.
+     * </p>
+     * <p>
+     * ⚠ TIME-BASED STAGES ONLY. A stage with requirements is waiting on a mob effect (the metamorphosis line), not on a
+     * clock, and shovelling ticks into a counter nothing reads would silently do nothing.
+     * </p>
+     *
+     * @return true if the meal actually advanced anything, so the caller can decide whether to play the eat feedback.
+     */
+    public boolean feedOnMeal() {
+        if (entity.level().isClientSide || !growOverTime || canNeverGrow()) {
+            return false;
+        }
+
+        var stage = findActiveOrMatchingGrowthStage();
+
+        if (stage == null || stage.hasRequirements()) {
+            return false;
+        }
+
+        var required = stage.growthTimeInTicks();
+
+        if (required <= 0 || growthTimeInTicks >= required) {
+            return false;
+        }
+
+        var bonus = Math.max(MIN_GROWTH_PER_MEAL_TICKS, Math.round(required * GROWTH_PER_MEAL_FRACTION));
+
+        this.growthTimeInTicks = Math.min(growthTimeInTicks + bonus, required);
+
+        if (growthTimeInTicks >= required) {
+            this.readyToGrow = true;
+        }
+
+        return true;
+    }
+
     private void tickTimeBasedGrowth(GrowthStage stage) {
         this.growthTimeInTicks++;
 
@@ -220,7 +277,21 @@ public class GrowthManager implements NBTSerializable {
         removeRequirementEffects(growthStage);
 
         if (entity instanceof com.alien.common.gameplay.entity.living.alien.xenomorph.Xenomorph xenomorph) {
-            xenomorph.getCocoonManager().prepare(nextFormType, growthStage.alternate().orElse(null), growthStage.cocooning());
+            // ⭐ AN ADOLESCENT CARRIES THE WHOLE MOLT ITSELF. Its clips are destination-keyed
+            // (molt.drone.enter/.loop, molt.spitter.*, molt.praetorian.*, molt.predalien.* ...), so it already shows
+            // what it is turning into for the full duration - and the adult it becomes may have no loop clip at all
+            // (the spitter ships only an emerge, on purpose, because it is terminal; the predalien currently ships
+            // neither). Collapsing the destination window means the new form appears just long enough to emerge
+            // instead of standing in a pose it does not have.
+            //
+            // ⚠ GATED ON THE TAG, NOT ON A CLASS. There are two adolescent classes (Adolescent, which also backs the
+            // royal, and PredalienAdolescent) and an instanceof list would have to grow with them. The ADOLESCENTS
+            // tag already exists and already includes #predalien_adolescents - isProperTransition reads it too.
+            var cocooning = entity.getType().is(AlienEntityTypeTags.ADOLESCENTS)
+                ? growthStage.cocooning().withoutDestinationWindow()
+                : growthStage.cocooning();
+
+            xenomorph.getCocoonManager().prepare(nextFormType, growthStage.alternate().orElse(null), cocooning);
             return GrowthResult.CocoonStarted.INSTANCE;
         }
 
@@ -248,6 +319,45 @@ public class GrowthManager implements NBTSerializable {
         }
 
         return new GrowthResult.Success(nextForm);
+    }
+
+    /**
+     * ⭐ COMPLETES A TIME-BASED GROWTH STAGE ON THE SPOT, [stated] "yes let it complete the timers fully".
+     * <p>
+     * The metamorphosis potion has always satisfied stages that ASK for it - {@code drone_to_warrior},
+     * {@code praetorian_to_queen} and the rest carry a {@code mob_effect} requirement. But the JUVENILE stages carry
+     * none: {@code adolescent_to_drone} is a bare {@code growthTimeInTicks: 3000}, so a potion could never move one.
+     * The effect's other half, {@code MoltingManager.skipToFullMaturity()}, only collapses SIZE - it never touched this
+     * clock.
+     * </p>
+     * <p>
+     * ⚠ DELIBERATELY NOT ADOLESCENT-SPECIFIC. It fills whatever time-based stage the entity is actually on, so any
+     * future timer stage inherits the behaviour for free. A stage WITH requirements is left alone: those already answer
+     * to the effect, and forcing their clock would skip the requirement rather than satisfy it.
+     * </p>
+     *
+     * @return true if a timer was actually filled.
+     */
+    public boolean completeTimeBasedGrowth() {
+        if (entity.level().isClientSide || canNeverGrow()) {
+            return false;
+        }
+
+        var stage = findActiveOrMatchingGrowthStage();
+
+        if (stage == null || stage.hasRequirements()) {
+            return false;
+        }
+
+        var required = stage.growthTimeInTicks();
+
+        if (required <= 0) {
+            return false;
+        }
+
+        this.growthTimeInTicks = required;
+        this.readyToGrow = true;
+        return true;
     }
 
     private boolean canNeverGrow() {

@@ -5,7 +5,10 @@ import com.alien.common.gameplay.hive.location.HiveLocation;
 import com.alien.common.registry.tag.AlienEntityTypeTags;
 import com.alien.common.util.AlienPredicates;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.entity.monster.Monster;
+import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.phys.AABB;
 import org.jetbrains.annotations.Nullable;
@@ -38,13 +41,30 @@ public final class HiveTerritoryAggroTask {
     }
 
     public static void run(ServerLevel level, HiveLocation location) {
-        var intruders = intrudersInTerritory(level, location);
+        var everyone = intrudersInTerritory(level, location);
 
-        recordVisitors(level, location, intruders);
-        trackIntrusionDwell(level, location, intruders);
+        // The visit log and the dwell timer see EVERY intruder, vermin included - those drive the hive's memory
+        // of who has been nosing around, which is a different question from who gets pulled off work.
+        recordVisitors(level, location, everyone);
+        trackIntrusionDwell(level, location, everyone);
 
-        if (intruders.isEmpty()) {
+        if (everyone.isEmpty()) {
             return;
+        }
+
+        // ⭐ TWO CLASSES, TWO RESPONSES. Threats call the whole hive; vermin are housekeeping and only reach
+        // members with nothing else on. See aggroMembers.
+        var threats = new ArrayList<LivingEntity>();
+        var vermin = new ArrayList<LivingEntity>();
+
+        for (var intruder : everyone) {
+            if (isHatedNonPlayer(intruder) || !(intruder instanceof Monster) || intruder instanceof Player) {
+                threats.add(intruder);
+            } else if (isVerminInsideTheHive(intruder, location)) {
+                vermin.add(intruder);
+            } else {
+                threats.add(intruder); // rival-strain xenomorphs and anything else the scan admitted
+            }
         }
 
         for (var entry : location.loadedMembersByType().entrySet()) {
@@ -52,7 +72,7 @@ public final class HiveTerritoryAggroTask {
                 continue;
             }
 
-            aggroMembers(level, entry.getValue(), intruders);
+            aggroMembers(level, entry.getValue(), threats, vermin);
         }
     }
 
@@ -154,22 +174,49 @@ public final class HiveTerritoryAggroTask {
         // xenomorph inside the claim is an invasion the whole location responds to, not something only the
         // members who happen to see it will fight.
         var locationVariant = location.lineageVariantOrNull();
-        for (var chunk : location.claimedChunks()) {
-            var box = new AABB(
-                chunk.getMinBlockX(),
-                level.getMinBuildHeight(),
-                chunk.getMinBlockZ(),
-                chunk.getMaxBlockX() + 1,
-                level.getMaxBuildHeight(),
-                chunk.getMaxBlockZ() + 1
-            );
-            for (
-                var entity : level.getEntitiesOfClass(
-                    LivingEntity.class,
-                    box,
-                    entity -> isHatedNonPlayer(entity) || isRivalStrainXenomorph(entity, locationVariant)
-                )
-            ) {
+        var claimed = location.claimedChunks();
+
+        if (claimed.isEmpty()) {
+            return intruders;
+        }
+
+        // ⭐⭐ ONE QUERY OVER THE WHOLE CLAIM, THEN FILTER - NOT ONE QUERY PER CHUNK.
+        //
+        // ⚠⚠ THIS WAS THE MOD'S HEAVIEST RECURRING COST. It ran a FULL-COLUMN getEntitiesOfClass for EVERY
+        // claimed chunk, every 20 ticks, per hive. A 23x23 empress hive claims 529 chunks, so that was 529
+        // separate world-height entity queries per second from ONE hive - roughly 12,700 entity-section visits,
+        // and about 50,000 across four loaded hives. Each call also re-walked overlapping section lists and paid
+        // its own setup.
+        //
+        // One AABB spanning the claim visits each entity section ONCE. The chunk-membership test then keeps the
+        // result identical: a claim is not always rectangular (contested borders, expansion bands), so the box
+        // can cover chunks the hive does not own - and those entities are dropped exactly as before.
+        var minX = Integer.MAX_VALUE;
+        var minZ = Integer.MAX_VALUE;
+        var maxX = Integer.MIN_VALUE;
+        var maxZ = Integer.MIN_VALUE;
+
+        for (var chunk : claimed) {
+            minX = Math.min(minX, chunk.getMinBlockX());
+            minZ = Math.min(minZ, chunk.getMinBlockZ());
+            maxX = Math.max(maxX, chunk.getMaxBlockX() + 1);
+            maxZ = Math.max(maxZ, chunk.getMaxBlockZ() + 1);
+        }
+
+        var box = new AABB(minX, level.getMinBuildHeight(), minZ, maxX, level.getMaxBuildHeight(), maxZ);
+
+        for (
+            var entity : level.getEntitiesOfClass(
+                LivingEntity.class,
+                box,
+                entity -> isHatedNonPlayer(entity)
+                    || isRivalStrainXenomorph(entity, locationVariant)
+                    || isVerminInsideTheHive(entity, location)
+            )
+        ) {
+            // ⚠ THE MEMBERSHIP TEST IS WHAT MAKES THE SINGLE BOX SAFE - without it a hive would answer threats
+            // standing on ground it has not claimed.
+            if (claimed.contains(new ChunkPos(entity.blockPosition()))) {
                 intruders.add(entity);
             }
         }
@@ -190,6 +237,40 @@ public final class HiveTerritoryAggroTask {
             && !java.util.Objects.equals(alien.getVariant(), locationVariant);
     }
 
+    /**
+     * ⭐⭐ ORDINARY MONSTERS LOOSE INSIDE THE HIVE ARE INTRUDERS TOO.
+     * <p>
+     * [stated] "xenos docile toward zombies they store in harvest rooms." A harvest chamber is a captured VANILLA
+     * spawner - it produces plain zombies, right inside the hive - and this scan only ever admitted HATED factions and
+     * THREAT_3 high-danger mobs. A zombie is THREAT_2, so nothing in the hive was ever told about it and the xenomorphs
+     * stood beside their own livestock doing nothing.
+     * </p>
+     * <p>
+     * ⚠⚠ THE PREDICATE LAYER ALREADY ALLOWED THIS - the gap was that nobody ASKED. {@code AlienPredicates}'s vermin
+     * rule makes any non-avp monster inside a hive slab a legal target regardless of threat tier or biomass level. But
+     * a legal target is not an assigned one: THREAT_2 prey is only pursued when the hive is low on biomass or a hunting
+     * party is out, and neither applies to a well-fed hive standing in its own harvest room. This task is what actually
+     * hands members a target, so the rule had to be mirrored HERE to have any effect.
+     * </p>
+     * <p>
+     * ⚠ SAME THREE CONDITIONS AS THE PREDICATE, deliberately, so the two can never disagree: a Monster, not one of
+     * ours, and inside the location's vertical slab. The slab test is what keeps a zombie wandering the surface far
+     * above a deep hive from dragging the whole colony up through the ceiling.
+     * </p>
+     */
+    private static boolean isVerminInsideTheHive(LivingEntity entity, HiveLocation location) {
+        if (!entity.isAlive() || entity.isRemoved() || !(entity instanceof Monster)) {
+            return false;
+        }
+
+        // Ours are never vermin - rival strains are handled by isRivalStrainXenomorph, which knows about lineages.
+        if (com.alien.Alien.MOD_ID.equals(EntityType.getKey(entity.getType()).getNamespace())) {
+            return false;
+        }
+
+        return location.withinSlab(entity.blockPosition().getY());
+    }
+
     private static boolean isHatedNonPlayer(LivingEntity entity) {
         if (!entity.isAlive() || entity.isRemoved()) {
             return false;
@@ -198,18 +279,83 @@ public final class HiveTerritoryAggroTask {
             || entity.getType().is(AlienEntityTypeTags.XENOMORPH_THREAT_3_HIGH_DANGER);
     }
 
-    private static void aggroMembers(ServerLevel level, Set<UUID> memberIds, List<LivingEntity> intruders) {
+    /**
+     * ⭐⭐ VERMIN DO NOT PULL WORKERS OFF THEIR JOBS. [stated] "anyone doing a task shouldnt try to intercept a vermin
+     * until the task is done have the defense party deal with that."
+     * <p>
+     * ⚠ THIS SPLIT IS THE WHOLE POINT OF THE METHOD NOW. A marine raid or a rival strain is an EMERGENCY and still
+     * calls every adult in the hive. A zombie loose in a harvest room is HOUSEKEEPING and only reaches members who are
+     * not mid-task - the hive's standing defence, in other words, since a xenomorph with nothing assigned IS the
+     * defence.
+     * </p>
+     * <p>
+     * ⚠ Without the split, adding vermin to the intruder list (which is what made the harvest chamber respond at all)
+     * would have had every egg hauler, host carrier and resin builder in the hive drop what it was holding every time a
+     * spider wandered in. The fix for one bug would have created a worse one.
+     * </p>
+     */
+    private static void aggroMembers(
+        ServerLevel level,
+        Set<UUID> memberIds,
+        List<LivingEntity> intruders,
+        List<LivingEntity> vermin
+    ) {
         for (var memberId : memberIds) {
             var entity = level.getEntity(memberId);
             if (!(entity instanceof Xenomorph xenomorph) || !xenomorph.isAlive() || xenomorph.isRemoved()) {
                 continue;
             }
 
+            // ⭐ CHILDREN DO NOT ANSWER THE CALL. setHiveIntruderTarget writes its OWN field and drives its OWN
+            // navigator, so Adolescent.setTarget refusing the target is not enough to stop it here - without this
+            // they would path to armed intruders and stand there with nothing to fight with.
+            if (AlienPredicates.isJuvenile(xenomorph)) {
+                continue;
+            }
+
             var target = nearestTarget(xenomorph, intruders);
+
+            // Nothing worth dropping a job for - fall back to vermin, but only for members who have no job.
+            if (target == null && !vermin.isEmpty() && !isOccupiedWithATask(xenomorph)) {
+                target = nearestTarget(xenomorph, vermin);
+            }
+
             if (target != null) {
                 xenomorph.setHiveIntruderTarget(target);
             }
         }
+    }
+
+    /**
+     * Is this xenomorph mid-job? Vermin are refused to anyone who is.
+     * <p>
+     * ⚠ CARGO FIRST, because it is the case that actually bit: a drone carrying a captured host or an egg hauler
+     * mid-delivery is the worst possible thing to send after a zombie - it abandons the cargo in the open, which is the
+     * same self-sabotage the captured-host target rule already exists to prevent.
+     * </p>
+     * <p>
+     * ⚠ PARTY MEMBERSHIP COUNTS AS A JOB. A hunting or attack party is out on the hive's business with its own target
+     * discipline; a zombie at home is not its problem.
+     * </p>
+     * <p>
+     * ⚠ A xenomorph that already HAS a target is busy by definition - re-pointing it at nearer vermin mid-fight would
+     * let a zombie peel a defender off the marine currently killing it.
+     * </p>
+     */
+    private static boolean isOccupiedWithATask(Xenomorph xenomorph) {
+        if (!xenomorph.getPassengers().isEmpty()) {
+            return true; // hauling a host, an egg, or a rider of any kind
+        }
+
+        if (xenomorph.isPassenger()) {
+            return true; // being hauled - it is cargo itself
+        }
+
+        if (xenomorph.partyMembership() != null) {
+            return true;
+        }
+
+        return xenomorph.getTarget() != null;
     }
 
     private static @Nullable LivingEntity nearestTarget(Xenomorph xenomorph, List<LivingEntity> intruders) {

@@ -35,7 +35,17 @@ public class Boiler extends Xenomorph implements GOAPUser<Boiler> {
         .parallelDigCount(2)
         .build();
 
-    private static final float EXPLOSION_RADIUS = 2F;
+    /**
+     * ⭐ Blast strength. [stated] "the explosion should be slight less damaging than a creeper" - a creeper is 3.0F, TNT
+     * 4.0F, a charged creeper 6.0F. Explosion power scales with roughly the CUBE of radius, so the old 2.0F was under a
+     * third of a creeper rather than slightly under it.
+     * <p>
+     * ⚠ THIS ALSO SIZES THE ACID FIELD, and not smoothly: ExplosiveXenomorphUtil casts the radius to int for the block
+     * box, so 2.6 still floors to 2 and the acid stays 5x5x5 while the blast grows. Going to 3.0F or beyond would jump
+     * it to 7x7x7 in one step. Keep that in mind before nudging this again.
+     * </p>
+     */
+    private static final float EXPLOSION_RADIUS = 2.6F;
 
     private static final int ACID_AMOUNT = 3;
 

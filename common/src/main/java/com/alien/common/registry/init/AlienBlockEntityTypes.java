@@ -2,6 +2,7 @@ package com.alien.common.registry.init;
 
 import com.alien.Alien;
 import com.alien.common.gameplay.block.entity.capture.anchor.AnchorBlockEntity;
+import com.alien.common.gameplay.block.entity.container.ResinContainerBlockEntity;
 import com.alien.common.gameplay.block.entity.crusher.CrusherHeadBlockEntity;
 import com.alien.common.gameplay.block.entity.jelly.JellyVatBlockEntity;
 import com.alien.common.gameplay.block.entity.queen.QueenHeadBlockEntity;
@@ -27,6 +28,18 @@ import java.util.stream.Stream;
 public class AlienBlockEntityTypes {
 
     private static final BLibRegistry<BlockEntityType<?>> REGISTRY = Alien.MOD.registries().create(BuiltInRegistries.BLOCK_ENTITY_TYPE);
+
+    /** ⚠ ONE block entity type for all four strains - they differ only in art, never in behaviour. */
+    public static final BLibHolder<BlockEntityType<ResinContainerBlockEntity>> RESIN_CONTAINER = create(
+        "resin_container",
+        () -> BlockEntityType.Builder.of(
+            ResinContainerBlockEntity::new,
+            AlienBlocks.RESIN_CONTAINER.get(),
+            AlienBlocks.NETHER_RESIN_CONTAINER.get(),
+            AlienBlocks.ABERRANT_RESIN_CONTAINER.get(),
+            AlienBlocks.IRRADIATED_RESIN_CONTAINER.get()
+        )
+    );
 
     public static final BLibHolder<BlockEntityType<ResinNodeBlockEntity>> RESIN_NODE = create(
         "resin_node",

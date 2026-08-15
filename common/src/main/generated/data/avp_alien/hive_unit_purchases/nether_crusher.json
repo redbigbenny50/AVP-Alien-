@@ -2,8 +2,8 @@
   "conditions": [
     {
       "type": "min_entity_count_in_location",
-      "entity": "avp_alien:nether_prowler",
-      "value": 35
+      "entity": "avp_alien:nether_harbinger",
+      "value": 1
     },
     {
       "type": "max_entity_count_in_location",

@@ -65,6 +65,11 @@ public class BlockLootTableProvider extends FabricBlockLootTableProvider {
     }
 
     private void generateSelfDrops() {
+        // ⭐ The four resin containers - shulker rules, see dropSelfWithContents.
+        dropSelfWithContents(AlienBlocks.RESIN_CONTAINER);
+        dropSelfWithContents(AlienBlocks.NETHER_RESIN_CONTAINER);
+        dropSelfWithContents(AlienBlocks.ABERRANT_RESIN_CONTAINER);
+        dropSelfWithContents(AlienBlocks.IRRADIATED_RESIN_CONTAINER);
         dropSelf(AberrantAlienResinBlocks.ABERRANT_RESIN);
         dropSelf(AberrantAlienResinBlocks.ABERRANT_RESIN_BONE);
         dropSelf(AberrantAlienResinBlocks.ABERRANT_RESIN_BONE_STAIRS);
@@ -260,6 +265,47 @@ public class BlockLootTableProvider extends FabricBlockLootTableProvider {
     public void add(Supplier<? extends Block> blockSupplier, Function<Block, LootTable.Builder> factory) {
         var block = blockSupplier.get();
         add(block, factory);
+        TOUCHED_ENTRIES.add(block);
+    }
+
+    /**
+     * ⭐⭐ SHULKER RULES: the block drops itself CARRYING ITS INVENTORY. [stated] "keep like shulker box".
+     * <p>
+     * ⚠⚠ THIS IS THE SECOND HALF OF A TWO-PART MECHANISM AND NEITHER HALF WORKS ALONE.
+     * {@code ResinContainerBlock.playerWillDestroy} calls {@code setChanged()} to commit the inventory into the block
+     * entity's components; THIS copies that component onto the dropped stack. Without the first the component is stale,
+     * without this it never reaches the item - and both failures look identical in game: a container that seemed full
+     * comes back empty.
+     * </p>
+     * <p>
+     * ⚠ {@code applyExplosionCondition} is deliberately kept: it is about the LOOT TABLE's explosion-decay rule, not
+     * about the block surviving a blast. The block's 1200 blast resistance means an explosion never breaks it in the
+     * first place, so this branch only matters if something one day destroys it another way.
+     * </p>
+     */
+    public void dropSelfWithContents(Supplier<? extends Block> blockSupplier) {
+        var block = blockSupplier.get();
+        add(
+            block,
+            LootTable.lootTable()
+                .withPool(
+                    this.applyExplosionCondition(
+                        block,
+                        net.minecraft.world.level.storage.loot.LootPool.lootPool()
+                            .setRolls(net.minecraft.world.level.storage.loot.providers.number.ConstantValue.exactly(1.0F))
+                            .add(
+                                net.minecraft.world.level.storage.loot.entries.LootItem.lootTableItem(block)
+                                    .apply(
+                                        net.minecraft.world.level.storage.loot.functions.CopyComponentsFunction
+                                            .copyComponents(
+                                                net.minecraft.world.level.storage.loot.functions.CopyComponentsFunction.Source.BLOCK_ENTITY
+                                            )
+                                            .include(net.minecraft.core.component.DataComponents.CONTAINER)
+                                    )
+                            )
+                    )
+                )
+        );
         TOUCHED_ENTRIES.add(block);
     }
 

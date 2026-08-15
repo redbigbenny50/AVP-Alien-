@@ -248,24 +248,12 @@ public final class XenomorphTargetSensors {
         if (!com.alien.common.gameplay.hive.party.EggDutyGuard.isOnEggDuty(xenomorph)) {
             return;
         }
-        int hadTargets = targets.size();
-        var hadTarget = xenomorph.getTarget();
         targets.clear();
         if (xenomorph.getTarget() != null) {
             xenomorph.setTarget(null);
         }
-        // [DIAGNOSTIC] Sensors run every tick regardless of what the planner picks, so this ALWAYS fires for a
-        // frozen hauler. It proves the two DELIVER_EGG preconditions: carrying an egg, and no attack target.
-        if (xenomorph.tickCount % 100 == 0) {
-            com.alien.Alien.LOGGER.info(
-                "[eggdebug] carrier sensor: {} at {} eggDuty=true targetsCleared={} hadTarget={} nowTarget={}",
-                xenomorph.getType().getDescriptionId(),
-                xenomorph.blockPosition(),
-                hadTargets,
-                hadTarget == null ? "none" : hadTarget.getType().getDescriptionId(),
-                xenomorph.getTarget() == null ? "none" : "STILL SET"
-            );
-        }
+        // The [eggdebug] line that used to sit here is gone - it was armed for the frozen-hauler investigation, that
+        // bug is long fixed, and firing per carrier every 5 seconds it was the loudest thing in every log.
     }
 
     private static void applyTargetGiveUp(Xenomorph xenomorph, List<LivingEntity> targets) {

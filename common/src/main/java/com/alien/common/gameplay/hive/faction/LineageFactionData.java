@@ -56,6 +56,10 @@ public class LineageFactionData extends FactionData {
 
     private static final String NBT_FOUNDER_ID = "FounderId";
 
+    private static final String NBT_PARENT_LINEAGE_ID = "ParentLineageId";
+
+    private static final String NBT_SEPARATION_TICK = "SeparationTick";
+
     private static final String NBT_EMPRESS_ID = "EmpressId";
 
     private static final String NBT_AGE_IN_TICKS = "AgeInTicks";
@@ -98,6 +102,12 @@ public class LineageFactionData extends FactionData {
     private ResourceKey<Level> dimension;
 
     private @Nullable UUID founderId;
+
+    /** The lineage this one broke away from, if any. See AlienTerritoryWarSystem remembrance. */
+    private @Nullable ResourceLocation parentLineageId;
+
+    /** Game time the break-away happened, i.e. when the remembrance window starts. */
+    private long separationTick;
 
     private @Nullable UUID empressId;
 
@@ -371,6 +381,25 @@ public class LineageFactionData extends FactionData {
         markDirty();
     }
 
+    public @Nullable ResourceLocation parentLineageId() {
+        return parentLineageId;
+    }
+
+    public long separationTick() {
+        return separationTick;
+    }
+
+    /**
+     * ⭐ Records which lineage this one broke away from, and when. [stated] "i would say theres a period of rememberance
+     * where they are nuetral to allow the daughter to leave and found" - without the parent link there is nothing to be
+     * neutral TOWARD, since every separated daughter otherwise reads as an unrelated rival lineage.
+     */
+    public void setParentLineage(@Nullable ResourceLocation parentLineageId, long separationTick) {
+        this.parentLineageId = parentLineageId;
+        this.separationTick = Math.max(0L, separationTick);
+        markDirty();
+    }
+
     public @Nullable UUID empressId() {
         return empressId;
     }
@@ -561,6 +590,10 @@ public class LineageFactionData extends FactionData {
 
         if (tag.hasUUID(NBT_FOUNDER_ID)) {
             this.founderId = tag.getUUID(NBT_FOUNDER_ID);
+            if (tag.contains(NBT_PARENT_LINEAGE_ID)) {
+                this.parentLineageId = ResourceLocation.tryParse(tag.getString(NBT_PARENT_LINEAGE_ID));
+                this.separationTick = tag.getLong(NBT_SEPARATION_TICK);
+            }
         }
 
         if (tag.hasUUID(NBT_EMPRESS_ID)) {
@@ -669,6 +702,10 @@ public class LineageFactionData extends FactionData {
 
         if (founderId != null) {
             tag.putUUID(NBT_FOUNDER_ID, founderId);
+        }
+        if (parentLineageId != null) {
+            tag.putString(NBT_PARENT_LINEAGE_ID, parentLineageId.toString());
+            tag.putLong(NBT_SEPARATION_TICK, separationTick);
         }
 
         if (empressId != null) {

@@ -569,6 +569,31 @@ public class FieldManualScreen extends Screen {
         this.maxScroll = 0;
     }
 
+    /**
+     * Whether a {@code required_mod} gate is satisfied.
+     * <p>
+     * Deliberately GENERIC rather than a hardcoded avp_human check: the id is looked up through BLib, so any section or
+     * page can be gated on any mod ("avp_predator", a future module) by adding one JSON field and no code. Absent,
+     * empty or blank means ungated, so every existing section keeps working untouched.
+     * <p>
+     * A section whose gate fails is dropped BEFORE the index rail is built, so it leaves no empty entry behind. If a
+     * gated section's every page is individually gated away, the section is dropped too - see the empty-pages check at
+     * the end of the section loop.
+     */
+    private static boolean isModPresent(String modId) {
+        if (modId == null || modId.isBlank()) {
+            return true;
+        }
+
+        try {
+            return com.blib.api.BLibAPI.createMod(modId.trim()).isLoaded();
+        } catch (Exception ignored) {
+            // An unresolvable id hides the content rather than crashing the screen - same defensive posture as the
+            // broken-JSON fallback below.
+            return false;
+        }
+    }
+
     private static List<ManualSection> loadManualSections() {
         try {
             Optional<Resource> resource = Minecraft.getInstance().getResourceManager().getResource(MANUAL_JSON);
@@ -598,10 +623,20 @@ public class FieldManualScreen extends Screen {
                 continue;
             }
 
+            // Content about another module's gear is hidden outright when that module is absent, rather than shown
+            // and disclaimed - a reader with no avp_human installed should never see a tracker page at all.
+            if (!isModPresent(sectionData.required_mod)) {
+                continue;
+            }
+
             List<ManualPage> pages = new ArrayList<>();
             if (sectionData.pages != null) {
                 for (ManualPageData pageData : sectionData.pages) {
                     if (pageData == null) {
+                        continue;
+                    }
+
+                    if (!isModPresent(pageData.required_mod)) {
                         continue;
                     }
 
@@ -1233,12 +1268,18 @@ public class FieldManualScreen extends Screen {
 
         String title;
 
+        /** Optional mod id gate - see {@link FieldManualScreen#isModPresent}. */
+        String required_mod;
+
         List<ManualPageData> pages;
     }
 
     private static class ManualPageData {
 
         String title;
+
+        /** Optional mod id gate, same rule as the section's. */
+        String required_mod;
 
         List<ManualElementData> elements;
     }

@@ -97,6 +97,11 @@ public final class CarveSite {
 
     private static final String NBT_FILLED_COLUMNS = "FilledColumns";
 
+    /** Persisted so a founding core can settle up for time the world was not watching. See CarveSiteWork. */
+    private static final String NBT_NEXT_DIG_TICK = "NextDigTick";
+
+    private static final String NBT_NEXT_FILL_TICK = "NextFillTick";
+
     /** Per-column build state: has the column been dug out, and has its resin been placed. */
     public static final class ColumnProgress {
 
@@ -168,6 +173,16 @@ public final class CarveSite {
 
     /** Game time of the next dig step / fill step. 0 = not yet scheduled (first tick schedules them). */
     long nextDigTick;
+
+    /**
+     * Seeds the dig clock at COMMISSION so an unattended founding core accrues debt from the moment it is created - see
+     * {@code CarveSiteWork.catchUpFoundingDig}, which settles from this value and would find 0 otherwise.
+     */
+    public void startDigClock(long gameTime) {
+        if (nextDigTick == 0L) {
+            nextDigTick = gameTime;
+        }
+    }
 
     long nextFillTick;
 
@@ -260,6 +275,8 @@ public final class CarveSite {
         }
         tag.putInt(NBT_FLOOR_Y, floorY);
         tag.putInt(NBT_CEILING_Y, ceilingY);
+        tag.putLong(NBT_NEXT_DIG_TICK, nextDigTick);
+        tag.putLong(NBT_NEXT_FILL_TICK, nextFillTick);
         if (resinBiomassOwed > 0) {
             tag.putInt(NBT_RESIN_OWED, resinBiomassOwed);
         }
@@ -303,6 +320,8 @@ public final class CarveSite {
         int ceiling = tag.contains(NBT_CEILING_Y) ? tag.getInt(NBT_CEILING_Y) : location.hiveCeilingY();
         var site = new CarveSite(new PieceMatch(piece, rotation, origin), socket, floor, ceiling);
         site.resinBiomassOwed = tag.getInt(NBT_RESIN_OWED);
+        site.nextDigTick = tag.getLong(NBT_NEXT_DIG_TICK);
+        site.nextFillTick = tag.getLong(NBT_NEXT_FILL_TICK);
         for (long packed : tag.getLongArray(NBT_DUG_COLUMNS)) {
             var column = site.columns.get(unpack(packed));
             if (column != null) {

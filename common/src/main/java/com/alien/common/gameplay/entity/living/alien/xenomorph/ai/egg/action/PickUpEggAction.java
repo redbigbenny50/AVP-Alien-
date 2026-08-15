@@ -2,18 +2,13 @@ package com.alien.common.gameplay.entity.living.alien.xenomorph.ai.egg.action;
 
 import com.alien.common.gameplay.entity.living.alien.EggCarrier;
 import com.alien.common.gameplay.entity.living.alien.xenomorph.Xenomorph;
-import com.alien.common.gameplay.hive.location.HiveLocationRegistry;
 import com.alien.common.gameplay.hive.vent.HiveVents;
-import com.alien.common.gameplay.hive.vent.VentKind;
 import com.blib.api.common.goap.v1.action.impl.NeoMoveToPosAction;
 import com.just.ai.goap.StateKey;
 import com.just.ai.goap.action.Action;
 import com.just.ai.goap.state.Blackboard;
 import net.minecraft.core.BlockPos;
-import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.phys.Vec3;
-
-import java.util.function.Predicate;
 
 public class PickUpEggAction {
 
@@ -127,32 +122,12 @@ public class PickUpEggAction {
     }
 
     /** If the egg is far enough to be worth it, pick an interior entry/exit vent pair that shortens the trip. */
+    /** Delegates to the shared planner - this was a private copy of HiveVents.planInteriorLeg. */
     private static void planVentLeg(Xenomorph xenomorph, BlockPos egg, Blackboard blackboard) {
-        if (!(xenomorph.level() instanceof ServerLevel serverLevel)) {
-            return;
-        }
-        if (xenomorph.blockPosition().distSqr(egg) < VENT_WORTHWHILE_DIST_SQUARED) {
-            return;
-        }
-        var location = HiveLocationRegistry.INSTANCE.getByChunk(serverLevel.dimension(), xenomorph.chunkPosition());
-        if (location == null) {
-            return;
-        }
-        var vents = location.ventManager();
-        // Interior vents only - surface vents are the hive's defensive/party mouths, never used for egg fetching.
-        // In-hive shortcut: STRUCTURE ducts only. This used to be "any vent that is not near the surface", which also
-        // swept up frontier vents out in the caves.
-        Predicate<BlockPos> interiorOnly = v -> location.ventManager().isKind(v, VentKind.STRUCTURE);
-        var entry = HiveVents.nearestVent(vents, xenomorph.blockPosition(), VENT_SEARCH_RADIUS_CHUNKS, interiorOnly);
-        var exit = HiveVents.nearestVent(vents, egg, VENT_SEARCH_RADIUS_CHUNKS, interiorOnly);
-        if (entry == null || exit == null || entry.equals(exit)) {
-            return;
-        }
-        if (exit.distSqr(egg) >= xenomorph.blockPosition().distSqr(egg)) {
-            return; // the duct wouldn't shorten the trip
-        }
-        blackboard.set(KEY_VENT_ENTRY, entry);
-        blackboard.set(KEY_VENT_EXIT, exit);
+        HiveVents.planInteriorLeg(xenomorph, egg, false).ifPresent(leg -> {
+            blackboard.set(KEY_VENT_ENTRY, leg.entry());
+            blackboard.set(KEY_VENT_EXIT, leg.exit());
+        });
     }
 
     public static void onFinish(Action.Context<? extends Xenomorph> context) {

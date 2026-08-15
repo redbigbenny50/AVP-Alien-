@@ -1,6 +1,10 @@
 {
   "values": [
     "#avp_alien:chitin",
+    "avp_alien:resin_container",
+    "avp_alien:nether_resin_container",
+    "avp_alien:aberrant_resin_container",
+    "avp_alien:irradiated_resin_container",
     "avp_alien:jelly_vat",
     "avp_alien:aberrant_resin",
     "avp_alien:aberrant_resin_slab",

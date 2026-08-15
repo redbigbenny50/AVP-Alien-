@@ -58,6 +58,9 @@ public final class HiveLocation {
     /** Upkeep cadence: one built piece re-drained per beat (~5s), so the whole hive cycles cheaply. */
     private static final int UPKEEP_INTERVAL_TICKS = 100;
 
+    /** Ceiling on reported breaches queued at once - a crater must not become an unbounded set. */
+    private static final int MAX_FLAGGED_BREACH_CHUNKS = 64;
+
     /** Round-robin cursor over the built pieces for the upkeep pass. Transient - order need not survive a reload. */
     private int upkeepCursor = 0;
 
@@ -105,6 +108,8 @@ public final class HiveLocation {
     private static final String NBT_EXILED = "Exiled";
 
     private static final String NBT_DAUGHTER_HIVES_FOUNDED = "DaughterHivesFounded";
+
+    private static final String NBT_LAST_DAUGHTER_FOUNDED_TICK = "LastDaughterFoundedTick";
 
     private static final String NBT_EMPRESS_RESCUES_RECEIVED = "EmpressRescuesReceived";
 
@@ -276,6 +281,9 @@ public final class HiveLocation {
      * buy the right to make another, or a hive under pressure would breed indefinitely.
      */
     private int daughterHivesFounded;
+
+    /** Game time the last daughter promotion STARTED. See QueenPromotionService for the 7-MC-day gate. */
+    private long lastDaughterFoundedTick;
 
     /**
      * How many times an empress has refilled this hive's firewall fund from a sibling. Never decrements - the point is
@@ -509,6 +517,17 @@ public final class HiveLocation {
     ) {}
 
     private final Map<ChunkPos, BuiltPlacement> builtPlacements;
+
+    /**
+     * Pieces reported damaged by an actual block break, waiting to be scanned ahead of the cursor.
+     * <p>
+     * TRANSIENT and BOUNDED. The cursor sweep visits one piece per {@code UPKEEP_INTERVAL_TICKS}, so on a finished hive
+     * a given piece is only revisited every few MINUTES - which is why a hole could sit open while a tester watched it.
+     * This is the fast lane: a break tells us exactly which chunk to look at, so detection stops scaling with hive
+     * size. The cursor stays as the safety net for damage nothing reported (fluids, decay, worldgen edits).
+     * </p>
+     */
+    private final java.util.Set<ChunkPos> flaggedBreachChunks = new java.util.LinkedHashSet<>();
 
     private final Set<FrontierSocket> frontierSockets;
 
@@ -1341,6 +1360,23 @@ public final class HiveLocation {
         this.daughterHivesFounded = Math.max(0, daughterHivesFounded);
     }
 
+    /**
+     * Game time the last daughter promotion started, or 0 if this hive has never raised one.
+     * <p>
+     * [stated] "7 day cool down between daughter queen partys". Kept SEPARATE from the shared spread clock
+     * ({@link #lastAbstractSpreadTick()}): that one exists so the abstract and visible halves of spreading cannot both
+     * count the same daughter, and it is measured in real minutes. This one is the DESIGN pacing between a hive's two
+     * lifetime daughters, and it is measured in Minecraft days.
+     * </p>
+     */
+    public long lastDaughterFoundedTick() {
+        return lastDaughterFoundedTick;
+    }
+
+    public void setLastDaughterFoundedTick(long lastDaughterFoundedTick) {
+        this.lastDaughterFoundedTick = Math.max(0L, lastDaughterFoundedTick);
+    }
+
     /** See the {@code exiled} field javadoc - an exiled empress remnant, alive but no longer counted. */
     public boolean isExiled() {
         return exiled;
@@ -1387,6 +1423,21 @@ public final class HiveLocation {
      * <p>
      * See {@code HiveStructureUpkeep} for what is preserved rather than cleared (jelly vats, resin).
      */
+    /**
+     * Reports a block break inside this hive so the damaged piece is scanned within a second or so.
+     * <p>
+     * Bounded at {@link #MAX_FLAGGED_BREACH_CHUNKS}: one nuke can break a million blocks, and an unbounded set would
+     * turn a crater into a memory leak. Overflow simply falls back to the cursor sweep, which is what used to handle
+     * everything anyway.
+     * </p>
+     */
+    public void flagBreachAt(BlockPos pos) {
+        if (builtPlacements.isEmpty() || flaggedBreachChunks.size() >= MAX_FLAGGED_BREACH_CHUNKS) {
+            return;
+        }
+        flaggedBreachChunks.add(new ChunkPos(pos));
+    }
+
     private void tickStructureUpkeep(MinecraftServer server) {
         // Repair crews beat faster than the detector: steering, gait and progress need a 1-second cadence even
         // though new damage is only LOOKED for every UPKEEP_INTERVAL_TICKS.
@@ -1396,6 +1447,26 @@ public final class HiveLocation {
                 com.alien.common.gameplay.hive.structure.HiveBreachRepair.tick(repairLevel, this);
             }
         }
+        // FAST LANE: a reported break is scanned on the repair beat, not the slow cursor beat, so a hole is noticed in
+        // about a second regardless of how many pieces the hive has.
+        if (
+            ageInTicks % com.alien.common.gameplay.hive.structure.HiveBreachRepair.TICK_INTERVAL == 0
+                && !flaggedBreachChunks.isEmpty()
+        ) {
+            var flagged = flaggedBreachChunks.iterator();
+            var damagedChunk = flagged.next();
+            flagged.remove();
+
+            var flaggedLevel = server.getLevel(dimension);
+            if (flaggedLevel != null) {
+                var flaggedPlacement = builtPlacements.get(damagedChunk);
+                if (flaggedPlacement != null) {
+                    com.alien.common.gameplay.hive.structure.HiveStructureUpkeep
+                        .tickPiece(flaggedLevel, this, damagedChunk, flaggedPlacement);
+                }
+            }
+        }
+
         if (ageInTicks % UPKEEP_INTERVAL_TICKS != 0) {
             return;
         }
@@ -1477,6 +1548,9 @@ public final class HiveLocation {
         }
         if (daughterHivesFounded > 0) {
             tag.putInt(NBT_DAUGHTER_HIVES_FOUNDED, daughterHivesFounded);
+        }
+        if (lastDaughterFoundedTick > 0L) {
+            tag.putLong(NBT_LAST_DAUGHTER_FOUNDED_TICK, lastDaughterFoundedTick);
         }
         if (empressRescuesReceived > 0) {
             tag.putInt(NBT_EMPRESS_RESCUES_RECEIVED, empressRescuesReceived);
@@ -1762,6 +1836,7 @@ public final class HiveLocation {
             : 0L;
         location.exiled = tag.getBoolean(NBT_EXILED);
         location.daughterHivesFounded = Math.max(0, tag.getInt(NBT_DAUGHTER_HIVES_FOUNDED));
+        location.lastDaughterFoundedTick = Math.max(0L, tag.getLong(NBT_LAST_DAUGHTER_FOUNDED_TICK));
         location.empressRescuesReceived = Math.max(0, tag.getInt(NBT_EMPRESS_RESCUES_RECEIVED));
         // Hives saved before this state existed load gracefully as a fresh location: fund available, nothing
         // accrued, no sample taken yet — exactly the private-constructor defaults, so no migration is needed.

@@ -79,7 +79,16 @@ public final class HiveLocationLoadedTickTask {
             return;
         }
 
+        // ⭐⭐ REPAIR VENTS MISLABELLED BY THE OLD CLASSIFIER. Runs on the same slow cadence as the aggro sweep, and
+        // is a no-op for any hive whose vents are already right - it only ever promotes FRONTIER→SURFACE for vents
+        // that genuinely sit near the surface. Needed because classification is WRITE-ONCE and persisted, so
+        // existing worlds carry the old wrong answer forever otherwise.
         if (HiveTerritoryAggroTask.shouldFire(currentTick)) {
+            com.alien.common.gameplay.hive.vent.HiveVents.reclassifyStaleFrontierVents(
+                serverLevel,
+                location,
+                HiveLocationRegistry.INSTANCE.config().surfacePartySurfaceBandBlocks()
+            );
             HiveTerritoryAggroTask.run(serverLevel, location);
         }
         if (com.alien.common.gameplay.hive.defense.VentDefenseTask.shouldFire(currentTick)) {
@@ -193,6 +202,13 @@ public final class HiveLocationLoadedTickTask {
         // Structure growth: grow one hive piece off an open frontier socket on a coarse cadence (every 200 ticks / 10s)
         // so the hive expands gradually and visibly rather than all at once. Bounded and event-driven off the frontier
         // set; does nothing when there are no open sockets.
+        // Take in the hive's own strays before anything asks how many workers it has. A host-born xenomorph that
+        // burst in the field never joined anything, so construction and repair could not see it even while it hauled
+        // eggs. Same beat as structure growth; see HiveStrayAdoption.
+        if (currentTick % com.alien.common.gameplay.hive.faction.HiveStrayAdoption.TICK_INTERVAL == 0L) {
+            com.alien.common.gameplay.hive.faction.HiveStrayAdoption.run(serverLevel, location);
+        }
+
         if (currentTick % 200L == 0L) {
             if (location.isBuildFrozenForWarPrep()) {
                 // No new pieces commissioned during the preparation truce.
@@ -212,6 +228,13 @@ public final class HiveLocationLoadedTickTask {
             // Idle host-born adults walk to a vent and fold into the brood bank: uncapped, off the member cap, and
             // drawn on before the main reserves.
             com.alien.common.gameplay.hive.economy.BroodBankTask.run(serverLevel, location);
+
+            // ⭐⭐ MEMBERS THAT CAN NEVER WALK HOME ARE BANKED. A nether xenomorph that falls into the lava under
+            // its own hive survives indefinitely, so it stays a MEMBER the hive can never use - which is why his
+            // log reported "no free drones, nothing in reserve" on every carve while drones plainly existed.
+            // ⚠ Runs on the member sweep that is already walking this list, so it costs one distance comparison
+            // per member per 2 seconds and no new iteration.
+            com.alien.common.gameplay.hive.economy.StrandedMemberRecovery.sweep(serverLevel, location);
         }
     }
 

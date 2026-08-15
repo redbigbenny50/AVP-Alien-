@@ -6,6 +6,10 @@
       "required": false
     },
     {
+      "id": "avp_human:sentry_turret",
+      "required": false
+    },
+    {
       "id": "avp_predator:predator",
       "required": false
     },

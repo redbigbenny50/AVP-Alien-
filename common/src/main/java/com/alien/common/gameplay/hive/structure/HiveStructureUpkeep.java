@@ -88,10 +88,13 @@ public final class HiveStructureUpkeep {
         if (HiveBreachRepair.hasJob(location, originChunk)) {
             return; // crew already dispatched - the detector's work is done until they finish
         }
+        if (HiveBreachRepair.isCoolingDown(level, location, originChunk)) {
+            return; // just repaired - see HiveBreachRepair.REPAIR_COOLDOWN_TICKS
+        }
         // Damage is no longer healed on the spot: the pass COLLECTS the wounded cells and files a repair job, and
         // drones travel there and visibly work before the re-stamp runs ([stated] "sends a drone or drones to the
         // site to do the dig animation as if they are fixing the breach"). See HiveBreachRepair.
-        var breachCells = collectBreachCells(level, resolved);
+        var breachCells = collectBreachCells(level, location, originChunk, resolved);
         if (breachCells.isEmpty()) {
             return;
         }
@@ -111,6 +114,27 @@ public final class HiveStructureUpkeep {
         if (pieceId == null) {
             return false;
         }
+
+        // ⭐⭐ A CONVERTED HIVE REPAIRS ITSELF IN ITS OWN COLOURS. [stated] "irradiated werent repairing their hive or
+        // overwriting the former strain with their own".
+        // <p>
+        // BuiltPlacement.pieceId is FROZEN AT BUILD TIME, so a hive built normal and later nuked into irradiated was
+        // re-stamping the NORMAL piece on every repair - forever. It was repairing perfectly well; it was repairing
+        // itself back to the strain it used to be, which reads as "not overwriting the former strain". NukeConversion
+        // retints existing blocks once at detonation, but nothing kept new masonry honest afterwards.
+        // </p>
+        // <p>
+        // ⚠ FALL BACK TO THE STORED ID, never fail. If a strain has no mirror of this piece the registry lookup misses
+        // and we stamp what was actually built - a wrong-coloured room beats a hole in the wall.
+        // </p>
+        var variant = location.lineageVariantOrNull();
+        if (!HivePieceCatalog.belongsToStrain(pieceId, variant)) {
+            var restrained = HivePieceCatalog.forStrain(pieceId, variant);
+            if (registry.get(restrained) != null) {
+                pieceId = restrained;
+            }
+        }
+
         var piece = registry.get(pieceId);
         if (piece == null) {
             return false;
@@ -127,19 +151,44 @@ public final class HiveStructureUpkeep {
             return false;
         }
         restore(level, preserved);
+        markUnfixableCells(level, location, originChunk, match);
         return true;
     }
 
     /**
-     * Is anything sitting in a cell the template says should be open?
+     * ⚠⚠ THE PHANTOM-HOLE VALVE. Anything the stamp could not fix is never reported again.
      * <p>
-     * Covers exactly the two things that actually matter to the hive: liquid that has seeped in (a fluid IS a block
-     * state, so a flooded cell reads as non-air here) and solid blocks dropped or placed into a passage. Both are what
-     * make a route impassable and strand workers. Anything on the preserve list is expected to be there and is not a
-     * breach.
+     * A saved structure OMITS its {@code structure_void} cells - {@code fillFromWorld} is told to ignore them - so a
+     * template does NOT author every cell inside its own bounding box. {@code hallway_straight_1x1} authors 1116 of
+     * 4096. The carve digs the whole slab, so every unauthored cell is genuinely AIR in the world, and
+     * {@link #collectBreachCells} used to read each one as a missing wall: job filed, crew works, re-stamp places
+     * NOTHING there (the template has nothing to place), cell is still air, re-detected. Forever. Measured across the
+     * 80 piece NBTs the worst offenders are hallway_royal_2x1_a (420 such cells), chamber_host_2x2 (112),
+     * chamber_raid_2x2 (70) and hallway_tee_1x1 (2) - which is exactly the set a mature hive keeps re-repairing.
+     * </p>
+     * <p>
+     * The template's authored-cell set is not reachable through public API ({@code StructureTemplate.palettes} is
+     * private and {@code filterBlocks} only answers per-block), so rather than guess at it this asks the world: run the
+     * detector again the instant the stamp finishes. A cell the masonry just rewrote and STILL reports as damaged
+     * cannot be fixed by masonry, so it is retired. That covers structure_void, {@code minecraft:jigsaw} cells (their
+     * {@code final_state} is air, so an authored jigsaw is air in the world too) and any future authoring quirk,
+     * without needing to enumerate any of them.
+     * </p>
+     * <p>
+     * ⚠ IT MUST RUN IMMEDIATELY, IN THE SAME TICK. Fluid flow is SCHEDULED, so water that will seep back into a
+     * genuinely breached room has not moved yet - a real leak reads as fixed here and is correctly NOT retired. Only
+     * cells that are broken the very instant the stamp lands are phantoms.
+     * </p>
      */
-    private static boolean isBreached(ServerLevel level, HiveStructurePlacer.ResolvedPlacement resolved) {
-        return !collectBreachCells(level, resolved).isEmpty();
+    private static void markUnfixableCells(ServerLevel level, HiveLocation location, ChunkPos originChunk, PieceMatch match) {
+        var resolved = HiveStructurePlacer.resolvePlacement(level, location, match);
+        if (resolved == null) {
+            return;
+        }
+        var residual = collectBreachCells(level, location, originChunk, resolved);
+        if (!residual.isEmpty()) {
+            HiveBreachRepair.retireUnfixableCells(location, originChunk, residual);
+        }
     }
 
     /** Enough cells to aim a crew and prove the wound; collection stops here. */
@@ -147,20 +196,41 @@ public final class HiveStructureUpkeep {
 
     /**
      * Every damaged cell the hive can see, two kinds: INTRUSIONS (something solid or liquid in an authored air cell -
-     * the original detector) and HOLES (an authored SOLID on the interior boundary that is now air or fluid). Broken
-     * walls and floors were invisible before: the old scan only read the air cells, so a removed block never registered
-     * and player damage stood forever. The boundary is derived from the air cells - each neighbor of an authored air
-     * cell that is not itself authored air is an authored solid (wall, floor, ceiling). Neighbors on the template's
-     * outermost shell are skipped, so doorway mouths that run to the edge (where structure_void margins begin) can
-     * never read as false damage.
+     * the original detector) and HOLES (an authored SOLID on the interior boundary that is now GONE). Broken walls and
+     * floors were invisible before: the old scan only read the air cells, so a removed block never registered and
+     * player damage stood forever. The boundary is derived from the air cells - each neighbor of an authored air cell
+     * that is not itself authored air is treated as an authored solid (wall, floor, ceiling). Neighbors on the
+     * template's outermost shell are skipped, so doorway mouths that run to the edge (where structure_void margins
+     * begin) can never read as false damage.
+     * <p>
+     * ⚠⚠ THAT BOUNDARY DERIVATION IS AN APPROXIMATION AND IT OVER-REPORTS - see {@link #markUnfixableCells}. Cells the
+     * template never authored at all look identical to authored solids from this side, so the retired set is what keeps
+     * the over-report from becoming a permanent repair loop.
+     * </p>
+     * <p>
+     * ⚠⚠ A WATERLOGGED WALL IS STILL A WALL. The hole test used to be {@code isAir() || !getFluidState().isEmpty()},
+     * and a waterlogged block reports a fluid state while being perfectly present - so in a flooded hive every
+     * waterloggable authored solid touching a room read as a missing wall. These pieces are full of them:
+     * chamber_host_2x2 has 1313 resin webs against its air cells, queen_chamber_3x3 has 963 webs plus 126 stairs,
+     * hallway_straight_1x1 has 96 ribbed stairs. The stamp writes the dry state, water flows back, the next scan sees
+     * it again - the same endless re-stamp the flooded-doorway bug produced one system over. The test is now the same
+     * one {@code HiveRouter.isDoorwayOpen} settled on: <b>can a xenomorph pass through the cell</b>. A liquid BLOCK is
+     * replaceable and counts as missing; a waterlogged solid is not and does not.
+     * </p>
      */
-    private static List<BlockPos> collectBreachCells(ServerLevel level, HiveStructurePlacer.ResolvedPlacement resolved) {
+    private static List<BlockPos> collectBreachCells(
+        ServerLevel level,
+        HiveLocation location,
+        ChunkPos originChunk,
+        HiveStructurePlacer.ResolvedPlacement resolved
+    ) {
         var breached = new ArrayList<BlockPos>();
         var airCells = resolved.template().filterBlocks(resolved.placeAt(), resolved.settings(), Blocks.AIR);
         var airSet = new java.util.HashSet<BlockPos>(Math.max(16, airCells.size() * 2));
         for (var cell : airCells) {
             airSet.add(cell.pos());
         }
+        var retired = HiveBreachRepair.retiredCells(location, originChunk);
         var bounds = resolved.template().getBoundingBox(resolved.settings(), resolved.placeAt());
         for (var cell : airCells) {
             var state = level.getBlockState(cell.pos());
@@ -182,9 +252,12 @@ public final class HiveStructureUpkeep {
                 ) {
                     continue; // outermost shell - structure_void territory
                 }
+                if (retired.contains(neighbor)) {
+                    continue; // a re-stamp already proved masonry cannot fill this one
+                }
                 var neighborState = level.getBlockState(neighbor);
-                if (neighborState.isAir() || !neighborState.getFluidState().isEmpty()) {
-                    breached.add(neighbor); // hole: authored solid missing (or flooded)
+                if (neighborState.isAir() || neighborState.canBeReplaced()) {
+                    breached.add(neighbor); // hole: the authored solid is gone, not merely wet
                     if (breached.size() >= MAX_BREACH_CELLS) {
                         return breached;
                     }

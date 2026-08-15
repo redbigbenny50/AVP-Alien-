@@ -6,6 +6,7 @@ import com.alien.common.gameplay.entity.living.alien.ovomorph.Ovomorph;
 import com.alien.common.gameplay.entity.living.alien.xenomorph.Xenomorph;
 import com.alien.common.gameplay.hive.location.HiveLocation;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.phys.AABB;
 
 import java.util.ArrayList;
@@ -41,6 +42,9 @@ public final class EggHaulDispatch {
 
     /** Vertical reach around the hive floor - enough for the chamber band without scanning the whole column. */
     private static final int VERTICAL_REACH = 24;
+
+    /** Path probes per egg before giving up on it this pass. Bounds the only real cost in here. */
+    private static final int MAX_PATH_PROBES_PER_EGG = 3;
 
     private EggHaulDispatch() {
         throw new UnsupportedOperationException();
@@ -79,14 +83,34 @@ public final class EggHaulDispatch {
 
         // UNROOTED EGGS ONLY, per his call. A shelved egg roots itself deliberately - that is what stopped the
         // haul/shelve/haul loop that used to freeze runners - so it must stay invisible to this sweep.
+        //
+        // ⚠⚠ AND ONLY EGGS NOBODY HAS CLAIMED. pickupRequestAcknowledged is the anti-pile-up flag the game-event
+        // path has always honoured (see EggPickupManager.acknowledgePickupRequest, whose comment is about this exact
+        // tester report: haulers "always got stuck on the egg and nothing else on eachother"). This relay did not
+        // check it, so every pass handed the SAME egg to the next free carrier: the log shows "dispatched 1 hauler(s)
+        // to 1 waiting egg(s)" once a second in bursts of nine and ten, sixty seconds apart - one ovomorph, the
+        // hive's entire carrier pool walking to it. The egg lapses its own claim after PICKUP_CLAIM_TIMEOUT_TICKS if
+        // no pickup follows, so honouring the flag costs at most one timeout and never strands an egg.
         var waiting = level.getEntitiesOfClass(
             Ovomorph.class,
             box,
             ovomorph -> ovomorph.isAlive()
                 && !ovomorph.isPassenger()
                 && !ovomorph.isRooted.get()
+                && !ovomorph.pickupRequestAcknowledged
                 && ovomorph.canBePickedUp()
         );
+
+        // ⚠ THE BOX IS A HULL, SO FILTER BACK DOWN TO THE HIVE. min/max over the structure chunks is a rectangle, and
+        // on a hive that has grown in an L or a cross that rectangle covers a great deal of open terrain the hive
+        // never built. Eggs dropped out there were being chased across a hundred blocks - the same session logged
+        // carriers at x=-122 and x=104 and six ovomorphs recovered as stranded. One hash lookup per egg puts the
+        // sweep back on the actual footprint.
+        waiting.removeIf(ovomorph -> !structureChunks.contains(new ChunkPos(ovomorph.blockPosition())));
+
+        if (waiting.isEmpty()) {
+            return;
+        }
 
         if (waiting.isEmpty()) {
             return;
@@ -125,23 +149,34 @@ public final class EggHaulDispatch {
                 break;
             }
 
-            // Nearest free worker to THIS egg. Reachability is not tested here on purpose: building a Path per
-            // worker per egg is exactly the cost the 16-block radius was avoiding, and the action already walks or
-            // ducts and gives up cleanly if it cannot get there.
+            // Nearest free worker to THIS egg that can actually GET to it, tried in distance order.
+            //
+            // ⚠⚠ THE PATH TEST IS NOT OPTIONAL, and my note saying otherwise was reasoning about a different cost.
+            // acknowledgePickupRequest has always refused an egg it cannot path to; this relay did not, so it could
+            // hand an unreachable ovomorph to the whole hive. PickUpEggAction then returns ABORT on NO_PATH and
+            // onFinish clears the claim, which frees every carrier at once for the relay to re-hand them the same
+            // unreachable egg on the next pass. That churn is what kept the carriers permanently "busy".
+            //
+            // The cost objection was about testing every worker against every egg. This is at most
+            // MAX_PATH_PROBES_PER_EGG paths for ONE egg, and at most MAX_ASSIGNMENTS_PER_RUN eggs per pass.
             Xenomorph best = null;
-            var bestDistance = Double.MAX_VALUE;
+            var probes = 0;
+            var candidates = new ArrayList<>(free);
+            candidates.sort(java.util.Comparator.comparingDouble(worker -> worker.distanceToSqr(egg)));
 
-            for (var worker : free) {
-                var distance = worker.distanceToSqr(egg);
-
-                if (distance < bestDistance) {
-                    bestDistance = distance;
+            for (var worker : candidates) {
+                if (probes >= MAX_PATH_PROBES_PER_EGG) {
+                    break;
+                }
+                probes++;
+                if (worker.getNavigation().createPath(egg, 0) != null) {
                     best = worker;
+                    break;
                 }
             }
 
             if (best == null) {
-                break;
+                continue; // nobody near can reach it - leave the egg for a worker that ends up closer
             }
 
             // setTargetOvomorph marks the egg acknowledged, so it stops broadcasting and no second worker claims it.

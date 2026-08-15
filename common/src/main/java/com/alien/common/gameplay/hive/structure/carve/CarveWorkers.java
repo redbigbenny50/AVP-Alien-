@@ -185,7 +185,10 @@ public final class CarveWorkers {
         return EggDutyGuard.isOnEggDuty(drone)
             || drone.partyMembership() != null
             || drone.isVehicle()
-            || drone.isMarkedForReserveReturn();
+            || drone.isMarkedForReserveReturn()
+            // A HOLE IN THE WALL OUTRANKS A NEW CORRIDOR. Repair and construction draw on the same free-drone pool,
+            // so a hive with nothing spare was leaving breaches open while it kept trying to extend itself.
+            || com.alien.common.gameplay.hive.structure.HiveBreachRepair.isOnRepairCrew(drone.getUUID());
     }
 
     private static void release(Xenomorph drone, CarveSite site, java.util.Iterator<Map.Entry<UUID, Role>> iterator) {

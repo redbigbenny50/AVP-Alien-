@@ -1,7 +1,9 @@
 package com.alien.common.gameplay.hive.vent;
 
+import com.alien.common.gameplay.hive.location.HiveLocationRegistry;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
+import net.minecraft.server.level.ServerLevel;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
 import net.minecraft.world.entity.LivingEntity;
@@ -13,6 +15,7 @@ import org.jetbrains.annotations.Nullable;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Optional;
 import java.util.function.Predicate;
 
 /**
@@ -183,6 +186,69 @@ public final class HiveVents {
      * egg) to the emergence spot at {@code exitVent}, squelch there. Returns false - and moves nothing - when the exit
      * has no standable spot.
      */
+       /** One shortcut through the interior duct network: which vent to enter by, and which to come out of. */
+    public record DuctLeg(
+        BlockPos entry,
+        BlockPos exit
+    ) {}
+
+    /**
+     * Below this, walking is simply quicker than finding a vent, going in and coming out.
+     * <p>
+     * Overridable by callers that have ALREADY FAILED to walk somewhere - at that point the duct is not an
+     * optimisation, it is the only route left, and distance stops being the right question.
+     * </p>
+     */
+    public static final double LEG_WORTHWHILE_DIST_SQUARED = 32.0 * 32.0;
+
+    private static final int LEG_SEARCH_RADIUS_CHUNKS = 1;
+
+    /**
+     * Plans a shortcut through the hive's INTERIOR ducts, or returns empty if walking is the better answer.
+     * <p>
+     * This was written three times: privately inside {@code PickUpEggAction}, again inside {@code DropOffEggAction},
+     * and not at all anywhere else - which is why egg hauling was the only job in the mod that could cross a hive
+     * quickly while repair crews walked the whole way. It lives here now so any hive job can take a duct.
+     * </p>
+     * <p>
+     * ⚠ STRUCTURE VENTS ONLY. Surface and frontier vents are the hive's MOUTHS - the ones parties, defenders and host
+     * hunters use to get OUT. Ducting through those to cross a room would post workers into open cave, so the two
+     * networks stay separate: this is the inside, {@code PartyVentUtil.findSurfaceVents} is the outside.
+     * </p>
+     *
+     * @param ignoreProximity skip the worthwhile-distance test, for a caller whose walk has already failed
+     */
+    public static Optional<DuctLeg> planInteriorLeg(LivingEntity traveller, BlockPos target, boolean ignoreProximity) {
+        if (!(traveller.level() instanceof ServerLevel serverLevel)) {
+            return Optional.empty();
+        }
+
+        if (!ignoreProximity && traveller.blockPosition().distSqr(target) < LEG_WORTHWHILE_DIST_SQUARED) {
+            return Optional.empty();
+        }
+
+        var location = HiveLocationRegistry.INSTANCE.getByChunk(serverLevel.dimension(), traveller.chunkPosition());
+        if (location == null) {
+            return Optional.empty();
+        }
+
+        var vents = location.ventManager();
+        Predicate<BlockPos> interiorOnly = vent -> vents.isKind(vent, VentKind.STRUCTURE);
+        var entry = nearestVent(vents, traveller.blockPosition(), LEG_SEARCH_RADIUS_CHUNKS, interiorOnly);
+        var exit = nearestVent(vents, target, LEG_SEARCH_RADIUS_CHUNKS, interiorOnly);
+
+        if (entry == null || exit == null || entry.equals(exit)) {
+            return Optional.empty();
+        }
+
+        // A duct that drops you no closer than you already were is a detour, not a shortcut.
+        if (exit.distSqr(target) >= traveller.blockPosition().distSqr(target)) {
+            return Optional.empty();
+        }
+
+        return Optional.of(new DuctLeg(entry, exit));
+    }
+
     public static boolean ductTravel(LivingEntity traveller, BlockPos entryVent, BlockPos exitVent) {
         var level = traveller.level();
         var emergence = emergencePosNear(level, exitVent);
@@ -198,5 +264,53 @@ public final class HiveVents {
         }
         level.playSound(null, emergence, SoundEvents.BEEHIVE_EXIT, SoundSource.HOSTILE, 1.0F, 0.8F);
         return true;
+    }
+
+    /**
+     * ⭐⭐ RE-LABEL EXISTING FRONTIER VENTS THAT ARE ACTUALLY ON THE SURFACE.
+     * <p>
+     * ⚠⚠ THIS EXISTS BECAUSE CLASSIFICATION IS WRITE-ONCE AND PERSISTED. `CreateVentAction` used to hardcode FRONTIER
+     * outside ceiled dimensions, so every vent a xenomorph dug up onto grass was stamped FRONTIER and STAYED FRONTIER.
+     * Fixing the classifier only helps vents dug from now on - [stated] "there was clearly a vent on the surface but it
+     * kept acting like it wasnt" describes vents that are ALREADY WRONG in his world, and no amount of new digging
+     * repairs them.
+     * </p>
+     * <p>
+     * ⚠ ONLY EVER PROMOTES FRONTIER → SURFACE. It never touches STRUCTURE (the hive's own doors, deliberately
+     * classified) and never demotes a SURFACE vent, so a hive cannot lose a door it already has. The worst case is that
+     * it does nothing.
+     * </p>
+     *
+     * @return how many vents were promoted
+     */
+    public static int reclassifyStaleFrontierVents(
+        net.minecraft.server.level.ServerLevel level,
+        com.alien.common.gameplay.hive.location.HiveLocation location,
+        int surfaceBandBlocks
+    ) {
+        var promoted = 0;
+
+        for (var vent : new java.util.ArrayList<>(location.ventManager().ventsOfKind(VentKind.FRONTIER))) {
+            // ⚠ SKIP UNLOADED CHUNKS. isNearSurface reads the heightmap and the world; forcing a load to relabel a
+            // vent would drag half the hive into memory. They are picked up next time the area is loaded.
+            if (!level.hasChunk(vent.getX() >> 4, vent.getZ() >> 4)) {
+                continue;
+            }
+
+            if (classifyUntagged(level, location, vent, surfaceBandBlocks) != VentKind.SURFACE) {
+                continue;
+            }
+
+            location.ventManager().addVent(vent, VentKind.SURFACE);
+
+            if (level.getBlockEntity(vent) instanceof com.alien.common.gameplay.block.entity.resin.vent.ResinVentBlockEntity blockEntity) {
+                blockEntity.setKind(VentKind.SURFACE);
+                blockEntity.markKindCurrent();
+            }
+
+            promoted++;
+        }
+
+        return promoted;
     }
 }

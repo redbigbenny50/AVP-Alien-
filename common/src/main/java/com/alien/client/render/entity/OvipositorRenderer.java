@@ -56,13 +56,21 @@ public class OvipositorRenderer extends AzEntityRenderer<Ovipositor> {
         return isChained(ovipositor) ? CHAINED_MODEL : MODEL;
     }
 
-    /** The strain of the queen underneath it - an eggsack has no variant of its own to read. */
+    /**
+     * The strain of the queen underneath it - an eggsack has no variant of its own to read.
+     * <p>
+     * ⚠ FALLS BACK TO THE REMEMBERED STRAIN, NOT TO THE PLAIN SHEET. An abandoned sack lingers for two minutes with no
+     * vehicle; asking the vehicle and defaulting on null is what turned an aberrant hive's eggsack black the instant
+     * its queen was knocked off it. The ovipositor records her strain every tick while carried, so the last value is
+     * still right once she is gone.
+     * </p>
+     */
     private static ResourceLocation textureFor(Ovipositor ovipositor) {
-        if (!(ovipositor.getVehicle() instanceof Queen queen)) {
-            return TEXTURE;
-        }
+        var variant = ovipositor.getVehicle() instanceof Queen queen
+            ? queen.getVariant()
+            : ovipositor.getRoyalVariant();
 
-        return switch (queen.getVariant()) {
+        return switch (variant) {
             case NETHER -> NETHER_TEXTURE;
             case ABERRANT -> ABERRANT_TEXTURE;
             default -> TEXTURE;

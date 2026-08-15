@@ -1,11 +1,12 @@
 package com.alien.common.gameplay.hive.lifecycle;
 
 import com.alien.Alien;
+import com.alien.common.gameplay.hive.economy.CasteResolver;
 import com.alien.common.gameplay.hive.economy.IrradiatedHiveRules;
 import com.alien.common.gameplay.hive.location.HiveLocation;
 import com.alien.common.gameplay.hive.location.HiveLocationRegistry;
-import com.alien.common.gameplay.hive.spawning.ReserveSpawnUtil;
 import com.alien.common.registry.init.AlienSoundEvents;
+import com.alien.common.registry.tag.AlienEntityTypeTags;
 import net.minecraft.ChatFormatting;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
@@ -52,6 +53,26 @@ public final class IrradiatedBirthRaid extends SavedData {
     private static final String NBT_LOCATION = "Location";
 
     private static final String NBT_TARGETS = "Targets";
+
+    /**
+     * ⭐ THE WAVE, IN ORDER. Walked repeatedly until the party cap is reached, so the FRONT is what a small raid is made
+     * of and the tail only shows up in a large one. Warriors and prowlers are the body, the spitter gives it reach, and
+     * the heavies arrive last.
+     * <p>
+     * ⚠ CASTE TAGS, resolved to the hive's own strain at send time - never entity types. A caste a strain does not have
+     * resolves to null and is skipped.
+     * </p>
+     */
+    private static final List<net.minecraft.tags.TagKey<EntityType<?>>> SHAPE = List.of(
+        AlienEntityTypeTags.WARRIORS,
+        AlienEntityTypeTags.WARRIORS,
+        AlienEntityTypeTags.PROWLERS,
+        AlienEntityTypeTags.WARRIORS,
+        AlienEntityTypeTags.SPITTERS,
+        AlienEntityTypeTags.PROWLERS,
+        AlienEntityTypeTags.PRAETORIANS,
+        AlienEntityTypeTags.CRUSHERS
+    );
 
     /** Two Minecraft days. */
     public static final long BIRTH_RAID_DELAY_TICKS = 48000L;
@@ -145,12 +166,18 @@ public final class IrradiatedBirthRaid extends SavedData {
         var present = new ArrayList<ServerPlayer>();
         for (var targetId : entry.targets()) {
             var player = level.getServer().getPlayerList().getPlayer(targetId);
-            if (player != null && player.level() == level) {
+
+            // A CREATIVE OR SPECTATOR CULPRIT COUNTS AS NOT HOME, NOT AS ANSWERED. The door in
+            // Alien.setTarget already refuses to aim at them, so sending the party anyway would spawn a full
+            // raid that stands around with no quarry AND mark the debt discharged - the hive would forgive a
+            // nuke because the culprit happened to be in creative when it came due. Left pending, it fires
+            // when they play again.
+            if (player != null && player.level() == level && !player.isCreative() && !player.isSpectator()) {
                 present.add(player);
             }
         }
 
-        // Nobody home. The hive is still standing and still owed, so keep the entry and try again.
+        // Nobody raidable. The hive is still standing and still owed, so keep the entry and try again.
         if (present.isEmpty()) {
             return false;
         }
@@ -193,11 +220,21 @@ public final class IrradiatedBirthRaid extends SavedData {
     }
 
     /**
-     * One free party at full strength, on the cluster's seed.
+     * ⭐⭐ THE COMPOSITION THE HIVE DOES NOT PAY FOR. [stated] "this raid isnt meant to pull from reserves. this raid is
+     * meant to generate all of its members full seperate from the reserves for free. its a penalty to the play not a
+     * drain to the hive. The aliens in this raid come from no where and are generated for free fully stocked raid
+     * waves."
      * <p>
-     * FREE means no biomass and no jelly - the newborn hive is not buying this, it is reacting. The members still come
-     * out of its own reserves, so it is spending PEOPLE rather than currency, which is the only thing it has left to
-     * spend.
+     * ⚠⚠ IT USED TO DRAIN {@code localReserves().trySpawn(type)}, WHICH INVERTED THE WHOLE POINT. A newborn hive has
+     * almost nothing banked, so the "max member" raid was whatever scraps it happened to hold - and every raider it did
+     * send was one it no longer had. The player who nuked it was effectively REWARDED: the retaliation emptied the hive
+     * that was retaliating. Now nothing is drained and nothing is checked; the roster below is conjured whole.
+     * </p>
+     * <p>
+     * ⚠ AND {@code markSpawnedFromReserves} IS DELIBERATELY NOT CALLED ON THEM. That helper skips a spawn to full
+     * maturity, but it is also the marker for units that BELONG to a reserve pool; applying it to free-conjured raiders
+     * would hand the hive a permanent windfall the first time they unloaded. Maturity is set directly instead.
+     * </p>
      */
     private static void sendRaid(ServerLevel level, HiveLocation location, List<ServerPlayer> cluster) {
         var quarry = cluster.get(0);
@@ -207,21 +244,11 @@ public final class IrradiatedBirthRaid extends SavedData {
         );
 
         var sent = 0;
-        var types = new ArrayList<>(location.localReserves().getAvailableEntityTypes());
-        var progressed = true;
+        var roster = conjureRoster(location, cap);
 
-        while (progressed && sent < cap) {
-            progressed = false;
-
-            for (var type : types) {
-                if (sent >= cap) {
-                    break;
-                }
-
-                if (spawnRaider(level, location, type, quarry)) {
-                    sent++;
-                    progressed = true;
-                }
+        for (var type : roster) {
+            if (spawnRaider(level, location, type, quarry)) {
+                sent++;
             }
         }
 
@@ -238,11 +265,53 @@ public final class IrradiatedBirthRaid extends SavedData {
         );
     }
 
-    private static boolean spawnRaider(ServerLevel level, HiveLocation location, EntityType<?> type, ServerPlayer quarry) {
-        if (!location.localReserves().trySpawn(type)) {
-            return false;
+    /**
+     * Builds the wave out of nothing, in the hive's own strain.
+     * <p>
+     * ⚠ RESOLVED FROM CASTE TAGS, NOT FROM WHAT IS BANKED - so the roster is the same whether the hive is a day old
+     * with an empty vault or a century old and full. {@code SHAPE} is walked in order and repeated until the party cap
+     * is reached, so the front of the list is what a small raid is made of and the tail only appears in a big one:
+     * warriors and prowlers form the body, a spitter gives it reach, and the heavies show up last.
+     * </p>
+     * <p>
+     * A caste that does not exist in this strain simply resolves to null and is skipped, which is why the loop counts
+     * what it actually added rather than trusting the shape's length.
+     * </p>
+     */
+    private static List<EntityType<?>> conjureRoster(HiveLocation location, int cap) {
+        var roster = new ArrayList<EntityType<?>>();
+        var variant = location.lineageVariantOrNull();
+
+        if (variant == null || cap <= 0) {
+            return roster;
         }
 
+        while (roster.size() < cap) {
+            var addedThisPass = false;
+
+            for (var casteTag : SHAPE) {
+                if (roster.size() >= cap) {
+                    break;
+                }
+
+                var type = CasteResolver.entityTypeForCaste(variant, casteTag);
+
+                if (type != null) {
+                    roster.add(type);
+                    addedThisPass = true;
+                }
+            }
+
+            // Nothing in the shape exists for this strain - stop rather than spin.
+            if (!addedThisPass) {
+                break;
+            }
+        }
+
+        return roster;
+    }
+
+    private static boolean spawnRaider(ServerLevel level, HiveLocation location, EntityType<?> type, ServerPlayer quarry) {
         var entity = type.create(level);
         if (entity == null) {
             return false;
@@ -259,7 +328,12 @@ public final class IrradiatedBirthRaid extends SavedData {
         }
 
         level.addFreshEntityWithPassengers(entity);
-        ReserveSpawnUtil.markSpawnedFromReserves(entity);
+
+        // Fully grown on arrival - see the note on sendRaid for why this is done directly rather than through
+        // ReserveSpawnUtil, which would also mark them as reserve stock and gift them to the hive on unload.
+        if (entity instanceof com.alien.common.gameplay.entity.living.alien.Alien alien) {
+            alien.getMoltingManager().skipToFullMaturity();
+        }
         return true;
     }
 

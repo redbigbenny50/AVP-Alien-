@@ -97,8 +97,21 @@ public class EggPickupManager implements GameEventListener.Provider<EggPickupReq
 
     private void acknowledgePickupRequest(Ovomorph ovomorph) {
         if (
-            // If this xenomorph already has a target ovomorph, then ignore this other requesting ovomorph.
-            targetOvomorph != null
+            // ⭐⭐ SOMEONE ELSE ALREADY CLAIMED THIS EGG. [stated] haulers "always got stuck on the egg and nothing
+            // else on eachother" - the pile in his screenshot is several workers converging on ONE ovomorph.
+            //
+            // ⚠⚠ EVERY OTHER CHECK HERE ASKS ABOUT THE WORKER; NOTHING ASKED ABOUT THE EGG. A pickup request is a
+            // game event broadcast to every listener in range, so two free workers hearing the same broadcast BOTH
+            // passed (neither had a target yet) and both set the same ovomorph as theirs. One picks it up; the rest
+            // stand over the spot holding a claim they can never fulfil, and the egg's own flag - already true -
+            // silences it for anyone who might have helped.
+            //
+            // ⚠ SAFE AGAINST STALE CLAIMS because the egg already lapses its own reservation after
+            // PICKUP_CLAIM_TIMEOUT_TICKS if no pickup follows, then starts broadcasting again. Without that valve
+            // this line would strand an egg whose claimer died; with it, refusing here costs at most one timeout.
+            ovomorph.pickupRequestAcknowledged
+                // If this xenomorph already has a target ovomorph, then ignore this other requesting ovomorph.
+                || targetOvomorph != null
                 // If the xenomorph is already moving an ovomorph, don't acknowledge this other ovomorph's request.
                 || !getPassengerOvomorphs().isEmpty()
                 // A worker hauling a host is busy: claiming an egg here silences it for everyone else.

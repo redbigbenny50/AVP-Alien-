@@ -1,7 +1,10 @@
 package com.alien.client.animation.entity;
 
 import com.alien.AlienResources;
+import com.alien.client.animation.entity.cocoon.CocoonAnimationStateTracker;
+import com.alien.common.gameplay.entity.dismemberment.AdultXenomorphHitboxCatalog;
 import com.alien.common.gameplay.entity.living.alien.adolescent.Adolescent;
+import com.alien.common.gameplay.entity.living.alien.adolescent.AdolescentAnimationRefs;
 import com.alien.common.util.AzAlienAnimationUtil;
 import com.alien.common.util.AzAlienHeadAnimationUtil;
 import com.blib.api.client.animation.v1.animator.AzAnimatorConfig;
@@ -27,6 +30,46 @@ public class AdolescentAnimator extends AzEntityAnimator<Adolescent> {
      * dispatcher drives both.
      */
     private static final ResourceLocation ROYAL_ANIMATION = AlienResources.entityAnimationLocation(ROYAL_NAME);
+
+    /**
+     * ⭐⭐ THE ADOLESCENT'S MOLT, WHICH NEVER PLAYED BEFORE.
+     * <p>
+     * Two things had to be true and neither was: the entity had to reach a cocoon state at all (it now does - it
+     * extends Xenomorph, so GrowthManager routes it through the cocoon pipeline instead of swapping it instantly), and
+     * something had to dispatch the clips. This is that something.
+     * </p>
+     * <p>
+     * ⚠ THE SELECTORS ARE DESTINATION-KEYED, unlike every other caste's. The adolescent has a separate enter/loop pair
+     * per form it can become, so both selectors read {@code getCocoonManager().getTargetType()} rather than returning a
+     * constant. ENTER-ORIENTED ({@code true}): the pair is authored as a wrapping-up, and the adolescent is only ever a
+     * molt SOURCE, so the emerge side is never reached on this entity.
+     * </p>
+     */
+    private final CocoonAnimationStateTracker<Adolescent> cocoonAnimationStateTracker = new CocoonAnimationStateTracker<>(
+        adolescent -> AdolescentAnimationRefs.moltLoopFor(moltFormOf(adolescent)),
+        adolescent -> AdolescentAnimationRefs.moltEnterFor(moltFormOf(adolescent)),
+        true
+    );
+
+    /**
+     * The bare caste name of what this adolescent is turning into - "spitter" for {@code avp_alien:nether_spitter}.
+     * <p>
+     * Strain prefixes are stripped because the clips are per FORM, not per strain: a nether adolescent becoming a
+     * nether spitter plays the same {@code molt.spitter.*} pair as a normal one. {@code modelForEntityPath} already
+     * does exactly this stripping for the limb-hitbox roster, so the rule lives in one place.
+     * </p>
+     */
+    private static String moltFormOf(Adolescent adolescent) {
+        var target = adolescent.getCocoonManager().getTargetType();
+
+        if (target == null) {
+            return null;
+        }
+
+        return AdultXenomorphHitboxCatalog
+            .modelForEntityPath(net.minecraft.core.registries.BuiltInRegistries.ENTITY_TYPE.getKey(target).getPath())
+            .orElse(null);
+    }
 
     public AdolescentAnimator() {
         super(AzAnimatorConfig.defaultConfig());
@@ -67,6 +110,11 @@ public class AdolescentAnimator extends AzEntityAnimator<Adolescent> {
     @Override
     public void setCustomAnimations(Adolescent animatable, float partialTicks) {
         super.setCustomAnimations(animatable, partialTicks);
+
+        // Ahead of everything: a molting adolescent is doing nothing else.
+        if (cocoonAnimationStateTracker.run(animatable)) {
+            return;
+        }
 
         AzAlienHeadAnimationUtil.applyHeadLookFromBindPose(animatable, context(), partialTicks, "gNeck");
 

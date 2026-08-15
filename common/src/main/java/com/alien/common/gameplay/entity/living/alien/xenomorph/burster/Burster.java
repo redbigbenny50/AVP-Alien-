@@ -3,6 +3,7 @@ package com.alien.common.gameplay.entity.living.alien.xenomorph.burster;
 import com.alien.common.gameplay.entity.living.alien.Alien;
 import com.alien.common.gameplay.entity.living.alien.EggCarrier;
 import com.alien.common.gameplay.entity.living.alien.xenomorph.AttackType;
+import com.alien.common.gameplay.entity.living.alien.xenomorph.CrawlAttack;
 import com.alien.common.gameplay.entity.living.alien.xenomorph.EggPickupManager;
 import com.alien.common.gameplay.entity.living.alien.xenomorph.ExplosiveXenomorphUtil;
 import com.alien.common.gameplay.entity.living.alien.xenomorph.VentBuilder;
@@ -48,6 +49,34 @@ public class Burster extends Xenomorph implements EggCarrier, GOAPUser<Burster>,
     private static final double LIMB_HORIZONTAL_VELOCITY = 0.18D;
 
     private static final double LIMB_VERTICAL_VELOCITY = 0.14D;
+
+    /**
+     * ⭐⭐ THE PRONE ATTACKS. [stated] "the spitter loses one leg and still stands to attack with arms and tail attack it
+     * should only resort to crawl attacks."
+     * <p>
+     * ⚠⚠ THE CLIPS AND THE DISPATCHER METHODS ALREADY EXISTED - what was missing was the ATTACK TYPES. The crawl
+     * preference in {@code XenomorphAttackConfig} restricts a crawling caste to crawl attacks ONLY IF it has any; with
+     * none registered there was nothing to restrict to and it fell straight through to the standing set. A one-legged
+     * burster stood up to swing because there was literally nothing prone to pick.
+     * </p>
+     */
+    /** ⚠ Slightly softer than a standing swing, matching the predalien's existing crawl claw. */
+    private static final float CRAWL_DAMAGE_FRACTION = 0.8F;
+
+    public static final AttackType CRAWL_CLAW = CrawlAttack.create(
+        "burster_crawl_claw",
+        CRAWL_DAMAGE_FRACTION,
+        CrawlAttack.Limb.ARM,
+        16
+    );
+
+    /** ⚠ HEAD, NOT ARM - so a crawling burster that has also lost both arms still has a bite. */
+    public static final AttackType CRAWL_BITE = CrawlAttack.create(
+        "burster_crawl_bite",
+        CRAWL_DAMAGE_FRACTION,
+        CrawlAttack.Limb.HEAD,
+        14
+    );
 
     public static final AttackType CLAW = AttackType.builder("burster_claw")
         .requiresAnyArm()
@@ -95,6 +124,8 @@ public class Burster extends Xenomorph implements EggCarrier, GOAPUser<Burster>,
                     XenomorphAttackConfig.builder()
                         .addRegular(CLAW)
                         .addRegular(BITE)
+                        .addRegular(CRAWL_CLAW)
+                        .addRegular(CRAWL_BITE)
                         .addRegular(TAIL)
                         .build()
                 )

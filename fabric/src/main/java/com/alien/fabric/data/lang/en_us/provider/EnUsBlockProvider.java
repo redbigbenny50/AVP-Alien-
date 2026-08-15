@@ -24,6 +24,12 @@ public class EnUsBlockProvider {
         addBlock(builder, AlienBlocks.ROYAL_JELLY_BLOCK, "Royal Jelly Block");
         addBlock(builder, AlienBlocks.SCOURGE_JELLY_BLOCK, "Scourge Jelly Block");
         addBlock(builder, AlienBlocks.IRRADIATED_JELLY_BLOCK, "Irradiated Jelly Block");
+        addBlock(builder, AlienBlocks.RESIN_CONTAINER, "Resin Container");
+        addBlock(builder, AlienBlocks.NETHER_RESIN_CONTAINER, "Nether Resin Container");
+        addBlock(builder, AlienBlocks.ABERRANT_RESIN_CONTAINER, "Aberrant Resin Container");
+        addBlock(builder, AlienBlocks.IRRADIATED_RESIN_CONTAINER, "Irradiated Resin Container");
+        // ⚠ The MENU title, not the block name - the block entity asks for this key when a player opens one.
+        builder.add("container.avp_alien.resin_container", "Resin Container");
         addBlock(builder, AlienBlocks.ANCHOR, "Anchor");
         addBlock(builder, AlienBlocks.JELLY_VAT, "Jelly Vat");
 

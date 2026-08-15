@@ -9,7 +9,6 @@ import com.alien.common.gameplay.hive.location.HiveLocationRegistry;
 import com.alien.common.gameplay.hive.structure.HiveChamberSlots;
 import com.alien.common.gameplay.hive.structure.HostEggDelivery;
 import com.alien.common.gameplay.hive.vent.HiveVents;
-import com.alien.common.gameplay.hive.vent.VentKind;
 import com.alien.common.registry.init.AlienSoundEvents;
 import com.alien.common.registry.tag.AlienEntityTypeTags;
 import com.blib.api.common.goap.v1.action.impl.NeoMoveToPosAction;
@@ -105,7 +104,22 @@ public class DropOffEggAction {
      */
     private static final int SHELVE_AFTER_EXHAUSTED_SEARCHES = 6;
 
-    private static final StateKey<Integer> KEY_EXHAUSTED_SEARCHES = StateKey.sensed("egg_drop_exhausted_searches");
+    /**
+     * ⭐⭐ THE EXHAUSTION COUNT LIVES ON THE ENTITY, NOT THE BLACKBOARD, AND THAT IS THE WHOLE FIX.
+     * <p>
+     * It used to be a {@code StateKey.sensed} blackboard value. Sensed keys do not survive the sensor pass between
+     * planning cycles, so every retry read back 0, the counter never reached {@link #SHELVE_AFTER_EXHAUSTED_SEARCHES},
+     * and the shelve safety net below was UNREACHABLE. The symptom in the field is exactly what it looks like: haulers
+     * standing frozen holding eggs, several piled on the same block, logging "Egg haul STUCK" forever. Razorem's log
+     * has 62 STUCK lines from two haulers and **zero** SHELVED lines.
+     * </p>
+     * <p>
+     * ⚠ A WeakHashMap keyed on the entity, deliberately: it outlives the blackboard, costs nothing when the hauler
+     * unloads, and needs no NBT - a reload resetting the count just gives the hive a few more seconds of grace, which
+     * is the correct behaviour anyway.
+     * </p>
+     */
+    private static final java.util.Map<Xenomorph, Integer> EXHAUSTED_SEARCHES = new java.util.WeakHashMap<>();
 
     private static final int MAX_REMEMBERED_FAILED_SPOTS = 32;
 
@@ -214,9 +228,17 @@ public class DropOffEggAction {
                 // A FROZEN HAULER IS THE ONE FORBIDDEN OUTCOME. Count consecutive exhausted searches; past the
                 // threshold, root the egg right here and finish - the runner returns to its normal duties and the
                 // egg sits shelved like any nursery-overflow clutch egg until something hatches it or clears it.
-                var exhausted = blackboard.getOrDefault(KEY_EXHAUSTED_SEARCHES, 0) + 1;
-                blackboard.set(KEY_EXHAUSTED_SEARCHES, exhausted);
+                var exhausted = EXHAUSTED_SEARCHES.merge(xenomorph, 1, Integer::sum);
                 if (exhausted >= SHELVE_AFTER_EXHAUSTED_SEARCHES) {
+                    // ⭐⭐ BANK IT FIRST. [stated] "if there is a bonus or overflow of eggs... they can be banked if
+                    // the bank is capped put them in anyway as a bonus." An egg in the reserve is a real asset the
+                    // hive spends later; an egg rooted on the floor is litter nothing ever collects. So the shelf
+                    // below is now only the LAST resort - when the reserve refuses the egg outright.
+                    if (bankOverflowEgg(xenomorph)) {
+                        EXHAUSTED_SEARCHES.remove(xenomorph);
+                        return Action.Signal.ABORT;
+                    }
+
                     var shelf = findShelfSpot(xenomorph);
                     placeEggs(xenomorph, shelf);
                     com.alien.Alien.LOGGER.info(
@@ -225,6 +247,7 @@ public class DropOffEggAction {
                         BlockPos.containing(shelf),
                         exhausted
                     );
+                    EXHAUSTED_SEARCHES.remove(xenomorph);
                     return Action.Signal.ABORT;
                 }
 
@@ -233,7 +256,7 @@ public class DropOffEggAction {
             }
 
             // A destination exists again - the drought is over, so the shelve countdown starts fresh.
-            blackboard.set(KEY_EXHAUSTED_SEARCHES, 0);
+            EXHAUSTED_SEARCHES.remove(xenomorph);
 
             // Ours now - other haulers will look elsewhere. The claim expires by itself if we never arrive.
             claimSpot(xenomorph, freeSpot.get());
@@ -468,6 +491,68 @@ public class DropOffEggAction {
     }
 
     /**
+     * ⭐⭐ BANKS A HELD EGG THE NURSERY HAS NO BED FOR, and DELIBERATELY IGNORES `RESERVE_EGG_CAP`.
+     * <p>
+     * [stated] "if the bank is capped put them in anyway as a bonus." `HiveLocationReserves.tryAdd` is itself uncapped
+     * - the 100-egg ceiling lives only in the LAYING sensor, which decides whether the queen should keep producing.
+     * That separation is exactly right here: the queen must stop at the cap, but an egg that ALREADY exists and is
+     * being carried around should never be thrown away for being over it.
+     * </p>
+     * <p>
+     * ⚠ THE CARRIED OVOMORPHS ARE DISCARDED, NOT DROPPED. They are becoming an abstract reserve entry - leaving the
+     * entities in the world as well would duplicate them.
+     * </p>
+     * <p>
+     * ⚠ RETURNS FALSE FOR AN END-STYLE HIVE or a variant mismatch, and the caller falls back to shelving. [stated] "no
+     * eggs only adults in the end" - so an End hive genuinely cannot bank one.
+     * </p>
+     */
+    private static boolean bankOverflowEgg(Xenomorph xenomorph) {
+        if (!(xenomorph.level() instanceof ServerLevel serverLevel)) {
+            return false;
+        }
+
+        var location = resolveLocation(serverLevel, xenomorph);
+
+        if (location == null || location.isEndStyleHive()) {
+            return false;
+        }
+
+        var carried = xenomorph.getPassengers()
+            .stream()
+            .filter(passenger -> passenger instanceof Ovomorph)
+            .map(passenger -> (Ovomorph) passenger)
+            .toList();
+
+        if (carried.isEmpty()) {
+            return false;
+        }
+
+        var banked = 0;
+
+        for (var ovomorph : carried) {
+            if (!location.localReserves().tryAdd(ovomorph.getType(), 1)) {
+                continue;
+            }
+
+            ovomorph.stopRiding();
+            ovomorph.discard();
+            banked++;
+        }
+
+        if (banked <= 0) {
+            return false;
+        }
+
+        com.alien.Alien.LOGGER.info(
+            "Egg haul BANKED at {}: nursery full, {} egg(s) added to the reserve (over cap is allowed) - hauler released.",
+            xenomorph.blockPosition(),
+            banked
+        );
+        return true;
+    }
+
+    /**
      * Where to root an egg the hive has no home for: the hauler's own feet when nothing else claims that spot,
      * otherwise the first free horizontal neighbor with solid footing. Falls back to the feet even when crowded - two
      * overlapping shelved eggs beat one eternally frozen hauler.
@@ -527,53 +612,18 @@ public class DropOffEggAction {
         blackboard.set(KEY_FAILED_VENTS, failedVents);
     }
 
+    /**
+     * Delegates to the shared planner. The walk-failed override survives as the {@code ignoreProximity} flag: once a
+     * walk to the bed has failed, the duct stops being an optimisation and becomes the only route left, so the
+     * worthwhile-distance test must not veto it.
+     */
     private static void planVentLeg(Xenomorph xenomorph, BlockPos bed, Blackboard blackboard) {
-        if (!(xenomorph.level() instanceof ServerLevel serverLevel)) {
-            return;
-        }
-        // Proximity normally rules the duct out - but NOT once a walk has already failed. See KEY_WALK_FAILED.
         var walkFailed = blackboard.getOrDefault(KEY_WALK_FAILED, false);
-        if (!walkFailed && xenomorph.blockPosition().distSqr(bed) < VENT_WORTHWHILE_DIST_SQUARED) {
-            return;
-        }
-        var location = resolveLocation(serverLevel, xenomorph);
-        if (location == null) {
-            return;
-        }
-        var vents = location.ventManager();
-        var failedVents = getFailedVents(blackboard);
-        // Egg haulers travel the hive's OWN ducts - STRUCTURE vents. Never a party door, and never a vent this hauler
-        // has already failed to reach on this run.
-        java.util.function.Predicate<BlockPos> usableEntry =
-            v -> location.ventManager().isKind(v, VentKind.STRUCTURE) && !failedVents.contains(v);
-        // In-hive shortcut: STRUCTURE ducts only (was "any vent not near the surface", which caught frontier vents).
-        java.util.function.Predicate<BlockPos> interiorOnly =
-            v -> location.ventManager().isKind(v, VentKind.STRUCTURE);
-        var entry = HiveVents.nearestVent(vents, xenomorph.blockPosition(), VENT_SEARCH_RADIUS_CHUNKS, usableEntry);
-        var exit = HiveVents.nearestVent(vents, bed, VENT_SEARCH_RADIUS_CHUNKS, interiorOnly);
-        if (entry == null || exit == null || entry.equals(exit)) {
-            return;
-        }
 
-        // The duct is only worth taking if the WHOLE ducted route - walk to the entry vent, then walk from the
-        // exit vent to the bed - is meaningfully shorter than just walking straight to the bed. The old check only
-        // compared the EXIT leg, ignoring how far the entry vent is. That let a hauler commit to an entry vent
-        // sitting BEHIND it (away from the bed): it would trudge backward to the vent, and because that backward
-        // walk kept it 'far enough' the plan kept re-choosing the duct - the walk-vs-vent tug-of-war the tester
-        // saw at certain positions. Requiring the entry leg to pay for itself removes the backward-vent trap.
-        // Skip this route check once the direct walk has already FAILED: at that point any duct beats standing in
-        // a dead end, so we take the shortcut even if it isn't shorter. Only the healthy (not-yet-failed) case
-        // has to justify the detour.
-        if (!walkFailed) {
-            var self = xenomorph.blockPosition();
-            var directToBed = Math.sqrt(self.distSqr(bed));
-            var ductedRoute = Math.sqrt(self.distSqr(entry)) + Math.sqrt(exit.distSqr(bed));
-            if (ductedRoute >= directToBed - VENT_MIN_SHORTCUT_BLOCKS) {
-                return; // the duct wouldn't shorten the trip enough to be worth the detour
-            }
-        }
-        blackboard.set(KEY_VENT_ENTRY, entry);
-        blackboard.set(KEY_VENT_EXIT, exit);
+        HiveVents.planInteriorLeg(xenomorph, bed, walkFailed).ifPresent(leg -> {
+            blackboard.set(KEY_VENT_ENTRY, leg.entry());
+            blackboard.set(KEY_VENT_EXIT, leg.exit());
+        });
     }
 
     /**

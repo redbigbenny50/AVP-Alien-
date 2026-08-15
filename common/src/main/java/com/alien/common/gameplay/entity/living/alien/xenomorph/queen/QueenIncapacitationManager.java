@@ -24,9 +24,11 @@ import net.minecraft.world.entity.LivingEntity;
  * <li><b>Capture</b> - the player tags/chains her. She still wakes on heal/timeout; the inhibitor only changes WHO she
  * is when she wakes, not whether she does.</li>
  * </ul>
- * On top of that sits the DOWN CAP: go down more than {@link #MAX_DOWNS} times inside {@link #DOWN_WINDOW_TICKS} and
- * the next defeat is a real death. The cap takes precedence over the heal and timeout exits - you cannot rescue your
- * way out of being worn down.
+ * On top of that sits the DOWN CAP: go down more than {@link #MAX_DOWNS} times, each within {@link #DOWN_WINDOW_TICKS}
+ * of the LAST one, and the next defeat is a real death. The cap takes precedence over the heal and timeout exits - you
+ * cannot rescue your way out of being worn down. Measured from the last down rather than the first ON PURPOSE: measured
+ * from the first, a rescue-and-re-down cycle slower than three downs per window kept resetting the count, and she could
+ * be ground forever without ever wearing out.
  * <p>
  * Every number here is a per-strain knob in the design. They are constants for now; when strain config lands, these
  * become its defaults.
@@ -47,6 +49,18 @@ public final class QueenIncapacitationManager {
      */
     public static final int SELF_RECOVERY_TICKS = 10 * 60 * 20;
 
+    /**
+     * How long a rescuer must stand over her, unbroken, before she comes round.
+     * <p>
+     * The rescue used to fire the instant any kin came within {@link #HEAL_RADIUS} on a 20-tick scan, which made a
+     * downed queen surrounded by her own hive effectively unkillable: she was back up before an attacker could land the
+     * finisher, over and over. A channel gives the fight counterplay in both directions — the attacker can break it by
+     * killing or driving off the rescuer, and the hive has to actually commit a body to standing over her.
+     * <p>
+     * Three seconds, matching the 60-tick claw the chained-queen rescue already uses, so the two read as the same act.
+     */
+    public static final int RESCUE_CHANNEL_TICKS = 60;
+
     /** A rescuing xenomorph restores this fraction of her max health, and she wakes immediately. */
     public static final float XENO_HEAL_FRACTION = 0.5F;
 
@@ -66,6 +80,7 @@ public final class QueenIncapacitationManager {
 
     private static final String NBT_DOWN_COUNT = "QueenIncapDownCount";
 
+    /** Key kept at its original spelling so existing saves still load; it now stores the LAST down. */
     private static final String NBT_FIRST_DOWN_TICK = "QueenIncapFirstDownTick";
 
     private static final String NBT_LAST_BAR_TICK = "QueenIncapLastBarTick";
@@ -76,7 +91,12 @@ public final class QueenIncapacitationManager {
 
     private int downCount;
 
-    private long firstDownGameTime = Long.MIN_VALUE;
+    private long lastDownGameTime = Long.MIN_VALUE;
+
+    /** The rescuer currently standing over her, and how long it has held. Transient: a reload restarts the channel. */
+    private java.util.UUID rescuerId = null;
+
+    private int rescueChannelTicks = 0;
 
     /** Game-time the recovery bar was last advanced. Lets the bar catch up in one step across an unload gap. */
     private long lastBarGameTime = Long.MIN_VALUE;
@@ -109,9 +129,8 @@ public final class QueenIncapacitationManager {
         }
 
         var now = serverLevel.getGameTime();
-        if (firstDownGameTime == Long.MIN_VALUE || now - firstDownGameTime > DOWN_WINDOW_TICKS) {
+        if (lastDownGameTime == Long.MIN_VALUE || now - lastDownGameTime > DOWN_WINDOW_TICKS) {
             // Window expired (or first ever down) - the count starts over from here.
-            firstDownGameTime = now;
             downCount = 0;
         }
 
@@ -121,12 +140,14 @@ public final class QueenIncapacitationManager {
         }
 
         downCount++;
+        lastDownGameTime = now;
         goDown();
         return true;
     }
 
     private void goDown() {
         bar = BAR_START;
+        clearRescueChannel();
         lastBarGameTime = queen.level().getGameTime();
         showBar();
         queen.setIncapacitated(true);
@@ -162,6 +183,7 @@ public final class QueenIncapacitationManager {
 
     private void wake(float health) {
         bar = 0.0F;
+        clearRescueChannel();
         lastBarGameTime = Long.MIN_VALUE;
         hideBar();
         queen.setIncapacitated(false);
@@ -214,9 +236,38 @@ public final class QueenIncapacitationManager {
             ) {
                 continue;
             }
-            healRescue();
+            tickRescueChannel(candidate);
             return;
         }
+
+        // Nobody is standing over her: whatever progress a rescuer had made is lost.
+        clearRescueChannel();
+    }
+
+    /**
+     * Advances the rescue channel for the kin currently over her, and wakes her once it completes.
+     * <p>
+     * The channel belongs to ONE rescuer. If it dies, wanders out of {@link #HEAL_RADIUS} or is replaced by a different
+     * xenomorph, the count restarts — a relay of drones passing through cannot chip away at it, and killing the one
+     * that is actually tending her genuinely undoes the work.
+     */
+    private void tickRescueChannel(LivingEntity rescuer) {
+        if (!java.util.Objects.equals(rescuerId, rescuer.getUUID())) {
+            rescuerId = rescuer.getUUID();
+            rescueChannelTicks = 0;
+        }
+
+        rescueChannelTicks += HEAL_SCAN_INTERVAL_TICKS;
+
+        if (rescueChannelTicks >= RESCUE_CHANNEL_TICKS) {
+            clearRescueChannel();
+            healRescue();
+        }
+    }
+
+    private void clearRescueChannel() {
+        rescuerId = null;
+        rescueChannelTicks = 0;
     }
 
     /**
@@ -275,6 +326,7 @@ public final class QueenIncapacitationManager {
 
     /** She left the world while down (killed, unloaded, removed): never leak the bar. */
     public void onRemoved() {
+        clearRescueChannel();
         hideBar();
     }
 
@@ -295,7 +347,7 @@ public final class QueenIncapacitationManager {
     public void save(CompoundTag tag) {
         tag.putFloat(NBT_BAR, bar);
         tag.putInt(NBT_DOWN_COUNT, downCount);
-        tag.putLong(NBT_FIRST_DOWN_TICK, firstDownGameTime);
+        tag.putLong(NBT_FIRST_DOWN_TICK, lastDownGameTime);
         tag.putLong(NBT_LAST_BAR_TICK, lastBarGameTime);
     }
 
@@ -303,7 +355,7 @@ public final class QueenIncapacitationManager {
         bar = tag.getFloat(NBT_BAR);
         downCount = tag.getInt(NBT_DOWN_COUNT);
         if (tag.contains(NBT_FIRST_DOWN_TICK)) {
-            firstDownGameTime = tag.getLong(NBT_FIRST_DOWN_TICK);
+            lastDownGameTime = tag.getLong(NBT_FIRST_DOWN_TICK);
         }
         if (tag.contains(NBT_LAST_BAR_TICK)) {
             lastBarGameTime = tag.getLong(NBT_LAST_BAR_TICK);

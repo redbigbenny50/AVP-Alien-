@@ -1,14 +1,20 @@
 package com.alien.common.gameplay.hive.convoy;
 
 import com.alien.Alien;
+import com.alien.common.gameplay.entity.living.alien.xenomorph.queen.Queen;
 import com.alien.common.gameplay.hive.config.HiveConfig;
 import com.alien.common.gameplay.hive.faction.LineageFactionData;
+import com.alien.common.gameplay.hive.faction.LocationMembership;
 import com.alien.common.gameplay.hive.location.HiveLocation;
 import com.alien.common.gameplay.hive.location.HiveLocationRegistry;
 import com.alien.common.registry.RaidWaveProfileRegistry;
+import com.alien.common.registry.tag.AlienEntityTypeTags;
 import com.blib.api.common.entity.v1.EntityReserves;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.MinecraftServer;
+import net.minecraft.world.entity.MobSpawnType;
+
+import java.util.List;
 
 /**
  * Detects when a convoy has reached its destination and applies the arrival effect.
@@ -68,6 +74,15 @@ public final class ConvoyArrival {
             );
             return;
         }
+
+        // ⭐⭐⭐ THE FOUNDER QUEEN MUST BE SPAWNED, NOT BANKED - do this BEFORE the rest goes to reserves.
+        // A founder convoy is the ONE reinforcement that carries a queen. AbstractSpreadAttempt deliberately puts
+        // her in the COMPOSITION rather than draining her from reserves, because queens are unique identity
+        // entities that reserves cannot hold (see HiveIdentityReserveUnloadHandler: "never virtualize them").
+        // Pouring the whole composition in regardless undid exactly that: she arrived as a NUMBER in the reserve
+        // and never became an entity, so the daughter got a core claim and surface vents and then stopped dead -
+        // no queen, no laying, no growth, forever.
+        materializeFounderQueens(server, destinationLocation, reinforcement.composition());
 
         addCompositionToLocation(destinationLocation, reinforcement.composition());
 
@@ -201,6 +216,85 @@ public final class ConvoyArrival {
             destination.id(),
             raid.composition().getCount()
         );
+    }
+
+    /**
+     * Spawns any QUEENS-tagged member of an arriving composition as a REAL ENTITY and binds her to the destination,
+     * removing her from the composition so the pour that follows cannot bank her.
+     * <p>
+     * ⚠ ORDER MATTERS: this runs BEFORE {@code addCompositionToLocation}. Everything else in the convoy - drones,
+     * runners, the escort - is fungible and belongs in reserves exactly as before; only the royal is lifted out.
+     * </p>
+     * <p>
+     * ⚠ IF THE LOCATION ALREADY HAS A LIVING FOUNDER she is NOT overwritten - a second royal arriving at a hive that
+     * already has one joins as an ordinary member. Reassigning `founderId` would orphan the sitting queen from the hive
+     * she founded.
+     * </p>
+     * <p>
+     * ⚠ IF THE SPAWN FAILS the entry is LEFT IN the composition, so she still reaches the reserve rather than being
+     * silently destroyed. That is the old (broken) outcome, but it is strictly better than deleting her.
+     * </p>
+     */
+    private static void materializeFounderQueens(
+        MinecraftServer server,
+        HiveLocation destinationLocation,
+        EntityReserves composition
+    ) {
+        var level = server.getLevel(destinationLocation.dimension());
+
+        if (level == null) {
+            return;
+        }
+
+        for (var entityType : List.copyOf(composition.getAvailableEntityTypes())) {
+            if (!entityType.is(AlienEntityTypeTags.QUEENS) || composition.getCount(entityType) <= 0) {
+                continue;
+            }
+
+            var spawnPos = destinationLocation.centerPos();
+            var spawned = entityType.spawn(level, spawnPos, MobSpawnType.STRUCTURE);
+
+            if (!(spawned instanceof Queen queen)) {
+                if (spawned != null) {
+                    spawned.discard();
+                }
+                Alien.LOGGER.warn(
+                    "Hive: founder convoy carried {} but it did not spawn as a Queen at {} - leaving it in the "
+                        + "composition so it is not lost",
+                    entityType,
+                    spawnPos
+                );
+                continue;
+            }
+
+            // ⚠ EntityReserves exposes no remove - edit the backing map directly, and DROP the key when it hits
+            // zero so getAvailableEntityTypes stops offering it.
+            var backing = composition.getBackingMap();
+            var remaining = backing.getOrDefault(entityType, 0) - 1;
+
+            if (remaining > 0) {
+                backing.put(entityType, remaining);
+            } else {
+                backing.remove(entityType);
+            }
+
+            queen.setPersistenceRequired();
+            queen.getMoltingManager().skipToFullMaturity();
+
+            // Only claim the founder seat if it is genuinely vacant.
+            if (destinationLocation.founderId() == null) {
+                destinationLocation.setFounderId(queen.getUUID());
+            }
+
+            LocationMembership.join(destinationLocation, queen);
+
+            Alien.LOGGER.info(
+                "Hive: founder queen {} materialized at location {} ({}) - daughter hive is now alive",
+                queen.getUUID(),
+                destinationLocation.id(),
+                spawnPos
+            );
+        }
     }
 
     private static void addCompositionToLocation(HiveLocation location, EntityReserves composition) {

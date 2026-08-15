@@ -84,7 +84,16 @@ public final class CarveSiteWork {
      * her). One clump every 5s; on the 3x3-chunk chamber that lands the core carve at a few minutes of visible, solo
      * queen work, overlapping the founding biomass fill she is doing anyway.
      */
-    private static final int QUEEN_DIG_INTERVAL_TICKS = 100;
+    /**
+     * ⭐ THE QUEEN'S SOLO DIG PACE. [stated] "raise the solo pace lowerly" — 100 → 70, a modest lift, not a rewrite.
+     * <p>
+     * The arithmetic, so the number means something: {@code queen_chamber_3x3} is 2304 columns and a dig step clears
+     * every unexcavated column within {@link #DIG_RADIUS} (a 5×5 block, ≤25 columns), so a core is ~92 steps. At 100
+     * ticks/step solo that was ~9216 ticks — <b>7.7 real minutes</b>, which matched his log exactly (commissioned
+     * 00:10:57, complete 00:21:14). At 70 it is ~5.4. Helpers still divide it: {@code 70 / (1 + diggers)}.
+     * </p>
+     */
+    private static final int QUEEN_DIG_INTERVAL_TICKS = 70;
 
     /**
      * The §8.7 empty-reserve fallback pace: if no drones exist to place the core resin, the QUEEN places it herself,
@@ -165,17 +174,39 @@ public final class CarveSiteWork {
 
         // Founding core (step 6, design §7b): the QUEEN is the digger, at her fixed §8.8 pace - drone diggers are
         // never sourced for it. Her stand-dig sequence (start -> loop -> stop) tracks the excavation.
+        //
+        // ⚠⚠ "AXIOMATICALLY PRESENT" IS NOT THE SAME AS "ABLE TO WORK". [stated] "i even chained her and inhibired
+        // her and she kept doing it on the sack". Every staffing gate above is short-circuited by isFoundingCore() on
+        // the grounds that the founder is always there - but a queen who is INHIBITED, or BOUND to her ovipositor, is
+        // present and cannot dig. The excavation is driven from the LOCATION tick, not from her AI, so nothing the
+        // player did to her reached it: chains went on, the inhibitor went on, and the hole kept growing.
+        var founderCanDig = founderCanDig(level, location);
+
         if (site.isFoundingCore()) {
-            tickQueenDig(level, location, site, crew.unstaffed());
+            tickQueenDig(level, location, site, crew.unstaffed(), founderCanDig);
         }
 
-        var digStaffed = site.isFoundingCore() || crew.diggers() > 0;
+        // A founding core with an incapacitated founder falls back to needing REAL diggers, exactly like any other
+        // site - so a captured queen's hive stalls instead of digging itself out from under her.
+        // ⭐⭐ SETTLE UP FOR THE TIME NOBODY WAS WATCHING. [stated] "let founding cores happen unloaded it was always
+        // intended to" + "its assumd they have been building the whole time you werent there".
+        //
+        // This is the BIOMASS MODEL, and it is the cheap one: while the chunks are unloaded NOTHING runs at all - no
+        // per-location background work, no cost for hives nobody will ever visit - and the first loaded tick pays the
+        // whole debt in one pass from the persisted clock. CatchUpEngine already does exactly this for biomass and
+        // the claim loop; carve was simply never part of it, which is why a daughter reliably had her CLAIM and never
+        // her chamber.
+        if (site.isFoundingCore() && founderCanDig) {
+            catchUpFoundingDig(site, now);
+        }
+
+        var digStaffed = (site.isFoundingCore() && founderCanDig) || crew.diggers() > 0;
         if (digStaffed) {
             if (site.nextDigTick == 0L) {
                 site.nextDigTick = now; // first dig fires immediately - visible progress the moment work starts
             }
             if (now >= site.nextDigTick) {
-                digStep(level, site);
+                digStep(level, location, site);
                 site.nextDigTick = now
                     + (site.isFoundingCore() ? coreDigIntervalTicks(crew.diggers()) : digIntervalTicks(crew.diggers()));
             }
@@ -206,6 +237,67 @@ public final class CarveSiteWork {
         if (site.isComplete()) {
             complete(level, location, site);
         }
+    }
+
+    /**
+     * Marks every dig step whose scheduled time has already passed while the location was unloaded.
+     * <p>
+     * ⚠⚠ BOOKKEEPING ONLY — NO BLOCK WRITES, DELIBERATELY. Replaying hundreds of {@code digStep} calls would break
+     * thousands of blocks in a single tick the instant a player walked up, with the sound and particle spam to match.
+     * The columns are marked dug and the completion stamp ({@code HiveStructurePlacer.finishWorld}) lays the finished
+     * piece down, which is the same end state by a much cheaper route. Nothing is lost: nobody was there to watch the
+     * intermediate hole being made.
+     * </p>
+     * <p>
+     * ⚠ {@code nextDigTick} is now PERSISTED on the site ({@code CarveSite.NBT_NEXT_DIG_TICK}); it used to be a
+     * transient field, so a restart would have reset the anchor to 0 and silently forgiven the whole debt.
+     * </p>
+     */
+    private static void catchUpFoundingDig(CarveSite site, long now) {
+        if (site.nextDigTick == 0L || site.isFullyExcavated()) {
+            return;
+        }
+
+        var interval = coreDigIntervalTicks(0); // unattended: she dug alone out there
+        var owed = (now - site.nextDigTick) / interval;
+        if (owed <= 0L) {
+            return; // nothing missed - this is just the ordinary loaded path
+        }
+
+        // ⚠⚠ PERF: BREAK ON THE STEP, NOT ON isFullyExcavated(). That method is a LINEAR SCAN of every column (2304
+        // for a 3x3 core), and as a loop CONDITION it ran once per iteration - ~92 iterations x 2304 on top of the
+        // scan markDigStepExcavated already does, all inside the ONE tick a player walks up on a long-unattended
+        // hive. Having the step report whether it found anything gives the identical result for half the work.
+        for (var i = 0L; i < owed; i++) {
+            if (!markDigStepExcavated(site)) {
+                break; // nothing left to dig - the rest of the debt is moot
+            }
+        }
+        site.nextDigTick = now;
+    }
+
+    /**
+     * The bookkeeping half of {@link #digStep}: the same columns, none of the block writes.
+     *
+     * @return false when there was nothing left to excavate, so the caller can stop instead of re-scanning to find out.
+     */
+    private static boolean markDigStepExcavated(CarveSite site) {
+        var center = nextColumn(site, false);
+        if (center == null) {
+            return false;
+        }
+        for (CarveSite.ColumnKey key : site.workOrder) {
+            if (cheby(key, center) > DIG_RADIUS) {
+                continue;
+            }
+            var column = site.columns().get(key);
+            if (column == null || column.isExcavated()) {
+                continue;
+            }
+            column.markExcavated();
+        }
+
+        return true;
     }
 
     // ---- Hydration ----
@@ -365,7 +457,35 @@ public final class CarveSiteWork {
      * so the server's whole job is this one boolean. She is resolved via the location's founder id; if she is dead or
      * unloaded the carve continues without her show (never-wedge - founding must not hinge on an animation).
      */
-    private static void tickQueenDig(ServerLevel level, HiveLocation location, CarveSite site, boolean unstaffed) {
+    /**
+     * Whether the founding queen is actually in a position to swing. Missing, dead, inhibited or bound to her own
+     * ovipositor all mean no - and all four were previously ignored, because the founding core assumed her presence
+     * rather than testing it.
+     */
+    private static boolean founderCanDig(ServerLevel level, HiveLocation location) {
+        var founderId = location.founderId();
+        if (founderId == null) {
+            return false;
+        }
+        if (
+            !(level.getEntity(
+                founderId
+            ) instanceof com.alien.common.gameplay.entity.living.alien.xenomorph.queen.Queen queen)
+                || !queen.isAlive()
+        ) {
+            return false;
+        }
+
+        return !queen.isInhibited() && !queen.getBindManager().isFullyBound();
+    }
+
+    private static void tickQueenDig(
+        ServerLevel level,
+        HiveLocation location,
+        CarveSite site,
+        boolean unstaffed,
+        boolean founderCanDig
+    ) {
         var founderId = location.founderId();
         if (founderId == null) {
             return;
@@ -378,7 +498,7 @@ public final class CarveSiteWork {
         ) {
             return;
         }
-        var shouldDig = !site.isFullyExcavated();
+        var shouldDig = !site.isFullyExcavated() && founderCanDig;
         if (queen.standDiggingSynced.get() != shouldDig) {
             queen.standDiggingSynced.set(shouldDig);
         }
@@ -433,8 +553,16 @@ public final class CarveSiteWork {
     /** Below this, she has not meaningfully moved since the last tick. */
     private static final double STUCK_MOVE_EPSILON = 0.05;
 
-    /** She belongs AT the core she is digging; beyond this she is not merely standing still, she is lost. */
-    private static final double AT_SITE_DISTANCE = 8.0;
+    /**
+     * Slack allowed OUTSIDE the site's own footprint before she counts as lost.
+     * <p>
+     * This is a MARGIN, not a radius. It used to be measured from a single point, which is what broke the check: a
+     * queen_chamber_3x3 is 48 blocks across, so working its far side legitimately puts her ~24 blocks from any centre.
+     */
+    private static final double AT_SITE_MARGIN = 8.0;
+
+    /** Vertical slack on the footprint test - she may be anywhere in the shaft she is cutting, above or below floor. */
+    private static final double AT_SITE_VERTICAL_MARGIN = 512.0;
 
     /** Ten seconds of no movement while stranded. Long enough that a brief snag never teleports her. */
     private static final int STUCK_TICKS_BEFORE_WARP = 200;
@@ -448,8 +576,16 @@ public final class CarveSiteWork {
      * somewhere, and nothing in the pipeline was watching her position.
      * <p>
      * STANDING STILL IS NOT THE TEST. Digging is standing still - that is the whole animation. The test is standing
-     * still while FAR FROM the core: within {@link #AT_SITE_DISTANCE} she is working, beyond it she is stranded. Both
-     * conditions must hold for {@link #STUCK_TICKS_BEFORE_WARP} so a snag on terrain never teleports her.
+     * still while OUTSIDE THE SITE SHE IS DIGGING: inside its footprint (plus {@link #AT_SITE_MARGIN}) she is working,
+     * beyond it she is stranded. Both conditions must hold for {@link #STUCK_TICKS_BEFORE_WARP} so a snag never
+     * teleports her.
+     * <p>
+     * ⚠ THE FOOTPRINT IS WHY THIS REGRESSED. The first version anchored on {@code site.match().originChunk()}, but
+     * {@code PieceMatch#originChunk} is documented as "the MIN CORNER of its footprint" - not its centre. For the 3x3
+     * founding core the queen stands in the CENTRE chunk, a flat 22.6 blocks from that corner, so {@code atSite} was
+     * ALWAYS false while she dug her own chamber; she stood still because she was digging, and after 200 ticks got
+     * teleported into the corner of her own core. To a watching player that reads as the queen vanishing mid-dig. Never
+     * treat originChunk as a centre.
      */
     private static void recoverStuckDigger(
         ServerLevel level,
@@ -457,8 +593,9 @@ public final class CarveSiteWork {
         CarveSite site,
         com.alien.common.gameplay.entity.living.alien.xenomorph.queen.Queen queen
     ) {
-        var core = site.match().originChunk().getMiddleBlockPosition(location.hiveFloorY());
-        var atSite = queen.position().closerThan(net.minecraft.world.phys.Vec3.atCenterOf(core), AT_SITE_DISTANCE);
+        var footprint = siteFootprint(site, location);
+        var atSite = footprint.inflate(AT_SITE_MARGIN, AT_SITE_VERTICAL_MARGIN, AT_SITE_MARGIN)
+            .contains(queen.position());
         var previous = LAST_DIGGER_POS.put(location.id(), queen.position());
 
         if (atSite || previous == null || previous.distanceTo(queen.position()) > STUCK_MOVE_EPSILON) {
@@ -473,14 +610,51 @@ public final class CarveSiteWork {
 
         STUCK_TICKS.remove(location.id());
         LAST_DIGGER_POS.remove(location.id());
-        queen.teleportTo(core.getX() + 0.5, core.getY(), core.getZ() + 0.5);
+
+        var core = footprint.getCenter();
+        // Measured BEFORE the teleport. The old version logged it after, so it always printed "0 blocks" - which hid
+        // the fact that she was never actually stranded.
+        var strandedBy = (int) queen.position().distanceTo(core);
+
+        queen.teleportTo(core.x, footprint.minY, core.z);
         queen.getNavigation().stop();
         Alien.LOGGER.info(
-            "Hive at {}: founding queen was stranded {} blocks from her core for {} ticks - warped back to {}.",
+            "Hive at {}: founding queen was stranded {} blocks outside her core footprint for {} ticks - warped back to {}.",
             location.centerPos(),
-            (int) queen.position().distanceTo(net.minecraft.world.phys.Vec3.atCenterOf(core)),
+            strandedBy,
             stuckFor,
-            core
+            BlockPos.containing(core.x, footprint.minY, core.z)
+        );
+    }
+
+    /**
+     * The block-space box the carve site actually occupies, at the hive floor.
+     * <p>
+     * Derived from {@code occupiedChunks()} rather than any single chunk, so it is correct for a 1x1 piece and a 3x3
+     * founding core alike. Y is a thin slice at the floor; callers inflate it themselves.
+     */
+    private static net.minecraft.world.phys.AABB siteFootprint(CarveSite site, HiveLocation location) {
+        var minChunkX = Integer.MAX_VALUE;
+        var minChunkZ = Integer.MAX_VALUE;
+        var maxChunkX = Integer.MIN_VALUE;
+        var maxChunkZ = Integer.MIN_VALUE;
+
+        for (var chunk : site.match().occupiedChunks()) {
+            minChunkX = Math.min(minChunkX, chunk.x);
+            minChunkZ = Math.min(minChunkZ, chunk.z);
+            maxChunkX = Math.max(maxChunkX, chunk.x);
+            maxChunkZ = Math.max(maxChunkZ, chunk.z);
+        }
+
+        var floorY = location.hiveFloorY();
+
+        return new net.minecraft.world.phys.AABB(
+            minChunkX * 16.0,
+            floorY,
+            minChunkZ * 16.0,
+            maxChunkX * 16.0 + 16.0,
+            floorY,
+            maxChunkZ * 16.0 + 16.0
         );
     }
 
@@ -523,7 +697,7 @@ public final class CarveSiteWork {
         return (int) Math.round(DIG_INTERVAL_TICKS * (90.0 - 30.0 * (d - 1)) / 90.0);
     }
 
-    private static void digStep(ServerLevel level, CarveSite site) {
+    private static void digStep(ServerLevel level, HiveLocation location, CarveSite site) {
         var center = nextColumn(site, false);
         if (center == null) {
             return; // excavation done; fill is still catching up
@@ -555,6 +729,10 @@ public final class CarveSiteWork {
                             sampleStates.add(state);
                         }
                         cleared++;
+                        // ⭐ SALVAGE BEFORE THE BLOCK GOES. HiveSalvage reads the block entity for chest
+                        // contents, and by the time this cell is air that is gone. The tag test inside is a
+                        // single flag read, so the hundreds of stone cells a dig step clears cost nothing.
+                        HiveSalvage.capture(level, location, pos.immutable(), state);
                         level.setBlock(pos, Blocks.AIR.defaultBlockState(), 2);
                         sealLiquidNeighbours(level, pos, neighbourScratch);
                     }

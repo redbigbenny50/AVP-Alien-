@@ -93,6 +93,13 @@ public final class HiveStructureFounding {
             null,
             location
         );
+        // ⚠⚠ START THE CLOCK AT COMMISSION, NOT LAZILY ON THE FIRST DIG. CarveSiteWork.catchUpFoundingDig settles the
+        // debt from nextDigTick, and tickActive only seeds that field inside its dig branch - so a core commissioned
+        // and then never loaded again would sit at 0 and accrue NOTHING, which is exactly the case the catch-up was
+        // written for. Founding normally happens with the queen present so the first loaded tick used to set it, but
+        // a founder who is teleported away in the same breath got nothing at all.
+        site.startDigClock(level.getGameTime());
+
         location.setActiveCarveSite(site);
         Alien.LOGGER.info("Hive: commissioned founding core {} (queen-dug).", site.describe());
     }
@@ -116,6 +123,22 @@ public final class HiveStructureFounding {
         int halfX = (chamber.footprintChunksX() - 1) / 2;
         int halfZ = (chamber.footprintChunksZ() - 1) / 2;
         var originChunk = new ChunkPos(centerChunk.x - halfX, centerChunk.z - halfZ);
+
+        // ⭐⭐ THE QUEEN CHAMBER JOINS THE UPKEEP ROTATION. Until now it was the ONE piece in the hive that never
+        // did: HiveLocation.tickStructureUpkeep walks builtPlacements, and recordBuiltPlacement is called from
+        // exactly one place - HiveStructurePlacer.finalizePlacement - which the founding core never reaches, because
+        // founding completes HERE instead.
+        // <p>
+        // Two consequences, both of them reported: a hole punched in the royal chamber was NEVER repaired, and a hive
+        // nuked into another strain never re-stamped its core, so the queen’s own room kept the old strain’s resin
+        // forever while the hive converted around her. Registering the placement fixes both, and together with the
+        // re-strain in HiveStructureUpkeep.restamp the core converts on its next upkeep pass.
+        // </p>
+        location.recordBuiltPlacement(
+            originChunk,
+            HivePieceCatalog.queenChamber(location.lineageVariantOrNull()).toString(),
+            Rotation.NONE
+        );
 
         // Royal ring: on the INSTANT paths (the never-wedge fallbacks) stamp a royal hallway on each
         // royal exit now, exactly as before. On the CARVE path, register EVERY doorway - royal included - as an open

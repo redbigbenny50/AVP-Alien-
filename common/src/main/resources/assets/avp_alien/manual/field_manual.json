@@ -88,7 +88,7 @@
           "elements": [
             {
               "type": "text",
-              "text": "The device that ends a queen's autonomy. Clamps to the crest.",
+              "text": "The device that ends a queen's autonomy. Clamps to the neck.",
               "spacing_after": 5
             },
             {
@@ -119,7 +119,7 @@
           "elements": [
             {
               "type": "text",
-              "text": "Placed around the specimen. Four bound anchors hold a queen completely.",
+              "text": "Placed around the specimen and bound to her with chains.",
               "spacing_after": 5
             },
             {
@@ -140,7 +140,12 @@
             },
             {
               "type": "text",
-              "text": "Eight per fabrication, which is deliberate. You will want spares, and you will want them positioned before she arrives rather than during.",
+              "text": "Eight per fabrication. Mount them on any surface - floor, ceiling or wall - and position them before she arrives, not during.",
+              "spacing_after": 6
+            },
+            {
+              "type": "text",
+              "text": "A queen will take up to eight chains, but four hold her. Most field agents seat four, then use the spare set to reposition the first without ever letting her loose.",
               "spacing_after": 0
             }
           ]
@@ -150,7 +155,7 @@
           "elements": [
             {
               "type": "text",
-              "text": "Runs from an anchor to the specimen. Each one bound is a quarter of the task.",
+              "text": "Runs from an anchor to the specimen. Two per fabrication.",
               "spacing_after": 5
             },
             {
@@ -171,8 +176,155 @@
             },
             {
               "type": "text",
+              "text": "It is not only for royalty. A chain takes hold of anything a lead will not - villagers included - and it is how an incapacitated queen is dragged anywhere at all. She does not walk to containment.",
+              "spacing_after": 6
+            },
+            {
+              "type": "text",
               "text": "A chain announces itself as it binds. Count them. Three is not four, and three holds nothing at all.",
               "spacing_after": 0
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "title": "Tracking Equipment",
+      "required_mod": "avp_human",
+      "pages": [
+        {
+          "title": "The Tracker",
+          "elements": [
+            {
+              "type": "text",
+              "text": "Company tracking hardware, issued to the Survey on the understanding that it is returned with data. A tracker is clamped directly to a queen and reports her position for the remainder of her life."
+            },
+            {
+              "type": "header",
+              "text": "Application"
+            },
+            {
+              "type": "text",
+              "text": "Applied by hand, to any queen, in any state. This is the one instrument in your kit that does not wait for her to be subdued - the inhibitor demands a helpless specimen, the tracker does not."
+            },
+            {
+              "type": "text",
+              "text": "Personnel are reminded that walking up to an unrestrained queen and touching her is not made safe by the fact that the device permits it. The tracker has no opinion on your survival."
+            },
+            {
+              "type": "bullet",
+              "text": "One tracker, one queen. The device is consumed on application."
+            },
+            {
+              "type": "bullet",
+              "text": "A queen already carrying a tracker cannot be tagged again."
+            },
+            {
+              "type": "bullet",
+              "text": "The unit is visible on the specimen once seated. You will be able to see, at a glance, which queens are on the register."
+            },
+            {
+              "type": "header",
+              "text": "Labelling"
+            },
+            {
+              "type": "text",
+              "text": "Name the tracker on an anvil before you apply it and that name is what appears on the register. Left unnamed, she is filed by strain - \"Aberrant Queen\", or simply \"Queen\" for the common type."
+            },
+            {
+              "type": "text",
+              "text": "The Survey strongly recommends naming them. A register of eleven entries all reading \"Queen\" is a register of nothing."
+            },
+            {
+              "type": "header",
+              "text": "A note on permanence"
+            },
+            {
+              "type": "text",
+              "text": "A tagged queen will not quietly disappear from the world the way an untended specimen might. Once she is on the register, she stays. Consider this before tagging every queen you meet."
+            },
+            {
+              "type": "space",
+              "height": 4
+            },
+            {
+              "type": "recipe",
+              "items": [
+                "minecraft:redstone",
+                "minecraft:amethyst_shard",
+                "minecraft:glowstone_dust",
+                "minecraft:iron_ingot",
+                "",
+                "",
+                "",
+                "",
+                ""
+              ],
+              "result": "avp_alien:tracker"
+            }
+          ]
+        },
+        {
+          "title": "The Tracking PDA",
+          "elements": [
+            {
+              "type": "text",
+              "text": "The reader. Where the tracker writes, the PDA reads - it queries the register and returns every tagged queen currently on file, with her position and the dimension she is in."
+            },
+            {
+              "type": "header",
+              "text": "Use"
+            },
+            {
+              "type": "bullet",
+              "text": "Reusable. It is an instrument, not a consumable."
+            },
+            {
+              "type": "bullet",
+              "text": "One unit serves the whole register. There is no need for a second."
+            },
+            {
+              "type": "bullet",
+              "text": "Reports last known position, not live pursuit. She moves; the entry updates when she is observed."
+            },
+            {
+              "type": "header",
+              "text": "When a signal is lost"
+            },
+            {
+              "type": "text",
+              "text": "A tracker goes dark for exactly two reasons, and the register records which."
+            },
+            {
+              "type": "bullet",
+              "text": "Deceased. The specimen is dead. The entry is retained until you acknowledge it."
+            },
+            {
+              "type": "bullet",
+              "text": "Interference. She has been taken into an empress emergence. The queen you were following no longer exists as a queen."
+            },
+            {
+              "type": "text",
+              "text": "The second case is the one worth your attention. A signal that ends in interference is not a loss of equipment - it is notice that something considerably larger has happened at that location, and that the Survey would like to hear about it."
+            },
+            {
+              "type": "space",
+              "height": 4
+            },
+            {
+              "type": "recipe",
+              "items": [
+                "minecraft:redstone",
+                "",
+                "",
+                "minecraft:amethyst_shard",
+                "",
+                "",
+                "minecraft:observer",
+                "",
+                ""
+              ],
+              "result": "avp_alien:tracking_pda"
             }
           ]
         }
@@ -276,7 +428,7 @@
             },
             {
               "type": "text",
-              "text": "Be clear about what this does and does not achieve. The hive does not die with her removal \u2014 it is left queenless but functioning, and what has been excavated stays excavated. Capture stops the loss. It does not reverse it.",
+              "text": "Be clear about what this does and does not achieve. The hive does not die with her removal — it is left queenless but functioning, and what has been excavated stays excavated. Capture stops the loss. It does not reverse it.",
               "spacing_after": 6
             },
             {
@@ -494,6 +646,20 @@
               "spacing_after": 6
             },
             {
+              "type": "image",
+              "image": "avp_alien:textures/gui/manual/queenmolt.png",
+              "label": "Queen mid-moult",
+              "width": 160,
+              "height": 85,
+              "show_border": true,
+              "spacing_after": 3
+            },
+            {
+              "type": "text",
+              "text": "A moult in progress. She will not start one with you in view.",
+              "spacing_after": 7
+            },
+            {
               "type": "text",
               "text": "This is useful to you twice over. A queen who has been fighting is smaller than her age would suggest, and a queen still moulting is vulnerable in a way a mature specimen is not.",
               "spacing_after": 6
@@ -537,6 +703,20 @@
             {
               "type": "bullet",
               "text": "Hand placed. A specimen you introduced to the environment yourself, in any state."
+            },
+            {
+              "type": "image",
+              "image": "avp_alien:textures/gui/manual/queen_incapacitated.png",
+              "label": "Queen incapacitated",
+              "width": 160,
+              "height": 85,
+              "show_border": true,
+              "spacing_after": 3
+            },
+            {
+              "type": "text",
+              "text": "Beaten down. She will rise again - three times in all - so the device goes on now, not after.",
+              "spacing_after": 7
             },
             {
               "type": "space",
@@ -681,6 +861,21 @@
             },
             {
               "type": "header",
+              "text": "Build the walls",
+              "spacing_after": 3
+            },
+            {
+              "type": "text",
+              "text": "A chained queen is a beacon. Her own kind come to break her chains and will keep coming, and a rival strain comes to finish her - a helpless royal of another strain is a prize, not a prisoner.",
+              "spacing_after": 6
+            },
+            {
+              "type": "text",
+              "text": "Enclose the site. The chains hold her; they do nothing about what walks in after her.",
+              "spacing_after": 7
+            },
+            {
+              "type": "header",
               "text": "The eggsack",
               "spacing_after": 3
             },
@@ -692,6 +887,20 @@
             {
               "type": "text",
               "text": "This is the outcome the Survey is after. A queen on an eggsack is production. A queen loose in your quarters is a demolition report and a difficult conversation.",
+              "spacing_after": 0
+            },
+            {
+              "type": "image",
+              "image": "avp_alien:textures/gui/manual/queen_chainedsack.png",
+              "label": "Queen on a chained eggsack",
+              "width": 160,
+              "height": 85,
+              "show_border": true,
+              "spacing_after": 3
+            },
+            {
+              "type": "text",
+              "text": "A contained breeder on her sack. This is what the Survey is for.",
               "spacing_after": 0
             }
           ]

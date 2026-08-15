@@ -40,13 +40,42 @@ public final class HostCaptureTask {
     }
 
     /** The host this alien is carrying, or null. */
+    /**
+     * The host an alien is physically carrying, or null.
+     * <p>
+     * ⚠ THE OVIPOSITOR EXCLUSION IS LOAD-BEARING - WITHOUT IT A QUEEN DROPS HER EGGSACK TO ANY HIT. The old test was "a
+     * passenger that is a LivingEntity and not an Alien", which reads as "a captured victim" but is not:
+     * {@code Ovipositor extends Mob}, so it IS a LivingEntity and is NOT an Alien, and a queen wearing her eggsack
+     * therefore reported the EGGSACK as her captive. {@code Alien.hurt} drops a carried host on ANY damage from anyone
+     * other than the captive - that is the rescue rule - so a 0.01 syringe, a stray splash, anything at all, called
+     * {@code breakCapture} and put her sack on the floor. It never touched the disturbance threshold, so nothing logged
+     * and no amount of tuning the rouse bar could have fixed it.
+     * </p>
+     * <p>
+     * This is recurring mistake #4 in the notes, verbatim: non-Alien entities like Ovipositor and RoyalCocoon extend
+     * Mob and inherit NO alien behaviour, so every "all aliens do X" rule has to list them by hand. Excluded by ENTITY
+     * TYPE rather than class so a future prop that also extends Mob is a one-line addition here.
+     * </p>
+     */
     public static @Nullable LivingEntity carriedHost(com.alien.common.gameplay.entity.living.alien.Alien alien) {
         for (var passenger : alien.getPassengers()) {
-            if (passenger instanceof LivingEntity living && !(living instanceof com.alien.common.gameplay.entity.living.alien.Alien)) {
+            if (
+                passenger instanceof LivingEntity living
+                    && !(living instanceof com.alien.common.gameplay.entity.living.alien.Alien)
+                    && !isCarriedProp(living)
+            ) {
                 return living;
             }
         }
         return null;
+    }
+
+    /** Mod-owned things that RIDE an alien without ever being its captive. */
+    private static boolean isCarriedProp(LivingEntity passenger) {
+        // BOTH royals. The Empress extends Xenomorph and so is an Alien too, and EmpressOvipositor is likewise a Mob
+        // that is not an Alien - she had exactly the same exposure.
+        return passenger.getType() == com.alien.common.registry.init.AlienEntityTypes.OVIPOSITOR.get()
+            || passenger.getType() == com.alien.common.registry.init.AlienEntityTypes.EMPRESS_OVIPOSITOR.get();
     }
 
     /**

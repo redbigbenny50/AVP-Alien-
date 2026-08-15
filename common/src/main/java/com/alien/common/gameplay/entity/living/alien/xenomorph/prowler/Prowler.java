@@ -2,6 +2,7 @@ package com.alien.common.gameplay.entity.living.alien.xenomorph.prowler;
 
 import com.alien.common.gameplay.entity.living.alien.Alien;
 import com.alien.common.gameplay.entity.living.alien.xenomorph.AttackType;
+import com.alien.common.gameplay.entity.living.alien.xenomorph.CrawlAttack;
 import com.alien.common.gameplay.entity.living.alien.xenomorph.Xenomorph;
 import com.alien.common.gameplay.entity.living.alien.xenomorph.XenomorphAttackConfig;
 import com.alien.common.gameplay.entity.living.alien.xenomorph.XenomorphConfig;
@@ -21,6 +22,33 @@ import net.minecraft.world.level.Level;
 import org.jetbrains.annotations.Nullable;
 
 public class Prowler extends Xenomorph implements GOAPUser<Prowler> {
+
+    /**
+     * ⭐⭐ THE PRONE ATTACKS. [stated] "when either leg is shot off it has to crawl there should be no other
+     * alternatives... the attacks they can do are only the crawl ones."
+     * <p>
+     * ⚠⚠ THE CLIPS AND THE DISPATCHER METHODS ALREADY EXISTED - what was missing was the ATTACK TYPES, so the crawl
+     * preference in {@code XenomorphAttackConfig} had nothing to restrict to and fell through to the standing set. A
+     * one-legged prowler stood up to swing because there was literally nothing prone to pick.
+     * </p>
+     */
+    /** ⚠ Slightly softer than a standing swing, matching the predalien's existing crawl claw. */
+    private static final float CRAWL_DAMAGE_FRACTION = 0.8F;
+
+    public static final AttackType CRAWL_CLAW = CrawlAttack.create(
+        "prowler_crawl_claw",
+        CRAWL_DAMAGE_FRACTION,
+        CrawlAttack.Limb.ARM,
+        16
+    );
+
+    /** ⚠ HEAD, NOT ARM - so a crawling prowler that has also lost both arms still has a bite. */
+    public static final AttackType CRAWL_BITE = CrawlAttack.create(
+        "prowler_crawl_bite",
+        CRAWL_DAMAGE_FRACTION,
+        CrawlAttack.Limb.HEAD,
+        14
+    );
 
     public static final AttackType CLAW = AttackType.builder("prowler_claw")
         .requiresAnyArm()
@@ -45,6 +73,8 @@ public class Prowler extends Xenomorph implements GOAPUser<Prowler> {
             XenomorphAttackConfig.builder()
                 .addRegular(CLAW)
                 .addRegular(BITE)
+                .addRegular(CRAWL_CLAW)
+                .addRegular(CRAWL_BITE)
                 .addRegular(TAIL_QUAD)
                 .build()
         )
@@ -60,7 +90,7 @@ public class Prowler extends Xenomorph implements GOAPUser<Prowler> {
     public static AttributeSupplier.Builder createProwlerAttributes() {
         return Alien.createAlienAttributes()
             .add(Attributes.ARMOR, 8.0F)
-            .add(Attributes.ARMOR_TOUGHNESS, 0f)
+            .add(Attributes.ARMOR_TOUGHNESS, 4.0F)
             .add(Attributes.ATTACK_DAMAGE, PlayerStatConstants.BASE_HEALTH * 0.4F)
             .add(Attributes.FOLLOW_RANGE, 35F)
             .add(Attributes.KNOCKBACK_RESISTANCE, 0.5f)

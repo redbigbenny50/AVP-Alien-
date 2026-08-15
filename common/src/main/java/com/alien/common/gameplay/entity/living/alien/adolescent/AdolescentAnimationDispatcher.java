@@ -56,7 +56,7 @@ public class AdolescentAnimationDispatcher {
         .build();
 
     private static final AzCommand<Adolescent> SWIM_BITE_ATTACK = AzCommand.<Adolescent>replay()
-        .play(AzAlienAnimationUtil.BODY, AdolescentAnimationRefs.ATTACK_SWIMBITE_ANIMATION_NAME, AzPlayBehaviors.PLAY_ONCE)
+        .play(AzAlienAnimationUtil.BODY, AdolescentAnimationRefs.SWIM_ATTACK_BITE_ANIMATION_NAME, AzPlayBehaviors.PLAY_ONCE)
         .build();
 
     private final Adolescent adolescent;

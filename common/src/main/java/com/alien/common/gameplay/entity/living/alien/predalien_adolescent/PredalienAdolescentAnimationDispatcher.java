@@ -61,7 +61,7 @@ public class PredalienAdolescentAnimationDispatcher {
     private static final AzCommand<PredalienAdolescent> SWIM_BITE_ATTACK = AzCommand.<PredalienAdolescent>replay()
         .play(
             AzAlienAnimationUtil.BODY,
-            AdolescentAnimationRefs.ATTACK_SWIMBITE_ANIMATION_NAME,
+            AdolescentAnimationRefs.SWIM_ATTACK_BITE_ANIMATION_NAME,
             AzPlayBehaviors.PLAY_ONCE
         )
         .build();

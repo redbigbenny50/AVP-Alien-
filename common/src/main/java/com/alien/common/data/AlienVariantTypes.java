@@ -2,6 +2,7 @@ package com.alien.common.data;
 
 import com.alien.common.gameplay.entity.acid.Acid;
 import com.alien.common.gameplay.entity.living.alien.Alien;
+import com.alien.common.gameplay.hive.location.HiveLocation;
 import com.alien.common.model.alien.variant.AlienVariant;
 import com.alien.common.model.alien.variant.AlienVariantType;
 import com.alien.common.registry.init.AlienGameEvents;
@@ -213,6 +214,32 @@ public class AlienVariantTypes {
 
     public static AlienVariantType getFor(Alien alien) {
         return getFor(alien.getVariant());
+    }
+
+    /**
+     * ⭐⭐ THE STRAIN A BUILDER SHOULD BUILD IN: the HIVE'S, not its own.
+     * <p>
+     * A hive's structure is the hive's, not a tally of who happened to lay each block. An off-strain member - a
+     * spawned-in normal runner, a captured drone, a survivor of a lineage that has since been nuked and converted - was
+     * stamping ITS OWN resin into someone else's hive, so an irradiated hive came out patched with black normal resin.
+     * Worse, the mismatch is not cosmetic: {@code isStandingOnVariantResin} and the resin tags are strain-specific, so
+     * the wrong block is invisible to the systems that look for the hive's own.
+     * </p>
+     * <p>
+     * ⚠ FALLS BACK TO THE BUILDER'S OWN STRAIN when it is outside any hive, or the location has no lineage. A lone
+     * alien webbing up a cave has no hive to speak for, and its own strain is the only right answer there.
+     * </p>
+     */
+    public static AlienVariantType getForBuild(Alien alien, @Nullable HiveLocation location) {
+        if (location != null) {
+            var lineageVariant = location.lineageVariantOrNull();
+
+            if (lineageVariant != null) {
+                return getFor(lineageVariant);
+            }
+        }
+
+        return getFor(alien);
     }
 
     /**

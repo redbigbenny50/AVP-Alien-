@@ -247,6 +247,12 @@ public class HiveUnitPurchaseDataProvider implements DataProvider {
                 List.of(min(entities.warrior(), WARRIOR_CAP / 2), max(entities.praetorian(), PRAETORIAN_CAP))
             )
         );
+        // CRUSHER. Gated on a living harbinger like the rest of the heavy line, NOT on a deep prowler pool.
+        // It previously required PROWLER_CAP / 2 = 35 prowlers, which no hive ever reached: chrysalis takes the same
+        // PROWLER input and unlocks at a single harbinger, so prowlers were spent as fast as they were promoted and
+        // the count sat around a dozen. Crushers were wanted the whole time - the balance policy asks for runner / 12
+        // of them - they simply could never commit. HiveBalanceTask now also alternates 2 chrysalises to 1 crusher so
+        // the two stop starving each other. It keeps its ROYAL jelly cost; only the gate changed.
         add(
             new HiveUnitPurchase(
                 entities.crusher(),
@@ -255,7 +261,7 @@ public class HiveUnitPurchaseDataProvider implements DataProvider {
                 1,
                 0,
                 List.of(input(entities.prowler())),
-                List.of(min(entities.prowler(), PROWLER_CAP / 2), max(entities.crusher(), CRUSHER_CAP))
+                List.of(min(entities.harbinger(), 1), max(entities.crusher(), CRUSHER_CAP))
             )
         );
 

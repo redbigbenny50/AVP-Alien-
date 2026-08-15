@@ -1,5 +1,6 @@
 package com.alien.common.gameplay.entity.living.alien.xenomorph.queen;
 
+import com.alien.Alien;
 import com.alien.common.data.AlienVariantTypes;
 import com.alien.common.gameplay.entity.living.alien.ovipositor.Ovipositor;
 import com.alien.common.gameplay.hive.location.HiveLocation;
@@ -11,6 +12,7 @@ import com.blib.api.common.time.v1.Cooldown;
 import com.just.core.functional.option.Option;
 import net.minecraft.core.BlockPos;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.world.entity.Entity;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.phys.Vec3;
 import org.jetbrains.annotations.Nullable;
@@ -37,6 +39,12 @@ public class OvipositorManager implements NBTSerializable {
      */
     public static final float OVIPOSITOR_YAW_OFFSET_DEGREES = 0.0F;
 
+    /**
+     * How long after losing an eggsack before she can grow another. Started the tick she stops carrying one, so it runs
+     * alongside the abandoned sack's own decay rather than after it.
+     */
+    public static final Duration OVIPOSITOR_REGROWTH_COOLDOWN = Duration.ofSeconds(180);
+
     private final Cooldown ovipositorCreationCooldown;
 
     private final Queen queen;
@@ -61,7 +69,10 @@ public class OvipositorManager implements NBTSerializable {
     private boolean hadOvipositorLastTick;
 
     public OvipositorManager(Queen queen) {
-        this.ovipositorCreationCooldown = Cooldown.withCooldownTime("ovipositorCreationCooldownInTicks", Duration.ofMinutes(1));
+        this.ovipositorCreationCooldown = Cooldown.withCooldownTime(
+            "ovipositorCreationCooldownInTicks",
+            OVIPOSITOR_REGROWTH_COOLDOWN
+        );
         this.queen = queen;
     }
 
@@ -85,6 +96,7 @@ public class OvipositorManager implements NBTSerializable {
             // she's
             // free again, not a captive breeder.
             if (!queen.isInhibited() && getOvipositor().isSomeAnd(Ovipositor::isChainedEggsack)) {
+                logEggsackRemoval("chained eggsack on a no-longer-inhibited queen");
                 getOvipositor().ifSome(ovipositor -> ovipositor.discard());
                 return;
             }
@@ -96,6 +108,7 @@ public class OvipositorManager implements NBTSerializable {
             if (queen.isInhibited()) {
                 // Inhibited but not contained (chains stripped) — "inhibited but loose" produces nothing per design.
                 if (!queen.getBindManager().isFullyBound()) {
+                    logEggsackRemoval("inhibited but not fully bound (chains stripped)");
                     getOvipositor().ifSome(ovipositor -> ovipositor.discard());
                     return;
                 }
@@ -104,6 +117,7 @@ public class OvipositorManager implements NBTSerializable {
                 // ovipositor (captured after she'd already founded), drop it so canCreateChainedEggsack below grows the
                 // chained one in its place — otherwise she stays stuck on the founding eggsack forever.
                 if (!getOvipositor().isSomeAnd(Ovipositor::isChainedEggsack)) {
+                    logEggsackRemoval("captured queen still on her founding eggsack");
                     getOvipositor().ifSome(ovipositor -> ovipositor.discard());
                     return;
                 }
@@ -248,23 +262,52 @@ public class OvipositorManager implements NBTSerializable {
         return getOvipositorOrNull() != null;
     }
 
+    /**
+     * She stands up and leaves the eggsack behind.
+     * <p>
+     * Dismount only — no discard. The sack rots on its own timer once it has no royal (see
+     * {@link Ovipositor#ABANDONED_LINGER_TICKS}), so what a player sees is the thing she was tending still lying where
+     * she left it rather than blinking out of existence the moment she rises. It yields nothing when it goes.
+     * <p>
+     * The three discards in {@link #tick} are deliberately NOT routed through here: those are state corrections for a
+     * captured queen (chains stripped, inhibitor pried off, wrong sack type), where the sack is being replaced rather
+     * than abandoned and a lingering husk would just be in the way.
+     */
+    /**
+     * Diagnostic for "the queen got off her eggsack".
+     * <p>
+     * Every server-side path that ends a ride now names itself. Three rounds were lost to theories because NOTHING
+     * logged: if none of these lines appears and she still appears to stand, the sack never actually left her and the
+     * problem is client-side presentation, not the eggsack logic. Rare events only - these fire once per removal.
+     * </p>
+     */
+    private void logEggsackRemoval(String reason) {
+        Alien.LOGGER.info(
+            "Queen eggsack removed at {}: {}. (inhibited={}, fullyBound={}, health={}/{})",
+            queen.blockPosition(),
+            reason,
+            queen.isInhibited(),
+            queen.getBindManager().isFullyBound(),
+            String.format("%.1f", queen.getHealth()),
+            String.format("%.1f", queen.getMaxHealth())
+        );
+    }
+
     public void abandonOvipositor() {
-        getOvipositor().ifSome(ovipositor -> {
-            ovipositor.stopRiding();
-            ovipositor.discard();
-        });
+        logEggsackRemoval("abandonOvipositor - she was roused or lost her ability to reproduce");
+        getOvipositor().ifSome(Entity::stopRiding);
+
         for (var passenger : List.copyOf(queen.getPassengers())) {
             if (passenger.getType() == AlienEntityTypes.OVIPOSITOR.get()) {
                 passenger.stopRiding();
-                passenger.discard();
             }
         }
+
         if (!queen.level().isClientSide) {
             var area = queen.getBoundingBox().inflate(8.0D);
             for (var ovipositor : queen.level().getEntitiesOfClass(Ovipositor.class, area)) {
                 if (ovipositor.getVehicle() == queen || ovipositor.distanceToSqr(queen) <= 16.0D) {
                     ovipositor.stopRiding();
-                    ovipositor.discard();
                 }
             }
         }
@@ -317,6 +360,12 @@ public class OvipositorManager implements NBTSerializable {
             ovipositor.yHeadRot = queen.yHeadRot;
 
             queen.level().addFreshEntity(ovipositor);
+
+            // Fresh sitting, fresh bar. The disturbance threshold is "health lost since she settled" - without this it
+            // carried her whole life's damage, and a queen who had already been fought once stood up to the very next
+            // scratch. See QueenLifecyclePhaseManager.resetDisturbance for why regeneration cannot be relied on to
+            // clear it while a player is stood next to her.
+            queen.getLifecyclePhaseManager().resetDisturbance();
 
             // The hive is now reproductive - founding mode ends. Cap reverts to the normal formula and the location may
             // resume expansion (claims), resin spread, and spawning. See founding-priority design.
@@ -453,6 +502,12 @@ public class OvipositorManager implements NBTSerializable {
             ovipositor.setPersistenceRequired();
             ovipositor.setChainedEggsack(true);
             queen.level().addFreshEntity(ovipositor);
+
+            // Fresh sitting, fresh bar. The disturbance threshold is "health lost since she settled" - without this it
+            // carried her whole life's damage, and a queen who had already been fought once stood up to the very next
+            // scratch. See QueenLifecyclePhaseManager.resetDisturbance for why regeneration cannot be relied on to
+            // clear it while a player is stood next to her.
+            queen.getLifecyclePhaseManager().resetDisturbance();
         }
     }
 
@@ -480,12 +535,20 @@ public class OvipositorManager implements NBTSerializable {
         if (location == null || !location.isAlive()) {
             return false;
         }
-        // THIS location must be hers. Every gate here only asked whether the location had A founder, never whether
-        // it was this queen - so a second queen who wandered into an established hive, stood on its resin near the
-        // centre, and passed the ordinary checks simply grew her own eggsack in someone else's core. The settlement
-        // rule already pushes a surplus queen off to found her own hive nearby; without this she never had to go.
+        // ⭐⭐ SHE MUST BE THE SEATED FOUNDER OF THIS LOCATION. NOT "not someone else's" - HERS.
+        //
+        // ⚠⚠ THE NULL CASE USED TO PASS, AND THAT WAS THE HOLE. A queen standing in a claim whose founder seat is
+        // VACANT adopted it on the spot and grew a sack where she stood. [stated] a tester drank a metamorphosis
+        // potion onto a crusher: it matured straight into a queen inside an existing claim, skipped the whole
+        // found-a-new-hive arc, and laid there instead. "once the tester killed the eggsack the queen dug like
+        // normal to found a true hive" - the founding path was never broken, this gate simply got to her first.
+        //
+        // ⚠ REQUIRING THE SEAT IS SAFE because every legitimate laying queen is explicitly seated by one of:
+        // HiveLocationFoundingService (settlement and inhibition's personal claim), ConvoyArrival (a founder
+        // queen reaching a daughter claim), HiveLoadedSpawner, or LegacyHiveRecovery. A queen who owns no seat
+        // has not founded yet - and founding is precisely what she should be doing instead of laying.
         var founderId = location.founderId();
-        if (founderId != null && !founderId.equals(queen.getUUID())) {
+        if (founderId == null || !founderId.equals(queen.getUUID())) {
             return false;
         }
         if (!isNearHiveCenter(location)) {

@@ -1,5 +1,6 @@
 package com.alien.common.gameplay.entity.living.alien.xenomorph.ravager.ai;
 
+import com.alien.common.gameplay.entity.dismemberment.MirroredAttackSide;
 import com.alien.common.gameplay.entity.dismemberment.RavagerHeadDismemberment;
 import com.alien.common.gameplay.entity.living.alien.xenomorph.ravager.Ravager;
 import com.alien.common.registry.key.AlienDamageTypeKeys;
@@ -60,9 +61,21 @@ public class RavagerClawAttackActions {
      * scales with how close the target is to death and how heavy the strike was. The target does not have to die for
      * the dismemberment to land.
      */
+    /**
+     * ⭐⭐ HALF DAMAGE ON ONE MISSING ARM. [stated] "if one arm is missing it will still play at 50% damage and wont play
+     * at all with no arms."
+     * <p>
+     * ⚠ THE TWO HALVES OF THAT RULE LIVE IN DIFFERENT PLACES, and neither alone expresses it: the "not at all with no
+     * arms" half is `requiresAnyArm()` on the AttackType, which refuses the swing outright; the "50%" half is here,
+     * priced into the damage. This attack used to carry `requiresBothArms()`, which collapsed both halves into one and
+     * meant a one-armed ravager simply never used it.
+     * </p>
+     */
     public static void doubleClaw(Ravager ravager) {
         var damageSource = ravager.damageSources().source(AlienDamageTypeKeys.RAVAGER_CLAW, ravager);
-        var damage = (float) ravager.getAttributeValue(Attributes.ATTACK_DAMAGE);
+        var bothArms = !MirroredAttackSide.isArmDetached(ravager, true)
+            && !MirroredAttackSide.isArmDetached(ravager, false);
+        var damage = (float) ravager.getAttributeValue(Attributes.ATTACK_DAMAGE) * (bothArms ? 1.0F : 0.5F);
 
         for (var target : targetsInFront(ravager)) {
             if (target.isInvulnerableTo(damageSource)) {

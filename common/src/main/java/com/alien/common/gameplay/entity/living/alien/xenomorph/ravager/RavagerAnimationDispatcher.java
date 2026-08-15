@@ -1,5 +1,6 @@
 package com.alien.common.gameplay.entity.living.alien.xenomorph.ravager;
 
+import com.alien.common.gameplay.entity.dismemberment.MirroredAttackSide;
 import com.alien.common.util.AzAlienAnimationUtil;
 import com.blib.api.client.animation.v1.command.AzCommand;
 import com.blib.api.client.animation.v1.command.play_behavior.AzPlayBehaviors;
@@ -8,11 +9,11 @@ import com.blib.api.client.animation.v1.command.policy.AzDispatchMode;
 public class RavagerAnimationDispatcher {
 
     private static final AzCommand<Ravager> ARMATTACK = AzCommand.<Ravager>replay()
-        .play(AzAlienAnimationUtil.BODY, RavagerAnimationRefs.ATTACK_ARM_SINGLE_ANIMATION_NAME, AzPlayBehaviors.PLAY_ONCE)
+        .play(AzAlienAnimationUtil.BODY, RavagerAnimationRefs.ATTACK_CLAW_RIGHT_ANIMATION_NAME, AzPlayBehaviors.PLAY_ONCE)
         .build();
 
     private static final AzCommand<Ravager> DOUBLE_ARMATTACK = AzCommand.<Ravager>replay()
-        .play(AzAlienAnimationUtil.BODY, RavagerAnimationRefs.ATTACK_ARM_DOUBLE_ANIMATION_NAME, AzPlayBehaviors.PLAY_ONCE)
+        .play(AzAlienAnimationUtil.BODY, RavagerAnimationRefs.ATTACK_CLAW_DOUBLE_ANIMATION_NAME, AzPlayBehaviors.PLAY_ONCE)
         .build();
 
     private static final AzCommand<Ravager> BITEATTACK = AzCommand.<Ravager>replay()
@@ -24,7 +25,7 @@ public class RavagerAnimationDispatcher {
         .build();
 
     private static final AzCommand<Ravager> CRAWL_ATTACK = AzCommand.<Ravager>replay()
-        .play(AzAlienAnimationUtil.BODY, RavagerAnimationRefs.CRAWL_ATTACK_ANIMATION_NAME, AzPlayBehaviors.PLAY_ONCE)
+        .play(AzAlienAnimationUtil.BODY, RavagerAnimationRefs.CRAWL_ATTACK_RIGHT_ANIMATION_NAME, AzPlayBehaviors.PLAY_ONCE)
         .build();
 
     private static final AzCommand<Ravager> SWIM_ATTACK = AzCommand.<Ravager>replay()
@@ -121,10 +122,62 @@ public class RavagerAnimationDispatcher {
         ARMATTACK.dispatchForEntity(ravager);
     }
 
+    /** ⚠ MIRRORED. Kept under the old NAME so no caller changes - the side is decided HERE, once per swing. */
     public void rightClawAttack(float speed) {
+        var clip = MirroredAttackSide.useLeftArm(ravager)
+            ? RavagerAnimationRefs.ATTACK_CLAW_LEFT_ANIMATION_NAME
+            : RavagerAnimationRefs.ATTACK_CLAW_RIGHT_ANIMATION_NAME;
+
         AzCommand.<Ravager>replay()
-            .play(AzAlienAnimationUtil.BODY, RavagerAnimationRefs.ATTACK_ARM_SINGLE_ANIMATION_NAME, AzPlayBehaviors.PLAY_ONCE)
+            .play(AzAlienAnimationUtil.BODY, clip, AzPlayBehaviors.PLAY_ONCE)
             .setSpeed(AzAlienAnimationUtil.BODY, speed)
+            .build()
+            .dispatchForEntity(ravager);
+    }
+
+    /** Crawling claw swipe - same side rule. */
+    public void crawlAttack() {
+        crawlAttack(1.0F);
+    }
+
+    public void crawlAttack(float speed) {
+        var clip = MirroredAttackSide.useLeftArm(ravager)
+            ? RavagerAnimationRefs.CRAWL_ATTACK_LEFT_ANIMATION_NAME
+            : RavagerAnimationRefs.CRAWL_ATTACK_RIGHT_ANIMATION_NAME;
+
+        AzCommand.<Ravager>replay()
+            .play(AzAlienAnimationUtil.BODY, clip, AzPlayBehaviors.PLAY_ONCE)
+            .setSpeed(AzAlienAnimationUtil.BODY, speed)
+            .build()
+            .dispatchForEntity(ravager);
+    }
+
+    public void crawlBiteAttack() {
+        AzCommand.<Ravager>replay()
+            .play(
+                AzAlienAnimationUtil.BODY,
+                RavagerAnimationRefs.CRAWL_BITE_ANIMATION_NAME,
+                AzPlayBehaviors.PLAY_ONCE
+            )
+            .build()
+            .dispatchForEntity(ravager);
+    }
+
+    /** ⚠ HOLD_ON_LAST_FRAME - the jump freezes on its final frame until the ground is regained. */
+    public void jump() {
+        AzCommand.<Ravager>replay()
+            .play(
+                AzAlienAnimationUtil.BODY,
+                RavagerAnimationRefs.JUMP_ANIMATION_NAME,
+                AzPlayBehaviors.HOLD_ON_LAST_FRAME
+            )
+            .build()
+            .dispatchForEntity(ravager);
+    }
+
+    public void land() {
+        AzCommand.<Ravager>replay()
+            .play(AzAlienAnimationUtil.BODY, RavagerAnimationRefs.LAND_ANIMATION_NAME, AzPlayBehaviors.PLAY_ONCE)
             .build()
             .dispatchForEntity(ravager);
     }
@@ -135,7 +188,7 @@ public class RavagerAnimationDispatcher {
 
     public void doubleClawAttack(float speed) {
         AzCommand.<Ravager>replay()
-            .play(AzAlienAnimationUtil.BODY, RavagerAnimationRefs.ATTACK_ARM_DOUBLE_ANIMATION_NAME, AzPlayBehaviors.PLAY_ONCE)
+            .play(AzAlienAnimationUtil.BODY, RavagerAnimationRefs.ATTACK_CLAW_DOUBLE_ANIMATION_NAME, AzPlayBehaviors.PLAY_ONCE)
             .setSpeed(AzAlienAnimationUtil.BODY, speed)
             .build()
             .dispatchForEntity(ravager);
@@ -165,18 +218,6 @@ public class RavagerAnimationDispatcher {
     public void crawlUp() {
         AzCommand.<Ravager>replay()
             .play(AzAlienAnimationUtil.BODY, RavagerAnimationRefs.CRAWL_UP_ANIMATION_NAME, AzPlayBehaviors.PLAY_ONCE)
-            .build()
-            .dispatchForEntity(ravager);
-    }
-
-    public void crawlAttack() {
-        CRAWL_ATTACK.dispatchForEntity(ravager);
-    }
-
-    public void crawlAttack(float speed) {
-        AzCommand.<Ravager>replay()
-            .play(AzAlienAnimationUtil.BODY, RavagerAnimationRefs.CRAWL_ATTACK_ANIMATION_NAME, AzPlayBehaviors.PLAY_ONCE)
-            .setSpeed(AzAlienAnimationUtil.BODY, speed)
             .build()
             .dispatchForEntity(ravager);
     }

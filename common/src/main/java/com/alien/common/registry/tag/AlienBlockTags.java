@@ -14,6 +14,22 @@ public class AlienBlockTags {
 
     public static final TagKey<Block> ABERRANT_RESIN_REPLACEABLE = create("aberrant_resin_replaceable");
 
+    /**
+     * ⭐⭐ WHAT THE HIVE SALVAGES INTO ITS RESIN CONTAINERS when a carve or a stamp would otherwise delete it.
+     * <p>
+     * ⚠ IT IS A BLOCK TAG, NOT AN ITEM TAG, because the salvage happens at the moment a BLOCK is cleared - [stated]
+     * "its storing the ore blocks themselves not the raw items so it would store say iron ore not raw iron". Reading
+     * the block and taking {@code asItem()} sidesteps loot tables, fortune and silk touch entirely.
+     * </p>
+     * <p>
+     * ⚠ ALMOST EVERYTHING HE ASKED FOR IS ALREADY INSIDE {@code c:ores}: ancient debris is
+     * {@code c:ores/netherite_scrap}, nether quartz is {@code c:ores/quartz}, and nether gold is inside
+     * {@code c:ores/gold}. avp_human populates {@code c:ores} too, so its ores come along for free. Only gilded
+     * blackstone is in no ore tag anywhere and has to be named.
+     * </p>
+     */
+    public static final TagKey<Block> HIVE_SALVAGE = create("hive_salvage");
+
     public static final TagKey<Block> ACID_IMMUNE = create("acid_immune");
 
     public static final TagKey<Block> CHITIN = create("chitin");

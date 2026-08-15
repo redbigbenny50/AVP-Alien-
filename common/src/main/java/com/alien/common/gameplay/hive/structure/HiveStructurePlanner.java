@@ -92,6 +92,15 @@ public final class HiveStructurePlanner {
      * The build plan for a hive. Hook: once the empress system is wired, detect an empress here and return an expanded
      * plan (larger extent, higher targets, additional room types). For now every hive uses the base plan.
      */
+    /**
+     * How many egg chambers this hive is planned to end up with. Exposed so {@code HiveRouter} can decide, at the
+     * moment it would otherwise SEAL a dead end, whether the nursery is still short and the dead end should become an
+     * egg cell instead. Reads the same plan the placer uses, so the two can never disagree.
+     */
+    public static int targetEggChambers(HiveLocation location) {
+        return planFor(location).targetEgg();
+    }
+
     private static BuildPlan planFor(HiveLocation location) {
         return BASE_PLAN;
     }
@@ -297,11 +306,45 @@ public final class HiveStructurePlanner {
      * this only patches the opening. Underground it seals cleanly; on an above-ground test hive any open air above the
      * piece in that plane fills too, so a cap can read a little tall.
      */
+    /**
+     * The ribbed resin of the hive's OWN strain.
+     * <p>
+     * ⚠ {@code capDoorway} used to hardcode {@code AlienResinBlocks.RIBBED_RESIN} - the NORMAL block - so every dead
+     * end capped in a nether, aberrant or irradiated hive was plugged with plain overworld resin and read as a patch of
+     * the wrong colour. A bare {@code AlienResinBlocks.RESIN_*} in hive code is almost always a strain bug.
+     * </p>
+     * <p>
+     * ⚠ NOTE THE WORD ORDER - the per-strain blocks are {@code RIBBED_NETHER_RESIN}, NOT {@code NETHER_RIBBED_RESIN}.
+     * The strain name sits in the MIDDLE for ribbed variants, unlike {@code NETHER_RESIN_BONE}.
+     * </p>
+     */
+    private static net.minecraft.world.level.block.Block strainRibbedResin(HiveLocation location) {
+        var variant = location.lineageVariantOrNull();
+
+        if (variant == null) {
+            return AlienResinBlocks.RIBBED_RESIN.get();
+        }
+
+        var type = com.alien.common.data.AlienVariantTypes.getFor(variant);
+
+        if (type == com.alien.common.data.AlienVariantTypes.ABERRANT) {
+            return com.alien.common.registry.init.block.AberrantAlienResinBlocks.RIBBED_ABERRANT_RESIN.get();
+        }
+        if (type == com.alien.common.data.AlienVariantTypes.NETHER) {
+            return com.alien.common.registry.init.block.NetherAlienResinBlocks.RIBBED_NETHER_RESIN.get();
+        }
+        if (type == com.alien.common.data.AlienVariantTypes.IRRADIATED) {
+            return com.alien.common.registry.init.block.IrradiatedAlienResinBlocks.RIBBED_IRRADIATED_RESIN.get();
+        }
+
+        return AlienResinBlocks.RIBBED_RESIN.get();
+    }
+
     private static void capDoorway(ServerLevel level, HiveLocation location, FrontierSocket socket) {
         // A hive door is a fixed DOOR_SIZE x DOOR_SIZE opening centred on the chunk's wall, from the floor up. Fill
         // just that region's air with resin; the wall around it and the terrain-blend cells (open air on an
         // above-ground hive) are left alone.
-        var resin = AlienResinBlocks.RIBBED_RESIN.get().defaultBlockState();
+        var resin = strainRibbedResin(location).defaultBlockState();
         var chunk = socket.chunk();
         var facing = socket.facing();
         int floorY = location.hiveFloorY();

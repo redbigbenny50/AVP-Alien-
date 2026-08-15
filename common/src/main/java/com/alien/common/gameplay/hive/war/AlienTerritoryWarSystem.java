@@ -89,14 +89,66 @@ public final class AlienTerritoryWarSystem implements TerritoryContestListener {
         var firstLineage = lineageFor(first.getUUID());
         var secondLineage = lineageFor(second.getUUID());
 
-        return firstLineage != null
-            && secondLineage != null
-            && !firstLineage.equals(secondLineage)
-            && !shareEmpressAuthority(firstLineage, secondLineage);
+        if (firstLineage == null || secondLineage == null || firstLineage.equals(secondLineage)) {
+            return false;
+        }
+
+        // ⚠⚠ PERF: RESOLVE EACH LineageFactionData EXACTLY ONCE. This predicate runs PER CANDIDATE PER SENSE SCAN -
+        // it is one of the hottest paths in the mod. shareEmpressAuthority used to look both lineages up itself, and
+        // the remembrance check then looked them BOTH up again (once per direction), so a single rival pair cost four
+        // faction lookups where two will do. Hoisted here and passed down; the exemptions are unchanged.
+        var firstData = lineageData(firstLineage);
+        var secondData = lineageData(secondLineage);
+
+        return !shareEmpressAuthority(firstData, secondData)
+            && !withinRemembrance(first.level(), firstLineage, firstData, secondLineage, secondData);
+    }
+
+    /**
+     * ⭐⭐ THE PERIOD OF REMEMBRANCE. [stated] "i would say theres a period of rememberance where they are nuetral to
+     * allow the daughter to leave and found".
+     * <p>
+     * A separating daughter mints her OWN lineage, and the ordinary rule is that same-strain hives of different
+     * lineages are at war. So the instant she broke away, her mother's hive read her - and her escort - as rivals and
+     * attacked. That is what produced "the members freed her from the chains but then went to attacking her": the
+     * damage drove the mother past her rouse threshold and unbound her from her own ovipositor.
+     * </p>
+     * <p>
+     * ⚠ MUTUAL AND DIRECTIONLESS. Checked BOTH ways round, because the pair arrives in whatever order the two aliens
+     * happened to be passed in, and a truce that only held in one direction would let one side beat on the other.
+     * </p>
+     * <p>
+     * ⚠ IT EXPIRES ON PURPOSE. He asked for a PERIOD, not an alliance - the daughter gets time to walk out and dig in,
+     * and after that the hive-war rule resumes and they are rivals like any other pair of lineages. The permanent
+     * version of this already exists and is deliberately harder to get: {@link #shareEmpressAuthority}, where an
+     * EMPRESS unifies lineages under one authority.
+     * </p>
+     */
+    private static boolean withinRemembrance(
+        net.minecraft.world.level.Level level,
+        ResourceLocation firstLineage,
+        @org.jetbrains.annotations.Nullable LineageFactionData firstData,
+        ResourceLocation secondLineage,
+        @org.jetbrains.annotations.Nullable LineageFactionData secondData
+    ) {
+        var now = level.getGameTime();
+        return isChildWithinRemembrance(firstData, secondLineage, now)
+            || isChildWithinRemembrance(secondData, firstLineage, now);
+    }
+
+    private static boolean isChildWithinRemembrance(
+        @org.jetbrains.annotations.Nullable LineageFactionData child,
+        ResourceLocation parentLineage,
+        long now
+    ) {
+        return child != null
+            && parentLineage.equals(child.parentLineageId())
+            && now < child.separationTick() + REMEMBRANCE_TICKS;
     }
 
     public static boolean areRivalLineages(ResourceLocation firstLineage, ResourceLocation secondLineage) {
-        return !firstLineage.equals(secondLineage) && !shareEmpressAuthority(firstLineage, secondLineage);
+        return !firstLineage.equals(secondLineage)
+            && !shareEmpressAuthority(lineageData(firstLineage), lineageData(secondLineage));
     }
 
     private static boolean tryStartBorderContest(ServerLevel level, HiveLocation attacker) {
@@ -271,10 +323,18 @@ public final class AlienTerritoryWarSystem implements TerritoryContestListener {
         Alien.MOD.factions().setRelationship(first, second, RelationshipState.HOSTILE);
     }
 
-    private static boolean shareEmpressAuthority(ResourceLocation firstLineage, ResourceLocation secondLineage) {
-        var first = lineageData(firstLineage);
-        var second = lineageData(secondLineage);
+    /**
+     * ⭐ THE DIAL: how long a mother and her freshly separated daughter stay neutral. THREE MINECRAFT DAYS (72,000
+     * ticks, about an hour of real time) - long enough for the daughter to travel clear, carve her core and get a first
+     * brood standing, which is what the truce is FOR. <b>Raise it</b> if daughters are still being cut down
+     * mid-migration; <b>lower it</b> if rival hives feel too slow to turn on each other.
+     */
+    private static final long REMEMBRANCE_TICKS = 3L * 24_000L;
 
+    private static boolean shareEmpressAuthority(
+        @org.jetbrains.annotations.Nullable LineageFactionData first,
+        @org.jetbrains.annotations.Nullable LineageFactionData second
+    ) {
         return first != null
             && second != null
             && first.empressId() != null

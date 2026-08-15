@@ -62,6 +62,18 @@ public final class MoltFeeding {
         if (!alien.getMoltingManager().advancePhase()) {
             return;
         }
+
+        // [stated] "if the adol eats anything it jumps ahead its growth time." A spent remain is food like any
+        // other, so it now buys growth time ON TOP of the molt phase it already bought. ⚠ THE TWO ARE DIFFERENT
+        // AXES and both are wanted: advancePhase is MOLTING (body scale - this form finishing growing INTO
+        // itself), feedOnMeal is GROWTH (the clock toward becoming the NEXT form). Eating an egg used to move
+        // only the first.
+        // ⚠ getGrowthManager lives on Xenomorph, NOT Alien - a chestburster is an Alien and has its own private
+        // one, so it keeps the molt phase and does not get the growth jump. Only the adolescents were specified.
+        if (alien instanceof com.alien.common.gameplay.entity.living.alien.xenomorph.Xenomorph xenomorph) {
+            xenomorph.getGrowthManager().feedOnMeal();
+        }
+
         consume(alien, meal);
     }
 
@@ -138,11 +150,19 @@ public final class MoltFeeding {
         var level = alien.level();
 
         // Snap at the meal: reuse the bite attack animation so eating actually reads as eating.
+        //
+        // ⚠⚠ THIS RUNS ON THE SERVER, SO IT MUST NOT TOUCH A DISPATCHER. It used to call
+        // getAnimationDispatcher().biteAttack() directly, which produced the log line "AzCommand.dispatch() was called
+        // on the server for Entity 'Adolescent'" and played NOTHING - animation commands are client-side only. The
+        // correct server-side lever is startAttack, which sets the synced attackType / attackId /
+        // attackStartedAtGameTime accessors; each client's animator reads those and plays the clip itself. Same
+        // synced-flag rule as the carve dig gait.
         alien.lookAt(net.minecraft.commands.arguments.EntityAnchorArgument.Anchor.EYES, meal.position());
-        if (alien instanceof com.alien.common.gameplay.entity.living.alien.chestburster.Chestburster chestburster) {
-            chestburster.getAnimationDispatcher().biteAttack();
-        } else if (alien instanceof com.alien.common.gameplay.entity.living.alien.adolescent.Adolescent adolescent) {
-            adolescent.getAnimationDispatcher().biteAttack();
+        if (alien instanceof com.alien.common.gameplay.entity.living.alien.adolescent.Adolescent adolescent) {
+            adolescent.startAttack(
+                com.alien.common.gameplay.entity.living.alien.adolescent.Adolescent.BITE,
+                null
+            );
         }
         level.playSound(
             null,

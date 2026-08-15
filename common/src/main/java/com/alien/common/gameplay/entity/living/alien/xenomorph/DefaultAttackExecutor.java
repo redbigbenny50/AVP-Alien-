@@ -19,8 +19,15 @@ public class DefaultAttackExecutor implements AttackExecutor {
     }
 
     @Override
+    public int totalDurationInTicks(Xenomorph entity, AttackType attack) {
+        return entity.scaleAttackDuration(attack.defaultDurationInTicks());
+    }
+
+    @Override
     public void onStart(Xenomorph entity, AttackType attack, @Nullable LivingEntity target) {
-        this.totalTicks = attack.defaultDurationInTicks();
+        // ⚠ MUST USE THE SCALED FIGURE, the same one startAttack handed to beginAttack. Reading the authored count
+        // here would put the damage tick past the end of a shortened attack, and the blow would never land.
+        this.totalTicks = entity.scaleAttackDuration(attack.defaultDurationInTicks());
         this.ticksRemaining = totalTicks;
         this.damageDealt = false;
         this.target = target;

@@ -188,6 +188,9 @@ public class EmpressOvipositorManager implements NBTSerializable {
             ovipositor.yHeadRot = empress.yHeadRot;
 
             empress.level().addFreshEntity(ovipositor);
+
+            // Fresh sitting, fresh bar - see Empress.resetDisturbance.
+            empress.resetDisturbance();
         }
     }
 
@@ -211,6 +214,13 @@ public class EmpressOvipositorManager implements NBTSerializable {
     private boolean hasEnoughLocalSupport() {
         var location = currentLocation();
         if (location == null || !location.isAlive()) {
+            return false;
+        }
+        // ⭐ SAME SEAT RULE AS THE QUEEN. An empress who has not been seated as this location's founder has not
+        // established here yet, and an unseated royal laying on someone else's (or nobody's) resin is the same
+        // bug in a bigger body - she just has a higher bar to clear otherwise, which is why it never showed.
+        var founderId = location.founderId();
+        if (founderId == null || !founderId.equals(empress.getUUID())) {
             return false;
         }
         if (!isNearHiveCenter(location)) {

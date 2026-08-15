@@ -40,6 +40,9 @@ public class FacehuggerAnimator extends AzEntityAnimator<Facehugger> {
         return ANIMATION;
     }
 
+    /** Edge detection for the lunge one-shot - see runPassiveAnimations. */
+    private boolean wasLunging;
+
     @Override
     public void setCustomAnimations(Facehugger animatable, float partialTicks) {
         super.setCustomAnimations(animatable, partialTicks);
@@ -61,10 +64,24 @@ public class FacehuggerAnimator extends AzEntityAnimator<Facehugger> {
             return;
         }
 
+        // ⭐⭐ THE LUNGE IS A ONE-SHOT AND MUST BE DISPATCHED ONCE, NOT EVERY TICK.
+        //
+        // ⚠⚠ LUNGE is an AzCommand.replay() - re-dispatching RESTARTS it from frame 0. Sending it on every tick of
+        // the lunge state pinned the body to the opening frame for the whole leap, so the mob slid along in a
+        // FROZEN POSE. [stated] "it seems to start but it just glides without moving its limbs." It also RETURNS,
+        // so the gait below never ran either - which is why walk and idle looked missing entirely while run and
+        // crawl (reached in other states) were fine.
+        //
+        // ⚠ Same trap as the jump clips: edge-detect the flip, then let the clip own the track for its length.
         if (facehugger.isLunging.get()) {
-            dispatcher.lunge();
+            if (!wasLunging) {
+                dispatcher.lunge();
+                wasLunging = true;
+            }
             return;
         }
+
+        wasLunging = false;
 
         var isMovingOnGround = facehugger.isMovingHorizontally.get() && facehugger.onGround();
 

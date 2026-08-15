@@ -152,6 +152,27 @@ public final class HiveDebugCommands {
                     .requires(CommandSourceStack::isPlayer)
                     .executes(HiveDebugCommands::forceShedCheckNearby)
             )
+            .then(Commands.literal("wake_nearest_legacy_queen").executes(HiveDebugCommands::wakeNearestLegacyQueen))
+            .then(
+                Commands.literal("wake_legacy_queens_in_area")
+                    .requires(CommandSourceStack::isPlayer)
+                    .then(
+                        Commands.argument("radius", IntegerArgumentType.integer(1, MAX_LEGACY_AREA_RADIUS))
+                            .executes(HiveDebugCommands::wakeLegacyQueensInArea)
+                    )
+            )
+            .then(Commands.literal("wake_all_legacy_queens").executes(HiveDebugCommands::wakeAllLegacyQueens))
+            .then(Commands.literal("kill_nearest_legacy_queen").executes(HiveDebugCommands::killNearestLegacyQueen))
+            .then(
+                Commands.literal("kill_legacy_queens_in_area")
+                    .requires(CommandSourceStack::isPlayer)
+                    .then(
+                        Commands.argument("radius", IntegerArgumentType.integer(1, MAX_LEGACY_AREA_RADIUS))
+                            .executes(HiveDebugCommands::killLegacyQueensInArea)
+                    )
+            )
+            .then(Commands.literal("kill_all_legacy_queens").executes(HiveDebugCommands::killAllLegacyQueens))
+            .then(Commands.literal("list_legacy_queens").executes(HiveDebugCommands::listLegacyQueens))
             .then(Commands.literal("rebuild_indexes").executes(HiveDebugCommands::rebuildIndexes))
             .then(Commands.literal("force_invariant_check").executes(HiveDebugCommands::forceInvariantCheck))
             .then(Commands.literal("list_emerging").executes(HiveDebugCommands::listEmerging))
@@ -603,6 +624,234 @@ public final class HiveDebugCommands {
         final var placed = spot;
         source.sendSuccess(() -> Component.literal("Webbed a test villager at " + placed.pos() + " facing " + placed.facing() + "."), true);
         return 1;
+    }
+
+    /**
+     * Wake the single nearest hibernating legacy queen.
+     * <p>
+     * [stated] "these old queens hibernate until awoken directly by the player or turned back on with the commands
+     * there should be one for nearest legacy queen the other is awakening all legacy queens." This is the first of the
+     * two. Only LOADED queens can be found - a sleeper in an unloaded chunk is invisible to any entity query - so this
+     * searches the player's own level and reports honestly when it finds nobody.
+     */
+    /** Upper bound on the area commands. Big enough to cover a legacy hive cluster, small enough not to be a sweep. */
+    private static final int MAX_LEGACY_AREA_RADIUS = 512;
+
+    /**
+     * The nearest LOADED legacy queen to the player, or null.
+     * <p>
+     * {@code dormantOnly} separates the two uses: waking cares only about sleepers, but killing should also reach a
+     * legacy queen who has already been woken - she is still legacy, and still cullable.
+     */
+    private static com.alien.common.gameplay.entity.living.alien.xenomorph.queen.@org.jetbrains.annotations.Nullable Queen nearestLegacyQueen(
+        net.minecraft.server.level.ServerLevel level,
+        net.minecraft.world.entity.player.Player player,
+        boolean dormantOnly
+    ) {
+        var candidates = dormantOnly
+            ? com.alien.common.gameplay.hive.migration.LegacyHiveRecovery
+                .dormantLegacyQueensIn(level, level.getWorldBorder().getCollisionShape().bounds())
+            : com.alien.common.gameplay.hive.migration.LegacyHiveRecovery
+                .legacyQueensIn(level, level.getWorldBorder().getCollisionShape().bounds());
+
+        com.alien.common.gameplay.entity.living.alien.xenomorph.queen.Queen nearest = null;
+        var nearestDistanceSqr = Double.MAX_VALUE;
+
+        for (var queen : candidates) {
+            var distanceSqr = queen.distanceToSqr(player);
+            if (distanceSqr < nearestDistanceSqr) {
+                nearestDistanceSqr = distanceSqr;
+                nearest = queen;
+            }
+        }
+        return nearest;
+    }
+
+    /** The player-centred cube the area commands act on. */
+    private static net.minecraft.world.phys.AABB legacyAreaBox(
+        net.minecraft.world.entity.player.Player player,
+        int radius
+    ) {
+        return new net.minecraft.world.phys.AABB(player.blockPosition()).inflate(radius);
+    }
+
+    /**
+     * Wake the single nearest hibernating legacy queen.
+     * <p>
+     * [stated] "there should be one for nearest legecy queen the other is awakening all legecy queens", later extended
+     * with [stated] "i think an area command to wake up queens would be good... nearest, in an area, and then all
+     * server wide." Only LOADED queens can be found - a sleeper in an unloaded chunk is invisible to any entity query -
+     * so nearest and area both report honestly when they find nobody, and only the server-wide pair arm the persisted
+     * flag that catches unloaded sleepers as they load.
+     */
+    private static int wakeNearestLegacyQueen(com.mojang.brigadier.context.CommandContext<CommandSourceStack> ctx) {
+        var source = ctx.getSource();
+        var player = source.getPlayer();
+        if (player == null) {
+            source.sendFailure(Component.literal("Must be run by a player."));
+            return 0;
+        }
+
+        var nearest = nearestLegacyQueen(source.getLevel(), player, true);
+        if (nearest == null) {
+            source.sendFailure(
+                Component.literal("No hibernating legacy queen is loaded in this dimension. Travel to her chunks first.")
+            );
+            return 0;
+        }
+
+        if (!com.alien.common.gameplay.hive.migration.LegacyHiveRecovery.awakenLegacyQueen(nearest)) {
+            source.sendFailure(Component.literal("Found a dormant queen but recovery refused to wake her."));
+            return 0;
+        }
+
+        final var woken = nearest;
+        final var blocks = (int) Math.sqrt(woken.distanceToSqr(player));
+        source.sendSuccess(
+            () -> Component
+                .literal("Woke legacy queen " + woken.getUUID() + " (" + blocks + " blocks away) at " + woken.blockPosition() + ".")
+                .withStyle(ChatFormatting.GREEN),
+            true
+        );
+        return 1;
+    }
+
+    /** Kill the single nearest legacy queen, asleep or already woken. */
+    private static int killNearestLegacyQueen(com.mojang.brigadier.context.CommandContext<CommandSourceStack> ctx) {
+        var source = ctx.getSource();
+        var player = source.getPlayer();
+        if (player == null) {
+            source.sendFailure(Component.literal("Must be run by a player."));
+            return 0;
+        }
+
+        var nearest = nearestLegacyQueen(source.getLevel(), player, false);
+        if (nearest == null) {
+            source.sendFailure(Component.literal("No legacy queen is loaded in this dimension."));
+            return 0;
+        }
+
+        final var target = nearest;
+        final var at = target.blockPosition();
+        final var blocks = (int) Math.sqrt(target.distanceToSqr(player));
+        if (!com.alien.common.gameplay.hive.migration.LegacyHiveRecovery.killLegacyQueen(target)) {
+            source.sendFailure(Component.literal("Found a queen but recovery does not consider her legacy."));
+            return 0;
+        }
+
+        source.sendSuccess(
+            () -> Component
+                .literal("Killed legacy queen (" + blocks + " blocks away) at " + at + ".")
+                .withStyle(ChatFormatting.YELLOW),
+            true
+        );
+        return 1;
+    }
+
+    private static int wakeLegacyQueensInArea(com.mojang.brigadier.context.CommandContext<CommandSourceStack> ctx) {
+        var source = ctx.getSource();
+        var player = source.getPlayer();
+        if (player == null) {
+            source.sendFailure(Component.literal("Must be run by a player."));
+            return 0;
+        }
+
+        var radius = IntegerArgumentType.getInteger(ctx, "radius");
+        var woken = com.alien.common.gameplay.hive.migration.LegacyHiveRecovery
+            .awakenLegacyQueensIn(source.getLevel(), legacyAreaBox(player, radius));
+
+        source.sendSuccess(
+            () -> Component
+                .literal("Woke " + woken + " legacy queen(s) within " + radius + " blocks.")
+                .withStyle(woken > 0 ? ChatFormatting.GREEN : ChatFormatting.GRAY),
+            true
+        );
+        return woken;
+    }
+
+    private static int killLegacyQueensInArea(com.mojang.brigadier.context.CommandContext<CommandSourceStack> ctx) {
+        var source = ctx.getSource();
+        var player = source.getPlayer();
+        if (player == null) {
+            source.sendFailure(Component.literal("Must be run by a player."));
+            return 0;
+        }
+
+        var radius = IntegerArgumentType.getInteger(ctx, "radius");
+        var killed = com.alien.common.gameplay.hive.migration.LegacyHiveRecovery
+            .killLegacyQueensIn(source.getLevel(), legacyAreaBox(player, radius));
+
+        source.sendSuccess(
+            () -> Component
+                .literal("Killed " + killed + " legacy queen(s) within " + radius + " blocks.")
+                .withStyle(killed > 0 ? ChatFormatting.YELLOW : ChatFormatting.GRAY),
+            true
+        );
+        return killed;
+    }
+
+    /**
+     * Wake every legacy queen, and ARM the persisted flag so sleepers in unloaded chunks wake as they load.
+     * <p>
+     * That persisted arming is why this is not just a loop: most of an old world's queens are not loaded when the
+     * command runs, and {@code wakeAllLegacyQueens} in the recovery data catches each one at load time instead.
+     */
+    private static int wakeAllLegacyQueens(com.mojang.brigadier.context.CommandContext<CommandSourceStack> ctx) {
+        var source = ctx.getSource();
+        var woken = com.alien.common.gameplay.hive.migration.LegacyHiveRecovery.awakenLegacyQueens(source.getServer());
+        source.sendSuccess(
+            () -> Component
+                .literal(
+                    "Woke " + woken + " loaded legacy queen(s). Any still in unloaded chunks will wake as they load."
+                )
+                .withStyle(ChatFormatting.GREEN),
+            true
+        );
+        return 1;
+    }
+
+    /**
+     * Cull every legacy queen, and ARM the persisted kill flag so sleepers in unloaded chunks are discarded as they
+     * load. Irreversible - the server-wide flags persist in NBT.
+     */
+    private static int killAllLegacyQueens(com.mojang.brigadier.context.CommandContext<CommandSourceStack> ctx) {
+        var source = ctx.getSource();
+        var killed = com.alien.common.gameplay.hive.migration.LegacyHiveRecovery.killLegacyQueens(source.getServer());
+        source.sendSuccess(
+            () -> Component
+                .literal(
+                    "Killed " + killed + " loaded legacy queen(s). Any still in unloaded chunks will be culled as they load."
+                )
+                .withStyle(ChatFormatting.YELLOW),
+            true
+        );
+        return 1;
+    }
+
+    /** Who is still asleep and where - so the nearest-queen command can be aimed instead of guessed at. */
+    private static int listLegacyQueens(com.mojang.brigadier.context.CommandContext<CommandSourceStack> ctx) {
+        var source = ctx.getSource();
+        var dormant = com.alien.common.gameplay.hive.migration.LegacyHiveRecovery
+            .loadedDormantLegacyQueens(source.getServer());
+
+        if (dormant.isEmpty()) {
+            source.sendSuccess(() -> Component.literal("No hibernating legacy queens are currently loaded."), false);
+            return 0;
+        }
+
+        source.sendSuccess(
+            () -> Component.literal("Hibernating legacy queens loaded: " + dormant.size()).withStyle(ChatFormatting.GOLD),
+            false
+        );
+        for (var queen : dormant) {
+            source.sendSuccess(
+                () -> Component.literal(
+                    "  " + queen.getUUID() + " in " + queen.level().dimension().location() + " at " + queen.blockPosition()
+                ),
+                false
+            );
+        }
+        return dormant.size();
     }
 
     private static int inhibitHere(com.mojang.brigadier.context.CommandContext<CommandSourceStack> ctx) {

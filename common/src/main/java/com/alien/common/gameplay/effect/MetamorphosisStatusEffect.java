@@ -1,6 +1,7 @@
 package com.alien.common.gameplay.effect;
 
 import com.alien.common.gameplay.entity.living.alien.Alien;
+import com.alien.common.gameplay.entity.living.alien.xenomorph.Xenomorph;
 import com.alien.common.model.alien.Host;
 import com.alien.common.util.AlienEmbryoUtil;
 import net.minecraft.world.effect.MobEffect;
@@ -51,6 +52,17 @@ public class MetamorphosisStatusEffect extends MobEffect {
             // aliens without a molting profile or already at full size, so the data (molting_profiles) decides scope.
             if (!alien.getMoltingManager().hasReachedTargetScale()) {
                 alien.getMoltingManager().skipToFullMaturity();
+            }
+
+            // ⭐ AND FINISH A TIME-BASED GROWTH STAGE, [stated] "yes let it complete the timers fully". Until now the
+            // effect only moved castes whose stage NAMED it as a requirement, so a potion did nothing at all to an
+            // adolescent - its stages are bare timers. ⚠ ORDER IS LOAD-BEARING: skipToFullMaturity() runs FIRST,
+            // because GrowthManager refuses to grow anything until the molting profile is fully matured; filling the
+            // clock before clearing the phases would just park it at the same gate.
+            // ⚠ getGrowthManager() lives on Xenomorph, NOT on Alien, so this is instanceof-gated. Adolescents are
+            // xenomorphs since the Aug 11 reparent and are covered; chestbursters are not, and are left alone.
+            if (alien instanceof Xenomorph xenomorph) {
+                xenomorph.getGrowthManager().completeTimeBasedGrowth();
             }
 
             return;
