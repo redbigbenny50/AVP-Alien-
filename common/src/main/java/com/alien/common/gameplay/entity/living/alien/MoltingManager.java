@@ -104,10 +104,33 @@ public class MoltingManager implements NBTSerializable {
         var currentPhase = data.phases().get(phaseIndex);
 
         if (!isMolting(currentPhase) && shouldStartMoltImmediately()) {
+            // ⚠⚠ THIS BRANCH HAD NO VALVE, AND THAT IS THE BUG. [stated] "they used a potion on her then immidietly
+            // chained her ... shes also smaller than normal".
+            // <p>
+            // The metamorphosis potion sets a growth REQUIREMENT, so shouldStartMoltImmediately() goes true and the
+            // molt tries to begin at once. But canStartMolting() refuses while the hive is tracking players, while
+            // anything is aggroed, or while an attack target is in sight - and a player standing right there chaining
+            // her satisfies all three. The old code then `return`ed with NO counter, EVERY TICK, FOREVER. She sat at
+            // whatever scale the phase had reached, which is exactly the "smaller than normal" queen frozen mid-molt.
+            // </p>
+            // <p>
+            // ⚠ The valve below already existed for the OTHER entry point (`willStartMolting`) - it was added when
+            // every adolescent in the tester's world froze for the same reason. This branch was simply never given
+            // one. Same constant, same counter, same semantics: wait for calm, but never wait forever.
+            // </p>
+            // <p>
+            // ⚠ CHAINS AND INHIBITION ARE NOT THE GATE and never were - nothing in canStartMolting() reads either,
+            // and QueenBindManager only zeroes horizontal movement. A chained, inhibited queen still develops. It was
+            // the PLAYER'S PRESENCE that blocked her, which is why chaining her looked like the cause.
+            // </p>
             if (!canStartMolting()) {
-                return;
+                if (moltBlockedTicks < MOLT_FORCE_TICKS) {
+                    moltBlockedTicks++;
+                    return;
+                }
             }
 
+            moltBlockedTicks = 0;
             phaseElapsedTicks = currentPhase.idleTicks();
         }
 
