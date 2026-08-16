@@ -36,6 +36,26 @@ public class AlienPredicates {
     /** How long an alien holds a retaliation grudge against something that hurt it (10s). */
     private static final int RETALIATION_GRUDGE_TICKS = 200;
 
+    /**
+     * ⭐⭐ A CHILD. [stated] "adolescents should be exempt from most if not all hive parties they arent attackers or
+     * workers or builders they are children whos only job is growing into adults."
+     * <p>
+     * They ARE hive members - they live there, they are counted, they are protected - but they are never CONSCRIPTED.
+     * This became necessary the moment they were reparented onto {@code Xenomorph} so their molt would run: every hive
+     * system that selects by class rather than by caste tag suddenly saw them.
+     * </p>
+     * <p>
+     * ⚠ TAG-BACKED ON PURPOSE. There are two adolescent classes ({@code Adolescent}, which also backs the royal, and
+     * {@code PredalienAdolescent}), so an instanceof list would rot; {@code ADOLESCENTS} already covers both plus every
+     * strain. ⚠ AND THE CONVERSE: do NOT "fix" a conscription site by adding adolescents to the
+     * {@code avp_alien:xenomorphs} tag - most hive logic filters on THAT, and it is what keeps them out of raid wave
+     * pools, attack/host-hunt/biomass/surface parties, throne defence and the dormant-queen purge for free.
+     * </p>
+     */
+    public static boolean isJuvenile(@NotNull Entity entity) {
+        return entity.getType().is(AlienEntityTypeTags.ADOLESCENTS);
+    }
+
     public static boolean canTarget(@NotNull Alien alien, @NotNull LivingEntity potentialTarget) {
         return canContinueTargeting(alien, potentialTarget)
             && isTargetThreatAllowed(alien, potentialTarget);

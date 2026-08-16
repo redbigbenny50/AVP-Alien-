@@ -7,6 +7,7 @@ import com.alien.common.registry.init.AlienEntityTypes;
 import com.alien.common.registry.init.block.AlienResinBlocks;
 import com.alien.common.registry.tag.AlienDamageTypesTags;
 import com.alien.common.registry.tag.AlienEntityTypeTags;
+import net.minecraft.nbt.CompoundTag;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.damagesource.DamageSource;
 import net.minecraft.world.entity.Entity;
@@ -16,6 +17,9 @@ import net.minecraft.world.entity.ai.attributes.AttributeSupplier;
 import net.minecraft.world.entity.ai.attributes.Attributes;
 import net.minecraft.world.level.Level;
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
+
+import java.util.UUID;
 
 /**
  * The resin "royal cocoon" a praetorian or crusher forms inside while metamorphosing into a queen. A placed, stationary
@@ -47,8 +51,49 @@ public class RoyalCocoon extends Mob {
             .add(Attributes.MOVEMENT_SPEED, 0);
     }
 
+    private static final String OCCUPANT_TAG = "RoyalCocoonOccupant";
+
+    /**
+     * ⭐ WHO IS ACTUALLY INSIDE. Written by {@code CocoonManager} when the cage is spawned, and RE-POINTED by it at the
+     * source -> destination swap, because the emerging royal is a different entity with a different UUID.
+     * <p>
+     * This exists to replace a proximity search. The old code took every {@code Xenomorph} within one block that was
+     * cocooning at all and discarded it, on the reasoning that a stored link could not survive the swap. It can - the
+     * swap happens in one place and both entities are in hand there - and the proximity version was a trap: anything
+     * else molting nearby was executed as though it were the occupant. Harmless while only praetorians and crushers
+     * could cocoon; not harmless now that adolescents molt too.
+     * </p>
+     */
+    private @Nullable UUID occupantId;
+
     public RoyalCocoon(EntityType<? extends RoyalCocoon> entityType, Level level) {
         super(entityType, level);
+    }
+
+    public void setOccupantId(@Nullable UUID occupantId) {
+        this.occupantId = occupantId;
+    }
+
+    public @Nullable UUID getOccupantId() {
+        return occupantId;
+    }
+
+    @Override
+    public void readAdditionalSaveData(@NotNull CompoundTag compoundTag) {
+        super.readAdditionalSaveData(compoundTag);
+
+        if (compoundTag.hasUUID(OCCUPANT_TAG)) {
+            this.occupantId = compoundTag.getUUID(OCCUPANT_TAG);
+        }
+    }
+
+    @Override
+    public void addAdditionalSaveData(@NotNull CompoundTag compoundTag) {
+        super.addAdditionalSaveData(compoundTag);
+
+        if (occupantId != null) {
+            compoundTag.putUUID(OCCUPANT_TAG, occupantId);
+        }
     }
 
     /**
@@ -119,16 +164,18 @@ public class RoyalCocoon extends Mob {
         if (!(level() instanceof ServerLevel)) {
             return;
         }
-        // Kill whoever is currently cocooning inside this cage (the source praetorian/crusher early on, or the
-        // queen herself once she has formed) -- proximity rather than a stored link, so it survives the swap.
-        for (
-            Xenomorph cocooning : level().getEntitiesOfClass(
-                Xenomorph.class,
-                getBoundingBox().inflate(1.0),
-                xeno -> xeno.cocoonState.get() != CocoonState.NONE
-            )
+        // Kill whoever is currently cocooning inside this cage - BY IDENTITY. The occupant is recorded when the cage
+        // is spawned and re-pointed across the source -> destination swap, so exactly one entity can ever be hit,
+        // and only if it really is mid-molt.
+        if (occupantId == null || !(level() instanceof ServerLevel serverLevel)) {
+            return;
+        }
+
+        if (
+            serverLevel.getEntity(occupantId) instanceof Xenomorph occupant
+                && occupant.cocoonState.get() != CocoonState.NONE
         ) {
-            cocooning.discard();
+            occupant.discard();
         }
     }
 

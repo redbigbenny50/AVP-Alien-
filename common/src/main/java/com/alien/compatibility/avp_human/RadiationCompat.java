@@ -74,8 +74,12 @@ public final class RadiationCompat {
 
         try {
             method.invoke(victim, exposure);
-        } catch (ReflectiveOperationException exception) {
-            Alien.LOGGER.warn("Failed to apply radiation exposure through the AVPHuman bridge", exception);
+        } catch (Throwable throwable) {
+            // ⚠ THROWABLE, NOT ReflectiveOperationException. Loading a class runs the mixin transformer over it,
+            // so a reflective probe executes every OTHER mod's mixins targeting that class. A broken one throws
+            // MixinTransformerError - an Error, and NOT a LinkageError - which the narrower catch let straight
+            // through, turning another mod's version skew into a crash attributed to us.
+            Alien.LOGGER.warn("Failed to apply radiation exposure through the AVPHuman bridge", throwable);
         }
     }
 
@@ -93,8 +97,12 @@ public final class RadiationCompat {
 
         try {
             method.invoke(victim, 0);
-        } catch (ReflectiveOperationException exception) {
-            Alien.LOGGER.warn("Failed to clear radiation exposure through the AVPHuman bridge", exception);
+        } catch (Throwable throwable) {
+            // ⚠ THROWABLE, NOT ReflectiveOperationException. Loading a class runs the mixin transformer over it,
+            // so a reflective probe executes every OTHER mod's mixins targeting that class. A broken one throws
+            // MixinTransformerError - an Error, and NOT a LinkageError - which the narrower catch let straight
+            // through, turning another mod's version skew into a crash attributed to us.
+            Alien.LOGGER.warn("Failed to clear radiation exposure through the AVPHuman bridge", throwable);
         }
     }
 
@@ -107,7 +115,11 @@ public final class RadiationCompat {
 
         try {
             setExposureMethod = Class.forName(EXPOSURE_INTERFACE).getMethod(SET_EXPOSURE_METHOD, int.class);
-        } catch (ReflectiveOperationException exception) {
+        } catch (Throwable throwable) {
+            // ⚠ THROWABLE, NOT ReflectiveOperationException. Loading a class runs the mixin transformer over it,
+            // so a reflective probe executes every OTHER mod's mixins targeting that class. A broken one throws
+            // MixinTransformerError - an Error, and NOT a LinkageError - which the narrower catch let straight
+            // through, turning another mod's version skew into a crash attributed to us.
             setExposureMethod = null;
         }
 
@@ -123,7 +135,11 @@ public final class RadiationCompat {
 
         try {
             addExposureMethod = Class.forName(EXPOSURE_INTERFACE).getMethod(ADD_EXPOSURE_METHOD, int.class);
-        } catch (ReflectiveOperationException exception) {
+        } catch (Throwable throwable) {
+            // ⚠ THROWABLE, NOT ReflectiveOperationException. Loading a class runs the mixin transformer over it,
+            // so a reflective probe executes every OTHER mod's mixins targeting that class. A broken one throws
+            // MixinTransformerError - an Error, and NOT a LinkageError - which the narrower catch let straight
+            // through, turning another mod's version skew into a crash attributed to us.
             // An AVPHuman without the exposure system (or no AVPHuman at all): the irradiated touch is simply inert.
             addExposureMethod = null;
         }

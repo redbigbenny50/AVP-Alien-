@@ -13,6 +13,16 @@ public class AlienEntityTypeTags {
 
     public static final TagKey<EntityType<?>> ADOLESCENTS = create("adolescents");
 
+    /**
+     * ⭐ WHAT AN ADOLESCENT WILL HUNT. [stated] "chickens, cats, axolotls, baby animals, a fox is the largest thing they
+     * would probably try to eat."
+     * <p>
+     * A SIZE ceiling, not a strength one - nothing belongs here for being weak. Baby animals are handled in code rather
+     * than listed, because the rule has to hold for species whose adults are far too big.
+     * </p>
+     */
+    public static final TagKey<EntityType<?>> JUVENILE_PREY = create("juvenile_prey");
+
     public static final TagKey<EntityType<?>> ALIENS = create("aliens");
 
     /** Mobs the capture chain refuses to grab or chain — bosses and the like. Datapack-overridable. */

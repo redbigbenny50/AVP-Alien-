@@ -248,9 +248,10 @@ public record HiveConfig(
             2, // maxDaughterHivesPerLocation: a hive may seed exactly two daughters in its whole life. With the
                // 8-hive lineage cap this is the same constraint said twice - 1 -> 3 -> 7 -> 8 converges exactly on
                // maxLocationsPerLineage - which is what stops one hive quietly taking the world.
-            100, // queenPromotionJellyCost: royal jelly to raise a praetorian (or, failing that, a crusher) into a
-            // founding queen. Deliberately the SAME price as firewallCrowningJellyCost - crowning a successor at a
-            // queenless hive and minting a daughter's founder are the same act of making a queen from nothing.
+            50, // queenPromotionJellyCost: royal jelly to raise a praetorian (or, failing that, a crusher) into a
+            // founding queen. ⚠ [stated] Aug 14, LOWERED 100 -> 50, so it is NO LONGER matched to
+            // firewallCrowningJellyCost (still 100) - that pairing is history, do not "restore" it. The vats now back
+            // this spend (see QueenPromotionService), so 50 is what a hive can realistically hold aside.
             30L * TICKS_PER_SECOND, // queenPromotionMoltTicks: same window as the empress molt
             5L * TICKS_PER_SECOND, // localLeaderPickCadenceTicks (100 ticks)
             0, // empressCandidateMinMembers: population floor for empress eligibility. WAS 250, which no hive could
@@ -296,7 +297,8 @@ public record HiveConfig(
             8, // maxLocationsUnderEmpress: an empress controls up to 8 hives (her origin included) - matched to
                // maxLocationsPerLineage so the empress (emerging at 4 hives) never freezes lineage growth short of
                // the 8-hive cap. Was 5, which silently capped every empress-led lineage at 5.
-            100, // minimumPopulationForHiveSpread
+            70, // minimumPopulationForHiveSpread: ⚠ [stated] Aug 14, LOWERED 100 -> 70. SHARED with
+                // AbstractSpreadAttempt, so this loosens the ABSTRACT spread path too, not just the visible promotion.
             4, // abstractSpreadMinFounderGroupSize
             10, // abstractSpreadMaxFounderGroupSize
             30L * TICKS_PER_SECOND, // foragerJoinTicks

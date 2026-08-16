@@ -53,20 +53,25 @@ public class QueenLifecyclePhaseManager implements NBTSerializable {
     /** Sleep length before she wakes and founds: 3 Minecraft days. Zeroed via the hibernation_skip debug command. */
     public static final int HIBERNATION_DURATION_TICKS = 3 * 24000;
 
-    /** Damage at or above which a hit rouses her from hibernation; below this (a stray arrow) she sleeps through it. */
-    /** One hit this hard and she is up, no matter what she was doing. */
-    public static final float HIBERNATION_DISTURBANCE_DAMAGE = 6.0F;
-
     /**
-     * Or this much damage TOTAL inside the window below. Sustained chipping rouses her just as surely as one heavy blow
-     * - it just takes commitment.
+     * HEALTH she must be down before she will leave her post — not damage dealt to her.
+     * <p>
+     * The difference matters. Damage dealt is what an attacker rolls; health lost is what actually came off her bar
+     * after armour and absorption, which is the thing a player can see. And because she REGENERATES, healing repays
+     * this debt on its own: the bar falls as she recovers, so there is no artificial decay rate to tune. To move her
+     * you have to take health off faster than she puts it back.
+     * <p>
+     * There is no single-blow shortcut: one heavy hit simply takes this much off her bar at once.
      */
-    public static final float SUSTAINED_DISTURBANCE_DAMAGE = 12.0F;
+    public static final float DISTURBANCE_THRESHOLD = 15.0F;
 
-    /** The accumulator bleeds off at this much per second, so a slow drip never adds up to anything. */
-    private static final float DISTURBANCE_DECAY_PER_SECOND = 2.0F;
-
+    /** Net health lost since she was last calm. Repaid by her own regeneration. */
     private float disturbanceAccumulator;
+
+    /** Her health as of the last sample, so the bar can follow the health bar in both directions. */
+    private float lastKnownHealth = Float.NaN;
+
+    private float lastKnownMaxHealth = Float.NaN;
 
     /** She must stay clear of threats this long (out of combat, no survival player in her chunk) before resettling. */
     private static final int HIBERNATION_CALM_TICKS = 10 * 20;
@@ -243,7 +248,7 @@ public class QueenLifecyclePhaseManager implements NBTSerializable {
         }
 
         if (queen.tickCount % 20 == 0) {
-            decayDisturbance();
+            sampleHealth();
         }
 
         // Bound queens are frozen: a captured queen does not develop, locate, dig, hibernate, or hand off to founding.
@@ -838,48 +843,95 @@ public class QueenLifecyclePhaseManager implements NBTSerializable {
     }
 
     /**
-     * Damage hook (called from {@link Queen#hurt}). A hit at or above {@link #HIBERNATION_DISTURBANCE_DAMAGE} rouses a
-     * sleeping or returning queen into the defend sub-state; weaker hits, and any damage taken when she is not
-     * hibernating, are ignored.
-     */
-    /**
      * Registers a hit against her composure and reports whether it was enough to make her abandon her post.
      * <p>
      * [stated] "the queen gets off her eggsack too easily when damaged... when he used a syringe on her she got up. so
      * we need to have it be multiple sustained small hits or a hard damaging hit will get her up. so if someone hits
      * her accidentally or uses the syringe item it wont make her abandon her duty to fight."
      * <p>
-     * TWO WAYS UP, and only two: one blow of {@link #HIBERNATION_DISTURBANCE_DAMAGE} or more, or
-     * {@link #SUSTAINED_DISTURBANCE_DAMAGE} accumulated before the accumulator bleeds off. A syringe deals 0.01 - it
-     * would take twelve hundred of them inside the window, which is the point. The accumulator DECAYS, so chipping at
-     * her once a minute never adds up; you have to mean it.
+     * ONE WAY UP: {@link #DISTURBANCE_THRESHOLD} of HEALTH lost, net of everything she has regenerated back. A syringe
+     * takes 0.01 off her - fifteen hundred of them would do it, if her regeneration did not repay them faster than any
+     * hand can click. Deliberately measured from her HEALTH rather than the damage rolled against her, so armour and
+     * absorption count for her exactly as a player would expect.
      *
      * @return true if she has been roused and should be allowed to retaliate
      */
-    public boolean registerDisturbance(float amount) {
-        if (amount >= HIBERNATION_DISTURBANCE_DAMAGE) {
-            rouse(amount, "single blow");
-            return true;
-        }
+    public boolean registerDisturbance() {
+        sampleHealth();
 
-        disturbanceAccumulator += amount;
-        if (disturbanceAccumulator >= SUSTAINED_DISTURBANCE_DAMAGE) {
-            rouse(disturbanceAccumulator, "sustained");
+        if (disturbanceAccumulator >= DISTURBANCE_THRESHOLD) {
+            // Logged because this bug was misdiagnosed twice for want of exactly these three numbers. Fires only on an
+            // actual rouse, which is rare - not per hit, not per tick.
+            Alien.LOGGER.info(
+                "Queen roused off her eggsack: {} health lost (threshold {}), now at {}/{}.",
+                String.format("%.2f", disturbanceAccumulator),
+                DISTURBANCE_THRESHOLD,
+                String.format("%.1f", queen.getHealth()),
+                String.format("%.1f", queen.getMaxHealth())
+            );
+            rouse(disturbanceAccumulator, "health lost");
             return true;
         }
 
         return false;
     }
 
-    /** Bleeds the accumulator off, so only sustained pressure counts. Called once a second from {@link #tick}. */
-    private void decayDisturbance() {
-        if (disturbanceAccumulator > 0.0F) {
-            disturbanceAccumulator = Math.max(0.0F, disturbanceAccumulator - DISTURBANCE_DECAY_PER_SECOND);
+    /**
+     * Follows her health bar in both directions: what she loses is added to the debt, what she regenerates repays it.
+     * Called on every hit and once a second from {@link #tick} — the periodic call is what lets healing count.
+     */
+    private void sampleHealth() {
+        var health = queen.getHealth();
+        var maxHealth = queen.getMaxHealth();
+
+        if (Float.isNaN(lastKnownHealth)) {
+            lastKnownHealth = health;
+            lastKnownMaxHealth = maxHealth;
+            return;
         }
+
+        // ⚠ A MOVING MAXIMUM IS NOT A WOUND, and this is what actually stood her up.
+        // Alien.applyDynamicAttributes re-checks strain and empress buffs every 40 ticks, and when the MAXIMUM moves
+        // it SCALES current health to match (`setHealth(getHealth() * (after / before))`). So an empress unloading and
+        // taking her influence buff with her drops a queen's current health by the whole buff percentage in one tick -
+        // tens of points on a royal health pool, many times the threshold - without a single blow landing. The bar
+        // then sat over the line until something touched her, and the next hit of ANY size read it and roused her.
+        // That is why a syringe still worked after the bar was reset at mount time: the reset happens when she sits
+        // down, the buff flicker happens later.
+        // Re-baselining instead of accumulating keeps real damage counted and attribute arithmetic out of it.
+        if (maxHealth != lastKnownMaxHealth) {
+            lastKnownHealth = health;
+            lastKnownMaxHealth = maxHealth;
+            return;
+        }
+
+        disturbanceAccumulator = Math.max(0.0F, disturbanceAccumulator + (lastKnownHealth - health));
+        lastKnownHealth = health;
+    }
+
+    /**
+     * Wipes the disturbance debt and re-baselines on her CURRENT health.
+     * <p>
+     * Called when she settles onto an eggsack, so the threshold means "health lost SINCE SHE SAT DOWN" rather than
+     * health lost across her whole life.
+     * </p>
+     * <p>
+     * ⚠ WHY THIS IS NECESSARY, and it is not obvious. The debt is only repaid by REGENERATION, and
+     * {@code Alien.canHeal} refuses to heal her while {@code getTarget() != null} or within 10s of being hurt. A player
+     * standing next to her keeps re-acquiring as a target between hits, so a queen with a player nearby heals NOTHING
+     * and the debt never unwinds. Any queen who had already lost {@value #DISTURBANCE_THRESHOLD} health earlier in her
+     * life was therefore sitting permanently over the line, and the next hit of ANY size - a 0.01 syringe - read the
+     * stale bar and stood her up instantly. The threshold was working; the bar it read was not hers to spend.
+     * </p>
+     */
+    public void resetDisturbance() {
+        disturbanceAccumulator = 0.0F;
+        lastKnownHealth = queen.getHealth();
+        lastKnownMaxHealth = queen.getMaxHealth();
     }
 
     private void rouse(float amount, String reason) {
-        disturbanceAccumulator = 0.0F;
+        resetDisturbance();
 
         if (phase != QueenLifecyclePhase.HIBERNATION || hibernationActivity == HibernationActivity.DEFENDING) {
             return;
@@ -889,7 +941,7 @@ public class QueenLifecyclePhaseManager implements NBTSerializable {
         disturbanceCalmTicks = 0;
         queen.isHibernating.set(false);
         Alien.LOGGER.info(
-            "Queen lifecycle: {} disturbed in HIBERNATION ({} dmg, {}) — defending",
+            "Queen lifecycle: {} disturbed in HIBERNATION ({} health lost, {}) — defending",
             queen.getUUID(),
             amount,
             reason

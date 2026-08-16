@@ -2,13 +2,17 @@ package com.alien.common.gameplay.hive.structure;
 
 import com.alien.Alien;
 import com.alien.common.gameplay.hive.location.HiveLocation;
+import com.alien.common.registry.init.block.AberrantAlienResinBlocks;
 import com.alien.common.registry.init.block.AlienResinBlocks;
+import com.alien.common.registry.init.block.IrradiatedAlienResinBlocks;
+import com.alien.common.registry.init.block.NetherAlienResinBlocks;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.entity.SpawnerBlockEntity;
+import net.minecraft.world.level.block.state.BlockState;
 
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -55,7 +59,7 @@ public final class HarvestChamberTask {
             }
             for (var slot : spawnerSlots(location, origin)) {
                 var state = level.getBlockState(slot);
-                if (!state.is(AlienResinBlocks.SMOOTH_RESIN.get())) {
+                if (!isSlotMarker(state)) {
                     continue; // not a marked (or already-filled) slot
                 }
                 if (pending.isEmpty()) {
@@ -88,6 +92,25 @@ public final class HarvestChamberTask {
      * The four spawner-slot positions for the 2x2 whose min-corner chunk is {@code origin}: the corner blocks around
      * the chunks' meeting point, at hive floor level.
      */
+    /**
+     * True for the smooth-resin marker of ANY strain.
+     * <p>
+     * This used to test only {@code AlienResinBlocks.SMOOTH_RESIN}, which silently broke every non-normal hive: the
+     * authored pieces mark their slots in their OWN resin, so an aberrant chamber carries smooth_aberrant_resin, the
+     * nether one smooth_nether_resin and the irradiated one smooth_irradiated_resin. The check failed, every slot was
+     * skipped as "not a marked slot", and the chamber sat there with its captured spawners still pending and nothing
+     * ever placed - exactly what Razorem saw in an aberrant hive ([stated] "finally got a harvest chamber to spawn but
+     * no spawner has generated at the center").
+     * <p>
+     * A filled slot holds a spawner rather than resin, so this still doubles as the already-filled test.
+     */
+    private static boolean isSlotMarker(BlockState state) {
+        return state.is(AlienResinBlocks.SMOOTH_RESIN.get())
+            || state.is(AberrantAlienResinBlocks.SMOOTH_ABERRANT_RESIN.get())
+            || state.is(NetherAlienResinBlocks.SMOOTH_NETHER_RESIN.get())
+            || state.is(IrradiatedAlienResinBlocks.SMOOTH_IRRADIATED_RESIN.get());
+    }
+
     public static List<BlockPos> spawnerSlots(HiveLocation location, ChunkPos origin) {
         int meetX = (origin.x + 1) << 4; // min block X of the +x chunks = the meeting line
         int meetZ = (origin.z + 1) << 4;

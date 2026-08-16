@@ -1,5 +1,6 @@
 package com.alien.common.gameplay.entity.living.alien.xenomorph.harbinger;
 
+import com.alien.common.gameplay.entity.dismemberment.MirroredAttackSide;
 import com.alien.common.util.AzAlienAnimationUtil;
 import com.blib.api.client.animation.v1.command.AzCommand;
 import com.blib.api.client.animation.v1.command.play_behavior.AzPlayBehaviors;
@@ -7,16 +8,8 @@ import com.blib.api.client.animation.v1.command.policy.AzDispatchMode;
 
 public class HarbingerAnimationDispatcher {
 
-    private static final AzCommand<Harbinger> CLAW_ATTACK = AzCommand.<Harbinger>replay()
-        .play(AzAlienAnimationUtil.BODY, HarbingerAnimationRefs.ATTACK_CLAW_ANIMATION_NAME, AzPlayBehaviors.PLAY_ONCE)
-        .build();
-
     private static final AzCommand<Harbinger> BITE_ATTACK = AzCommand.<Harbinger>replay()
         .play(AzAlienAnimationUtil.BODY, HarbingerAnimationRefs.ATTACK_BITE_ANIMATION_NAME, AzPlayBehaviors.PLAY_ONCE)
-        .build();
-
-    private static final AzCommand<Harbinger> TAIL_ATTACK = AzCommand.<Harbinger>replay()
-        .play(AzAlienAnimationUtil.BODY, HarbingerAnimationRefs.ATTACK_TAIL_ANIMATION_NAME, AzPlayBehaviors.PLAY_ONCE)
         .build();
 
     private static final AzCommand<Harbinger> CRAWL = AzCommand.<Harbinger>idempotent()
@@ -206,6 +199,29 @@ public class HarbingerAnimationDispatcher {
             .dispatchForEntity(harbinger);
     }
 
+    /** ⚠ ONE authored clip using BOTH arms - not a mirrored pair. */
+    public void swimClawsAttack() {
+        AzCommand.<Harbinger>replay()
+            .play(
+                AzAlienAnimationUtil.BODY,
+                HarbingerAnimationRefs.SWIM_ATTACK_CLAWS_ANIMATION_NAME,
+                AzPlayBehaviors.PLAY_ONCE
+            )
+            .build()
+            .dispatchForEntity(harbinger);
+    }
+
+    public void swimBiteAttack() {
+        AzCommand.<Harbinger>replay()
+            .play(
+                AzAlienAnimationUtil.BODY,
+                HarbingerAnimationRefs.SWIM_ATTACK_BITE_ANIMATION_NAME,
+                AzPlayBehaviors.PLAY_ONCE
+            )
+            .build()
+            .dispatchForEntity(harbinger);
+    }
+
     public void biteAttack() {
         BITE_ATTACK.dispatchForEntity(harbinger);
     }
@@ -219,29 +235,81 @@ public class HarbingerAnimationDispatcher {
     }
 
     public void rightClawAttack() {
-        CLAW_ATTACK.dispatchForEntity(harbinger);
+        rightClawAttack(1.0F);
     }
 
+    /** ⚠ MIRRORED. Kept under the old NAME so no caller changes - the side is decided HERE, once per swing. */
     public void rightClawAttack(float speed) {
+        var clip = MirroredAttackSide.useLeftArm(harbinger)
+            ? HarbingerAnimationRefs.ATTACK_CLAW_LEFT_ANIMATION_NAME
+            : HarbingerAnimationRefs.ATTACK_CLAW_RIGHT_ANIMATION_NAME;
+
         AzCommand.<Harbinger>replay()
-            .play(AzAlienAnimationUtil.BODY, HarbingerAnimationRefs.ATTACK_CLAW_ANIMATION_NAME, AzPlayBehaviors.PLAY_ONCE)
+            .play(AzAlienAnimationUtil.BODY, clip, AzPlayBehaviors.PLAY_ONCE)
             .setSpeed(AzAlienAnimationUtil.BODY, speed)
             .build()
             .dispatchForEntity(harbinger);
     }
 
+    /** ⚠ MIRRORED prone claw swipe - new, the crawl set had only the whipstabs and the bite before. */
+    public void crawlAttack() {
+        crawlAttack(1.0F);
+    }
+
+    public void crawlAttack(float speed) {
+        var clip = MirroredAttackSide.useLeftArm(harbinger)
+            ? HarbingerAnimationRefs.CRAWL_ATTACK_LEFT_ANIMATION_NAME
+            : HarbingerAnimationRefs.CRAWL_ATTACK_RIGHT_ANIMATION_NAME;
+
+        AzCommand.<Harbinger>replay()
+            .play(AzAlienAnimationUtil.BODY, clip, AzPlayBehaviors.PLAY_ONCE)
+            .setSpeed(AzAlienAnimationUtil.BODY, speed)
+            .build()
+            .dispatchForEntity(harbinger);
+    }
+
+    /**
+     * ⚠ THE STANDING WHIPSTAB, per side. Dispatched on that side's WHIP TRACK, not the body track - the body must stay
+     * free to keep walking underneath, exactly as the crawling pair already does.
+     */
+    public void whipStab(boolean leftSide) {
+        AzCommand.<Harbinger>replay()
+            .play(
+                leftSide ? AzAlienAnimationUtil.LEFT_WHIP : AzAlienAnimationUtil.RIGHT_WHIP,
+                leftSide
+                    ? HarbingerAnimationRefs.ATTACK_LEFT_WHIPSTAB_ANIMATION_NAME
+                    : HarbingerAnimationRefs.ATTACK_RIGHT_WHIPSTAB_ANIMATION_NAME,
+                AzPlayBehaviors.PLAY_ONCE
+            )
+            .build()
+            .dispatchForEntity(harbinger);
+    }
+
+    /** The hurt pose for a severed whip, on that side's own track. */
+    public void damagedWhip(boolean leftSide) {
+        AzCommand.<Harbinger>idempotent()
+            .play(
+                leftSide ? AzAlienAnimationUtil.LEFT_WHIP : AzAlienAnimationUtil.RIGHT_WHIP,
+                HarbingerAnimationRefs.DAMAGED_WHIPS_ANIMATION_NAME,
+                AzPlayBehaviors.LOOP
+            )
+            .build()
+            .dispatchForEntity(harbinger);
+    }
+
     public void tailAttack() {
-        TAIL_ATTACK.dispatchForEntity(harbinger);
+        tailAttack(1.0F);
     }
 
     /** Regular swing that throws whatever crowded in. */
+    /** ⚠ MIRRORED. The side is decided HERE, once per swing, by the shared seeded helper. */
     public void backhandAttack(float speed) {
+        var clip = MirroredAttackSide.useLeftArm(harbinger)
+            ? HarbingerAnimationRefs.ATTACK_BACKHAND_LEFT_ANIMATION_NAME
+            : HarbingerAnimationRefs.ATTACK_BACKHAND_RIGHT_ANIMATION_NAME;
+
         AzCommand.<Harbinger>replay()
-            .play(
-                AzAlienAnimationUtil.BODY,
-                HarbingerAnimationRefs.ATTACK_BACKHAND_ANIMATION_NAME,
-                AzPlayBehaviors.PLAY_ONCE
-            )
+            .play(AzAlienAnimationUtil.BODY, clip, AzPlayBehaviors.PLAY_ONCE)
             .setSpeed(AzAlienAnimationUtil.BODY, speed)
             .build()
             .dispatchForEntity(harbinger);
@@ -286,9 +354,14 @@ public class HarbingerAnimationDispatcher {
             .dispatchForEntity(harbinger);
     }
 
+    /** ⚠ MIRRORED. The side is decided HERE, once per swing, by the shared seeded helper. */
     public void tailAttack(float speed) {
+        var clip = MirroredAttackSide.useLeftArm(harbinger)
+            ? HarbingerAnimationRefs.ATTACK_TAIL_LEFT_ANIMATION_NAME
+            : HarbingerAnimationRefs.ATTACK_TAIL_RIGHT_ANIMATION_NAME;
+
         AzCommand.<Harbinger>replay()
-            .play(AzAlienAnimationUtil.BODY, HarbingerAnimationRefs.ATTACK_TAIL_ANIMATION_NAME, AzPlayBehaviors.PLAY_ONCE)
+            .play(AzAlienAnimationUtil.BODY, clip, AzPlayBehaviors.PLAY_ONCE)
             .setSpeed(AzAlienAnimationUtil.BODY, speed)
             .build()
             .dispatchForEntity(harbinger);

@@ -101,10 +101,26 @@ public final class PraetorianLimbHitboxes {
         var attackType = praetorian.attackType.get();
         if (!attackType.isNone()) {
             var animation = attackType == Praetorian.BITE
-                ? PraetorianAnimationRefs.FULL_ATTACK_BITE_ANIMATION_NAME
+                ? PraetorianAnimationRefs.ATTACK_BITE_ANIMATION_NAME
                 : attackType == Praetorian.CLAW
-                    ? PraetorianAnimationRefs.FULL_ATTACK_CLAW_ANIMATION_NAME
-                    : PraetorianAnimationRefs.FULL_ATTACK_TAIL_ANIMATION_NAME;
+                    // ⚠ THE SIDE MUST MATCH WHAT THE DISPATCHER PICKED. This runs EVERY TICK of a swing while the
+                    // dispatcher is asked ONCE, so it resolves through the same seeded helper - otherwise the arm
+                    // hitboxes sit on the opposite arm from the one the player can see moving.
+                    ? (MirroredAttackSide.useLeftArm(praetorian)
+                        ? PraetorianAnimationRefs.ATTACK_CLAW_LEFT_ANIMATION_NAME
+                        : PraetorianAnimationRefs.ATTACK_CLAW_RIGHT_ANIMATION_NAME)
+                    : attackType == Praetorian.CRAWL_CLAW
+                        ? (MirroredAttackSide.useLeftArm(praetorian)
+                            ? PraetorianAnimationRefs.CRAWL_ATTACK_LEFT_ANIMATION_NAME
+                            : PraetorianAnimationRefs.CRAWL_ATTACK_RIGHT_ANIMATION_NAME)
+                        : attackType == Praetorian.CRAWL_BITE
+                            ? PraetorianAnimationRefs.CRAWL_ATTACK_BITE_ANIMATION_NAME
+                            : attackType == Praetorian.BACKHAND
+                                // The backhand mirrors too, so its hitboxes resolve through the same seed.
+                                ? (MirroredAttackSide.useLeftArm(praetorian)
+                                    ? PraetorianAnimationRefs.ATTACK_BACKHAND_LEFT_ANIMATION_NAME
+                                    : PraetorianAnimationRefs.ATTACK_BACKHAND_RIGHT_ANIMATION_NAME)
+                                : PraetorianAnimationRefs.ATTACK_TAIL_ANIMATION_NAME;
             var elapsedTicks = Math.max(
                 0.0D,
                 praetorian.level().getGameTime() - praetorian.attackStartedAtGameTime.get() + partialTick
@@ -115,8 +131,12 @@ public final class PraetorianLimbHitboxes {
 
         var animation = praetorian.isUnderWater()
             ? PraetorianAnimationRefs.SWIM_ANIMATION_NAME
+            // ⭐ Same crawl-pose match as StandardXenomorphLimbHitboxes - the moving gait and the crawl idle are
+            // different poses, and replaying the wrong one puts the limb volumes where the model is not.
             : praetorian.getCrawlingManager().isCrawling()
-                ? PraetorianAnimationRefs.CRAWL_ANIMATION_NAME
+                ? praetorian.isMovingHorizontally.get() && praetorian.onGround()
+                    ? PraetorianAnimationRefs.CRAWL_ANIMATION_NAME
+                    : PraetorianAnimationRefs.CRAWL_IDLE_ANIMATION_NAME
                 : praetorian.isMovingHorizontally.get() && praetorian.onGround()
                     ? praetorian.isMovingQuickly.get()
                         ? PraetorianAnimationRefs.RUN_ANIMATION_NAME

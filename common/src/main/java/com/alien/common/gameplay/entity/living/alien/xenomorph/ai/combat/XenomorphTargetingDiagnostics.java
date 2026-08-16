@@ -43,11 +43,12 @@ public final class XenomorphTargetingDiagnostics {
         var sensed = subject.getEntitySenseCache().getByClass(LivingEntity.class);
         lines.add("senseCache: " + sensed.size() + " living entities");
 
-        var candidates = subject.level().getEntitiesOfClass(
-            LivingEntity.class,
-            subject.getBoundingBox().inflate(CANDIDATE_RADIUS),
-            candidate -> candidate != subject && candidate.isAlive()
-        );
+        var candidates = subject.level()
+            .getEntitiesOfClass(
+                LivingEntity.class,
+                subject.getBoundingBox().inflate(CANDIDATE_RADIUS),
+                candidate -> candidate != subject && candidate.isAlive()
+            );
 
         lines.add("within " + (int) CANDIDATE_RADIUS + " blocks: " + candidates.size() + " living entities");
 
@@ -113,9 +114,13 @@ public final class XenomorphTargetingDiagnostics {
     private static String describeCandidate(Xenomorph subject, LivingEntity candidate, boolean sensed) {
         var line = new StringBuilder();
 
-        line.append("  - ").append(candidate.getType().getDescriptionId())
-            .append(" @ ").append(String.format("%.1f", subject.distanceTo(candidate))).append("m")
-            .append(" sensed=").append(sensed);
+        line.append("  - ")
+            .append(candidate.getType().getDescriptionId())
+            .append(" @ ")
+            .append(String.format("%.1f", subject.distanceTo(candidate)))
+            .append("m")
+            .append(" sensed=")
+            .append(sensed);
 
         // OUTBOUND: can the subject target this?
         var valid = AlienPredicates.isValidTarget(subject.getVariant(), candidate);
@@ -124,11 +129,16 @@ public final class XenomorphTargetingDiagnostics {
         var canAcquire = AlienPredicates.canAcquireTarget(subject, candidate);
         var los = subject.getSensing().hasLineOfSight(candidate);
 
-        line.append("\n      OUT: isValidTarget=").append(valid)
-            .append(" canContinueTargeting=").append(canContinue)
-            .append(" canTarget=").append(canTarget)
-            .append(" canAcquireTarget=").append(canAcquire)
-            .append(" lineOfSight=").append(los);
+        line.append("\n      OUT: isValidTarget=")
+            .append(valid)
+            .append(" canContinueTargeting=")
+            .append(canContinue)
+            .append(" canTarget=")
+            .append(canTarget)
+            .append(" canAcquireTarget=")
+            .append(canAcquire)
+            .append(" lineOfSight=")
+            .append(los);
 
         // canTarget is canContinueTargeting AND the threat-tier gate, so this isolates the tier check without
         // needing to make the private predicate public.
@@ -143,7 +153,8 @@ public final class XenomorphTargetingDiagnostics {
         if (candidate instanceof Alien alienCandidate) {
             line.append("\n      alien-vs-alien: enemies=")
                 .append(AlienPredicates.areAliensEnemies(subject, alienCandidate))
-                .append(" theirVariant=").append(alienCandidate.getVariant())
+                .append(" theirVariant=")
+                .append(alienCandidate.getVariant())
                 .append(" (false here means they read as ALLIES and will never fight)");
         }
 
@@ -152,7 +163,8 @@ public final class XenomorphTargetingDiagnostics {
         if (candidate instanceof Xenomorph xenoCandidate) {
             line.append("\n      IN:  theirCanAcquire=")
                 .append(AlienPredicates.canAcquireTarget(xenoCandidate, subject))
-                .append(" theirCanTarget=").append(AlienPredicates.canTarget(xenoCandidate, subject))
+                .append(" theirCanTarget=")
+                .append(AlienPredicates.canTarget(xenoCandidate, subject))
                 .append(" theirTarget=")
                 .append(xenoCandidate.getTarget() == null ? "none" : xenoCandidate.getTarget().getType().getDescriptionId());
         }

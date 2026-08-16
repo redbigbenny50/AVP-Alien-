@@ -2,6 +2,7 @@
   "limbs": [
     {
       "category": "blib:head",
+      "fatal": true,
       "id": "avp_alien:empress_head"
     },
     {

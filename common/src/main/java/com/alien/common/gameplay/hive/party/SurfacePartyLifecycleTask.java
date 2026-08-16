@@ -259,8 +259,24 @@ public final class SurfacePartyLifecycleTask {
             return;
         }
 
-        // Roll LAST: burning the 10% chance and THEN bailing on a bad spot wasted the drop entirely.
-        if (serverLevel.random.nextDouble() >= config.surfacePartyVentDropChance()) {
+        // ⭐⭐ THE HIVE'S **FIRST** SURFACE VENT IS GUARANTEED - IT DOES NOT ROLL.
+        //
+        // ⚠⚠ THIS WAS A HARD BLOCK ON HOST HUNTS, NOT A SLOW TRICKLE. In the overworld the surface party is the
+        // ONLY source of a SURFACE vent: CreateVentAction hardcodes FRONTIER outside ceiled dimensions ("a dug
+        // vent is an outpost in the rock by definition there"), and host hunts are the one party type that
+        // requires SURFACE specifically. So a hive with no surface vent cannot hunt hosts AT ALL - which is why
+        // his host chambers stayed empty indefinitely while every other party ran fine on FRONTIER vents.
+        //
+        // His log is the evidence: "made NO vent - lost the 35% drop roll" over and over, one successful drop in
+        // an entire session. At 35%, gated behind an occasional one-at-a-time party AND a per-claim cap, a hive
+        // can plausibly go hours with zero. The roll is fine for the SECOND vent onward - it is a spread-rate
+        // dial - but the first one is the difference between a working hive and a broken one.
+        var hasAnySurfaceVent = !location.ventManager()
+            .ventsOfKind(com.alien.common.gameplay.hive.vent.VentKind.SURFACE)
+            .isEmpty();
+
+        // Roll LAST: burning the chance and THEN bailing on a bad spot wasted the drop entirely.
+        if (hasAnySurfaceVent && serverLevel.random.nextDouble() >= config.surfacePartyVentDropChance()) {
             Alien.LOGGER.info(
                 "Hive: surface party made NO vent at {} for {} - lost the {}% drop roll.",
                 chunk,

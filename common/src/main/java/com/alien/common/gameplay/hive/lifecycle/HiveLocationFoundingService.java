@@ -108,6 +108,14 @@ public final class HiveLocationFoundingService {
         // her and her freshly-spawned workers to different lineages by faction-set order, so her own hive reads
         // her as a rival-lineage queen and attacks her (and her eggsack). Shed every prior lineage before the
         // join below makes her a member of the new one. Skip the lineage just minted (nothing to shed there yet).
+        // ⭐ REMEMBER WHERE SHE CAME FROM, BEFORE shedPriorLineages throws it away. [stated] "i would say theres a
+        // period of rememberance where they are nuetral to allow the daughter to leave and found". The prior lineage
+        // is only knowable here - one line later the queen has been stripped of it.
+        var parentLineageId = firstPriorLineageOrNull(queen, lineageId);
+        if (parentLineageId != null) {
+            lineageData.setParentLineage(parentLineageId, level.getGameTime());
+        }
+
         shedPriorLineages(queen, lineageId);
 
         // Adds the queen to both the lineage faction (idempotent) and the new location faction.
@@ -175,6 +183,16 @@ public final class HiveLocationFoundingService {
      * sever, this does NOT null founder links or open rescue campaigns on the departed hive: an emigrating forager was
      * a member, not that hive's founder, so it loses a worker, not its queen.
      */
+    /** The lineage this founder is walking away from, or null if she had none (a wild queen founding from scratch). */
+    private static @Nullable ResourceLocation firstPriorLineageOrNull(Queen queen, ResourceLocation keepLineageId) {
+        for (var factionId : Alien.MOD.factions().getFactionIds(queen.getUUID())) {
+            if (LineageIds.isLineageId(factionId) && !factionId.equals(keepLineageId)) {
+                return factionId;
+            }
+        }
+        return null;
+    }
+
     private static void shedPriorLineages(Queen queen, ResourceLocation keepLineageId) {
         var member = FactionMember.entity(queen);
         for (var factionId : new ArrayList<>(Alien.MOD.factions().getFactionIds(queen.getUUID()))) {

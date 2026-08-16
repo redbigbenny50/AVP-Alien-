@@ -63,8 +63,14 @@ public class Ravager extends Xenomorph implements GOAPUser<Ravager>, com.alien.c
         .damageApplicator(SINGLE_CLAW_APPLICATOR)
         .build();
 
+    /**
+     * ⚠⚠ `requiresAnyArm`, NOT `requiresBothArms`. [stated] "if one arm is missing it will still play at 50% damage and
+     * wont play at all with no arms." `requiresBothArms` refused the swing the moment either arm went, so the 50% case
+     * could never happen - the gate ate the rule. The penalty lives in {@code RavagerClawAttackActions.doubleClaw}
+     * instead; this gate now only enforces the "no arms at all" half.
+     */
     public static final AttackType CLAW_DOUBLE = AttackType.builder("ravager_claw_double")
-        .requiresBothArms()
+        .requiresAnyArm()
         .defaultDurationInTicks(10 * ATTACK_DURATION_MULTIPLIER)
         .sound(AlienSoundEvents.ENTITY_XENOMORPH_ATTACK)
         .damageApplicator(DOUBLE_CLAW_APPLICATOR)
@@ -112,7 +118,7 @@ public class Ravager extends Xenomorph implements GOAPUser<Ravager>, com.alien.c
     public static AttributeSupplier.Builder createRavagerAttributes() {
         return Alien.createAlienAttributes()
             .add(Attributes.ARMOR, 16.0F)
-            .add(Attributes.ARMOR_TOUGHNESS, 12.0F)
+            .add(Attributes.ARMOR_TOUGHNESS, 18.0F)
             .add(Attributes.ATTACK_DAMAGE, PlayerStatConstants.BASE_HEALTH * 0.75F)
             .add(Attributes.FOLLOW_RANGE, 35F)
             .add(Attributes.KNOCKBACK_RESISTANCE, 0.7f)

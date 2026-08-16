@@ -1,5 +1,6 @@
 package com.alien.common.gameplay.entity.living.alien.xenomorph.prowler;
 
+import com.alien.common.gameplay.entity.dismemberment.MirroredAttackSide;
 import com.alien.common.util.AzAlienAnimationUtil;
 import com.blib.api.client.animation.v1.command.AzCommand;
 import com.blib.api.client.animation.v1.command.play_behavior.AzPlayBehaviors;
@@ -15,20 +16,24 @@ import com.blib.api.client.animation.v1.command.policy.AzDispatchMode;
  */
 public class ProwlerAnimationDispatcher {
 
+    private static final AzCommand<Prowler> ARM_ATTACK_LEFT = AzCommand.<Prowler>replay()
+        .play(AzAlienAnimationUtil.BODY, ProwlerAnimationRefs.ATTACK_CLAW_LEFT_ANIMATION_NAME, AzPlayBehaviors.PLAY_ONCE)
+        .build();
+
     private static final AzCommand<Prowler> ARM_ATTACK = AzCommand.<Prowler>replay()
-        .play(AzAlienAnimationUtil.BODY, ProwlerAnimationRefs.FULL_ATTACK_ARM_ANIMATION_NAME, AzPlayBehaviors.PLAY_ONCE)
+        .play(AzAlienAnimationUtil.BODY, ProwlerAnimationRefs.ATTACK_CLAW_RIGHT_ANIMATION_NAME, AzPlayBehaviors.PLAY_ONCE)
         .build();
 
     private static final AzCommand<Prowler> BITE_ATTACK = AzCommand.<Prowler>replay()
-        .play(AzAlienAnimationUtil.BODY, ProwlerAnimationRefs.FULL_ATTACK_BITE_ANIMATION_NAME, AzPlayBehaviors.PLAY_ONCE)
+        .play(AzAlienAnimationUtil.BODY, ProwlerAnimationRefs.ATTACK_BITE_ANIMATION_NAME, AzPlayBehaviors.PLAY_ONCE)
         .build();
 
     private static final AzCommand<Prowler> TAIL_ATTACK = AzCommand.<Prowler>replay()
-        .play(AzAlienAnimationUtil.BODY, ProwlerAnimationRefs.FULL_ATTACK_TAIL_ANIMATION_NAME, AzPlayBehaviors.PLAY_ONCE)
+        .play(AzAlienAnimationUtil.BODY, ProwlerAnimationRefs.ATTACK_TAIL_ANIMATION_NAME, AzPlayBehaviors.PLAY_ONCE)
         .build();
 
     private static final AzCommand<Prowler> SWIM_ATTACK = AzCommand.<Prowler>replay()
-        .play(AzAlienAnimationUtil.BODY, ProwlerAnimationRefs.FULL_ATTACK_SWIM_ANIMATION_NAME, AzPlayBehaviors.PLAY_ONCE)
+        .play(AzAlienAnimationUtil.BODY, ProwlerAnimationRefs.SWIM_ATTACK_BITE_ANIMATION_NAME, AzPlayBehaviors.PLAY_ONCE)
         .build();
 
     private static final AzCommand<Prowler> CRAWL = AzCommand.<Prowler>idempotent()
@@ -108,7 +113,7 @@ public class ProwlerAnimationDispatcher {
     }
 
     public void biteAttack(float speed) {
-        playAttackWithSpeed(ProwlerAnimationRefs.FULL_ATTACK_BITE_ANIMATION_NAME, speed);
+        playAttackWithSpeed(ProwlerAnimationRefs.ATTACK_BITE_ANIMATION_NAME, speed);
     }
 
     public void rightClawAttack() {
@@ -116,7 +121,7 @@ public class ProwlerAnimationDispatcher {
     }
 
     public void rightClawAttack(float speed) {
-        playAttackWithSpeed(ProwlerAnimationRefs.FULL_ATTACK_ARM_ANIMATION_NAME, speed);
+        playAttackWithSpeed(ProwlerAnimationRefs.ATTACK_CLAW_RIGHT_ANIMATION_NAME, speed);
     }
 
     public void tailAttackQuad() {
@@ -124,7 +129,7 @@ public class ProwlerAnimationDispatcher {
     }
 
     public void tailAttackQuad(float speed) {
-        playAttackWithSpeed(ProwlerAnimationRefs.FULL_ATTACK_TAIL_ANIMATION_NAME, speed);
+        playAttackWithSpeed(ProwlerAnimationRefs.ATTACK_TAIL_ANIMATION_NAME, speed);
     }
 
     public void swimAttack() {
@@ -132,13 +137,76 @@ public class ProwlerAnimationDispatcher {
     }
 
     public void swimAttack(float speed) {
-        playAttackWithSpeed(ProwlerAnimationRefs.FULL_ATTACK_SWIM_ANIMATION_NAME, speed);
+        playAttackWithSpeed(ProwlerAnimationRefs.SWIM_ATTACK_BITE_ANIMATION_NAME, speed);
     }
 
     private void playAttackWithSpeed(String animationName, float speed) {
         AzCommand.<Prowler>replay()
             .play(AzAlienAnimationUtil.BODY, animationName, AzPlayBehaviors.PLAY_ONCE)
             .setSpeed(AzAlienAnimationUtil.BODY, speed)
+            .build()
+            .dispatchForEntity(prowler);
+    }
+
+    /** Claw swing, side chosen from the dismemberment state. */
+    public void clawAttack() {
+        if (MirroredAttackSide.useLeftArm(prowler)) {
+            ARM_ATTACK_LEFT.dispatchForEntity(prowler);
+            return;
+        }
+        ARM_ATTACK.dispatchForEntity(prowler);
+    }
+
+    public void clawAttack(float speed) {
+        var clip = MirroredAttackSide.useLeftArm(prowler)
+            ? ProwlerAnimationRefs.ATTACK_CLAW_LEFT_ANIMATION_NAME
+            : ProwlerAnimationRefs.ATTACK_CLAW_RIGHT_ANIMATION_NAME;
+
+        AzCommand.<Prowler>replay()
+            .play(AzAlienAnimationUtil.BODY, clip, AzPlayBehaviors.PLAY_ONCE)
+            .setSpeed(AzAlienAnimationUtil.BODY, speed)
+            .build()
+            .dispatchForEntity(prowler);
+    }
+
+    /** Crawling claw swing - same side rule. */
+    public void crawlAttack() {
+        var clip = MirroredAttackSide.useLeftArm(prowler)
+            ? ProwlerAnimationRefs.CRAWL_ATTACK_LEFT_ANIMATION_NAME
+            : ProwlerAnimationRefs.CRAWL_ATTACK_RIGHT_ANIMATION_NAME;
+
+        AzCommand.<Prowler>replay()
+            .play(AzAlienAnimationUtil.BODY, clip, AzPlayBehaviors.PLAY_ONCE)
+            .build()
+            .dispatchForEntity(prowler);
+    }
+
+    /** Crawling bite - not mirrored. */
+    public void crawlBiteAttack() {
+        AzCommand.<Prowler>replay()
+            .play(AzAlienAnimationUtil.BODY, ProwlerAnimationRefs.CRAWL_ATTACK_BITE_ANIMATION_NAME, AzPlayBehaviors.PLAY_ONCE)
+            .build()
+            .dispatchForEntity(prowler);
+    }
+
+    /**
+     * Leaving the ground. HOLD_ON_LAST_FRAME so one clip covers any airborne duration.
+     * <p>
+     * ⚠ NOT the lunge. {@code lunge()} is the POUNCE state's animation and is dispatched from {@code isLunging};
+     * borrowing it for airborne once made a prowler walking off a ledge play its pounce.
+     * </p>
+     */
+    public void jump() {
+        AzCommand.<Prowler>replay()
+            .play(AzAlienAnimationUtil.BODY, ProwlerAnimationRefs.JUMP_ANIMATION_NAME, AzPlayBehaviors.HOLD_ON_LAST_FRAME)
+            .build()
+            .dispatchForEntity(prowler);
+    }
+
+    /** Touching down. */
+    public void land() {
+        AzCommand.<Prowler>replay()
+            .play(AzAlienAnimationUtil.BODY, ProwlerAnimationRefs.LAND_ANIMATION_NAME, AzPlayBehaviors.PLAY_ONCE)
             .build()
             .dispatchForEntity(prowler);
     }

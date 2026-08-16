@@ -1,6 +1,8 @@
 package com.alien.fabric.client;
 
 import com.alien.client.AlienClient;
+import com.alien.client.AlienClientHooks;
+import com.alien.client.screen.FieldManualScreen;
 import com.alien.common.registry.init.block.AberrantAlienResinBlocks;
 import com.alien.common.registry.init.block.AlienResinBlocks;
 import com.alien.common.registry.init.block.IrradiatedAlienResinBlocks;
@@ -19,6 +21,9 @@ public class AlienFabricClient implements ClientModInitializer {
         ResinAlphaModelWrapper.register();
         registerResinRenderLayers();
         com.alien.fabric.client.render.HiveRenderHook.register();
+        AlienClientHooks.registerFieldManualScreenOpener(
+            () -> net.minecraft.client.Minecraft.getInstance().setScreen(new FieldManualScreen())
+        );
     }
 
     private static void registerResinRenderLayers() {

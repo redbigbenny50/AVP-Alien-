@@ -50,11 +50,20 @@ public final class NukeConversion {
         killEveryoneHome(level, location);
         convertEggs(level, location);
         mergeJellyPools(location);
-        convertVats(level, location);
 
         if (!rehomeToFreshIrradiatedLineage(level, location, oldLineage)) {
             return false;
         }
+
+        // ⚠ ORDER IS LOAD-BEARING: convertVats MUST run AFTER the rehome.
+        // It used to sit above, and that was the bug behind "converted hives keep their old vat shells". The vat's
+        // shell strain is taken from the OWNING LOCATION'S LINEAGE VARIANT (JellyVatBlockEntity#adoptHiveStrain), and
+        // the variant does not become IRRADIATED until rehomeToFreshIrradiatedLineage runs. Called before it, every
+        // vat resolved its OLD strain, matched the value it already held, and took adoptHiveStrain's unchanged
+        // early-out - so setChanged() never fired and the pre-nuke shell was what got written back to disk. The vats
+        // looked converted only until the chunk reloaded. Filling one by hand fixed it permanently, because THAT
+        // commitType happened after the variant had flipped.
+        convertVats(level, location);
 
         restoreReservesAsIrradiated(location, reserveSnapshot);
         evictOutsiders(level, location);
@@ -241,6 +250,11 @@ public final class NukeConversion {
                 }
 
                 vat.commitType(JellyType.IRRADIATED);
+
+                // Belt and braces: commitType only re-reads the strain when it is changing the committed TYPE, so a
+                // vat already committed to irradiated jelly would skip the shell update. Ask for it explicitly - the
+                // call is idempotent and early-outs when the strain already matches.
+                vat.adoptHiveStrain();
             }
         }
     }

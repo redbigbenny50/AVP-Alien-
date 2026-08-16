@@ -1,5 +1,6 @@
 package com.alien.common.gameplay.entity.living.alien.xenomorph.queen;
 
+import com.alien.common.gameplay.entity.dismemberment.MirroredAttackSide;
 import com.alien.common.util.AzAlienAnimationUtil;
 import com.blib.api.client.animation.v1.command.AzCommand;
 import com.blib.api.client.animation.v1.command.play_behavior.AzPlayBehaviors;
@@ -36,6 +37,23 @@ public class QueenAnimationDispatcher {
 
     private static final AzCommand<Queen> SIT_ON_OVIPOSITOR = AzCommand.<Queen>idempotent()
         .play(AzAlienAnimationUtil.BODY, QueenAnimationRefs.RIDE_EGG_SACK_ANIMATION_NAME, AzPlayBehaviors.LOOP)
+        .build();
+
+    /**
+     * ⭐⭐ THE CHAINED SEAT. [stated] "theres a new riding eggsack animation for when she is inhibited and chained on the
+     * restrained eggsack."
+     * <p>
+     * ⚠ NO NEW STATE WAS NEEDED. `isInhibited()` is already networked (QUEEN_HAS_INHIBITOR) and `isRidingOvipositor()`
+     * already drives the seat, so the client can pick the posture itself. Adding a synced "restrained" flag would have
+     * been a third source of truth for a thing two existing flags already answer.
+     * </p>
+     */
+    private static final AzCommand<Queen> SIT_ON_OVIPOSITOR_RESTRAINED = AzCommand.<Queen>idempotent()
+        .play(
+            AzAlienAnimationUtil.BODY,
+            QueenAnimationRefs.RIDE_EGG_SACK_RESTRAINED_ANIMATION_NAME,
+            AzPlayBehaviors.LOOP
+        )
         .build();
 
     private static final AzCommand<Queen> SWIM = AzCommand.<Queen>idempotent()
@@ -88,8 +106,9 @@ public class QueenAnimationDispatcher {
         RUN.dispatchForEntity(queen);
     }
 
+    /** Free on the sack, or chained to it. ⚠ IDEMPOTENT, so flipping mid-ride swaps posture without restarting. */
     public void sitOnOvipositor() {
-        SIT_ON_OVIPOSITOR.dispatchForEntity(queen);
+        (queen.isInhibited() ? SIT_ON_OVIPOSITOR_RESTRAINED : SIT_ON_OVIPOSITOR).dispatchForEntity(queen);
     }
 
     public void swim() {
@@ -228,12 +247,47 @@ public class QueenAnimationDispatcher {
             .dispatchForEntity(queen);
     }
 
+    /** ⚠ MIRRORED now - the side is decided HERE, once per swing, by the shared seeded helper. */
     public void crawlAttack() {
-        playAttack(QueenAnimationRefs.CRAWL_ATTACK_ANIMATION_NAME);
+        crawlAttack(1.0F);
     }
 
     public void crawlAttack(float speed) {
-        playAttack(QueenAnimationRefs.CRAWL_ATTACK_ANIMATION_NAME, speed);
+        playAttack(
+            MirroredAttackSide.useLeftArm(queen)
+                ? QueenAnimationRefs.CRAWL_ATTACK_LEFT_ANIMATION_NAME
+                : QueenAnimationRefs.CRAWL_ATTACK_RIGHT_ANIMATION_NAME,
+            speed
+        );
+    }
+
+    public void crawlBiteAttack() {
+        playAttack(QueenAnimationRefs.CRAWL_ATTACK_BITE_ANIMATION_NAME);
+    }
+
+    public void biteAttack() {
+        playAttack(QueenAnimationRefs.ATTACK_BITE_ANIMATION_NAME);
+    }
+
+    public void biteAttack(float speed) {
+        playAttack(QueenAnimationRefs.ATTACK_BITE_ANIMATION_NAME, speed);
+    }
+
+    public void swimAttack() {
+        playAttack(QueenAnimationRefs.SWIM_ATTACK_BITE_ANIMATION_NAME);
+    }
+
+    /** Her forward head ram - the only strike she has that uses neither arm nor tail. */
+    public void headRamAttack() {
+        headRamAttack(1.0F);
+    }
+
+    public void headRamAttack(float speed) {
+        playAttack(QueenAnimationRefs.ATTACK_HEADRAM_ANIMATION_NAME, speed);
+    }
+
+    public void screamAttack() {
+        playAttack(QueenAnimationRefs.SPECIAL_ATTACK_SCREAM_ANIMATION_NAME);
     }
 
     /** Crawl posture transitions - one-shots on the crawl edge; speed 2 on a leg-loss collapse. */

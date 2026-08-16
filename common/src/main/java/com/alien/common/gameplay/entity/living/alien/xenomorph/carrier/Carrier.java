@@ -4,6 +4,7 @@ import com.alien.common.gameplay.entity.living.alien.Alien;
 import com.alien.common.gameplay.entity.living.alien.ovomorph.Ovomorph;
 import com.alien.common.gameplay.entity.living.alien.parasite.facehugger.Facehugger;
 import com.alien.common.gameplay.entity.living.alien.xenomorph.AttackType;
+import com.alien.common.gameplay.entity.living.alien.xenomorph.CrawlAttack;
 import com.alien.common.gameplay.entity.living.alien.xenomorph.Xenomorph;
 import com.alien.common.gameplay.entity.living.alien.xenomorph.XenomorphAttackConfig;
 import com.alien.common.gameplay.entity.living.alien.xenomorph.XenomorphConfig;
@@ -29,6 +30,34 @@ import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 public class Carrier extends Xenomorph implements GOAPUser<Carrier> {
+
+    /**
+     * ⭐⭐ THE PRONE ATTACKS. [stated] "the spitter loses one leg and still stands to attack with arms and tail attack it
+     * should only resort to crawl attacks."
+     * <p>
+     * ⚠⚠ THE CLIPS AND THE DISPATCHER METHODS ALREADY EXISTED - what was missing was the ATTACK TYPES. The crawl
+     * preference in {@code XenomorphAttackConfig} restricts a crawling caste to crawl attacks ONLY IF it has any; with
+     * none registered there was nothing to restrict to and it fell straight through to the standing set. A one-legged
+     * carrier stood up to swing because there was literally nothing prone to pick.
+     * </p>
+     */
+    /** ⚠ Slightly softer than a standing swing, matching the predalien's existing crawl claw. */
+    private static final float CRAWL_DAMAGE_FRACTION = 0.8F;
+
+    public static final AttackType CRAWL_CLAW = CrawlAttack.create(
+        "carrier_crawl_claw",
+        CRAWL_DAMAGE_FRACTION,
+        CrawlAttack.Limb.ARM,
+        16
+    );
+
+    /** ⚠ HEAD, NOT ARM - so a crawling carrier that has also lost both arms still has a bite. */
+    public static final AttackType CRAWL_BITE = CrawlAttack.create(
+        "carrier_crawl_bite",
+        CRAWL_DAMAGE_FRACTION,
+        CrawlAttack.Limb.HEAD,
+        14
+    );
 
     public static final AttackType CLAW = AttackType.builder("carrier_claw")
         .requiresAnyArm()
@@ -61,7 +90,7 @@ public class Carrier extends Xenomorph implements GOAPUser<Carrier> {
     public static AttributeSupplier.Builder createCarrierAttributes() {
         return Alien.createAlienAttributes()
             .add(Attributes.ARMOR, 8.0F)
-            .add(Attributes.ARMOR_TOUGHNESS, 12.0F)
+            .add(Attributes.ARMOR_TOUGHNESS, 8.0F)
             .add(Attributes.ATTACK_DAMAGE, PlayerStatConstants.BASE_HEALTH * 0.4F)
             .add(Attributes.FOLLOW_RANGE, 35F)
             .add(Attributes.KNOCKBACK_RESISTANCE, 0.7f)
@@ -82,6 +111,8 @@ public class Carrier extends Xenomorph implements GOAPUser<Carrier> {
                     XenomorphAttackConfig.builder()
                         .addRegular(CLAW)
                         .addRegular(BITE)
+                        .addRegular(CRAWL_CLAW)
+                        .addRegular(CRAWL_BITE)
                         .addRegular(TAIL)
                         .build()
                 )

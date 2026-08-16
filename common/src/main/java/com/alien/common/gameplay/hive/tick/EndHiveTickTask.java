@@ -10,6 +10,7 @@ import com.alien.common.gameplay.hive.spawning.ReserveSpawnUtil;
 import com.alien.common.gameplay.hive.vent.VentKind;
 import com.alien.common.gameplay.hive.vent.VentPlacement;
 import com.alien.common.registry.tag.AlienEntityTypeTags;
+import com.alien.common.util.AlienPredicates;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
@@ -346,6 +347,13 @@ public final class EndHiveTickTask {
         ) {
             var set = 0;
             for (var member : members) {
+                // ⚠ Children do not answer. This sweep selects by CLASS (every faction Alien in the box), not by
+                // caste tag, so adolescents reach it. Adolescent.setTarget would refuse anyway - but a refused
+                // member still consumed one of the three responder slots, so the enderman got fewer defenders.
+                if (AlienPredicates.isJuvenile(member)) {
+                    continue;
+                }
+
                 if (member.getTarget() == null && member.distanceToSqr(enderman) <= 48.0 * 48.0) {
                     member.setTarget(enderman);
                     if (++set >= 3) {

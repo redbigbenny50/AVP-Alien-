@@ -10,6 +10,7 @@ public class ToolsAndUtilitiesCreativeModeTabInitializer {
 
     public static final Consumer<CreativeModeTab.Output> OUTPUT_CONSUMER = output -> {
         CreativeModeTabUtil.accept(output, AlienItems.ANCHOR);
+        CreativeModeTabUtil.accept(output, AlienItems.FIELD_MANUAL);
         CreativeModeTabUtil.accept(output, AlienItems.CAPTURE_CHAIN);
         CreativeModeTabUtil.accept(output, AlienItems.INHIBITOR);
         // Tracker + tracking PDA are human tech: hidden without the human module, same gate as the other

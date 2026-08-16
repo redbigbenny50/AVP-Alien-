@@ -67,6 +67,9 @@ public class EnUsSoundEventProvider {
         addSound(builder, AlienSoundEvents.UI_TERMINAL_OPEN, "Terminal powers on");
         addSound(builder, AlienSoundEvents.UI_TERMINAL_CLOSE, "Terminal powers off");
         addSound(builder, AlienSoundEvents.UI_TERMINAL_MOUSEOVER, "Terminal blip");
+        addSound(builder, AlienSoundEvents.BROADCAST_WAR_SOS, "Emergency broadcast: distress signal");
+        addSound(builder, AlienSoundEvents.BROADCAST_WAR_ALL_CLEAR, "Emergency broadcast: all clear");
+
         addSound(builder, AlienSoundEvents.UI_TERMINAL_CLICK, "Terminal selects");
         addSound(builder, AlienSoundEvents.UI_TERMINAL_EXECUTE, "Terminal confirms");
     };

@@ -3,6 +3,7 @@ package com.alien.common.gameplay.hive.economy;
 import com.alien.Alien;
 import com.alien.common.gameplay.hive.convoy.Convoy;
 import com.alien.common.gameplay.hive.faction.LineageFactionData;
+import com.alien.common.gameplay.hive.id.HiveLocationId;
 import com.alien.common.gameplay.hive.id.LineageIds;
 import com.alien.common.gameplay.hive.location.HiveLocation;
 import com.alien.common.gameplay.hive.location.HiveLocationRegistry;
@@ -15,6 +16,7 @@ import net.minecraft.tags.TagKey;
 import net.minecraft.world.entity.EntityType;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
@@ -29,6 +31,24 @@ import java.util.Map;
  * purchase lookups); no throttling per the project's correctness-over-cadence preference.
  */
 public final class HiveBalanceTask {
+
+    /**
+     * How many chrysalises a hive may buy before a crusher jumps the queue.
+     * <p>
+     * [stated] "we can also add that it alternates so for every 2 chrysalis it makes it does a crusher."
+     * </p>
+     */
+    private static final int CHRYSALISES_PER_CRUSHER = 2;
+
+    /**
+     * Chrysalises bought since this location last bought a crusher.
+     * <p>
+     * TRANSIENT ON PURPOSE, like the founding-crew bootstrap set: the worst a restart can do is let one extra pair of
+     * chrysalises through before the next crusher, which is not worth a persisted field. Entries are only added for
+     * locations that actually buy chrysalises.
+     * </p>
+     */
+    private static final Map<HiveLocationId, Integer> CHRYSALISES_SINCE_CRUSHER = new HashMap<>();
 
     private static final TagKey<EntityType<?>>[] POPULATION_FILL_CASTES = new TagKey[] {
         AlienEntityTypeTags.RUNNERS,
@@ -275,13 +295,48 @@ public final class HiveBalanceTask {
             }
         }
         candidates.sort((left, right) -> Integer.compare(deficits.get(right), deficits.get(left)));
+        promoteCrusherIfDue(location, candidates);
 
         for (var caste : candidates) {
             if (tryCommitCaste(server, location, lineage, caste, totalPop, PurchasePopulationMode.NEUTRAL)) {
+                recordAlternation(location, caste);
                 return true;
             }
         }
         return false;
+    }
+
+    /**
+     * Puts the crusher at the head of the queue once the hive has bought {@link #CHRYSALISES_PER_CRUSHER} chrysalises
+     * since its last one.
+     * <p>
+     * Chrysalis and crusher are the only two promotions that eat a PROWLER, so without this they compete for one pool
+     * and pure deficit ordering lets chrysalises take every prowler the hive makes. Alternating guarantees the heavy
+     * gets a turn.
+     * </p>
+     * <p>
+     * Only REORDERS - it never forces a purchase. The crusher still has to have a deficit to be a candidate at all, and
+     * its own purchase conditions still decide whether it can commit; if it cannot, the loop falls straight through to
+     * the next caste and the debt stays owed until it can.
+     * </p>
+     */
+    private static void promoteCrusherIfDue(HiveLocation location, ArrayList<TagKey<EntityType<?>>> candidates) {
+        if (CHRYSALISES_SINCE_CRUSHER.getOrDefault(location.id(), 0) < CHRYSALISES_PER_CRUSHER) {
+            return;
+        }
+
+        if (candidates.remove(AlienEntityTypeTags.CRUSHERS)) {
+            candidates.add(0, AlienEntityTypeTags.CRUSHERS);
+        }
+    }
+
+    /** Counts chrysalises toward the next crusher, and clears the debt when a crusher is actually bought. */
+    private static void recordAlternation(HiveLocation location, TagKey<EntityType<?>> caste) {
+        if (caste.equals(AlienEntityTypeTags.CRUSHERS)) {
+            CHRYSALISES_SINCE_CRUSHER.remove(location.id());
+        } else if (caste.equals(AlienEntityTypeTags.CHRYSALISES)) {
+            CHRYSALISES_SINCE_CRUSHER.merge(location.id(), 1, Integer::sum);
+        }
     }
 
     /**

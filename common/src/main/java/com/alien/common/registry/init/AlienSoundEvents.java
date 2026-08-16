@@ -123,6 +123,12 @@ public class AlienSoundEvents {
 
     public static final BLibHolder<SoundEvent> UI_TERMINAL_CLOSE = create("ui.terminal.close");
 
+    /** Morse SOS carried on the emergency band - a hive war has opened somewhere in the world. */
+    public static final BLibHolder<SoundEvent> BROADCAST_WAR_SOS = create("broadcast.war.sos");
+
+    /** Morse all-clear - the war those coordinates belonged to is over. */
+    public static final BLibHolder<SoundEvent> BROADCAST_WAR_ALL_CLEAR = create("broadcast.war.all_clear");
+
     public static final BLibHolder<SoundEvent> UI_TERMINAL_MOUSEOVER = create("ui.terminal.mouseover");
 
     public static final BLibHolder<SoundEvent> UI_TERMINAL_CLICK = create("ui.terminal.click");

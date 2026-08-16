@@ -7,6 +7,7 @@ import com.alien.common.gameplay.entity.living.alien.xenomorph.praetorian.Praeto
 import com.alien.common.gameplay.entity.living.alien.xenomorph.queen.Queen;
 import com.alien.common.gameplay.hive.config.HiveConfig;
 import com.alien.common.gameplay.hive.economy.CastePopulation;
+import com.alien.common.gameplay.hive.economy.JellyVatDisplay;
 import com.alien.common.gameplay.hive.faction.LineageFactionData;
 import com.alien.common.gameplay.hive.location.HiveLocation;
 import com.alien.common.model.lifecycle.growth.CocooningConfig;
@@ -38,6 +39,13 @@ public final class QueenPromotionService {
 
     private QueenPromotionService() {}
 
+    /**
+     * ⭐ THE DIAL, [stated] "7 day cool down between daughter queen partys". Seven Minecraft days = 168,000 ticks, about
+     * 2h20m of real time - far longer than the shared {@code lineageSpreadCooldownTicks} (30 real minutes), and
+     * deliberately so: this is the pacing between a hive's TWO lifetime daughters, not a bookkeeping guard.
+     */
+    private static final long DAUGHTER_COOLDOWN_TICKS = 7L * 24_000L;
+
     /** Returns true if a promotion was started this tick. */
     public static boolean tryPromote(
         ServerLevel level,
@@ -58,6 +66,14 @@ public final class QueenPromotionService {
         if (lineage.empressId() != null && lineage.activeLocationCount() >= config.maxLocationsUnderEmpress()) {
             return false;
         }
+        // ⭐ DRAW ON THE VATS BEFORE ASKING THE BANK, [stated] "vat draw for daughter queens" - the tester's hive had
+        // vats "mostly full" while this gate refused for months. JellyVatDisplay.coverShortfall pulls the difference
+        // out of loaded royal chambers (vaults drained first) and into the bank, and it is what HiveBalanceTask and
+        // QueenlessMaturationTask have always done for their own spends. This was the ONE spend site that never asked.
+        // ⚠ It refuses outright for an IRRADIATED location by his earlier ruling ("the hive doesnt consume the vats"),
+        // which is harmless here since an irradiated hive has no queen line at all.
+        JellyVatDisplay.coverShortfall(level, location, config.queenPromotionJellyCost());
+
         if (location.royalJelly() < config.queenPromotionJellyCost()) {
             return false;
         }
@@ -67,6 +83,13 @@ public final class QueenPromotionService {
         // Shares AbstractSpreadAttempt's cooldown deliberately - one hive, one spread clock, whichever half runs it.
         var lastSpread = location.lastAbstractSpreadTick();
         if (lastSpread > 0L && currentTick < lastSpread + config.lineageSpreadCooldownTicks()) {
+            return false;
+        }
+        // ⭐ AND THE SEVEN-DAY GATE BETWEEN A HIVE'S TWO DAUGHTERS, [stated] "7 day cool down between daughter queen
+        // partys". BOTH clocks are kept: the shared one above is bookkeeping (it stops the abstract and visible halves
+        // double-counting one daughter, and it is minutes), this one is the design pacing, and it is DAYS.
+        var lastDaughter = location.lastDaughterFoundedTick();
+        if (lastDaughter > 0L && currentTick < lastDaughter + DAUGHTER_COOLDOWN_TICKS) {
             return false;
         }
 
@@ -86,6 +109,10 @@ public final class QueenPromotionService {
         location.setRoyalJelly(location.royalJelly() - config.queenPromotionJellyCost());
         location.setDaughterHivesFounded(location.daughterHivesFounded() + 1);
         location.setLastAbstractSpreadTick(currentTick);
+        // Stamped where the SLOT is spent, not where the queen finishes: the cost commits when the molt starts (see
+        // daughterHivesFounded, same rule), so a queen killed en route still costs her mother both the slot and the
+        // wait.
+        location.setLastDaughterFoundedTick(currentTick);
 
         Alien.LOGGER.info(
             "Hive: {} is raising a {} into a founding queen at {} - daughter {}/{}",

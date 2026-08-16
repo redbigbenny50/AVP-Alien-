@@ -104,16 +104,46 @@ public class MoltingManager implements NBTSerializable {
         var currentPhase = data.phases().get(phaseIndex);
 
         if (!isMolting(currentPhase) && shouldStartMoltImmediately()) {
+            // ⚠⚠ THIS BRANCH HAD NO VALVE, AND THAT IS THE BUG. [stated] "they used a potion on her then immidietly
+            // chained her ... shes also smaller than normal".
+            // <p>
+            // The metamorphosis potion sets a growth REQUIREMENT, so shouldStartMoltImmediately() goes true and the
+            // molt tries to begin at once. But canStartMolting() refuses while the hive is tracking players, while
+            // anything is aggroed, or while an attack target is in sight - and a player standing right there chaining
+            // her satisfies all three. The old code then `return`ed with NO counter, EVERY TICK, FOREVER. She sat at
+            // whatever scale the phase had reached, which is exactly the "smaller than normal" queen frozen mid-molt.
+            // </p>
+            // <p>
+            // ⚠ The valve below already existed for the OTHER entry point (`willStartMolting`) - it was added when
+            // every adolescent in the tester's world froze for the same reason. This branch was simply never given
+            // one. Same constant, same counter, same semantics: wait for calm, but never wait forever.
+            // </p>
+            // <p>
+            // ⚠ CHAINS AND INHIBITION ARE NOT THE GATE and never were - nothing in canStartMolting() reads either,
+            // and QueenBindManager only zeroes horizontal movement. A chained, inhibited queen still develops. It was
+            // the PLAYER'S PRESENCE that blocked her, which is why chaining her looked like the cause.
+            // </p>
             if (!canStartMolting()) {
-                return;
+                if (moltBlockedTicks < MOLT_FORCE_TICKS) {
+                    moltBlockedTicks++;
+                    return;
+                }
             }
 
+            moltBlockedTicks = 0;
             phaseElapsedTicks = currentPhase.idleTicks();
         }
 
         if (willStartMolting(currentPhase) && !canStartMolting()) {
-            return;
+            // ⚠⚠ THE VALVE. Waiting for calm is right, waiting FOREVER is the bug that froze every adolescent in the
+            // tester's world - see moltBlockedTicks.
+            if (moltBlockedTicks < MOLT_FORCE_TICKS) {
+                moltBlockedTicks++;
+                return;
+            }
         }
+
+        moltBlockedTicks = 0;
 
         phaseElapsedTicks++;
 
@@ -233,6 +263,42 @@ public class MoltingManager implements NBTSerializable {
 
     private boolean willStartMolting(MoltPhase phase) {
         return !isMolting(phase) && phaseElapsedTicks + 1 >= phase.idleTicks();
+    }
+
+    /**
+     * ⭐ THE VALVE, [stated] "ok on b and c". How long a phase may sit blocked before it molts anyway: 30 seconds.
+     * <p>
+     * {@link #canStartMolting()} asks for calm - not aggroed, not moving, no path, hive not tracking players. For an
+     * ADULT that is nearly always true within seconds. For a JUVENILE it was very nearly never true: the Aug 11 work
+     * gave adolescents their own hunting and wandering AI, and reparenting them onto Xenomorph switched on the
+     * {@code hasActiveBLibPath()} clause that had returned false for them unconditionally beforehand. Between the two
+     * they never stood still, never advanced a phase, never fully matured - and {@code GrowthManager} refuses to grow
+     * anything that has not fully matured. Hence "a bunch of adols running around that seem to just not grow at all".
+     * </p>
+     * <p>
+     * ⚠ THE SETTLE GOAL IS THE FIX; THIS IS THE GUARANTEE. A juvenile now parks itself when a phase comes due, so in
+     * practice this counter rarely runs out. It exists for the cases the goal cannot reach - a hive bossbar left angry
+     * by a player farming it, a juvenile permanently cornered and re-aggroing, or any clause someone adds to
+     * {@code canStartMolting} later. Without it this can silently wedge again, which is exactly how we got here.
+     * </p>
+     */
+    private static final int MOLT_FORCE_TICKS = 600;
+
+    /** Consecutive ticks this phase has been held at the molt boundary waiting for calm. */
+    private int moltBlockedTicks;
+
+    /**
+     * True while a phase is due but calm has not arrived - i.e. the alien is standing at the molt boundary. The
+     * settle-and-molt goal watches this to decide when to stop the juvenile and let it change.
+     */
+    public boolean isWaitingToMolt() {
+        var data = getData();
+
+        if (data == null || data.isFullyMatured(phaseIndex)) {
+            return false;
+        }
+
+        return willStartMolting(data.phases().get(phaseIndex)) && !canStartMolting();
     }
 
     private boolean canStartMolting() {

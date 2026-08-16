@@ -11,6 +11,7 @@ import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.protocol.Packet;
 import net.minecraft.network.protocol.game.ClientGamePacketListener;
 import net.minecraft.network.protocol.game.ClientboundBlockEntityDataPacket;
+import net.minecraft.server.TickTask;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
@@ -171,6 +172,58 @@ public class JellyVatBlockEntity extends BlockEntity {
     public void setLevel(net.minecraft.world.level.Level level) {
         super.setLevel(level);
         adoptHiveStrain();
+        catchUpOnStrainConversion();
+    }
+
+    /**
+     * Finishes a strain conversion this vat slept through because its chunk was unloaded when the hive changed hands.
+     * <p>
+     * {@code NukeConversion.convertVats} can only reach LOADED chunks - it skips the rest outright - so a vat sitting
+     * outside render distance when the nuke landed kept its old jelly type and its full jelly forever. Adopting the
+     * shell strain on load fixed how it LOOKED but not what it HELD. This closes that: on load, a vat that now belongs
+     * to an irradiated hive but is still committed to another jelly type performs the conversion it missed.
+     * <p>
+     * IDEMPOTENT BY CONSTRUCTION - the halving only runs on the pass that actually retypes the vat, and after that the
+     * committed type IS irradiated, so reloading the chunk can never drain it a second time.
+     * <p>
+     * DEFERRED to the next server tick rather than run inline, via {@code tell(new TickTask(...))} -- see the note at
+     * the call itself for why {@code execute()} cannot do this. setLevel fires while the block entity is still joining
+     * the chunk, and {@link #commitType} writes a block state - doing that mid-load risks re-entrancy for no benefit.
+     * The delay also gives {@link HiveLocationRegistry} time to be fully populated, so the strain is re-adopted inside
+     * the deferred body: if the lookup missed during load, this is the second chance.
+     */
+    private void catchUpOnStrainConversion() {
+        if (!(level instanceof ServerLevel serverLevel) || serverLevel.getServer() == null) {
+            return;
+        }
+
+        var server = serverLevel.getServer();
+
+        // tell(), NOT execute(). execute() only queues when it is called from OFF the server thread; called from ON it,
+        // it runs the task inline -- and setLevel is on the server thread. So the deferral described above never
+        // happened: the body ran while the vat was still mid-registration, getBlockEntity below found nothing in the
+        // chunk yet, built a SECOND vat to satisfy the lookup, and that one's setLevel started the whole thing again.
+        // A StackOverflowError in the server tick loop, from the guard that was meant to prevent exactly this.
+        server.tell(new TickTask(server.getTickCount() + 1, () -> {
+            // Re-check everything: between scheduling and running, the vat may have been broken or replaced.
+            if (isRemoved() || !(this.level instanceof ServerLevel liveLevel)) {
+                return;
+            }
+            if (liveLevel.getBlockEntity(getBlockPos()) != this) {
+                return;
+            }
+
+            adoptHiveStrain();
+
+            if (strain != AlienVariant.IRRADIATED || getJellyType() == JellyType.IRRADIATED) {
+                return;
+            }
+
+            if (fillLevel > 0) {
+                setFillLevel(fillLevel / 2);
+            }
+            commitType(JellyType.IRRADIATED);
+        }));
     }
 
     /**

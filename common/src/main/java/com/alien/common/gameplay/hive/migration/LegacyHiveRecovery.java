@@ -231,10 +231,13 @@ public final class LegacyHiveRecovery {
                 if (queen.isLegacyDormant()) {
                     queen.wakeFromLegacyDormantRecovery();
                     awakened[0]++;
-                } else {
-                    onLegacyQueenAwakened(queen);
                 }
                 recoverLoadedAlien(queen);
+                // Unconditional, and that is the fix: this used to run only in the ELSE branch, so the queens that
+                // were ACTUALLY dormant - the only ones this method exists for - woke up without ever claiming their
+                // founding area. A hive with zero claimed chunks is reaped by LocationDormancyTask rule 1 on the very
+                // next tick, so waking her deleted her hive.
+                onLegacyQueenAwakened(queen);
             }
         }
         return awakened[0];
@@ -256,7 +259,113 @@ public final class LegacyHiveRecovery {
                 recoverLoadedAlien(queen);
                 awakened[0] = true;
             });
+
+        // Outside the Option block: onLegacyQueenAwakened opens its own. Without this the single-queen wake never
+        // claimed her founding area, so she woke into a hive that rule 1 killed on the next tick.
+        if (awakened[0]) {
+            onLegacyQueenAwakened(queen);
+        }
         return awakened[0];
+    }
+
+    /**
+     * Whether this location is a recovered legacy hive still waiting to be woken, and must therefore be left alone by
+     * natural decay.
+     * <p>
+     * [stated] "the intent is these old queens hibernate until awoken directly by the player or turned back on with the
+     * commands." Territory is claimed at WAKE time ({@link #onLegacyQueenAwakened}), never at recovery time - a
+     * hibernating hive should not hold ground. But {@code LocationDormancyTask} rule 1 kills any location with zero
+     * claimed chunks, per tick and immediately, so every recovered hive was executed about two seconds after load and
+     * its queen never got the chance to be woken. This is the exemption that lets her sleep.
+     */
+    public static boolean isAwaitingLegacyWake(@Nullable MinecraftServer server, HiveLocation location) {
+        if (server == null) {
+            return false;
+        }
+
+        var founderId = location.founderId();
+        if (founderId == null) {
+            return false;
+        }
+
+        final boolean[] awaiting = { false };
+        LegacyHiveRecoveryData.getOrCreate(server)
+            .ifSome(
+                data -> awaiting[0] = data.legacyDetected()
+                    && data.isLegacyQueen(founderId)
+                    && !data.isAwakenedLegacyQueen(founderId)
+                    && !data.wakeAllLegacyQueens()
+                    && !data.killAllLegacyQueens()
+            );
+        return awaiting[0];
+    }
+
+    /** Every queen the recovery still considers asleep, for the wake commands. */
+    public static java.util.List<Queen> loadedDormantLegacyQueens(MinecraftServer server) {
+        var found = new ArrayList<Queen>();
+        for (var level : server.getAllLevels()) {
+            found.addAll(dormantLegacyQueensIn(level, level.getWorldBorder().getCollisionShape().bounds()));
+        }
+        return found;
+    }
+
+    /** Sleeping legacy queens whose position falls inside {@code box}, in one level. */
+    public static java.util.List<Queen> dormantLegacyQueensIn(ServerLevel level, net.minecraft.world.phys.AABB box) {
+        var found = new ArrayList<Queen>();
+        for (var queen : level.getEntitiesOfClass(Queen.class, box)) {
+            if (queen.isLegacyDormant()) {
+                found.add(queen);
+            }
+        }
+        return found;
+    }
+
+    /**
+     * Legacy queens in {@code box} that the recovery would accept as kill targets.
+     * <p>
+     * Deliberately NOT the same set as {@link #dormantLegacyQueensIn}: a legacy queen who has already been woken is
+     * still a legacy queen and should still be cullable, so this asks the recovery data rather than the dormant flag.
+     */
+    public static java.util.List<Queen> legacyQueensIn(ServerLevel level, net.minecraft.world.phys.AABB box) {
+        var server = level.getServer();
+        var found = new ArrayList<Queen>();
+        LegacyHiveRecoveryData.getOrCreate(server)
+            .ifSome(data -> {
+                for (var queen : level.getEntitiesOfClass(Queen.class, box)) {
+                    if (shouldTreatAsLegacyQueen(data, queen)) {
+                        found.add(queen);
+                    }
+                }
+            });
+        return found;
+    }
+
+    /**
+     * Wake every sleeping legacy queen inside {@code box}.
+     * <p>
+     * [stated] "i think an area command to wake up queens would be good." Unlike the server-wide sweep this does NOT
+     * arm the persisted wake-all flag - an area wake must stay bounded to the area, or it would silently become a
+     * server-wide one the moment an untouched sleeper elsewhere loaded.
+     */
+    public static int awakenLegacyQueensIn(ServerLevel level, net.minecraft.world.phys.AABB box) {
+        var awakened = 0;
+        for (var queen : dormantLegacyQueensIn(level, box)) {
+            if (awakenLegacyQueen(queen)) {
+                awakened++;
+            }
+        }
+        return awakened;
+    }
+
+    /** Kill every legacy queen inside {@code box}. Bounded for the same reason as the area wake. */
+    public static int killLegacyQueensIn(ServerLevel level, net.minecraft.world.phys.AABB box) {
+        var killed = 0;
+        for (var queen : legacyQueensIn(level, box)) {
+            if (killLegacyQueen(queen)) {
+                killed++;
+            }
+        }
+        return killed;
     }
 
     public static int killLegacyQueens(MinecraftServer server) {

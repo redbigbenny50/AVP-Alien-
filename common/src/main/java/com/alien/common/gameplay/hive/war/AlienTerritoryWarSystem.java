@@ -11,10 +11,12 @@ import com.alien.common.gameplay.hive.id.LineageIds;
 import com.alien.common.gameplay.hive.location.HiveLocation;
 import com.alien.common.gameplay.hive.location.HiveLocationRegistry;
 import com.alien.common.gameplay.hive.tick.HiveLocationLoadedTickTask;
+import com.alien.common.registry.init.AlienSoundEvents;
 import com.alien.common.registry.tag.AlienEntityTypeTags;
 import com.blib.api.common.faction.v1.RelationshipState;
 import com.blib.api.common.territory.v1.TerritoryContest;
 import com.blib.api.common.territory.v1.TerritoryContestListener;
+import net.minecraft.core.BlockPos;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
@@ -36,9 +38,6 @@ public final class AlienTerritoryWarSystem implements TerritoryContestListener {
     private static final ResourceLocation REASON = AlienResources.location("territory_war");
 
     private static final int[][] CARDINAL_OFFSETS = { { 1, 0 }, { -1, 0 }, { 0, 1 }, { 0, -1 } };
-
-    /** Players this close to either hive hear the war declared and settled. Matches the queen-message audience. */
-    private static final double ANNOUNCE_RANGE_BLOCKS = 256.0;
 
     /** [stated] "there is a period of 3 mc days before hostilities start" when two hives share a slab band. */
     private static final long SLAB_GRACE_TICKS = 3L * 24000L;
@@ -90,14 +89,66 @@ public final class AlienTerritoryWarSystem implements TerritoryContestListener {
         var firstLineage = lineageFor(first.getUUID());
         var secondLineage = lineageFor(second.getUUID());
 
-        return firstLineage != null
-            && secondLineage != null
-            && !firstLineage.equals(secondLineage)
-            && !shareEmpressAuthority(firstLineage, secondLineage);
+        if (firstLineage == null || secondLineage == null || firstLineage.equals(secondLineage)) {
+            return false;
+        }
+
+        // ⚠⚠ PERF: RESOLVE EACH LineageFactionData EXACTLY ONCE. This predicate runs PER CANDIDATE PER SENSE SCAN -
+        // it is one of the hottest paths in the mod. shareEmpressAuthority used to look both lineages up itself, and
+        // the remembrance check then looked them BOTH up again (once per direction), so a single rival pair cost four
+        // faction lookups where two will do. Hoisted here and passed down; the exemptions are unchanged.
+        var firstData = lineageData(firstLineage);
+        var secondData = lineageData(secondLineage);
+
+        return !shareEmpressAuthority(firstData, secondData)
+            && !withinRemembrance(first.level(), firstLineage, firstData, secondLineage, secondData);
+    }
+
+    /**
+     * ⭐⭐ THE PERIOD OF REMEMBRANCE. [stated] "i would say theres a period of rememberance where they are nuetral to
+     * allow the daughter to leave and found".
+     * <p>
+     * A separating daughter mints her OWN lineage, and the ordinary rule is that same-strain hives of different
+     * lineages are at war. So the instant she broke away, her mother's hive read her - and her escort - as rivals and
+     * attacked. That is what produced "the members freed her from the chains but then went to attacking her": the
+     * damage drove the mother past her rouse threshold and unbound her from her own ovipositor.
+     * </p>
+     * <p>
+     * ⚠ MUTUAL AND DIRECTIONLESS. Checked BOTH ways round, because the pair arrives in whatever order the two aliens
+     * happened to be passed in, and a truce that only held in one direction would let one side beat on the other.
+     * </p>
+     * <p>
+     * ⚠ IT EXPIRES ON PURPOSE. He asked for a PERIOD, not an alliance - the daughter gets time to walk out and dig in,
+     * and after that the hive-war rule resumes and they are rivals like any other pair of lineages. The permanent
+     * version of this already exists and is deliberately harder to get: {@link #shareEmpressAuthority}, where an
+     * EMPRESS unifies lineages under one authority.
+     * </p>
+     */
+    private static boolean withinRemembrance(
+        net.minecraft.world.level.Level level,
+        ResourceLocation firstLineage,
+        @org.jetbrains.annotations.Nullable LineageFactionData firstData,
+        ResourceLocation secondLineage,
+        @org.jetbrains.annotations.Nullable LineageFactionData secondData
+    ) {
+        var now = level.getGameTime();
+        return isChildWithinRemembrance(firstData, secondLineage, now)
+            || isChildWithinRemembrance(secondData, firstLineage, now);
+    }
+
+    private static boolean isChildWithinRemembrance(
+        @org.jetbrains.annotations.Nullable LineageFactionData child,
+        ResourceLocation parentLineage,
+        long now
+    ) {
+        return child != null
+            && parentLineage.equals(child.parentLineageId())
+            && now < child.separationTick() + REMEMBRANCE_TICKS;
     }
 
     public static boolean areRivalLineages(ResourceLocation firstLineage, ResourceLocation secondLineage) {
-        return !firstLineage.equals(secondLineage) && !shareEmpressAuthority(firstLineage, secondLineage);
+        return !firstLineage.equals(secondLineage)
+            && !shareEmpressAuthority(lineageData(firstLineage), lineageData(secondLineage));
     }
 
     private static boolean tryStartBorderContest(ServerLevel level, HiveLocation attacker) {
@@ -272,10 +323,18 @@ public final class AlienTerritoryWarSystem implements TerritoryContestListener {
         Alien.MOD.factions().setRelationship(first, second, RelationshipState.HOSTILE);
     }
 
-    private static boolean shareEmpressAuthority(ResourceLocation firstLineage, ResourceLocation secondLineage) {
-        var first = lineageData(firstLineage);
-        var second = lineageData(secondLineage);
+    /**
+     * ⭐ THE DIAL: how long a mother and her freshly separated daughter stay neutral. THREE MINECRAFT DAYS (72,000
+     * ticks, about an hour of real time) - long enough for the daughter to travel clear, carve her core and get a first
+     * brood standing, which is what the truce is FOR. <b>Raise it</b> if daughters are still being cut down
+     * mid-migration; <b>lower it</b> if rival hives feel too slow to turn on each other.
+     */
+    private static final long REMEMBRANCE_TICKS = 3L * 24_000L;
 
+    private static boolean shareEmpressAuthority(
+        @org.jetbrains.annotations.Nullable LineageFactionData first,
+        @org.jetbrains.annotations.Nullable LineageFactionData second
+    ) {
         return first != null
             && second != null
             && first.empressId() != null
@@ -504,12 +563,11 @@ public final class AlienTerritoryWarSystem implements TerritoryContestListener {
         }
 
         if (level != null) {
-            announce(
+            broadcast(
                 level,
-                location,
-                enemy,
-                victorId == null ? "The hive war has ended - both sides are spent..." : "A hive war has ended...",
-                net.minecraft.ChatFormatting.DARK_RED
+                "<<Attention>> Hostilities at " + coordsOf(warAnchorPos(location, enemy)) + " have concluded",
+                net.minecraft.ChatFormatting.GREEN,
+                AlienSoundEvents.BROADCAST_WAR_ALL_CLEAR.get()
             );
         }
         Alien.LOGGER.info(
@@ -520,25 +578,52 @@ public final class AlienTerritoryWarSystem implements TerritoryContestListener {
         );
     }
 
-    /** War news reaches players near EITHER hive - they are the ones who will walk into it. */
-    private static void announce(
+    /**
+     * A hive war is world news, not local news: every player on the server gets the line and the morse broadcast,
+     * wherever they are. Range-limiting it would have hidden exactly the warning it exists to give - the point is that
+     * you learn the coordinates BEFORE you wander into a warzone.
+     */
+    private static void broadcast(
         ServerLevel level,
-        HiveLocation first,
-        @org.jetbrains.annotations.Nullable HiveLocation second,
         String text,
-        net.minecraft.ChatFormatting colour
+        net.minecraft.ChatFormatting colour,
+        net.minecraft.sounds.SoundEvent sound
     ) {
         var line = net.minecraft.network.chat.Component
             .literal(text)
             .withStyle(colour, net.minecraft.ChatFormatting.ITALIC);
-        for (var player : level.players()) {
-            boolean nearFirst = player.blockPosition().closerThan(first.centerPos(), ANNOUNCE_RANGE_BLOCKS);
-            boolean nearSecond = second != null
-                && player.blockPosition().closerThan(second.centerPos(), ANNOUNCE_RANGE_BLOCKS);
-            if (nearFirst || nearSecond) {
-                player.sendSystemMessage(line);
-            }
+        for (var player : level.getServer().getPlayerList().getPlayers()) {
+            player.sendSystemMessage(line);
+            player.playNotifySound(sound, net.minecraft.sounds.SoundSource.MASTER, 1F, 1F);
         }
+    }
+
+    /**
+     * The hive whose coordinates BOTH announcements quote, chosen the same way at declaration and at conclusion so the
+     * all-clear names the place the warning named.
+     * <p>
+     * It cannot simply be "the location that noticed", because a war is symmetric and either side may be the one that
+     * ticks the conclusion. Ordering the two ids gives both ends the same answer with nothing persisted. If the chosen
+     * side has already left the registry by conclusion time, the survivor stands in - the war is over either way, and a
+     * slightly different coordinate beats no all-clear at all.
+     */
+    private static BlockPos warAnchorPos(
+        @org.jetbrains.annotations.Nullable HiveLocation first,
+        @org.jetbrains.annotations.Nullable HiveLocation second
+    ) {
+        if (first == null) {
+            return second == null ? BlockPos.ZERO : second.centerPos();
+        }
+        if (second == null) {
+            return first.centerPos();
+        }
+        return first.id().value().toString().compareTo(second.id().value().toString()) <= 0
+            ? first.centerPos()
+            : second.centerPos();
+    }
+
+    private static String coordsOf(BlockPos pos) {
+        return pos.getX() + ", " + pos.getY() + ", " + pos.getZ();
     }
 
     @Override
@@ -897,12 +982,11 @@ public final class AlienTerritoryWarSystem implements TerritoryContestListener {
         // Two empires meeting: each crown pays its own hive up to half strength before the first blow.
         EmpressWarBolster.tryBolster(level, first, second);
         EmpressWarBolster.tryBolster(level, second, first);
-        announce(
+        broadcast(
             level,
-            first,
-            second,
-            "Two hives have gone to war...",
-            net.minecraft.ChatFormatting.DARK_RED
+            "<<Warning>> Alien lifeform hostilities reported, avoid " + coordsOf(warAnchorPos(first, second)),
+            net.minecraft.ChatFormatting.DARK_RED,
+            AlienSoundEvents.BROADCAST_WAR_SOS.get()
         );
         Alien.LOGGER.info(
             "Alien hive war DECLARED between {} and {} — contested ground is frozen until one side is spent.",

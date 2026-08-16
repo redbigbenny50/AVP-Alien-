@@ -44,7 +44,41 @@ public final class EmpressCandidatePicker {
      * The best seat for an empress, or {@code null} if this lineage has no hive with a seated queen. Reads only
      * persisted location state - safe to call when nothing in the lineage is loaded.
      */
-    public static @Nullable HiveLocation pickSeat(LineageFactionData lineage) {
+    /**
+     * Seats that were crowned and then surrendered the crown on load, mapped to the tick they may be tried again.
+     * <p>
+     * WHY THIS EXISTS. Election and materialization did not agree on what "eligible" means. {@link #pickSeat} runs on
+     * PERSISTED data and can only see {@code founderId != null}; {@link #resolveSeatedQueen} runs on the loaded entity
+     * and additionally demands she be alive, founded (has an ovipositor), and neither contained nor inhibited. A seat
+     * failing only the second set was re-elected forever: elect, load, surrender, elect again on the very next scan -
+     * once every 5 seconds in Razorem's log, 80 times in 7 minutes, each cycle also firing "empress influence gained -
+     * expanding and resuming construction" and the matching contraction. That churn, not the logging, is the lag.
+     * <p>
+     * The gap cannot be closed at election time: whether she is inhibited or holds an ovipositor lives on the entity,
+     * and the seat hive is by design NOT loaded when the vote happens. So a failed seat is benched instead. Transient
+     * on purpose - a restart is a fine moment to reconsider.
+     */
+    private static final java.util.Map<com.alien.common.gameplay.hive.id.HiveLocationId, Long> SEAT_RETRY_AT =
+        new java.util.HashMap<>();
+
+    /** Long enough that a hopeless seat costs one scan per five minutes instead of one every five seconds. */
+    private static final long SEAT_RETRY_COOLDOWN_TICKS = 20L * 60L * 5L;
+
+    /** Bench a seat that surrendered the crown, so the next scan does not immediately re-elect it. */
+    public static void benchSeat(com.alien.common.gameplay.hive.id.HiveLocationId seatId, long currentTick) {
+        SEAT_RETRY_AT.put(seatId, currentTick + SEAT_RETRY_COOLDOWN_TICKS);
+    }
+
+    /** Cleared the moment a seat successfully crowns, so a working seat never carries a stale bench entry. */
+    public static void clearBench(com.alien.common.gameplay.hive.id.HiveLocationId seatId) {
+        SEAT_RETRY_AT.remove(seatId);
+    }
+
+    public static @Nullable HiveLocation pickSeat(
+        LineageFactionData lineage,
+        net.minecraft.server.MinecraftServer server,
+        long currentTick
+    ) {
         var config = HiveLocationRegistry.INSTANCE.config();
         Candidate best = null;
 
@@ -53,9 +87,33 @@ public final class EmpressCandidatePicker {
                 // An exiled remnant is alive but written off - it can never seat the next empress.
                 continue;
             }
+            var retryAt = SEAT_RETRY_AT.get(location.id());
+            if (retryAt != null) {
+                if (currentTick < retryAt) {
+                    continue; // benched after surrendering the crown - see SEAT_RETRY_AT
+                }
+                SEAT_RETRY_AT.remove(location.id());
+            }
             if (location.founderId() == null) {
                 // Null founder == queenless, which is what QueenInhibitionService sets when a queen is inhibited and
                 // what the growth/economy tasks already read. A hive with no seated queen has nobody to crown.
+                continue;
+            }
+
+            // ASK HER DIRECTLY WHEN SHE IS LOADED. founderId is only cleared by inhibition and by death, so a
+            // queen who is merely CONTAINED (four chains) or not yet founded keeps her founder link and sails
+            // through every persisted test - then fails resolveSeatedQueen the instant the seat materializes.
+            // That mismatch is what looped: elect, surrender, elect again on the next scan, five seconds apart,
+            // each round granting and revoking empress influence (expand, resume construction, contract).
+            //
+            // When the entity is resolvable we can run the REAL test here and simply never elect her. When she is
+            // not loaded we cannot know, and the bench above catches that case after the fact.
+            var seatLevel = server.getLevel(location.dimension());
+            if (
+                seatLevel != null
+                    && seatLevel.getEntity(location.founderId()) != null
+                    && resolveSeatedQueen(seatLevel, location) == null
+            ) {
                 continue;
             }
 
