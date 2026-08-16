@@ -62,7 +62,13 @@ public final class CrusherChargeAttack {
 
     private static final double TERRAIN_PROBE_DISTANCE = 1.25D;
 
-    private static final double MAX_TERRAIN_STEP_UP = 1.05D;
+    /**
+     * Raised 1.05 -> 1.5 to match {@code Alien.maxUpStep()}, which is what vanilla collision resolution will actually
+     * step the Crusher over. Below that the charge treated climbable rises as walls and impacted on terrain it was
+     * about to walk up. The Chrysalis roll draws its line at the same figure (ROLL_MAX_TERRAIN_STEP_UP); the two
+     * constants stay separate so either attack can be retuned without silently moving the other.
+     */
+    private static final double MAX_TERRAIN_STEP_UP = 1.5D;
 
     private static final int TERRAIN_SEARCH_DEPTH = 4;
 

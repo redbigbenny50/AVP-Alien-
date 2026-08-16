@@ -22,7 +22,26 @@ public class PraetorianAnimator extends AzEntityAnimator<Praetorian> {
 
     private int previousAttackId = Integer.MIN_VALUE;
 
-    private final CocoonAnimationStateTracker<Praetorian> cocoonAnimationStateTracker = new CocoonAnimationStateTracker<>();
+    /** ⭐ THE JUMP DIAL - the same 3-tick floor every converted caste uses. RAISE IT if they hop over every slab. */
+    private static final int AIRBORNE_TICKS_BEFORE_JUMP = 3;
+
+    /** Blocks per tick of vertical motion below which the entity counts as ground-bound, not falling. */
+    private static final double AIRBORNE_VERTICAL_EPSILON = 0.08;
+
+    private int airborneTicks = 0;
+
+    private boolean jumpPlayed = false;
+
+    /**
+     * ⭐⭐ THE FIRST CASTE WITH BOTH HALVES AUTHORED - enter, loop AND emerge - so it takes the three-selector
+     * constructor and nothing is ever reversed. The two-selector forms would have discarded one of the two real clips
+     * and substituted a reversal of the other.
+     */
+    private final CocoonAnimationStateTracker<Praetorian> cocoonAnimationStateTracker = new CocoonAnimationStateTracker<>(
+        praetorian -> PraetorianAnimationRefs.MOLT_LOOP_ANIMATION_NAME,
+        praetorian -> PraetorianAnimationRefs.MOLT_EMERGE_ANIMATION_NAME,
+        praetorian -> PraetorianAnimationRefs.MOLT_ENTER_ANIMATION_NAME
+    );
 
     public PraetorianAnimator() {
         super(AzAnimatorConfig.defaultConfig());
@@ -71,6 +90,12 @@ public class PraetorianAnimator extends AzEntityAnimator<Praetorian> {
                     dispatcher.rightClawAttack(speed);
                 } else if (attackType == Praetorian.TAIL) {
                     dispatcher.tailAttack(speed);
+                } else if (attackType == Praetorian.BACKHAND) {
+                    dispatcher.backhandAttack(speed);
+                } else if (attackType == Praetorian.CRAWL_CLAW) {
+                    dispatcher.crawlAttack(speed);
+                } else if (attackType == Praetorian.CRAWL_BITE) {
+                    dispatcher.crawlBiteAttack(speed);
                 }
 
                 previousAttackId = attackId;
@@ -78,6 +103,30 @@ public class PraetorianAnimator extends AzEntityAnimator<Praetorian> {
             return;
         }
 
+        // AIRBORNE, ahead of every gait. Edge-detected: jump fires ONCE on the tick the floor is crossed and HOLDS,
+        // and land only plays if a jump actually played, so a one-tick stumble produces neither.
+        // ⚠⚠ VERTICAL MOTION IS REQUIRED, NOT JUST !onGround. A mob whose ground contact FLICKERS while it walks
+        // (an uneven floor, resin ledges, a slab lip) would otherwise reach the airborne floor, dispatch the
+        // HOLD_ON_LAST_FRAME jump, and then be blocked from every gait clip below by the jumpPlayed guard - so it
+        // slides along with its pose frozen. Nothing genuinely airborne has zero vertical velocity.
+        if (praetorian.onGround() || Math.abs(praetorian.getDeltaMovement().y) <= AIRBORNE_VERTICAL_EPSILON) {
+            if (jumpPlayed) {
+                dispatcher.land();
+                jumpPlayed = false;
+            }
+            airborneTicks = 0;
+        } else {
+            airborneTicks++;
+
+            if (airborneTicks == AIRBORNE_TICKS_BEFORE_JUMP) {
+                dispatcher.jump();
+                jumpPlayed = true;
+            }
+
+            if (jumpPlayed) {
+                return;
+            }
+        }
         var isMovingOnGround = praetorian.isMovingHorizontally.get() && praetorian.onGround();
         var isCrawling = praetorian.getCrawlingManager().isCrawling();
         Runnable animFunction;
@@ -104,11 +153,20 @@ public class PraetorianAnimator extends AzEntityAnimator<Praetorian> {
         String animationName;
 
         if (attackType == Praetorian.BITE) {
-            animationName = PraetorianAnimationRefs.FULL_ATTACK_BITE_ANIMATION_NAME;
+            animationName = PraetorianAnimationRefs.ATTACK_BITE_ANIMATION_NAME;
         } else if (attackType == Praetorian.CLAW) {
-            animationName = PraetorianAnimationRefs.FULL_ATTACK_CLAW_ANIMATION_NAME;
+            // The mirrored pair are the same length, so the right clip stands in for both; which arm swings is
+            // decided at dispatch, not here.
+            animationName = PraetorianAnimationRefs.ATTACK_CLAW_RIGHT_ANIMATION_NAME;
         } else if (attackType == Praetorian.TAIL) {
-            animationName = PraetorianAnimationRefs.FULL_ATTACK_TAIL_ANIMATION_NAME;
+            animationName = PraetorianAnimationRefs.ATTACK_TAIL_ANIMATION_NAME;
+        } else if (attackType == Praetorian.BACKHAND) {
+            // Mirrored pair, same length - the right clip stands in for both.
+            animationName = PraetorianAnimationRefs.ATTACK_BACKHAND_RIGHT_ANIMATION_NAME;
+        } else if (attackType == Praetorian.CRAWL_CLAW) {
+            animationName = PraetorianAnimationRefs.CRAWL_ATTACK_RIGHT_ANIMATION_NAME;
+        } else if (attackType == Praetorian.CRAWL_BITE) {
+            animationName = PraetorianAnimationRefs.CRAWL_ATTACK_BITE_ANIMATION_NAME;
         } else {
             animationName = null;
         }
@@ -120,6 +178,11 @@ public class PraetorianAnimator extends AzEntityAnimator<Praetorian> {
         }
 
         var animation = getAnimation(praetorian, animationName);
+
+        // ⚠ A missing clip must never NPE the render thread - see DroneAnimator.calculateAttackSpeed.
+        if (animation == null) {
+            return 1.0f;
+        }
 
         return (float) (animation.length() / durationInTicks);
     }

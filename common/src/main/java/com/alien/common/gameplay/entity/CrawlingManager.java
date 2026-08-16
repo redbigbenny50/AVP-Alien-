@@ -1,6 +1,7 @@
 package com.alien.common.gameplay.entity;
 
 import com.alien.AlienResources;
+import com.alien.common.gameplay.entity.living.alien.xenomorph.crusher.Crusher;
 import com.blib.api.common.data_sync.v1.DataAccessor;
 import com.blib.api.common.dismemberment.v1.Dismemberable;
 import com.blib.api.common.dismemberment.v1.LimbCategories;
@@ -160,16 +161,41 @@ public class CrawlingManager implements NBTSerializable {
         }
 
         var path = navigation.getPath();
+
+        // THE ROUTE ITSELF ASKING TO CRAWL STILL WINS OUTRIGHT. This is the navigator saying the path it chose
+        // needs a crawl to be walkable at all - a real doorway it must fit through. Ducking THAT is correct and
+        // is not what the sustained test below is trying to prevent.
         var pathRequestsCrawl = entity instanceof PathNavigatorUser navigatorUser
             && navigatorUser.getPathNavigator().getPostureView().shouldCrawl();
-        var isTight = pathRequestsCrawl || isTightSpace(blockPosition);
 
-        if (path != null && path.getNextNodeIndex() < path.getNodeCount()) {
-            var previousNode = path.getPreviousNode();
-            isTight = isTight || previousNode != null && isTightSpace(previousNode.asBlockPos());
-            var nextNode = path.getNextNode();
-            isTight = isTight || isTightSpace(nextNode.asBlockPos());
+        // ⭐⭐⭐ SUSTAINED LOW CEILING, NOT A SINGLE LOW BLOCK. [stated] "it is supposed to only crawl if the
+        // entire hallways is short or it loses a leg. just going under a doorway shouldnt lock it."
+        //
+        // ⚠⚠ THIS USED TO BE AN OR-CHAIN across the current position, the previous path node and the next one,
+        // so ONE low block anywhere in that window dropped the whole body. Combined with isTightSpace scanning
+        // standingHeight - 1 of headroom, a PRAETORIAN (3.98 tall, so 3 blocks of scan) read almost every hive
+        // corridor and doorway as tight and crawled essentially all the time indoors - which in turn made its
+        // crawl attacks its ordinary combat mode instead of the exception they are meant to be.
+        //
+        // Now every sampled position must be low: the ceiling has to hold across the stretch it is standing in
+        // and moving through, which is the difference between a short hallway and an arch it passes under.
+        var isTight = isTightSpace(blockPosition);
+
+        if (isTight) {
+            if (path != null && path.getNextNodeIndex() < path.getNodeCount()) {
+                var previousNode = path.getPreviousNode();
+                if (previousNode != null) {
+                    isTight = isTightSpace(previousNode.asBlockPos());
+                }
+                isTight = isTight && isTightSpace(path.getNextNode().asBlockPos());
+            } else {
+                // ⚠ STANDING STILL HAS NO PATH TO SAMPLE, so without this a praetorian parked in a doorway
+                // would still read tight from its own tile alone and drop - the exact case he ruled out.
+                isTight = neighboursAreAlsoLow(blockPosition);
+            }
         }
+
+        isTight = isTight || pathRequestsCrawl;
 
         // A dismembered leg forces the stance into crawling regardless of overhead clearance - the mob lost a leg, it
         // can't stand back up.
@@ -189,7 +215,17 @@ public class CrawlingManager implements NBTSerializable {
         // "Running" is judged against the caste's OWN walk speed, the same way shoulderThroughObstructions judges
         // it, so a queen and a runner are each measured by their own gait. A lost leg still overrides everything -
         // she cannot stand up to charge on a missing limb.
-        isCrawling.set((canCrawl && isTight && !isChargingATarget()) || hasLegOff);
+        var wasCrawling = isCrawling.get();
+        var nowCrawling = (canCrawl && isTight && !isChargingATarget()) || hasLegOff;
+        isCrawling.set(nowCrawling);
+
+        // ⚠⚠ THE HITBOX HAS TO FOLLOW THE POSTURE. Alien.getDimensions returns a shorter box while crawling, but
+        // vanilla caches the bounding box - without refreshDimensions the entity keeps its old size until
+        // something else happens to invalidate it, which is precisely how a "crawling" harbinger kept a 5.5-tall
+        // box and wedged itself on one-block steps.
+        if (wasCrawling != nowCrawling) {
+            entity.refreshDimensions();
+        }
     }
 
     /** Pursuing something and moving faster than its own walk pace - a charge, not a patrol. */
@@ -212,8 +248,18 @@ public class CrawlingManager implements NBTSerializable {
             return false;
         }
 
+        // ⭐ THE CRUSHER IS BROADER THAN EVERYONE ELSE. [stated] "if any of its limbs except tail are shot off it can
+        // only crawl." Its bulk sits on all four quarters, so losing an arm topples it just as a leg does - whereas
+        // every other caste only collapses on a LEG. The tail is excluded because it carries nothing.
+        var collapsesOnAnyLimb = entity instanceof Crusher;
+
         for (var definition : LimbDefinitionRegistry.getDefinitions(entity.getType())) {
-            if (definition.category().equals(LimbCategories.LEG) && manager.isDetached(definition)) {
+            var category = definition.category();
+            var collapses = collapsesOnAnyLimb
+                ? !category.equals(LimbCategories.TAIL)
+                : category.equals(LimbCategories.LEG);
+
+            if (collapses && manager.isDetached(definition)) {
                 return true;
             }
         }
@@ -291,6 +337,36 @@ public class CrawlingManager implements NBTSerializable {
      * anything blocks it. Crawling scales height to 40%, so a 3.98 caste drops to 1.99 and needs two blocks rather than
      * four, which is what makes a low doorway passable.
      */
+    /**
+     * Whether the low ceiling CONTINUES into the neighbouring tiles it could actually walk to.
+     * <p>
+     * Only OPEN neighbours are judged - a wall beside it says nothing about the ceiling, and counting walls as "not
+     * low" would stop it ever crawling in a proper 1-wide corridor, which is precisely where it should. If every side
+     * is walled (a nook barely its own size) there is nothing to corroborate with, so its own tile stands as the
+     * answer.
+     * </p>
+     */
+    private boolean neighboursAreAlsoLow(BlockPos blockPos) {
+        var level = entity.level();
+        var openNeighbours = 0;
+
+        for (var direction : net.minecraft.core.Direction.Plane.HORIZONTAL) {
+            var neighbour = blockPos.relative(direction);
+
+            if (level.getBlockState(neighbour).entityCanStandOn(level, neighbour, entity)) {
+                continue; // a wall at foot level - not somewhere it can be, so it gets no vote
+            }
+
+            openNeighbours++;
+
+            if (!isTightSpace(neighbour)) {
+                return false; // it opens out right there: a doorway or an arch, not a short hallway
+            }
+        }
+
+        return true; // every open side was low too (or it is boxed in), so the ceiling genuinely holds
+    }
+
     private boolean isTightSpace(BlockPos blockPos) {
         var level = entity.level();
         var standingHeight = Math.max(1, Mth.ceil(entity.getType().getDimensions().height()));

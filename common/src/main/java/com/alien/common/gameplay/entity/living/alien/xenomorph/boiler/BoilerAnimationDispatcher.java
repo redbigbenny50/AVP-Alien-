@@ -31,6 +31,15 @@ public class BoilerAnimationDispatcher {
         .play(BoilerAnimationRefs.FULL_BODY, BoilerAnimationRefs.WALK_ANIMATION_NAME, AzPlayBehaviors.LOOP)
         .build();
 
+    /** ⚠ HOLD_ON_LAST_FRAME - the jump freezes on its final frame until the ground is regained. */
+    private static final AzCommand<Boiler> JUMP = AzCommand.<Boiler>replay()
+        .play(BoilerAnimationRefs.FULL_BODY, BoilerAnimationRefs.JUMP_ANIMATION_NAME, AzPlayBehaviors.HOLD_ON_LAST_FRAME)
+        .build();
+
+    private static final AzCommand<Boiler> LAND = AzCommand.<Boiler>replay()
+        .play(BoilerAnimationRefs.FULL_BODY, BoilerAnimationRefs.LAND_ANIMATION_NAME, AzPlayBehaviors.PLAY_ONCE)
+        .build();
+
     private final Boiler boiler;
 
     public BoilerAnimationDispatcher(Boiler boiler) {
@@ -53,6 +62,14 @@ public class BoilerAnimationDispatcher {
 
     public void crawlHold() {
         CRAWL_HOLD.dispatchForEntity(boiler);
+    }
+
+    public void jump() {
+        JUMP.dispatchForEntity(boiler);
+    }
+
+    public void land() {
+        LAND.dispatchForEntity(boiler);
     }
 
     public void idle() {

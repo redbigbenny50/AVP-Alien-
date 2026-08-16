@@ -5,6 +5,7 @@ import com.alien.common.gameplay.item.AgileXenomorphHeadShieldItem;
 import com.alien.common.gameplay.item.CaptureChainItem;
 import com.alien.common.gameplay.item.CrusherHeadItem;
 import com.alien.common.gameplay.item.CrusherHeadShieldItem;
+import com.alien.common.gameplay.item.FieldManualItem;
 import com.alien.common.gameplay.item.InhibitorItem;
 import com.alien.common.gameplay.item.PoisonJellyItem;
 import com.alien.common.gameplay.item.QueenHeadItem;
@@ -105,6 +106,12 @@ public class AlienItems {
     public static final BLibHolder<Item> CAPTURE_CHAIN = create(
         "capture_chain",
         () -> new CaptureChainItem(new Item.Properties())
+    );
+
+    /** The in-game guide. Right click to open; every player is handed one on first join. */
+    public static final BLibHolder<Item> FIELD_MANUAL = create(
+        "field_manual",
+        () -> new FieldManualItem(new Item.Properties().stacksTo(1))
     );
 
     public static final BLibHolder<Item> INHIBITOR = create(

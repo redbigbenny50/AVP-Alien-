@@ -42,13 +42,19 @@ public class EmpressOvipositorRenderer extends AzEntityRenderer<EmpressOviposito
         this.shadowRadius = 0.5F;
     }
 
-    /** The strain of the empress underneath it - an eggsack has no variant of its own to read. */
+    /**
+     * The strain of the empress underneath it - an eggsack has no variant of its own to read.
+     * <p>
+     * ⚠ Same fallback as the queen's sack: the REMEMBERED strain, not the plain sheet. EmpressOvipositor extends
+     * Ovipositor, so it inherits the recording and gets the fix for free.
+     * </p>
+     */
     private static ResourceLocation textureFor(EmpressOvipositor ovipositor) {
-        if (!(ovipositor.getVehicle() instanceof Empress empress)) {
-            return TEXTURE;
-        }
+        var variant = ovipositor.getVehicle() instanceof Empress empress
+            ? empress.getVariant()
+            : ovipositor.getRoyalVariant();
 
-        return switch (empress.getVariant()) {
+        return switch (variant) {
             case NETHER -> NETHER_TEXTURE;
             case ABERRANT -> ABERRANT_TEXTURE;
             default -> TEXTURE;

@@ -4,6 +4,7 @@ import com.alien.AlienResources;
 import com.alien.client.animation.entity.cocoon.CocoonAnimationStateTracker;
 import com.alien.common.gameplay.entity.living.alien.xenomorph.AttackType;
 import com.alien.common.gameplay.entity.living.alien.xenomorph.CocoonSourceForm;
+import com.alien.common.gameplay.entity.living.alien.xenomorph.CocoonState;
 import com.alien.common.gameplay.entity.living.alien.xenomorph.queen.Queen;
 import com.alien.common.gameplay.entity.living.alien.xenomorph.queen.QueenAnimationRefs;
 import com.alien.common.gameplay.entity.living.alien.xenomorph.queen.QueenBindManager;
@@ -69,6 +70,21 @@ public class QueenAnimator extends AzEntityAnimator<Queen> {
 
     private boolean previousIncapacitated = false;
 
+    /**
+     * ⭐⭐ THE QUEEN IS THE ONLY CASTE THAT IS BOTH A MOLT DESTINATION AND A MOLT SOURCE.
+     * <p>
+     * She ARRIVES from a praetorian or a crusher and she LEAVES to become an empress. BOTH directions are served by the
+     * EMERGE-ORIENTED two-selector form, which is what makes that possible at all: it plays the selected clip FORWARDS
+     * when emerging and BACKWARDS when cocooning in. So the arrival clips play forwards as she hatches, and the empress
+     * clip plays reversed as she wraps up.
+     * </p>
+     * <p>
+     * ⚠⚠ DO NOT PASS AN ENTER SELECTOR HERE. [stated] "the molt.emerge.empress needs to be played in reverse like the
+     * other emerges that were entering molts to new forms." Supplying a third selector switches the tracker to "both
+     * halves authored" mode, where NOTHING is ever reversed - which is the opposite of what her empress transition
+     * wants. The reversal IS the mechanism here, not a fallback.
+     * </p>
+     */
     private final CocoonAnimationStateTracker<Queen> cocoonAnimationStateTracker =
         new CocoonAnimationStateTracker<>(QueenAnimator::selectLoopAnimation, QueenAnimator::selectEmergeAnimation);
 
@@ -126,15 +142,41 @@ public class QueenAnimator extends AzEntityAnimator<Queen> {
         }
     }
 
-    /** Source-specific in-cocoon loop: from a crusher she plays molting.crusher, otherwise molting.prae. */
+    /**
+     * The in-cocoon loop, which depends on WHICH WAY she is moulting.
+     * <p>
+     * ⚠ SOURCE_COCOONING IS HER BECOMING AN EMPRESS - a different loop entirely from the two she plays while ARRIVING
+     * as a queen. Reading only {@code cocoonSourceForm} would have had her lying in a praetorian's cocoon pose for the
+     * whole empress transformation.
+     * </p>
+     */
     private static String selectLoopAnimation(Queen queen) {
+        if (queen.cocoonState.get() == CocoonState.SOURCE_COCOONING) {
+            return QueenAnimationRefs.MOLT_LOOP_EMPRESS_ANIMATION_NAME;
+        }
+
         return queen.cocoonSourceForm.get() == CocoonSourceForm.CRUSHER
             ? QueenAnimationRefs.MOLTING_CRUSHER_ANIMATION_NAME
             : QueenAnimationRefs.MOLTING_PRAE_ANIMATION_NAME;
     }
 
-    /** Source-specific emerge burst: from a crusher she plays emerge.crusher, otherwise emerge.prae. */
+    /**
+     * The clip for whichever transformation she is in the middle of.
+     * <p>
+     * ⚠ THE TRACKER REVERSES WHATEVER THIS RETURNS WHEN SHE IS COCOONING IN, so the empress clip is selected here
+     * rather than through an enter selector - handing it over as an "enter" would make it play forwards and she would
+     * unwrap herself into a cocoon.
+     * </p>
+     * <p>
+     * SOURCE_COCOONING is her becoming an EMPRESS; anything else is her ARRIVING as a queen, from a crusher or a
+     * praetorian.
+     * </p>
+     */
     private static String selectEmergeAnimation(Queen queen) {
+        if (queen.cocoonState.get() == CocoonState.SOURCE_COCOONING) {
+            return QueenAnimationRefs.MOLT_EMERGE_EMPRESS_ANIMATION_NAME;
+        }
+
         return queen.cocoonSourceForm.get() == CocoonSourceForm.CRUSHER
             ? QueenAnimationRefs.EMERGE_CRUSHER_ANIMATION_NAME
             : QueenAnimationRefs.EMERGE_PRAE_ANIMATION_NAME;
@@ -265,6 +307,10 @@ public class QueenAnimator extends AzEntityAnimator<Queen> {
                 if (animationName == null) {
                     previousAttackId = attackId;
                     return;
+                    // ⭐ POSTURE FIRST, as on every other caste: underwater she has one authored bite and the
+                    // standing limb clips would swing her through water she cannot brace against.
+                } else if (queen.isUnderWater()) {
+                    dispatcher.swimAttack();
                 } else if (attackType == Queen.SWIPE_DOWN) {
                     dispatcher.swipeDownAttack(animationName, speed);
                 } else if (attackType == Queen.BACKHAND) {
@@ -273,6 +319,12 @@ public class QueenAnimator extends AzEntityAnimator<Queen> {
                     dispatcher.tailStrikeAttack(animationName, speed);
                 } else if (attackType == Queen.CRAWL_ATTACK) {
                     dispatcher.crawlAttack(speed);
+                } else if (attackType == Queen.HEAD_RAM) {
+                    dispatcher.headRamAttack(speed);
+                } else if (attackType == Queen.CRAWL_BITE) {
+                    dispatcher.crawlBiteAttack();
+                } else if (attackType == Queen.BITE) {
+                    dispatcher.biteAttack(speed);
                 }
 
                 previousAttackId = attackId;
@@ -312,12 +364,34 @@ public class QueenAnimator extends AzEntityAnimator<Queen> {
 
         var animation = getAnimation(queen, animationName);
 
+        // ⚠⚠ A MISSING CLIP MUST NEVER NPE THE RENDER THREAD. getAnimation returns NULL for a clip the loader
+        // threw away - and GeckoLib discards an ENTIRE clip when one Molang expression fails to parse, so a
+        // single bad keyframe in the art turns this line into a client crash the moment that animation is
+        // selected. That is exactly what killed the game when a queen lost a leg: the forced crawl asked for
+        // crawl.attack.*, which had been discarded, and this dereferenced null.
+        if (animation == null) {
+            return 1.0f;
+        }
+
         return (float) (animation.length() / durationInTicks);
     }
 
     private String selectAttackAnimation(Queen queen, AttackType attackType, int attackId) {
         if (attackType == Queen.CRAWL_ATTACK) {
-            return QueenAnimationRefs.CRAWL_ATTACK_ANIMATION_NAME;
+            // Mirrored pair, same length - the right clip stands in for both when measuring.
+            return QueenAnimationRefs.CRAWL_ATTACK_RIGHT_ANIMATION_NAME;
+        }
+
+        if (attackType == Queen.HEAD_RAM) {
+            return QueenAnimationRefs.ATTACK_HEADRAM_ANIMATION_NAME;
+        }
+
+        if (attackType == Queen.BITE) {
+            return QueenAnimationRefs.ATTACK_BITE_ANIMATION_NAME;
+        }
+
+        if (attackType == Queen.CRAWL_BITE) {
+            return QueenAnimationRefs.CRAWL_ATTACK_BITE_ANIMATION_NAME;
         }
         if (attackType == Queen.SWIPE_DOWN) {
             return chooseArmAnimation(

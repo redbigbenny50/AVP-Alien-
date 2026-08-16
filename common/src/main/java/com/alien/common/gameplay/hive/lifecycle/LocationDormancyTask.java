@@ -132,6 +132,15 @@ public final class LocationDormancyTask {
         long maxNoContact,
         long currentTick
     ) {
+        // RULE 0: a recovered legacy hive that has not been woken yet is EXEMPT from all three rules.
+        // It is supposed to have nothing - no claimed chunks, no loaded population - because it is hibernating until a
+        // player wakes its queen. Without this, rule 1 below reaped every recovered hive on the tick after load (an
+        // 18/18 wipe roughly two seconds after world join), so the queens could never be found to wake.
+        // Checked HERE rather than at the kill sites so rules 2 and 3 cannot quietly accrue against a sleeper either.
+        if (com.alien.common.gameplay.hive.migration.LegacyHiveRecovery.isAwaitingLegacyWake(level.getServer(), location)) {
+            return false;
+        }
+
         // Rule 1: zero claimed chunks → die.
         if (location.claimedChunks().isEmpty()) {
             LocationDeathHandler.killNaturalDecay(level, location, lineage);

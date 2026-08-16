@@ -259,7 +259,11 @@ public abstract class Xenomorph extends Alien implements ResinProducer, EntitySe
         var crawlConfig = config.canCrawl()
             ? PathCrawlConfig.enabled(pathConfig.crawlHeight())
             : PathCrawlConfig.DISABLED;
-        var waterConfig = PathWaterConfig.enabled((int) Math.ceil(pathConfig.entityHeight() * UNDERWATER_HEIGHT_SCALE));
+        // AVOID means the navigator will not route through water at all — the BLib equivalent of the enderman's
+        // setPathfindingMalus(PathType.WATER, -1.0F). NEUTRAL and PREFER both path as every caste always has.
+        var waterConfig = pathConfig.waterAffinity() == XenomorphPathConfig.WaterAffinity.AVOID
+            ? PathWaterConfig.DISABLED
+            : PathWaterConfig.enabled((int) Math.ceil(pathConfig.entityHeight() * UNDERWATER_HEIGHT_SCALE));
         var evaluatorConfig = TerrainEvaluatorConfig.builder()
             .addTerrain(TerrainType.GROUND, 1.0f)
             .addTerrain(TerrainType.WATER, 1.5f)
@@ -372,6 +376,35 @@ public abstract class Xenomorph extends Alien implements ResinProducer, EntitySe
         return config.healthRegenPerSecond();
     }
 
+    /**
+     * ⭐⭐ HOW FAST THIS XENOMORPH SWINGS. 1.0 is normal; 2.5 means every attack takes 1/2.5 of its authored ticks.
+     * <p>
+     * ⚠ THE ANIMATION FOLLOWS FOR FREE, and that is why this works at all: every animator computes its clip speed as
+     * {@code animation.length() / attackDurationInTicks}, reading the SYNCED duration. Shorten the duration and the
+     * clip speeds up to fit it, in lockstep, on every caste, with no per-caste change. Scaling the clip directly
+     * instead would have desynced the visible swing from the tick the damage lands on.
+     * </p>
+     * <p>
+     * ⚠ Applies to attacks whose executor honours it - see
+     * {@link AttackExecutor#totalDurationInTicks(Xenomorph, AttackType)}. Default is 1.0, so nothing changes for any
+     * caste that does not override this.
+     * </p>
+     */
+    public float attackSpeedMultiplier() {
+        return 1.0F;
+    }
+
+    /** Applies {@link #attackSpeedMultiplier()} to an authored tick count, never dropping below a single tick. */
+    public int scaleAttackDuration(int authoredTicks) {
+        var multiplier = attackSpeedMultiplier();
+
+        if (multiplier <= 1.0F) {
+            return authoredTicks;
+        }
+
+        return Math.max(1, Math.round(authoredTicks / multiplier));
+    }
+
     @Override
     public boolean isPushedByFluid() {
         return config.isPushedByFluid();
@@ -424,7 +457,7 @@ public abstract class Xenomorph extends Alien implements ResinProducer, EntitySe
         }
 
         var executor = attack.executorFactory().get();
-        var totalTicks = executor.totalDurationInTicks(attack);
+        var totalTicks = executor.totalDurationInTicks(this, attack);
 
         activeAttack = attack;
         activeExecutor = executor;
@@ -602,6 +635,7 @@ public abstract class Xenomorph extends Alien implements ResinProducer, EntitySe
             breakFrenziedRaidObstructions();
             breakRaidContainmentTargets();
             shoulderThroughObstructions();
+            jumpShortWallTowardTarget();
         }
 
         crawlingManager.tick();
@@ -854,6 +888,41 @@ public abstract class Xenomorph extends Alien implements ResinProducer, EntitySe
     private static final float SHOULDER_BREAK_MIN_HEIGHT = 3.0F;
 
     /** Half a second. Often enough to keep moving, rare enough not to scan every tick. */
+    // #########################
+    // ## SHORT-WALL JUMPING ##
+    // #########################
+
+    /**
+     * ⭐ THE WALL-JUMP DIAL. The tallest wall a drone or warrior will hop rather than be stopped by.
+     * <p>
+     * [stated] "we might want to let the drones and warriors jump up 3 block tall walls" and, on why 3 is modest,
+     * [stated] "we plan to add crawling up walls and ceilings later this is just a prelude to that eventually aliens
+     * could scale even a 7 block wall or more so a jump over 3 isnt too crazy."
+     * </p>
+     * <p>
+     * ⚠ THIS IS NOT {@code maxUpStep} AND MUST NOT BECOME IT. Every alien steps 1.5, and BOTH rush attacks are pinned
+     * to that figure - the Crusher's {@code MAX_TERRAIN_STEP_UP} (1.5) and the Chrysalis's {@code ROLL_WALL_HEIGHT}
+     * (2.0) draw their terrain-vs-wall line from it. Raising the step to 3 would make the Crusher read a 3-block wall
+     * as walkable terrain and never charge-stun, and would leave the roll's wall line BELOW its own step height. A jump
+     * is a velocity impulse and touches neither.
+     * </p>
+     */
+    private static final int WALL_JUMP_MAX_HEIGHT = 3;
+
+    /**
+     * Upward impulse, tuned to clear {@link #WALL_JUMP_MAX_HEIGHT} with a little margin.
+     * <p>
+     * Vanilla's 0.42 clears about 1.25 blocks, and apex height goes with the SQUARE of the impulse, so clearing ~3.5
+     * needs roughly 0.42 * sqrt(3.5 / 1.25). Raise this if they clip the lip of a 3-block wall.
+     * </p>
+     */
+    private static final double WALL_JUMP_IMPULSE = 0.72;
+
+    /** A nudge forward so they clear the lip and land ON the wall instead of sliding back down its face. */
+    private static final double WALL_JUMP_FORWARD_BOOST = 0.28;
+
+    private static final int WALL_JUMP_INTERVAL_TICKS = 10;
+
     private static final int SHOULDER_BREAK_INTERVAL_TICKS = 10;
 
     /** Roughly 0.05 blocks a tick - enough to tell walking from standing still and being shoved. */
@@ -893,6 +962,85 @@ public abstract class Xenomorph extends Alien implements ResinProducer, EntitySe
      * of a box. Walking through a doorway should be neither. A block a xenomorph could have chewed through is a block
      * it can shoulder aside, and nothing more.
      */
+    /**
+     * Hops a short wall that is between this xenomorph and its target.
+     * <p>
+     * A REACTION, NOT PATHFINDING. Aliens use the vanilla {@code WalkNodeEvaluator}, which only ever considers a
+     * one-block rise plus step height, so it will never PLAN a route over a wall however capable the mob is. Teaching
+     * it to would mean a custom node evaluator in the hottest code in the game. Instead this waits until they are
+     * actually stopped by something and answers it - which is the visible case anyway.
+     * </p>
+     * <p>
+     * ⚠ DRONES AND WARRIORS ONLY, and that is the point: {@code shoulderThroughObstructions} needs a body at least
+     * {@code SHOULDER_BREAK_MIN_HEIGHT} (3.0) tall, and both of these are 1.98 - so they CANNOT break a wall at all.
+     * Today a waist-high ledge stops them dead. Praetorians and up already answer walls by demolishing them and are
+     * deliberately left alone.
+     * </p>
+     * <p>
+     * TARGET-GATED [stated], so an idle hive does not hop about: they only jump when something is on the other side.
+     * </p>
+     */
+    private void jumpShortWallTowardTarget() {
+        if (tickCount % WALL_JUMP_INTERVAL_TICKS != 0 || !onGround() || Boolean.TRUE.equals(isCrawling.get())) {
+            return;
+        }
+
+        var target = getTarget();
+        if (target == null || !target.isAlive()) {
+            return;
+        }
+
+        // Only castes that cannot shoulder through. Anything tall enough to break a wall should break it.
+        if (getBbHeight() >= SHOULDER_BREAK_MIN_HEIGHT) {
+            return;
+        }
+
+        // Actually stopped by something, rather than merely near it - horizontalCollision is vanilla's own report
+        // that this tick's movement was clipped.
+        if (!horizontalCollision) {
+            return;
+        }
+
+        var toTarget = new Vec3(target.getX() - getX(), 0.0, target.getZ() - getZ());
+        if (toTarget.lengthSqr() < 1.0E-4) {
+            return;
+        }
+
+        var forward = toTarget.normalize();
+        var ahead = BlockPos.containing(getX() + forward.x, getY(), getZ() + forward.z);
+        var feetY = ahead.getY();
+
+        // Walk the column ahead: find the top of the obstruction, and refuse if it is taller than we can clear.
+        var topOffset = 0;
+        for (var offset = 0; offset <= WALL_JUMP_MAX_HEIGHT; offset++) {
+            if (!level().getBlockState(ahead.above(offset)).getCollisionShape(level(), ahead.above(offset)).isEmpty()) {
+                topOffset = offset + 1;
+            }
+        }
+
+        // Nothing there (the collision was something else), or too tall to clear - a 4-block wall is a job for a
+        // caste that can demolish it.
+        if (topOffset == 0 || topOffset > WALL_JUMP_MAX_HEIGHT) {
+            return;
+        }
+
+        // Somewhere to land: the space above the wall must be clear enough to stand in.
+        for (var clearance = 0; clearance < Math.max(1, Mth.ceil(getBbHeight())); clearance++) {
+            var landing = ahead.above(topOffset + clearance);
+            if (!level().getBlockState(landing).getCollisionShape(level(), landing).isEmpty()) {
+                return;
+            }
+        }
+
+        var motion = getDeltaMovement();
+        setDeltaMovement(
+            motion.x + forward.x * WALL_JUMP_FORWARD_BOOST,
+            WALL_JUMP_IMPULSE,
+            motion.z + forward.z * WALL_JUMP_FORWARD_BOOST
+        );
+        hasImpulse = true;
+    }
+
     private void shoulderThroughObstructions() {
         if (getBbHeight() < SHOULDER_BREAK_MIN_HEIGHT || tickCount % SHOULDER_BREAK_INTERVAL_TICKS != 0) {
             return;
@@ -1488,12 +1636,24 @@ public abstract class Xenomorph extends Alien implements ResinProducer, EntitySe
         return !cocoonManager.isLocked() && super.canAttack(target) && AlienPredicates.canContinueTargeting(this, target);
     }
 
+    /**
+     * ⭐⭐ EGGS ARE NO LONGER SHOVED. [stated] "eggs seem to get pushed inside the queens hitbox and they cant get to
+     * it."
+     * <p>
+     * An ovomorph is furniture, not traffic: it is placed deliberately, on a chosen cell, and nothing downstream
+     * expects it to move afterwards. The QUEEN is the worst offender because she is 2.6 blocks wide and shuffles
+     * constantly while laying - every nudge walks a nearby egg further under her, and once it is inside her bounding
+     * box no hauler can path to it. Facehuggers, chestbursters and adolescents were already exempt for the same reason;
+     * the egg was simply missed.
+     * </p>
+     */
     @Override
     protected void doPush(Entity entity) {
         if (
             !entity.getType().is(AlienEntityTypeTags.FACEHUGGERS)
                 && !entity.getType().is(AlienEntityTypeTags.CHESTBURSTERS)
                 && !entity.getType().is(AlienEntityTypeTags.ADOLESCENTS)
+                && !entity.getType().is(AlienEntityTypeTags.OVOMORPHS)
         ) {
             super.doPush(entity);
         }

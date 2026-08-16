@@ -8,7 +8,9 @@
     "MixinBlock_FlammableResinFamily",
     "MixinBlock_FlammableResinNode"
   ],
-  "client": [],
+  "client": [
+    "MixinAnchorBlockEntityRenderer_RenderBox"
+  ],
   "server": [],
   "injectors": {
     "defaultRequire": 1

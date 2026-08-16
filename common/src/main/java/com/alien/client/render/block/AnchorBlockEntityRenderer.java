@@ -29,6 +29,32 @@ import org.jetbrains.annotations.NotNull;
 public class AnchorBlockEntityRenderer implements BlockEntityRenderer<AnchorBlockEntity> {
 
     /**
+     * Always render, even when the anchor block itself is outside the view frustum.
+     * <p>
+     * A block entity is normally culled with the chunk section it sits in, which is correct for something that only
+     * draws inside its own block - and wrong here, because the chain we draw reaches from this anchor all the way to
+     * the queen. Turn until the anchor leaves the frustum and the whole chain vanished with it, even though most of it
+     * was still on screen. [stated] "when i look away from the chains at certain angles they completely vanish this
+     * makes it hard to place and attach".
+     * <p>
+     * This is what vanilla does for the beacon beam and the structure block for the same reason. The cost is one draw
+     * call per loaded anchor inside the view distance below, which is nothing at the handful a capture site uses.
+     */
+    @Override
+    public boolean shouldRenderOffScreen(AnchorBlockEntity blockEntity) {
+        return true;
+    }
+
+    /**
+     * Chains have to stay visible from further out than a normal block entity, since you are usually backing away from
+     * the queen while you place them. Vanilla default is 64.
+     */
+    @Override
+    public int getViewDistance() {
+        return 128;
+    }
+
+    /**
      * How far each plate is pushed into its mounting surface to seat flush, in block units (~0.43 px). Applied on the
      * axis that points into the surface for that orientation: the floor pushes down (−Y), the ceiling up (+Y), and the
      * wall into its face along the facing direction (so all four wall facings seat the same). One knob for all three;

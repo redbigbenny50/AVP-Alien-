@@ -2,6 +2,7 @@ package com.alien.common.gameplay.hive.structure;
 
 import com.alien.Alien;
 import com.alien.common.gameplay.hive.location.HiveLocation;
+import com.alien.common.gameplay.hive.structure.carve.HiveSalvage;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.util.RandomSource;
@@ -138,8 +139,28 @@ public final class HiveStructurePlacer {
         // terrain. No separate box-carve: that would wrongly clear the void margins. Offset is the origin chunk's min
         // corner at the hive floor row; the authored piece sits with its own floor on that row.
         var placeAt = resolved.placeAt();
+
+        // ⭐⭐ SALVAGE BEFORE THE STAMP OVERWRITES EVERYTHING. placeInWorld writes straight over whatever was
+        // there, so an ore vein or a dungeon chest inside the footprint is simply gone the instant it runs - and
+        // unlike the carve, there is no per-cell hook to intercept. A bounded one-time sweep of the piece box is
+        // the only place this can happen at all.
+        var pieceBox = resolved.template().getBoundingBox(resolved.settings(), placeAt);
+
+        HiveSalvage.sweepBeforeStamp(level, location, pieceBox);
+
         boolean placed = resolved.template()
             .placeInWorld(level, placeAt, placeAt, resolved.settings(), RandomSource.create(), 2);
+
+        // ⭐⭐ MAKE THE FOOTPRINT STRAIN-CONSISTENT. Runs on the SAME box the salvage sweep already computed, so it
+        // adds no new iteration over the piece.
+        //
+        // ⚠⚠ THIS IS A NET FOR A CLASS OF BUG, NOT ONE BUG. strainFolderPrefix returns the NORMAL folder when the
+        // lineage variant is momentarily null, so an ENTIRE piece can stamp in normal resin; and every non-normal
+        // piece NBT carries a normal resin_vent (57 files). Retinting after the stamp fixes both, plus any future
+        // authoring slip, without chasing each route separately.
+        if (placed) {
+            HiveStrainNormalisation.normalise(level, location, pieceBox);
+        }
         if (!placed) {
             Alien.LOGGER.warn("Structure placement returned false for hive piece {}.", match.piece().id());
             return false;
@@ -155,6 +176,8 @@ public final class HiveStructurePlacer {
         // constraint: interior cells only, structure_void margins and everything outside the shell untouched, so the
         // ocean laps against the resin instead of disappearing around it.
         drainStructureAir(level, resolved);
+        // ...then follow the water one pocket further, under a hard cap. See drainConnectedPocket.
+        drainConnectedPocket(level, resolved);
         // Ceiled dimensions: fortress-style 4x4 ribbed-resin piers under every occupied chunk, so pieces stamped
         // over open air or the lava ocean stand on something instead of floating. Runs on the completion stamp and
         // on upkeep re-stamps alike; idempotent (see HiveSupportPillars).
@@ -274,9 +297,18 @@ public final class HiveStructurePlacer {
      * this drain.
      */
     private static void drainStructureAir(ServerLevel level, ResolvedPlacement resolved) {
-        var airCells = resolved.template()
-            .filterBlocks(resolved.placeAt(), resolved.settings(), net.minecraft.world.level.block.Blocks.AIR);
-        for (var cell : airCells) {
+        var openCells = new java.util.ArrayList<>(
+            resolved.template().filterBlocks(resolved.placeAt(), resolved.settings(), net.minecraft.world.level.block.Blocks.AIR)
+        );
+        // ⭐⭐ DOORWAYS COUNT AS OPEN, [stated] "if there is a liquid at all where a block would be or a doorway being
+        // sealed it should replace the water source or flowing regardless." A doorway mouth is authored as
+        // minecraft:jigsaw with final_state air, NOT as air - so filterBlocks(AIR) has never returned one and the
+        // drain has never touched a single doorway. In a flooded hive that is the one cell that matters most: water
+        // standing in a mouth is a sealed door, which is precisely the shape of the re-stamp loop the router had.
+        openCells.addAll(
+            resolved.template().filterBlocks(resolved.placeAt(), resolved.settings(), net.minecraft.world.level.block.Blocks.JIGSAW)
+        );
+        for (var cell : openCells) {
             var pos = cell.pos();
             var state = level.getBlockState(pos);
             if (state.getFluidState().isEmpty()) {
@@ -297,6 +329,86 @@ public final class HiveStructurePlacer {
             } else {
                 level.setBlock(pos, net.minecraft.world.level.block.Blocks.AIR.defaultBlockState(), 2);
             }
+        }
+    }
+
+    /**
+     * Ceiling on the widened drain. A pocket the hive is plumbed into is a handful of cells; anything bigger is a body
+     * of water or lava the hive happens to be built against, and must be left entirely alone.
+     */
+    private static final int MAX_POCKET_DRAIN_CELLS = 192;
+
+    /**
+     * ⭐ THE WIDENED DRAIN, [stated] "widen the drain but dont extend it so far it makes the holes again in the lava."
+     * <p>
+     * {@link #drainStructureAir} empties the AUTHORED air cells and stops dead at the template's edge. But a saved
+     * structure omits its {@code structure_void} cells, so a piece does not author every cell inside its own bounding
+     * box - and the carve digs the whole slab, so those unauthored cells are open space the stamp never touches. A
+     * fluid sitting in one of them is a source the room is plumbed directly into: drain the room, the pocket refills
+     * it, the next upkeep pass reads a flooded room again. That is the leak the tester has been watching repair itself
+     * over and over.
+     * </p>
+     * <p>
+     * ⚠⚠ AND THIS IS EXACTLY WHERE THE OLD BUG LIVED, so the rule is: FOLLOW THE POCKET, NEVER SWEEP A VOLUME. A flood
+     * fill runs outward from the authored air cells through liquid ONLY, and the pocket is drained just when it is
+     * ENCLOSED - if the fill ever reaches liquid outside the piece's bounding box, or grows past
+     * {@link #MAX_POCKET_DRAIN_CELLS}, the whole widening is ABANDONED and nothing at all is written. That test is the
+     * difference between the two cases in one question: is the hive plumbed into a pocket, or is it standing in the
+     * sea. Abandoning rather than draining up to a limit is the load-bearing half - taking a partial bite out of a lava
+     * ocean, then another on every re-stamp, is precisely how the ragged gaps around nether hives appeared.
+     * </p>
+     * <p>
+     * ⚠ LIQUID BLOCKS ONLY. A waterlogged solid is a wall doing its job and is not part of any pocket; the stamp
+     * rewrites authored cells to their dry authored state anyway.
+     * </p>
+     */
+    private static void drainConnectedPocket(ServerLevel level, ResolvedPlacement resolved) {
+        var airCells = resolved.template()
+            .filterBlocks(resolved.placeAt(), resolved.settings(), net.minecraft.world.level.block.Blocks.AIR);
+        if (airCells.isEmpty()) {
+            return;
+        }
+        var bounds = resolved.template().getBoundingBox(resolved.settings(), resolved.placeAt());
+        var seen = new java.util.HashSet<BlockPos>();
+        var queue = new java.util.ArrayDeque<BlockPos>();
+        for (var cell : airCells) {
+            seen.add(cell.pos());
+            queue.add(cell.pos());
+        }
+        var pocket = new java.util.ArrayList<BlockPos>();
+        while (!queue.isEmpty()) {
+            var current = queue.poll();
+            for (var direction : net.minecraft.core.Direction.values()) {
+                var next = current.relative(direction);
+                if (!seen.add(next)) {
+                    continue;
+                }
+                // ⚠⚠ THE FILL ESCAPED THE PIECE. Reaching outside the bounding box means this liquid is not a pocket
+                // the hive is plumbed into - it is the sea, and the piece is standing in it. Abandon the whole
+                // widening and write NOTHING: draining a partial bite out of a lava ocean is exactly how the ragged
+                // ever-growing gaps around nether hives appeared, and every re-stamp would take another bite.
+                if (!bounds.isInside(next)) {
+                    var outside = level.getBlockState(next);
+                    if (!outside.getFluidState().isEmpty() && outside.canBeReplaced()) {
+                        return;
+                    }
+                    continue;
+                }
+                var state = level.getBlockState(next);
+                // A pure liquid block: replaceable AND carrying a fluid. Air is neither interesting nor a leak, and a
+                // waterlogged solid fails the replaceable half, so neither one extends the fill.
+                if (state.getFluidState().isEmpty() || !state.canBeReplaced()) {
+                    continue;
+                }
+                pocket.add(next);
+                if (pocket.size() > MAX_POCKET_DRAIN_CELLS) {
+                    return; // too big to be a leak - write nothing at all
+                }
+                queue.add(next);
+            }
+        }
+        for (var pos : pocket) {
+            level.setBlock(pos, net.minecraft.world.level.block.Blocks.AIR.defaultBlockState(), 2);
         }
     }
 

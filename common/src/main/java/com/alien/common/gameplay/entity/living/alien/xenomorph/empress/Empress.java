@@ -1,28 +1,36 @@
 package com.alien.common.gameplay.entity.living.alien.xenomorph.empress;
 
+import com.alien.common.gameplay.entity.dismemberment.MirroredAttackSide;
 import com.alien.common.gameplay.entity.living.alien.Alien;
 import com.alien.common.gameplay.entity.living.alien.xenomorph.AttackType;
+import com.alien.common.gameplay.entity.living.alien.xenomorph.ScaledDamage;
 import com.alien.common.gameplay.entity.living.alien.xenomorph.Xenomorph;
 import com.alien.common.gameplay.entity.living.alien.xenomorph.XenomorphAttackConfig;
 import com.alien.common.gameplay.entity.living.alien.xenomorph.XenomorphConfig;
 import com.alien.common.gameplay.entity.living.alien.xenomorph.XenomorphPathConfig;
 import com.alien.common.gameplay.entity.living.alien.xenomorph.ai.egg_laying.EggLayer;
 import com.alien.common.gameplay.entity.living.alien.xenomorph.empress.ai.EmpressGOAP;
+import com.alien.common.gameplay.entity.living.alien.xenomorph.queen.QueenHeadRamAttack;
 import com.alien.common.gameplay.entity.living.alien.xenomorph.queen.QueenLifecyclePhaseManager;
+import com.alien.common.gameplay.entity.living.alien.xenomorph.queen.QueenScreamDefense;
 import com.alien.common.model.alien.variant.AlienVariant;
+import com.alien.common.registry.init.AlienDataSyncKeys;
 import com.alien.common.registry.init.AlienEntityTypes;
 import com.alien.common.registry.init.AlienSoundEvents;
 import com.alien.common.registry.tag.AlienEntityTypeTags;
+import com.blib.api.common.data_sync.v1.DataAccessor;
 import com.blib.api.common.entity.v1.PlayerStatConstants;
 import com.blib.api.common.goap.v1.GOAPUser;
 import com.just.ai.goap.Agent;
 import com.just.ai.goap.graph.Graph;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.sounds.SoundEvent;
+import net.minecraft.world.InteractionHand;
 import net.minecraft.world.damagesource.DamageSource;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.Entity.RemovalReason;
 import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.ai.attributes.AttributeSupplier;
 import net.minecraft.world.entity.ai.attributes.Attributes;
 import net.minecraft.world.level.Level;
@@ -32,11 +40,68 @@ import org.jetbrains.annotations.Nullable;
 
 import java.util.Objects;
 
-public class Empress extends Xenomorph implements GOAPUser<Empress>, EggLayer, com.alien.common.gameplay.entity.CrawlPostureTransitionListener {
+public class Empress extends Xenomorph implements GOAPUser<Empress>, EggLayer, com.alien.common.gameplay.entity.CrawlPostureTransitionListener, QueenScreamDefense.ScreamingRoyal {
 
     @Override
     public int crawlPostureTransitionTicks(boolean enteringCrawl) {
         return enteringCrawl ? EmpressAnimationRefs.CRAWL_DROP_TICKS : EmpressAnimationRefs.CRAWL_RISE_TICKS;
+    }
+
+    /**
+     * ⭐⭐ THE SWIM CLAWS - BOTH ARMS, and the same rule the ravager's double claw follows. [stated] "swim attack slaws
+     * is both arms use the same 50% damage rule if missing 1 arm or doesnt play at all if both are gone."
+     * <p>
+     * ⚠ THE RULE NEEDS BOTH HALVES IN DIFFERENT PLACES, and neither alone expresses it: `requiresAnyArm()` is the "not
+     * at all with no arms" half, and the 50% is priced into the damage below. Using `requiresBothArms()` would collapse
+     * them into one and the half-damage case could never happen.
+     * </p>
+     */
+    private static final float SWIM_CLAWS_MISSING_ARM_PENALTY = 0.5F;
+
+    /** ⭐ Same shape as the queen's: 5x5x3 AOE shove AND wall break, 120s cooldown. See QueenHeadRamAttack. */
+    public static final AttackType HEAD_RAM = QueenHeadRamAttack.create("empress_head_ram", 120 * 20, 22);
+
+    /**
+     * ⭐ Her bite, and her fallback. Same reasoning as the queen: every other attack she has needs an arm or a tail, so
+     * losing both arms leaves the bite as the only thing the limb gate still admits.
+     */
+    public static final AttackType BITE = AttackType.builder("empress_bite")
+        .requiresHead()
+        .defaultDurationInTicks(14)
+        .sound(AlienSoundEvents.ENTITY_XENOMORPH_ATTACK)
+        .build();
+
+    public static final AttackType CRAWL_BITE = AttackType.builder("empress_crawl_bite")
+        .crawlAttack()
+        .requiresHead()
+        .defaultDurationInTicks(14)
+        .sound(AlienSoundEvents.ENTITY_XENOMORPH_ATTACK)
+        .build();
+
+    public static final AttackType CRAWL_ATTACK = AttackType.builder("empress_crawl_attack")
+        .crawlAttack()
+        .requiresAnyArm()
+        .defaultDurationInTicks(18)
+        .sound(AlienSoundEvents.ENTITY_XENOMORPH_ATTACK)
+        .build();
+
+    public static final AttackType SWIM_CLAWS = AttackType.builder("empress_swim_claws")
+        .requiresAnyArm()
+        .defaultDurationInTicks(18)
+        .sound(AlienSoundEvents.ENTITY_XENOMORPH_ATTACK)
+        .damageApplicator(Empress::applySwimClawsDamage)
+        .build();
+
+    private static void applySwimClawsDamage(Xenomorph xenomorph, LivingEntity target) {
+        if (!ScaledDamage.canReach(xenomorph, target)) {
+            return;
+        }
+
+        var bothArms = !MirroredAttackSide.isArmDetached(xenomorph, true)
+            && !MirroredAttackSide.isArmDetached(xenomorph, false);
+
+        xenomorph.swing(InteractionHand.MAIN_HAND);
+        ScaledDamage.hurtScaled(xenomorph, target, bothArms ? 1.0F : SWIM_CLAWS_MISSING_ARM_PENALTY);
     }
 
     public static final AttackType SWIPE_DOWN = AttackType.builder("empress_swipe_down")
@@ -63,6 +128,11 @@ public class Empress extends Xenomorph implements GOAPUser<Empress>, EggLayer, c
                 .addRegular(SWIPE_DOWN)
                 .addRegular(BACKHAND)
                 .addRegular(TAIL_STRIKE)
+                .addRegular(SWIM_CLAWS)
+                .addRegular(HEAD_RAM)
+                .addRegular(BITE)
+                .addRegular(CRAWL_BITE)
+                .addRegular(CRAWL_ATTACK)
                 .build()
         )
         .parallelDigCount(4)
@@ -72,13 +142,21 @@ public class Empress extends Xenomorph implements GOAPUser<Empress>, EggLayer, c
     public static AttributeSupplier.Builder createEmpressAttributes() {
         return Alien.createAlienAttributes()
             .add(Attributes.ARMOR, 20.0F)
-            .add(Attributes.ARMOR_TOUGHNESS, 16.0F)
+            .add(Attributes.ARMOR_TOUGHNESS, 20.0F)
             .add(Attributes.ATTACK_DAMAGE, PlayerStatConstants.BASE_HEALTH * 1.5F)
             .add(Attributes.FOLLOW_RANGE, 35F)
             .add(Attributes.KNOCKBACK_RESISTANCE, 1f)
             .add(Attributes.MAX_HEALTH, PlayerStatConstants.BASE_HEALTH * 25F)
             .add(Attributes.MOVEMENT_SPEED, PlayerStatConstants.BASE_WALK_SPEED * 0.9F);
     }
+
+    public final DataAccessor<Integer> screamCooldownTicks;
+
+    public final DataAccessor<Boolean> screamedAtFirstThreshold;
+
+    public final DataAccessor<Boolean> screamedAtSecondThreshold;
+
+    public final DataAccessor<Integer> screamId;
 
     private final EmpressAnimationDispatcher animationDispatcher;
 
@@ -88,6 +166,12 @@ public class Empress extends Xenomorph implements GOAPUser<Empress>, EggLayer, c
 
     public Empress(EntityType<? extends Empress> entityType, Level level) {
         super(entityType, level, CONFIG);
+        this.screamCooldownTicks = new DataAccessor<>(this, AlienDataSyncKeys.EMPRESS_SCREAM_COOLDOWN_TICKS.get());
+        this.screamedAtFirstThreshold =
+            new DataAccessor<>(this, AlienDataSyncKeys.EMPRESS_SCREAMED_AT_FIRST_THRESHOLD.get());
+        this.screamedAtSecondThreshold =
+            new DataAccessor<>(this, AlienDataSyncKeys.EMPRESS_SCREAMED_AT_SECOND_THRESHOLD.get());
+        this.screamId = new DataAccessor<>(this, AlienDataSyncKeys.EMPRESS_SCREAM_ID.get());
         this.animationDispatcher = new EmpressAnimationDispatcher(this);
         this.empressOvipositorManager = new EmpressOvipositorManager(this);
         this.empressData = new EmpressData();
@@ -110,6 +194,17 @@ public class Empress extends Xenomorph implements GOAPUser<Empress>, EggLayer, c
     @Override
     public void tick() {
         super.tick();
+
+        // ⭐ THE SCREAM, shared with the queen through QueenScreamDefense.ScreamingRoyal - she just calls five.
+        if (!level().isClientSide && QueenScreamDefense.tick(this)) {
+            screamId.set(screamId.get() + 1);
+        }
+
+        // Once a second, so her regeneration repays the disturbance debt. Without this the bar would only ever climb.
+        if (!level().isClientSide && tickCount % 20 == 0) {
+            sampleHealth();
+        }
+
         empressOvipositorManager.tick();
         empressData.tick();
         tickCrownAdoption();
@@ -206,15 +301,20 @@ public class Empress extends Xenomorph implements GOAPUser<Empress>, EggLayer, c
         return empressOvipositorManager;
     }
 
-    /** Damage accumulated toward being pulled off the eggsack, and when it was last added to. */
+    /**
+     * HEALTH she must be down before she will leave her eggsack — not damage dealt. Deliberately harder than the
+     * queen's {@link QueenLifecyclePhaseManager#DISTURBANCE_THRESHOLD}: she is the apex of the lineage and should take
+     * real commitment to shift, not a lucky swing.
+     */
+    private static final float DISTURBANCE_THRESHOLD = 25.0F;
+
+    /** Net health lost since she was last calm. Repaid by her own regeneration. */
     private float disturbanceAccumulator;
 
-    private int lastDisturbanceTick = Integer.MIN_VALUE;
+    /** Her health as of the last sample, so the bar can follow the health bar in both directions. */
+    private float lastKnownHealth = Float.NaN;
 
-    /**
-     * Gap after which the accumulator is considered cold. Matches the queen's decay closely enough to feel the same.
-     */
-    private static final int DISTURBANCE_WINDOW_TICKS = 120;
+    private float lastKnownMaxHealth = Float.NaN;
 
     /** True once her hive has fallen and the lineage has left her behind. See {@link EmpressData}. */
     public boolean isExiled() {
@@ -245,7 +345,7 @@ public class Empress extends Xenomorph implements GOAPUser<Empress>, EggLayer, c
             // would all do it. Same disturbance bar the queen uses: one hard blow, or enough small hits before the
             // accumulator bleeds off. Below that she takes the hit and keeps working, and the retaliation is cleared
             // with it so her sensors do not simply pull her off a tick later.
-            if (registerDisturbance(amount)) {
+            if (registerDisturbance()) {
                 empressOvipositorManager.abandonOvipositor();
             } else if (empressOvipositorManager.hasOvipositor()) {
                 setLastHurtByMob(null);
@@ -256,27 +356,60 @@ public class Empress extends Xenomorph implements GOAPUser<Empress>, EggLayer, c
     }
 
     /**
-     * The empress has no lifecycle phase manager, so she keeps her own copy of the queen's disturbance bar. Thresholds
-     * are shared deliberately - the two should feel identical to hit.
+     * The empress has no lifecycle phase manager, so she keeps her own copy of the disturbance bar.
+     * <p>
+     * Her threshold is her OWN and is higher than the queen's - the two used to share the queen's constants, which made
+     * the apex of the lineage no harder to shift than her daughters. There is no single-blow shortcut here either; a
+     * heavy hit simply clears the bar the moment it is added.
      */
-    private boolean registerDisturbance(float amount) {
-        if (amount >= QueenLifecyclePhaseManager.HIBERNATION_DISTURBANCE_DAMAGE) {
-            disturbanceAccumulator = 0.0F;
-            return true;
-        }
+    private boolean registerDisturbance() {
+        sampleHealth();
 
-        if (tickCount - lastDisturbanceTick > DISTURBANCE_WINDOW_TICKS) {
-            disturbanceAccumulator = 0.0F;
-        }
-        lastDisturbanceTick = tickCount;
-
-        disturbanceAccumulator += amount;
-        if (disturbanceAccumulator >= QueenLifecyclePhaseManager.SUSTAINED_DISTURBANCE_DAMAGE) {
-            disturbanceAccumulator = 0.0F;
+        if (disturbanceAccumulator >= DISTURBANCE_THRESHOLD) {
+            resetDisturbance();
             return true;
         }
 
         return false;
+    }
+
+    /**
+     * Follows her health bar in both directions: what she loses is added to the debt, what she regenerates repays it.
+     * Called on every hit and once a second from {@link #tick} — the periodic call is what lets healing count.
+     */
+    /**
+     * Wipes the disturbance debt and re-baselines on her current health, so the threshold measures health lost SINCE
+     * SHE SETTLED rather than across her whole life. Same reasoning as the queen's - the debt is only repaid by
+     * regeneration, and {@code Alien.canHeal} refuses while she holds a target, so a player stood beside her keeps the
+     * bar frozen at whatever her last fight left on it.
+     */
+    public void resetDisturbance() {
+        disturbanceAccumulator = 0.0F;
+        lastKnownHealth = getHealth();
+        lastKnownMaxHealth = getMaxHealth();
+    }
+
+    private void sampleHealth() {
+        var health = getHealth();
+        var maxHealth = getMaxHealth();
+
+        if (Float.isNaN(lastKnownHealth)) {
+            lastKnownHealth = health;
+            lastKnownMaxHealth = maxHealth;
+            return;
+        }
+
+        // A MOVING MAXIMUM IS NOT A WOUND - same rule as the queen's. Alien.applyDynamicAttributes scales current
+        // health whenever a strain or empress buff changes the maximum, which would otherwise land on this bar as a
+        // huge phantom wound and stand her up on the next scratch.
+        if (maxHealth != lastKnownMaxHealth) {
+            lastKnownHealth = health;
+            lastKnownMaxHealth = maxHealth;
+            return;
+        }
+
+        disturbanceAccumulator = Math.max(0.0F, disturbanceAccumulator + (lastKnownHealth - health));
+        lastKnownHealth = health;
     }
 
     @Override
@@ -396,5 +529,26 @@ public class Empress extends Xenomorph implements GOAPUser<Empress>, EggLayer, c
     public boolean removeWhenFarAway(double distanceToClosestPlayer) {
         // An empress rules a lineage of hives; she must never despawn.
         return false;
+    }
+
+    @Override
+    public DataAccessor<Integer> screamCooldownTicks() {
+        return screamCooldownTicks;
+    }
+
+    @Override
+    public DataAccessor<Boolean> screamedAtFirstThreshold() {
+        return screamedAtFirstThreshold;
+    }
+
+    @Override
+    public DataAccessor<Boolean> screamedAtSecondThreshold() {
+        return screamedAtSecondThreshold;
+    }
+
+    /** [stated] "the scream summons 5 praetorians instead of just 3." */
+    @Override
+    public int praetoriansSummoned() {
+        return 5;
     }
 }

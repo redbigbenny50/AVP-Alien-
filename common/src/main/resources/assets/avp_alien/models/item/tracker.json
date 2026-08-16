@@ -79,6 +79,6 @@
     }
   },
   "textures": {
-    "particle": "tracker"
+    "particle": "avp_alien:item/tracker"
   }
 }

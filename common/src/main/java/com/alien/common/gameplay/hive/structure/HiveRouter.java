@@ -278,6 +278,39 @@ public final class HiveRouter {
             if (tryDropRoom(level, registry, location, goal.roomType(), eff, center, othersReserved, currentTick)) {
                 return true;
             }
+            // ⭐⭐ RIM-REFUSED ROOMS RETRY FURTHER IN. A raid chamber may only sit one ring inside the border, so on
+            // a hive whose free ground is all out at the edge every socket near the goal gets refused and the room
+            // simply never appears - worse than placing it badly, because a raid chamber with no scourge companion
+            // at least existed. Pulling the target one ring toward the centre and re-trying keeps the rule while
+            // still getting the room built.
+            // ⚠ ONLY for types that carry a rim margin, and only while the target is still outside the core -
+            // walking any room inward on failure would drag the whole hive toward its own centre.
+            if (rimMarginFor(goal.roomType()) > 0) {
+                var pulledIn = eff;
+
+                for (int step = 0; step < RIM_RETRY_STEPS; step++) {
+                    pulledIn = stepTowardCenter(pulledIn, center);
+
+                    if (pulledIn == null) {
+                        break; // reached the core - nowhere further in to try
+                    }
+
+                    if (
+                        tryDropRoom(
+                            level,
+                            registry,
+                            location,
+                            goal.roomType(),
+                            pulledIn,
+                            center,
+                            othersReserved,
+                            currentTick
+                        )
+                    ) {
+                        return true;
+                    }
+                }
+            }
             // Long routes arc: swing out through a per-goal sideways waypoint first, then bend in to the goal - so
             // corridors curve across the hive instead of running one dead-straight line. Seeded, so hives differ.
             var via = viaPoint(goal.chunk(), center, reserved);
@@ -547,7 +580,7 @@ public final class HiveRouter {
             }
             for (PieceMatch match : HivePieceMatcher.matchesFromRegistry(socket, registry, chunkIsFree, location.lineageVariantOrNull())) {
                 if (
-                    matchesType(match, roomType) && withinExtent(match, center)
+                    matchesType(match, roomType) && withinExtent(match, center, rimMarginFor(roomType))
                         && !occupiesReserved(match, forbidden)
                         && !(roomType.contains("chamber_raid") && tooCloseToRaidChamber(location, match))
                         && place(level, location, match, socket, currentTick)
@@ -962,9 +995,24 @@ public final class HiveRouter {
         // as the fill stamps in (CarveSiteWork). Fixed at commission so a price that moves mid-build (the hive keeps
         // claiming) can't reprice work already promised.
         var config = HiveLocationRegistry.INSTANCE.config();
-        var resinCost = (int) Math.ceil(
-            RESIN_COST_FACTOR * BiomassIncome.claimCost(location, config) * match.occupiedChunks().size()
-        );
+        // ⭐⭐ IRRADIATED HIVES REBUILD FOR FREE. [stated] "they would do this free of biomass cost but not an instant
+        // stamp - have them still work towards 'placing' the resin", and again: "irradiated xenos rebuild for free no
+        // biomass cost".
+        // <p>
+        // ⚠ FREE, NOT INSTANT. Only the DEBT is waived - the site is still commissioned, still dug, still filled at
+        // the ordinary pace by an ordinary crew. A white dwarf can still lay resin; what it cannot do is pay for it,
+        // because its biomass only ever comes from kills and its jelly never refills at all.
+        // </p>
+        // <p>
+        // ⚠ IrradiatedHiveRules was already consulted by HiveBalanceTask (1 biomass + 1 jelly promotions),
+        // JellyProduction and JellyVatDisplay - the ECONOMY - but nothing in the STRUCTURE path ever asked. So a
+        // converted hive was being charged full price to rebuild its own crater.
+        // </p>
+        var resinCost = com.alien.common.gameplay.hive.economy.IrradiatedHiveRules.isIrradiated(location)
+            ? 0
+            : (int) Math.ceil(
+                RESIN_COST_FACTOR * BiomassIncome.claimCost(location, config) * match.occupiedChunks().size()
+            );
         site.setResinBiomassOwed(resinCost);
         // Consume the socket NOW: the ground is committed, and a mid-build piece must expose no routable doorway in
         // either direction. finalizePlacement re-removes it at completion (a no-op) and registers the new ones.
@@ -1066,17 +1114,16 @@ public final class HiveRouter {
     /**
      * Ordering for pending goals; lower routes first, ties broken by distance from centre.
      * <p>
-     * THE FIRST EGG CHAMBER OUTRANKS EVERYTHING. A hive with no nursery is in a deadlock it cannot dig out of:
-     * eggs have nowhere to be hauled, so no new aliens hatch, so there are no drones to carve the egg chamber.
-     * Razorem's log shows exactly that - six commissions, all six "unstaffed - no free drones, nothing in
-     * reserve", and six "Egg haul STUCK ... has 0 egg chamber(s)" while the queen still had 40+ free clutch
-     * cells. Eggs used to sit in the LAST tier, tied with jelly, and lose the distance tiebreak every time
-     * because the blueprint deliberately spreads egg goals widest (EGG_SPACING). So the hive built jelly
-     * vaults and hubs while its own nursery never came up.
+     * THE FIRST EGG CHAMBER OUTRANKS EVERYTHING. A hive with no nursery is in a deadlock it cannot dig out of: eggs
+     * have nowhere to be hauled, so no new aliens hatch, so there are no drones to carve the egg chamber. Razorem's log
+     * shows exactly that - six commissions, all six "unstaffed - no free drones, nothing in reserve", and six "Egg haul
+     * STUCK ... has 0 egg chamber(s)" while the queen still had 40+ free clutch cells. Eggs used to sit in the LAST
+     * tier, tied with jelly, and lose the distance tiebreak every time because the blueprint deliberately spreads egg
+     * goals widest (EGG_SPACING). So the hive built jelly vaults and hubs while its own nursery never came up.
      * <p>
-     * It jumps the raid chamber, which normally wants the emptiest map, and that is an accepted cost: an egg
-     * chamber is 1x1 with a zero-chunk reserve margin, so one of them early barely marks the footprint. The
-     * promotion applies ONLY while the count is zero - the second onward go back to the normal tier.
+     * It jumps the raid chamber, which normally wants the emptiest map, and that is an accepted cost: an egg chamber is
+     * 1x1 with a zero-chunk reserve margin, so one of them early barely marks the footprint. The promotion applies ONLY
+     * while the count is zero - the second onward go back to the normal tier.
      * <p>
      * Jelly vaults also drop BELOW eggs generally, since they were the rooms winning that tie.
      */
@@ -1276,13 +1323,76 @@ public final class HiveRouter {
     /**
      * True if every chunk of the match stays within the footprint (Chebyshev radius activeExtent of the core centre).
      */
+    /**
+     * ⭐ [stated] "needs to be at a minimum 1 in from the border." One ring, so the scourge companion always has a chunk
+     * to occupy on the outward side.
+     */
+    private static final int RAID_PLACEMENT_RIM_MARGIN = 1;
+
+    /** How many rings inward a rim-refused room may walk its target before giving up for this pass. */
+    private static final int RIM_RETRY_STEPS = 3;
+
+    /** The core ring goals never cross - mirrors HiveBlueprintGenerator.MIN_GOAL_DIST, which is private there. */
+    private static final int MIN_GOAL_RING = 3;
+
     private static boolean withinExtent(PieceMatch match, ChunkPos center) {
+        return withinExtent(match, center, 0);
+    }
+
+    /**
+     * ⭐⭐ THE SAME EXTENT TEST, BUT ALLOWED TO KEEP A PIECE OFF THE RIM.
+     * <p>
+     * [stated] "any raid chamber cant be the border structure and needs to be at a minimum 1 in from the border." A
+     * raid chamber on the last ring has nowhere to hang its MANDATORY scourge companion room - the scourge door ends up
+     * facing outside the footprint and the companion becomes unplaceable, so the raid room exists and its scourge room
+     * never does. That is exactly the empress hive he found: a second raid chamber on the rim of a 23x23, with no
+     * scourge chamber beside it.
+     * </p>
+     * <p>
+     * ⚠⚠ THE BLUEPRINT ALREADY TRIED TO PREVENT THIS AND IT WAS NOT ENOUGH. `RAID_RIM_MARGIN` keeps the GOAL off the
+     * rim, but a goal is only a target - the router places the actual piece at whatever socket it can reach, and a 2x2
+     * room anchored one ring in still occupies the rim. **The margin has to be enforced where the piece lands, not
+     * where the goal was rolled.**
+     * </p>
+     */
+    private static boolean withinExtent(PieceMatch match, ChunkPos center, int rimMargin) {
+        var limit = activeExtent - rimMargin;
+
         for (ChunkPos c : match.occupiedChunks()) {
-            if (cheby(c, center) > activeExtent) {
+            if (cheby(c, center) > limit) {
                 return false;
             }
         }
         return true;
+    }
+
+    /**
+     * How far off the rim a room of this type must stay. ⚠ EVERY chunk the piece occupies is tested, so a 2x2 raid
+     * chamber with one corner on the rim is refused just as a 1x1 on the rim would be.
+     */
+    /**
+     * One ring closer to the centre, along whichever axis is currently furthest out. Null once the target reaches the
+     * core, so the caller stops rather than piling every retry onto the queen's own chunk.
+     */
+    private static @Nullable ChunkPos stepTowardCenter(ChunkPos from, ChunkPos center) {
+        var dx = from.x - center.x;
+        var dz = from.z - center.z;
+
+        if (Math.max(Math.abs(dx), Math.abs(dz)) <= MIN_GOAL_RING) {
+            return null;
+        }
+
+        // Move on the dominant axis so the target walks straight in rather than drifting diagonally across rooms
+        // that are already built.
+        if (Math.abs(dx) >= Math.abs(dz)) {
+            return new ChunkPos(from.x - Integer.signum(dx), from.z);
+        }
+
+        return new ChunkPos(from.x, from.z - Integer.signum(dz));
+    }
+
+    private static int rimMarginFor(String roomType) {
+        return roomType.contains("chamber_raid") ? RAID_PLACEMENT_RIM_MARGIN : 0;
     }
 
     private static boolean matchesType(PieceMatch match, String roomType) {
@@ -1440,6 +1550,26 @@ public final class HiveRouter {
                 frontier.remove(socket);
                 continue;
             }
+            // ⭐⭐ A DEAD END IS SPARE NURSERY SPACE. [stated] "if they didnt build all the eggcells they can turn
+            // one of the dead ends into an eggcell cant they?" - yes, and it is a straight swap because
+            // chamber_egg_1x1 has the SAME 1x1 footprint as the hallways that dead-end. A hive that finished
+            // "WITHOUT chamber_egg (3/5)" ran out of ROUTE, not out of room; this is the last chance to spend the
+            // leftover space on the shortfall instead of walling it off.
+            // ⚠ Recount every iteration - each success changes the answer, or one dead end would authorise many.
+            if (
+                countRoomsOfType(location, "chamber_egg") < HiveStructurePlanner.targetEggChambers(location)
+                    && attachEggChamberAt(level, registry, location, socket, center, currentTick)
+            ) {
+                Alien.LOGGER.info(
+                    "Hive {}: converted a dead end at {} into an egg chamber ({}/{}) instead of sealing it.",
+                    center,
+                    growthChunk(socket),
+                    countRoomsOfType(location, "chamber_egg"),
+                    HiveStructurePlanner.targetEggChambers(location)
+                );
+                continue; // socket consumed by the placer
+            }
+
             capDoorway(level, location, socket);
             frontier.remove(socket);
             sealed++;
@@ -1545,6 +1675,48 @@ public final class HiveRouter {
             // chamber's scourge doorway grew a SECOND raid chamber. Take the companion or take nothing; the loop
             // keeps walking, so the real chamber still gets built on the same pass.
             if (companion != null && !match.piece().id().getPath().contains(companion)) {
+                continue;
+            }
+            if (withinExtent(match, center) && place(level, location, match, socket, currentTick)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Attaches an EGG CHAMBER specifically, for the dead-end conversion above.
+     * <p>
+     * Same shape as {@link #attachAt} but the match loop is filtered to {@code chamber_egg_1x1} instead of running the
+     * ordinary weighted selection - a dead end that could take any room must not become a random one; the whole point
+     * is to spend it on the shortfall. There is no companion-room rule here because an egg chamber carries only
+     * ordinary hive doors.
+     * </p>
+     * <p>
+     * ⚠ The socket may simply not fit one (extent, occupancy, a door facing that no rotation satisfies). Returning
+     * false is normal and the caller falls straight through to capping, exactly as before.
+     * </p>
+     */
+    private static boolean attachEggChamberAt(
+        ServerLevel level,
+        HivePieceRegistry registry,
+        HiveLocation location,
+        FrontierSocket socket,
+        ChunkPos center,
+        long currentTick
+    ) {
+        var built = location.structurePieceByChunk().keySet();
+        Predicate<ChunkPos> chunkIsFree = c -> !built.contains(c);
+
+        for (
+            PieceMatch match : HivePieceMatcher.matchesFromRegistry(
+                socket,
+                registry,
+                chunkIsFree,
+                location.lineageVariantOrNull()
+            )
+        ) {
+            if (!match.piece().id().getPath().contains("chamber_egg")) {
                 continue;
             }
             if (withinExtent(match, center) && place(level, location, match, socket, currentTick)) {
@@ -1811,24 +1983,53 @@ public final class HiveRouter {
     }
 
     /** The door faces a placed 1x1 hallway actually has, read from the world (air at the 8x8 opening's centre). */
+    /**
+     * Which faces of this chunk already have an open doorway.
+     * <p>
+     * ⚠⚠ A FLOODED DOORWAY IS STILL A DOORWAY. This tested {@code isAir()}, and water is NOT air - so an exit that
+     * filled with water read as CLOSED forever. The router re-stamped the hallway to "carve" a door that was already
+     * there, the water flowed straight back in, and the next pass saw it closed again: an endless re-stamp of the same
+     * chunk, 45 times in one log at [-10, 2]. [stated] "the hive seems to not be able to replace a breach if waters
+     * there. they keep repairing the same spot over and over and not building."
+     * </p>
+     * <p>
+     * ⚠ AND THE LOOP BLOCKED EVERYTHING BEHIND IT. This pass returns true on a successful re-stamp, so the router spent
+     * every tick on the same doorway and never reached the stitching pass below - which is why the hive stopped
+     * BUILDING rather than merely wasting effort.
+     * </p>
+     * <p>
+     * ⚠ THE TEST IS NOW "CAN A XENOMORPH GET THROUGH", not "is it air": anything replaceable counts, which covers
+     * water, lava, and the resin web the hive puts over its own openings. Xenomorphs already walk through all three.
+     * </p>
+     */
     private static EnumSet<Direction> openDoorFaces(ServerLevel level, HiveLocation location, ChunkPos chunk) {
         var faces = EnumSet.noneOf(Direction.class);
         int y = location.hiveFloorY() + 2;
         int cx = chunk.getMinBlockX() + 8;
         int cz = chunk.getMinBlockZ() + 8;
-        if (level.getBlockState(new BlockPos(cx, y, chunk.getMinBlockZ())).isAir()) {
+        if (isDoorwayOpen(level, new BlockPos(cx, y, chunk.getMinBlockZ()))) {
             faces.add(Direction.NORTH);
         }
-        if (level.getBlockState(new BlockPos(cx, y, chunk.getMaxBlockZ())).isAir()) {
+        if (isDoorwayOpen(level, new BlockPos(cx, y, chunk.getMaxBlockZ()))) {
             faces.add(Direction.SOUTH);
         }
-        if (level.getBlockState(new BlockPos(chunk.getMinBlockX(), y, cz)).isAir()) {
+        if (isDoorwayOpen(level, new BlockPos(chunk.getMinBlockX(), y, cz))) {
             faces.add(Direction.WEST);
         }
-        if (level.getBlockState(new BlockPos(chunk.getMaxBlockX(), y, cz)).isAir()) {
+        if (isDoorwayOpen(level, new BlockPos(chunk.getMaxBlockX(), y, cz))) {
             faces.add(Direction.EAST);
         }
         return faces;
+    }
+
+    /**
+     * ⚠ Open means PASSABLE, not empty. Air, water, lava and resin web all count - a xenomorph walks through every one
+     * of them, so treating a flooded or webbed opening as solid rock is what created the re-stamp loop.
+     */
+    private static boolean isDoorwayOpen(ServerLevel level, BlockPos pos) {
+        var state = level.getBlockState(pos);
+
+        return state.isAir() || !state.getFluidState().isEmpty() || state.canBeReplaced();
     }
 
     /** Re-stamps {@code chunk} with the 1x1 hallway whose doors (under some rotation) equal {@code desired}. */

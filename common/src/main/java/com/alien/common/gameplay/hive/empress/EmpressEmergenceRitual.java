@@ -144,10 +144,14 @@ public final class EmpressEmergenceRitual {
             );
             lineage.setPendingEmpressSeatId(null);
             lineage.setEmpressId(null);
+            // Bench it. Without this the next scan re-elects the same seat immediately, because pickSeat only
+            // sees persisted data and cannot know she is inhibited, contained, or not yet founded.
+            EmpressCandidatePicker.benchSeat(location.id(), serverLevel.getGameTime());
             return;
         }
 
         materializeWaits.remove(lineageFactionId);
+        EmpressCandidatePicker.clearBench(location.id());
         start(queen, lineageFactionId, serverLevel.getGameTime());
     }
 

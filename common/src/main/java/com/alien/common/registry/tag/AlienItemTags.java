@@ -11,6 +11,9 @@ public class AlienItemTags {
 
     public static final TagKey<Item> ACID_IMMUNE = create("acid_immune");
 
+    /** Every strain's resin ball. Lets the field manual recipe accept any variant. */
+    public static final TagKey<Item> RESIN_BALLS = create("resin_balls");
+
     public static final TagKey<Item> CHITIN_ARMORS = create("chitin_armors");
 
     public static final TagKey<Item> FACEHUGGER_RESISTANT_HELMETS = create("facehugger_resistant_helmets");

@@ -2,6 +2,7 @@ package com.alien.fabric.data.tag;
 
 import com.alien.common.registry.init.block.AberrantAlienChitinBlocks;
 import com.alien.common.registry.init.block.AberrantAlienResinBlocks;
+import com.alien.common.registry.init.block.AlienBlocks;
 import com.alien.common.registry.init.block.AlienChitinBlocks;
 import com.alien.common.registry.init.block.AlienResinBlocks;
 import com.alien.common.registry.init.block.IrradiatedAlienChitinBlocks;
@@ -778,11 +779,26 @@ public class AlienBlockTagProvider extends FabricTagProvider.BlockTagProvider {
                 AlienResinBlocks.RESIN_WEB.get()
             );
 
+        // ⭐ What the hive salvages instead of deleting. See AlienBlockTags.HIVE_SALVAGE.
+        getOrCreateTagBuilder(AlienBlockTags.HIVE_SALVAGE)
+            // ⚠ OPTIONAL: c:ores is a convention tag supplied by the loader, not by us. addOptionalTag means a
+            // stripped-down instance without it loads instead of failing datapack validation.
+            .addOptionalTag(net.minecraft.resources.ResourceLocation.fromNamespaceAndPath("c", "ores"))
+            // The one thing no ore tag anywhere contains.
+            .add(Blocks.GILDED_BLACKSTONE);
+
         // Acid-immune blocks
         getOrCreateTagBuilder(AlienBlockTags.ACID_IMMUNE)
             .addOptionalTag(BLibBlockTags.SHOULD_NOT_BE_DESTROYED)
             .addTag(AlienBlockTags.CHITIN)
             .addTag(AlienBlockTags.RESIN)
+            // ⚠ THE CONTAINERS ARE LISTED EXPLICITLY, not picked up by the RESIN tag. They are a resin BLOCK by
+            // material but not a member of that tag - it is the plain building set - so relying on it would have
+            // left them dissolving in their own hive's blood. [stated] "acid proof and explosion proof."
+            .add(AlienBlocks.RESIN_CONTAINER.get())
+            .add(AlienBlocks.NETHER_RESIN_CONTAINER.get())
+            .add(AlienBlocks.ABERRANT_RESIN_CONTAINER.get())
+            .add(AlienBlocks.IRRADIATED_RESIN_CONTAINER.get())
             .add(Blocks.AIR)
             .add(Blocks.FIRE)
             .add(Blocks.SOUL_FIRE);
@@ -843,6 +859,15 @@ public class AlienBlockTagProvider extends FabricTagProvider.BlockTagProvider {
         getOrCreateTagBuilder(BlockTags.MINEABLE_WITH_PICKAXE)
             .addTag(AlienBlockTags.CHITIN)
             .add(
+                // ⚠⚠ WITHOUT THIS THE CONTAINERS ARE EFFECTIVELY UNBREAKABLE. The resin property base sets
+                // requiresCorrectToolForDrops(), so a block in NO mineable tag has no correct tool at all - every
+                // attempt takes the 100x wrong-tool penalty AND gets no speed bonus from a pickaxe, which at
+                // strength 6 reads as "cannot break it with any tool or punching". Every other resin block is in
+                // this tag; the containers were simply never added.
+                com.alien.common.registry.init.block.AlienBlocks.RESIN_CONTAINER.get(),
+                com.alien.common.registry.init.block.AlienBlocks.NETHER_RESIN_CONTAINER.get(),
+                com.alien.common.registry.init.block.AlienBlocks.ABERRANT_RESIN_CONTAINER.get(),
+                com.alien.common.registry.init.block.AlienBlocks.IRRADIATED_RESIN_CONTAINER.get(),
                 com.alien.common.registry.init.block.AlienBlocks.JELLY_VAT.get(),
                 AberrantAlienResinBlocks.ABERRANT_RESIN.get(),
                 AberrantAlienResinBlocks.ABERRANT_RESIN_SLAB.get(),

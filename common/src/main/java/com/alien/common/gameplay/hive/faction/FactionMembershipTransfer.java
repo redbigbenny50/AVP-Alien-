@@ -59,7 +59,39 @@ public final class FactionMembershipTransfer {
     public static void apply(Set<ResourceLocation> snapshot, Entity newEntity) {
         var factions = Alien.MOD.factions();
         var member = FactionMember.entity(newEntity);
+
+        // ⚠⚠⚠ LINEAGE FIRST, LOCATION SECOND. THE ORDER IS THE WHOLE FIX.
+        // <p>
+        // {@code LocationFactionData.onMemberAdded} evicts on the spot anyone who is not ALREADY in the location's
+        // parent lineage faction: it computes {@code notInLineage = !lineageFaction.membership().hasMember(member)}
+        // and calls {@code removeMember} immediately. So joining the LOCATION before the LINEAGE is self-defeating -
+        // the entity is added and thrown straight back out, and the lineage join that follows arrives too late to
+        // save it.
+        // </p>
+        // <p>
+        // ⚠ AND THE SNAPSHOT IS A {@link Set}, SO THE OLD SINGLE LOOP RAN IN HASH ORDER — effectively random per
+        // UUID. That is why this was intermittent rather than total, and why evolving a whole brood at once lit it
+        // up: every molt runs this, so with enough transitions a good fraction land in the losing order and lose
+        // their hive. The log signature is a run of
+        // "Hive: evicting <uuid> ... variantMatch=true, inParentLineage=false" - variant fine, lineage missing,
+        // which is precisely a location-before-lineage add and nothing else.
+        // </p>
+        addAll(snapshot, newEntity, factions, member, true);
+        addAll(snapshot, newEntity, factions, member, false);
+    }
+
+    private static void addAll(
+        Set<ResourceLocation> snapshot,
+        Entity newEntity,
+        com.blib.api.common.faction.v1.FactionManager factions,
+        FactionMember member,
+        boolean lineagePass
+    ) {
         for (var factionId : snapshot) {
+            if (LineageIds.isLineageId(factionId) != lineagePass) {
+                continue;
+            }
+
             var faction = factions.get(factionId);
             if (faction == null || faction.membership().hasMember(member)) {
                 continue;

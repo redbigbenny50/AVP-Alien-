@@ -114,11 +114,22 @@ public class CreateVentAction {
                 new net.minecraft.world.level.ChunkPos(ventSpot)
             );
         }
-        // FRONTIER is the overworld answer: a dug vent is an outpost in the rock by definition there. In a CEILED
-        // dimension the open shelves ARE the surface, so a vent dug onto a shelf is a front door and must count as
-        // SURFACE for the party system - classify by where it actually sits instead of hardcoding.
+        // ⭐⭐ CLASSIFY BY WHERE THE VENT ACTUALLY SITS, IN EVERY DIMENSION.
+        //
+        // ⚠⚠ THIS USED TO HARDCODE FRONTIER OUTSIDE CEILED DIMENSIONS, on the assumption that "a dug vent is an
+        // outpost in the rock by definition" in the overworld. That assumption is simply false: a xenomorph that
+        // digs UP and breaks out onto grass has made a front door, and branding it FRONTIER meant the party system
+        // could not see a vent the player was standing next to. [stated] "there was clearly a vent on the surface
+        // but it kept acting like it wasnt" - that is exactly this line, and the vent he could see was real.
+        //
+        // ⚠ CLASSIFICATION IS WRITE-ONCE AND PERSISTED, so a vent mislabelled here stayed wrong for the life of
+        // the world - which is why this looked like a lookup bug rather than a labelling one.
+        //
+        // `classifyUntagged` already answers correctly for every dimension: STRUCTURE if it is inside the hive's
+        // own footprint, SURFACE if `isNearSurface` says so (which resolves shelf floors in ceiled dimensions and
+        // the heightmap elsewhere), FRONTIER otherwise. A deep tunnel vent still comes out FRONTIER, as it should.
         var kind = VentKind.FRONTIER;
-        if (xenomorph.level().dimensionType().hasCeiling() && location != null) {
+        if (location != null) {
             kind = com.alien.common.gameplay.hive.vent.HiveVents.classifyUntagged(
                 xenomorph.level(),
                 location,
@@ -129,7 +140,8 @@ public class CreateVentAction {
         VentPlacement.place(
             xenomorph.level(),
             ventSpot,
-            AlienVariantTypes.getFor(xenomorph),
+            // The vent belongs to the HIVE, so it is stamped in the hive's strain, not the digger's.
+            AlienVariantTypes.getForBuild(xenomorph, location),
             kind,
             location
         );
@@ -139,6 +151,38 @@ public class CreateVentAction {
      * An open cell that rests against a solid face, sits in real open space, is reachable, and is not right on top of a
      * vent the hive already has.
      */
+    /**
+     * ⚠⚠ A HALLWAY IS NOT A CAVE MOUTH. [stated] "xenos are making vents in the hallways and leaving behind webs. xenos
+     * shouldnt be making vents in the hive".
+     * <p>
+     * Every other filter in {@link #findVentSpot} passes happily INSIDE the hive: a corridor cell is open, it rests on
+     * a solid resin face, and a 1x1 hallway easily clears {@link #MIN_OPEN_NEIGHBOURS} because the corridor runs open
+     * along its length. So a drone standing in its own hallway would place a frontier vent right there and web every
+     * face of it - which is the litter the testers are seeing.
+     * </p>
+     * <p>
+     * The class doc has always said this action builds frontier vents "out in the rock" and that the hive's internal
+     * ducts are STRUCTURE vents shipped with the templates. The intent was written down; only the test was missing.
+     * This is the same structure-chunk + slab test {@code HiveVents.classifyUntagged} already uses to LABEL a vent
+     * STRUCTURE - now used to REFUSE the spot instead of mislabelling it after the fact.
+     * </p>
+     * <p>
+     * ⚠ Chunk membership ALONE is not enough: a hive's structure chunks extend from its floor to its ceiling only, and
+     * a genuine cave mouth can sit directly under or over the built slab in the same chunk. {@code withinSlab} is what
+     * keeps those legal.
+     * </p>
+     */
+    private static boolean isInsideBuiltStructure(Xenomorph xenomorph, BlockPos pos) {
+        var location = HiveLocationRegistry.INSTANCE.getByChunk(
+            xenomorph.level().dimension(),
+            new net.minecraft.world.level.ChunkPos(pos)
+        );
+
+        return location != null
+            && location.structurePieceByChunk().containsKey(new net.minecraft.world.level.ChunkPos(pos))
+            && location.withinSlab(pos.getY());
+    }
+
     private static @Nullable BlockPos findVentSpot(Xenomorph xenomorph) {
         var level = xenomorph.level();
         var origin = xenomorph.blockPosition();
@@ -165,6 +209,9 @@ public class CreateVentAction {
             }
             if (hasVentNearby(xenomorph, pos)) {
                 continue; // the hive already has a mouth here
+            }
+            if (isInsideBuiltStructure(xenomorph, pos)) {
+                continue; // a corridor is not a cave mouth - see below
             }
 
             var distance = pos.distSqr(origin);

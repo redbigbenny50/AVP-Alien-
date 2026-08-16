@@ -90,6 +90,9 @@ public final class XenomorphTargetSensors {
      * <p>
      * [Flag for teammate review: aggression/threat targeting flow.]
      */
+    /** Matches AlienPredicates' own RETALIATION_GRUDGE_TICKS - one definition of "just hurt me", two enforcers. */
+    private static final int LEASH_RETALIATION_TICKS = 200;
+
     private static void applyHiveWorkerLeash(Xenomorph xenomorph, List<LivingEntity> targets) {
         // ROYALS ARE NOT WORKERS. Matched on the QUEENS tag rather than `instanceof Queen`, because the EMPRESS
         // extends Xenomorph and NOT Queen - so she fell through this guard and got leashed like a drone.
@@ -118,7 +121,35 @@ public final class XenomorphTargetSensors {
             return;
         }
         var structureChunks = location.structurePieceByChunk();
-        targets.removeIf(target -> !structureChunks.containsKey(new ChunkPos(target.blockPosition())));
+
+        // THE LEASH IS ABOUT PREY, NOT ABOUT DEFENCE.
+        //
+        // Two things must survive it, or a worker standing on his own hive's ground is pacified in a fight he
+        // did not start:
+        //
+        // 1. A RIVAL ALIEN. Surface parties claim chunks as they go ("surface party opportunistic claim" fires
+        // all over the log), so a battle between two strains happens ON claimed territory - far from either
+        // hive STRUCTURE. Every rival was being stripped from the defender's list the moment he stood there.
+        // [stated] "the normal xeno reinforcments wouldnt fight the nether xenos".
+        // 2. ANYTHING THAT JUST HURT HIM. Retaliation already overrides every rule in AlienPredicates; it must
+        // override this one too, or the override is a lie for any leashed caste.
+        //
+        // This also explains why the fight PETERED OUT rather than never starting: the original combatants were
+        // party members and exempt, and the log shows "surface spawn party resolved at dawn". The instant a
+        // party resolved, its members lost partyMembership, fell into this leash and went quiet mid-battle.
+        // [stated] "after a while the pure xenos stopped fighting back".
+        targets.removeIf(target -> {
+            if (target instanceof Alien rival && AlienPredicates.areAliensEnemies(xenomorph, rival)) {
+                return false;
+            }
+            if (
+                xenomorph.getLastHurtByMob() == target
+                    && xenomorph.tickCount - xenomorph.getLastHurtByMobTimestamp() < LEASH_RETALIATION_TICKS
+            ) {
+                return false;
+            }
+            return !structureChunks.containsKey(new ChunkPos(target.blockPosition()));
+        });
     }
 
     // ===== Target give-up (anti wall-shove / anti kite) ==============================================================
@@ -217,24 +248,12 @@ public final class XenomorphTargetSensors {
         if (!com.alien.common.gameplay.hive.party.EggDutyGuard.isOnEggDuty(xenomorph)) {
             return;
         }
-        int hadTargets = targets.size();
-        var hadTarget = xenomorph.getTarget();
         targets.clear();
         if (xenomorph.getTarget() != null) {
             xenomorph.setTarget(null);
         }
-        // [DIAGNOSTIC] Sensors run every tick regardless of what the planner picks, so this ALWAYS fires for a
-        // frozen hauler. It proves the two DELIVER_EGG preconditions: carrying an egg, and no attack target.
-        if (xenomorph.tickCount % 100 == 0) {
-            com.alien.Alien.LOGGER.info(
-                "[eggdebug] carrier sensor: {} at {} eggDuty=true targetsCleared={} hadTarget={} nowTarget={}",
-                xenomorph.getType().getDescriptionId(),
-                xenomorph.blockPosition(),
-                hadTargets,
-                hadTarget == null ? "none" : hadTarget.getType().getDescriptionId(),
-                xenomorph.getTarget() == null ? "none" : "STILL SET"
-            );
-        }
+        // The [eggdebug] line that used to sit here is gone - it was armed for the frozen-hauler investigation, that
+        // bug is long fixed, and firing per carrier every 5 seconds it was the loudest thing in every log.
     }
 
     private static void applyTargetGiveUp(Xenomorph xenomorph, List<LivingEntity> targets) {

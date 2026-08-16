@@ -1,0 +1,16 @@
+{
+  "entity": "mca:male_villager",
+  "size": [
+    8.0,
+    8.0,
+    8.0
+  ],
+  "pivot": [
+    0.0,
+    24.0,
+    0.0
+  ],
+  "vertical_offset": -10.0,
+  "face_offset": 4.0,
+  "reference_height": 1.8
+}

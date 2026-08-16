@@ -10,6 +10,7 @@ import com.alien.common.gameplay.hive.location.HiveLocationRegistry;
 import com.alien.common.model.lifecycle.growth.GrowthStage;
 import com.alien.common.registry.GrowthStageRegistry;
 import com.alien.common.registry.tag.AlienEntityTypeTags;
+import com.alien.common.util.AlienPredicates;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.tags.TagKey;
@@ -153,6 +154,13 @@ public final class QueenlessMaturationTask {
         }
         // Already a queen / empress — nothing to mature. (EmpressEmergenceTask handles empress promotion if 2+
         // locations.)
+        // ⚠ A CHILD CANNOT BE PROMOTED, AND MUST NOT BLOCK THE PROMOTION. An adolescent leader would walk its growth
+        // chain looking for the queen track, find only drone/runner/spitter, and quietly return - leaving a queenless
+        // hive with nothing maturing. Skipping it lets the task look past a juvenile leader instead of stalling on one.
+        if (AlienPredicates.isJuvenile(entity)) {
+            return;
+        }
+
         if (entity.getType().is(AlienEntityTypeTags.QUEENS) || entity.getType().is(AlienEntityTypeTags.EMPRESSES)) {
             return;
         }

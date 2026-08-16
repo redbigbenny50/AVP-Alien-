@@ -19,6 +19,17 @@ public class CocoonAnimationStateTracker<T extends Xenomorph> {
 
     private static final String COCOON_LOOP_ANIMATION_NAME = "molting";
 
+    /**
+     * The shared in-cocoon loop name, for castes that need a CUSTOM emerge but the ORDINARY loop.
+     * <p>
+     * Exposed so such a caste can pass it explicitly instead of repeating the literal - the spitter needs the
+     * emerge-oriented constructor (it has no enter clip) while its art ships no loop of its own.
+     * </p>
+     */
+    public static String defaultLoopAnimationName() {
+        return COCOON_LOOP_ANIMATION_NAME;
+    }
+
     private static final int TRANSITION_ANIMATION_TICKS = 20;
 
     /**
@@ -43,6 +54,20 @@ public class CocoonAnimationStateTracker<T extends Xenomorph> {
      * explicit rather than assumed.
      */
     private final boolean clipIsEnterOriented;
+
+    /**
+     * ⭐⭐ A SEPARATELY AUTHORED ENTER CLIP, when the caste ships BOTH halves. Null for everyone else.
+     * <p>
+     * The two older constructors assume ONE authored clip and produce the other half by reversing it - fine when a
+     * caste ships only an enter (most) or only an emerge (queen, spitter). The praetorian is the first to ship
+     * {@code molt.enter}, {@code molt.loop} AND {@code molt.emerge}, and with only those constructors one of its two
+     * authored clips would have been thrown away and replaced by a reversal of the other.
+     * </p>
+     * <p>
+     * When this is set BOTH clips play FORWARDS and {@code clipIsEnterOriented} stops mattering.
+     * </p>
+     */
+    private final Function<T, String> enterAnimationSelector;
 
     private int previousAnimationId = Integer.MIN_VALUE;
 
@@ -71,9 +96,31 @@ public class CocoonAnimationStateTracker<T extends Xenomorph> {
         Function<T, String> emergeAnimationSelector,
         boolean clipIsEnterOriented
     ) {
+        this(loopAnimationSelector, emergeAnimationSelector, clipIsEnterOriented, null);
+    }
+
+    /**
+     * BOTH halves authored - no reversal anywhere. Pass the enter clip as well and each plays forwards in its own
+     * state. See {@link #enterAnimationSelector}.
+     */
+    public CocoonAnimationStateTracker(
+        Function<T, String> loopAnimationSelector,
+        Function<T, String> emergeAnimationSelector,
+        Function<T, String> enterAnimationSelector
+    ) {
+        this(loopAnimationSelector, emergeAnimationSelector, true, enterAnimationSelector);
+    }
+
+    private CocoonAnimationStateTracker(
+        Function<T, String> loopAnimationSelector,
+        Function<T, String> emergeAnimationSelector,
+        boolean clipIsEnterOriented,
+        Function<T, String> enterAnimationSelector
+    ) {
         this.loopAnimationSelector = loopAnimationSelector;
         this.emergeAnimationSelector = emergeAnimationSelector;
         this.clipIsEnterOriented = clipIsEnterOriented;
+        this.enterAnimationSelector = enterAnimationSelector;
     }
 
     public boolean run(T xenomorph) {
@@ -137,6 +184,15 @@ public class CocoonAnimationStateTracker<T extends Xenomorph> {
 
     /** Cocooning IN: forwards for an enter-authored clip, backwards for an emerge-authored one. */
     private void playEnter(T xenomorph) {
+        // Both halves authored: play the real enter clip forwards and never reverse anything.
+        if (enterAnimationSelector != null) {
+            AzCommand.<Xenomorph>replay()
+                .play(AzAlienAnimationUtil.BODY, enterAnimationSelector.apply(xenomorph), AzPlayBehaviors.PLAY_ONCE)
+                .build()
+                .dispatchForEntity(xenomorph);
+            return;
+        }
+
         AzCommand.<Xenomorph>replay()
             .play(AzAlienAnimationUtil.BODY, emergeAnimationSelector.apply(xenomorph), AzPlayBehaviors.PLAY_ONCE)
             .setReverseAnimation(AzAlienAnimationUtil.BODY, !clipIsEnterOriented)
@@ -155,7 +211,7 @@ public class CocoonAnimationStateTracker<T extends Xenomorph> {
     private void playEmerge(T xenomorph) {
         AzCommand.<Xenomorph>replay()
             .play(AzAlienAnimationUtil.BODY, emergeAnimationSelector.apply(xenomorph), AzPlayBehaviors.PLAY_ONCE)
-            .setReverseAnimation(AzAlienAnimationUtil.BODY, clipIsEnterOriented)
+            .setReverseAnimation(AzAlienAnimationUtil.BODY, enterAnimationSelector == null && clipIsEnterOriented)
             .build()
             .dispatchForEntity(xenomorph);
     }

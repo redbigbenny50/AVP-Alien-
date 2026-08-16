@@ -16,6 +16,8 @@ import net.minecraft.core.Direction;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.Level;
+import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.gameevent.DynamicGameEventListener;
 import net.minecraft.world.level.gameevent.EntityPositionSource;
 import net.minecraft.world.level.gameevent.GameEventListener;
@@ -38,6 +40,19 @@ public class ResinManager implements GameEventListener.Provider<ResinSpreadListe
     private static final int RESIN_NODE_SEARCH_RADIUS = 8;
 
     private static final int RESIN_SPREAD_TARGET_SEARCH_RADIUS = 6;
+
+    /**
+     * ⭐ HOW FAR A XENO REACHES TO RE-LAY FOREIGN RESIN, and how much of it per spread.
+     * <p>
+     * [stated] "the irradiated xenos are supposed to replace the old resin with their own like how it gets filled in
+     * the first place. so they walk the hive filling the previous resin with their own." Deliberately a SMALL bite on
+     * the ordinary spread cadence rather than a sweep - a converted hive should visibly turn over as its people move
+     * through it, which is also what keeps a big fortress off the server tick.
+     * </p>
+     */
+    private static final int FOREIGN_RESIN_SEARCH_RADIUS = 4;
+
+    private static final int FOREIGN_RESIN_CONVERSIONS_PER_SPREAD = 6;
 
     private static final int RESIN_SPREAD_TARGET_VERTICAL_SEARCH_RANGE = 3;
 
@@ -100,7 +115,8 @@ public class ResinManager implements GameEventListener.Provider<ResinSpreadListe
             return false;
         }
 
-        var alienVariantType = AlienVariantTypes.getFor(alien);
+        // Build in the HIVE'S strain where there is one - see AlienVariantTypes.getForBuild.
+        var alienVariantType = AlienVariantTypes.getForBuild(alien, currentLocation());
 
         if (!canAttemptResinSpreadAtAlienPosition() || !hasResinSpreadOpportunity(alienVariantType)) {
             ticksUntilSpreadOpportunityCheck = SPREAD_OPPORTUNITY_RECHECK_TICKS;
@@ -112,7 +128,7 @@ public class ResinManager implements GameEventListener.Provider<ResinSpreadListe
 
     public void spreadResin() {
         var location = currentLocation();
-        var alienVariantType = AlienVariantTypes.getFor(alien);
+        var alienVariantType = AlienVariantTypes.getForBuild(alien, location);
 
         if (
             !canPaySpreadCost(location)
@@ -122,6 +138,10 @@ public class ResinManager implements GameEventListener.Provider<ResinSpreadListe
             ticksUntilSpreadOpportunityCheck = SPREAD_OPPORTUNITY_RECHECK_TICKS;
             return;
         }
+
+        // ⭐ RE-LAY ANY FOREIGN RESIN UNDERFOOT FIRST. This is what turns a converted hive over: its people walk it
+        // and fill the old strain in with their own, a few blocks at a time, on the ordinary spread cadence.
+        convertForeignResin(alien.level(), alienVariantType);
 
         // Set the charge so the nearest resin node listener can consume it.
         resinData.setResin(SPREAD_CHARGE);
@@ -200,7 +220,10 @@ public class ResinManager implements GameEventListener.Provider<ResinSpreadListe
     private boolean hasResinSpreadOpportunity(AlienVariantType alienVariantType) {
         var level = alien.level();
 
-        return findSuitableResinNodeBlockPos(level, alienVariantType).isSome()
+        // ⚠ FOREIGN RESIN IS AN OPPORTUNITY IN ITS OWN RIGHT. A converted hive is already fully built, so there is
+        // no air left to spread into and neither clause below would ever fire - the re-laying would never start.
+        return !findForeignResin(level, alienVariantType).isEmpty()
+            || findSuitableResinNodeBlockPos(level, alienVariantType).isSome()
             || (hasNearbyResinNode(level, alienVariantType) && hasNearbyResinSpreadTarget(level, alienVariantType));
     }
 
@@ -278,6 +301,110 @@ public class ResinManager implements GameEventListener.Provider<ResinSpreadListe
 
     private HiveLocation currentLocation() {
         return HiveLocationSpawnGate.locationContaining(alien.level(), alien.blockPosition());
+    }
+
+    /**
+     * Every nearby resin block belonging to a DIFFERENT strain.
+     * <p>
+     * ⚠ Identified by asking {@code AlienVariantTypes} what strain the BLOCK belongs to, not by testing against a list
+     * - so a strain added later is picked up with no change here.
+     * </p>
+     */
+    private java.util.List<BlockPos> findForeignResin(Level level, AlienVariantType alienVariantType) {
+        var found = new java.util.ArrayList<BlockPos>();
+        var origin = alien.blockPosition();
+        var mutablePos = new BlockPos.MutableBlockPos();
+
+        for (var dx = -FOREIGN_RESIN_SEARCH_RADIUS; dx <= FOREIGN_RESIN_SEARCH_RADIUS; dx++) {
+            for (var dy = -FOREIGN_RESIN_SEARCH_RADIUS; dy <= FOREIGN_RESIN_SEARCH_RADIUS; dy++) {
+                for (var dz = -FOREIGN_RESIN_SEARCH_RADIUS; dz <= FOREIGN_RESIN_SEARCH_RADIUS; dz++) {
+                    mutablePos.set(origin.getX() + dx, origin.getY() + dy, origin.getZ() + dz);
+
+                    var state = level.getBlockState(mutablePos);
+                    var owner = AlienVariantTypes.getForOrNull(state);
+
+                    if (owner == null || owner.variant() == alienVariantType.variant()) {
+                        continue;
+                    }
+
+                    found.add(mutablePos.immutable());
+
+                    if (found.size() >= FOREIGN_RESIN_CONVERSIONS_PER_SPREAD) {
+                        return found;
+                    }
+                }
+            }
+        }
+
+        return found;
+    }
+
+    /** Swaps foreign resin for this strain's equivalent, preserving the blockstate and a node's stored charge. */
+    private void convertForeignResin(Level level, AlienVariantType alienVariantType) {
+        for (var pos : findForeignResin(level, alienVariantType)) {
+            var oldState = level.getBlockState(pos);
+            var owner = AlienVariantTypes.getForOrNull(oldState);
+
+            if (owner == null) {
+                continue; // changed under us between the scan and here
+            }
+
+            var replacement = equivalentBlock(oldState, owner, alienVariantType);
+
+            if (replacement == null) {
+                continue;
+            }
+
+            // ⚠ withPropertiesOf CARRIES THE SHARED BLOCKSTATE OVER - a vein's faces, a vent's facing, waterlogging.
+            // Placing a default state instead would snap every vein flat and re-aim every vent.
+            var newState = replacement.withPropertiesOf(oldState);
+
+            // ⚠ A NODE KEEPS ITS SPREAD CURSORS IN A BLOCK ENTITY, and replacing the block destroys them. Both
+            // strains use the same ResinNodeBlockEntity, so its saved tag carries across verbatim - without this
+            // step, converting a hive would silently wipe every spreader in it and the infestation would stall.
+            var savedNode = savedNodeData(level, pos);
+
+            level.setBlockAndUpdate(pos, newState);
+
+            if (savedNode != null && level.getBlockEntity(pos) instanceof ResinNodeBlockEntity converted) {
+                converted.loadWithComponents(savedNode, level.registryAccess());
+                converted.setChanged();
+            }
+        }
+    }
+
+    /** The same KIND of block in this strain: resin for resin, vein for vein, vent for vent, and so on. */
+    private static @Nullable Block equivalentBlock(
+        BlockState oldState,
+        AlienVariantType owner,
+        AlienVariantType target
+    ) {
+        if (oldState.is(owner.resinNode().get())) {
+            return target.resinNode().get();
+        }
+        if (oldState.is(owner.resinVein().get())) {
+            return target.resinVein().get();
+        }
+        if (oldState.is(owner.resinVent().get())) {
+            return target.resinVent().get();
+        }
+        if (oldState.is(owner.resinWeb().get())) {
+            return target.resinWeb().get();
+        }
+        if (oldState.is(owner.resin().get())) {
+            return target.resin().get();
+        }
+
+        return null; // some other block of theirs we have no counterpart for - leave it be
+    }
+
+    /** A node's saved tag, so its cursors survive the block swap. Null for anything that is not a node. */
+    private static @Nullable net.minecraft.nbt.CompoundTag savedNodeData(Level level, BlockPos pos) {
+        if (!(level.getBlockEntity(pos) instanceof ResinNodeBlockEntity node)) {
+            return null;
+        }
+
+        return node.saveWithoutMetadata(level.registryAccess());
     }
 
     private void seedPlacedResinNode(Level level, BlockPos resinNodePos, int totalCharge) {

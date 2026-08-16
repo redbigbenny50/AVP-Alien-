@@ -66,6 +66,11 @@ public class AlienEntityTypeTagProvider extends FabricTagProvider.EntityTypeTagP
         addWarriors();
         addXenomorphs();
 
+        // ⚠⚠ NOT INSIDE THE AVPHuman GUARD BELOW. juvenile_prey is a list of VANILLA mobs (chicken, fox,
+        // axolotl...) and has nothing to do with avp_human; putting it there meant it only generated when that mod
+        // happened to be loaded during datagen, which is why two runs produced no file.
+        addJuvenilePrey();
+
         // Compatibility
         addCompatibilityTags();
 
@@ -280,7 +285,54 @@ public class AlienEntityTypeTagProvider extends FabricTagProvider.EntityTypeTagP
                 EntityType.VILLAGER,
                 EntityType.WANDERING_TRADER,
                 EntityType.WITCH
-            );
+            )
+            // ⭐⭐ CROSS-MOD HOSTS, BUILT IN so the datapacks are not needed. ⚠ RE-APPLIED Aug 14 after an edit made
+            // in another chat overwrote this file - the generated tag JSON still held them, so the loss was silent
+            // until the next runDatagen would have deleted them.
+            // ⚠ addOptional: an id that does not resolve is DROPPED at load, never a validation failure.
+            .addOptional(ResourceLocation.fromNamespaceAndPath("minecolonies", "citizen"))
+            .addOptional(ResourceLocation.fromNamespaceAndPath("minecolonies", "visitor"))
+            .addOptional(ResourceLocation.fromNamespaceAndPath("minecolonies", "mercenary"))
+            .addOptional(ResourceLocation.fromNamespaceAndPath("minecolonies", "barbarian"))
+            .addOptional(ResourceLocation.fromNamespaceAndPath("minecolonies", "archerbarbarian"))
+            .addOptional(ResourceLocation.fromNamespaceAndPath("minecolonies", "chiefbarbarian"))
+            .addOptional(ResourceLocation.fromNamespaceAndPath("minecolonies", "pirate"))
+            .addOptional(ResourceLocation.fromNamespaceAndPath("minecolonies", "archerpirate"))
+            .addOptional(ResourceLocation.fromNamespaceAndPath("minecolonies", "chiefpirate"))
+            .addOptional(ResourceLocation.fromNamespaceAndPath("minecolonies", "drownedpirate"))
+            .addOptional(ResourceLocation.fromNamespaceAndPath("minecolonies", "drownedarcherpirate"))
+            .addOptional(ResourceLocation.fromNamespaceAndPath("minecolonies", "drownedchiefpirate"))
+            .addOptional(ResourceLocation.fromNamespaceAndPath("minecolonies", "mummy"))
+            .addOptional(ResourceLocation.fromNamespaceAndPath("minecolonies", "archermummy"))
+            .addOptional(ResourceLocation.fromNamespaceAndPath("minecolonies", "pharao"))
+            .addOptional(ResourceLocation.fromNamespaceAndPath("minecolonies", "amazon"))
+            .addOptional(ResourceLocation.fromNamespaceAndPath("minecolonies", "amazonspearman"))
+            .addOptional(ResourceLocation.fromNamespaceAndPath("minecolonies", "amazonchief"))
+            .addOptional(ResourceLocation.fromNamespaceAndPath("minecolonies", "shieldmaiden"))
+            .addOptional(ResourceLocation.fromNamespaceAndPath("minecolonies", "norsemenarcher"))
+            .addOptional(ResourceLocation.fromNamespaceAndPath("minecolonies", "norsemenchief"))
+            .addOptional(ResourceLocation.fromNamespaceAndPath("minecolonies", "campbarbarian"))
+            .addOptional(ResourceLocation.fromNamespaceAndPath("minecolonies", "camparcherbarbarian"))
+            .addOptional(ResourceLocation.fromNamespaceAndPath("minecolonies", "campchiefbarbarian"))
+            .addOptional(ResourceLocation.fromNamespaceAndPath("minecolonies", "camppirate"))
+            .addOptional(ResourceLocation.fromNamespaceAndPath("minecolonies", "camparcherpirate"))
+            .addOptional(ResourceLocation.fromNamespaceAndPath("minecolonies", "campchiefpirate"))
+            .addOptional(ResourceLocation.fromNamespaceAndPath("minecolonies", "campdrownedpirate"))
+            .addOptional(ResourceLocation.fromNamespaceAndPath("minecolonies", "campdrownedarcherpirate"))
+            .addOptional(ResourceLocation.fromNamespaceAndPath("minecolonies", "campdrownedchiefpirate"))
+            .addOptional(ResourceLocation.fromNamespaceAndPath("minecolonies", "campmummy"))
+            .addOptional(ResourceLocation.fromNamespaceAndPath("minecolonies", "camparchermummy"))
+            .addOptional(ResourceLocation.fromNamespaceAndPath("minecolonies", "camppharao"))
+            .addOptional(ResourceLocation.fromNamespaceAndPath("minecolonies", "campamazon"))
+            .addOptional(ResourceLocation.fromNamespaceAndPath("minecolonies", "campamazonspearman"))
+            .addOptional(ResourceLocation.fromNamespaceAndPath("minecolonies", "campamazonchief"))
+            .addOptional(ResourceLocation.fromNamespaceAndPath("minecolonies", "campshieldmaiden"))
+            .addOptional(ResourceLocation.fromNamespaceAndPath("minecolonies", "campnorsemenarcher"))
+            .addOptional(ResourceLocation.fromNamespaceAndPath("minecolonies", "campnorsemenchief"))
+            // Stellaris.
+            .addOptional(ResourceLocation.fromNamespaceAndPath("stellaris", "alien"))
+            .addOptional(ResourceLocation.fromNamespaceAndPath("stellaris", "pygro"))
+            .addOptional(ResourceLocation.fromNamespaceAndPath("stellaris", "pygro_brute"));
     }
 
     private void addIgnoredByXenomorphs() {
@@ -372,6 +424,11 @@ public class AlienEntityTypeTagProvider extends FabricTagProvider.EntityTypeTagP
         getOrCreateTagBuilder(AlienEntityTypeTags.XENOMORPH_THREAT_3_HIGH_DANGER)
             .add(EntityType.PLAYER)
             .addOptional(ResourceLocation.fromNamespaceAndPath("avp_human", "marine"))
+            // ⚠ A turret is not a monster and was in no tier at all, so it fell through to the untagged catch-all -
+            // which is LOW DANGER, and low danger is only hunted when the hive is short on biomass or the alien is in
+            // a hunting party. Everywhere else the ONLY route to it was the retaliation override, i.e. after it had
+            // already opened fire. That is the delay: aliens were waiting to be shot before they would answer.
+            .addOptional(ResourceLocation.fromNamespaceAndPath("avp_human", "sentry_turret"))
             .addOptional(ResourceLocation.fromNamespaceAndPath("avp_predator", "predator"))
             .addOptional(ResourceLocation.fromNamespaceAndPath("avp_predator", "yautja"))
             .addOptionalTag(ResourceLocation.fromNamespaceAndPath("avp_predator", "predators"));
@@ -648,7 +705,39 @@ public class AlienEntityTypeTagProvider extends FabricTagProvider.EntityTypeTagP
                 EntityType.SHEEP,
                 EntityType.SNIFFER,
                 EntityType.WOLF
-            );
+            )
+            // ⭐⭐ THE MARINE DOG. [stated] "the marine dog doesnt seem to be a viable host or at least its not targeted
+            // as a host and hugged. i see it just standing in the host room."
+            // <p>
+            // It was in NEITHER hosts NOR runner_hosts, so facehuggers could not see it at all - the same shape as the
+            // sentry-turret threat-tier miss: <b>untagged is not neutral, it is invisible.</b> ⚠ minecraft:wolf being
+            // listed here does NOT cover it - avp_human:marine_dog is its own entity type, not a wolf variant.
+            // </p>
+            // <p>
+            // ⚠ RUNNER_HOSTS, NOT HOSTS - a quadruped bursts a runner, which is also what the film's dog produced.
+            // addOptional needs no mod-loaded gate, exactly as the marine and sentry_turret entries rely on.
+            // </p>
+            .addOptional(ResourceLocation.fromNamespaceAndPath("avp_human", "marine_dog"))
+            // ⭐ CROSS-MOD RUNNER HOSTS - four-legged fauna, same addOptional safety.
+            .addOptional(ResourceLocation.fromNamespaceAndPath("naturalist", "alligator"))
+            .addOptional(ResourceLocation.fromNamespaceAndPath("naturalist", "bear"))
+            .addOptional(ResourceLocation.fromNamespaceAndPath("naturalist", "boar"))
+            .addOptional(ResourceLocation.fromNamespaceAndPath("naturalist", "deer"))
+            .addOptional(ResourceLocation.fromNamespaceAndPath("naturalist", "elephant"))
+            .addOptional(ResourceLocation.fromNamespaceAndPath("naturalist", "giraffe"))
+            .addOptional(ResourceLocation.fromNamespaceAndPath("naturalist", "hippo"))
+            .addOptional(ResourceLocation.fromNamespaceAndPath("naturalist", "lion"))
+            .addOptional(ResourceLocation.fromNamespaceAndPath("naturalist", "rhino"))
+            .addOptional(ResourceLocation.fromNamespaceAndPath("naturalist", "tortoise"))
+            .addOptional(ResourceLocation.fromNamespaceAndPath("naturalist", "zebra"))
+            .addOptional(ResourceLocation.fromNamespaceAndPath("naturalist", "black_bear"))
+            .addOptional(ResourceLocation.fromNamespaceAndPath("naturalist", "capybara"))
+            .addOptional(ResourceLocation.fromNamespaceAndPath("naturalist", "komodo_dragon"))
+            .addOptional(ResourceLocation.fromNamespaceAndPath("naturalist", "tiger"))
+            .addOptional(ResourceLocation.fromNamespaceAndPath("naturalist", "mammoth"))
+            // Stellaris.
+            .addOptional(ResourceLocation.fromNamespaceAndPath("stellaris", "martian_raptor"))
+            .addOptional(ResourceLocation.fromNamespaceAndPath("stellaris", "mogler"));
     }
 
     private void addRunners() {
@@ -743,6 +832,38 @@ public class AlienEntityTypeTagProvider extends FabricTagProvider.EntityTypeTagP
      * ROYAL_XENOMORPHS and the predalien tags leaked six aberrants straight back in, because those are CASTE tags that
      * span every strain.
      */
+    /**
+     * ⭐ THE JUVENILE MENU. [stated] "chickens, cats, axolotls, baby animals, a fox is the largest thing they would
+     * probably try to eat. everything else they would run from."
+     * <p>
+     * ⚠ THE FOX IS THE CEILING AND THE CEILING IS ABOUT SIZE. Nothing is here for being easy: no baby zombies, no
+     * wolves, no hoglin calves. Baby animals are NOT listed - {@code JuvenilePrey} handles them as a rule, so a calf is
+     * prey without the cow it becomes being prey.
+     * </p>
+     * <p>
+     * ⚠ NO {@code addOptionalTag(EntityTypeTags.*)} SHORTCUT EXISTS FOR THIS. Vanilla has no "small passive" tag, and
+     * the nearest thing ({@code EntityTypeTags.AQUATIC}) would hand a land-bound child a menu of things it cannot
+     * reach. Explicit list, deliberately.
+     * </p>
+     */
+    private void addJuvenilePrey() {
+        getOrCreateTagBuilder(AlienEntityTypeTags.JUVENILE_PREY)
+            .add(
+                EntityType.AXOLOTL,
+                EntityType.BAT,
+                EntityType.CAT,
+                EntityType.CHICKEN,
+                EntityType.COD,
+                EntityType.FOX,
+                EntityType.FROG,
+                EntityType.OCELOT,
+                EntityType.PARROT,
+                EntityType.RABBIT,
+                EntityType.SALMON,
+                EntityType.TROPICAL_FISH
+            );
+    }
+
     private void addRadiationResistant() {
         getOrCreateTagBuilder(HumanEntityTypeTags.RADIATION_RESISTANT)
             .addTag(AlienEntityTypeTags.NORMAL_ALIENS)

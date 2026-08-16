@@ -27,6 +27,25 @@ public sealed interface GeneManagerProxy {
         }
     }
 
+    /**
+     * ⚠ TEMPORARY DIAGNOSTIC — remove once the ovomorph royal-promotion gene report is settled.
+     * <p>
+     * Returns "active=N dormant=M" for logging, or "avp_human-absent" when the proxy is EMPTY. Reads
+     * {@code GeneMap.getBackingMap()} on both maps, which is the same storage {@code GeneContainer.transfer} moves, so
+     * a before/after pair around a transfer says exactly whether the copy happened.
+     * </p>
+     */
+    default String describeGeneCounts() {
+        return switch (this) {
+            case EMPTY ignored -> "avp_human-absent";
+            case Wrapper wrapper -> {
+                var container = wrapper.geneManager().getGeneContainer();
+                yield "active=" + container.getActiveGeneMap().getBackingMap().size()
+                    + " dormant=" + container.getDormantGeneMap().getBackingMap().size();
+            }
+        };
+    }
+
     default void transfer(GeneManagerProxy other, boolean activateDormantGenes) {
         transfer(other.getGeneContainer(), activateDormantGenes);
     }

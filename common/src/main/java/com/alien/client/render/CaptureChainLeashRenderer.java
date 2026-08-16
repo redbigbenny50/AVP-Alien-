@@ -32,16 +32,17 @@ public final class CaptureChainLeashRenderer {
     ) {
         Vec3 entityPos = entity.getPosition(partialTick);
 
-        // Entity leash attach point: the leash offset rotated by body yaw, mirroring vanilla renderLeash exactly.
-        float bodyRot = entity.getPreciseBodyRotation(partialTick) * ((float) Math.PI / 180.0F);
-        Vec3 leashOffset = entity.getLeashOffset(partialTick);
-        double cos = Math.cos(bodyRot);
-        double sin = Math.sin(bodyRot);
-        Vec3 start = new Vec3(
-            cos * leashOffset.z + sin * leashOffset.x,
-            leashOffset.y,
-            sin * leashOffset.z - cos * leashOffset.x
-        );
+        // Attach to the BODY, not to the vanilla leash knot.
+        //
+        // This used to mirror vanilla renderLeash: getLeashOffset rotated by body yaw. That offset is built for a
+        // cow-sized mob - roughly eye height and a little forward - so on a 5.5-block queen the chain met her above
+        // her crest, and while she is INCAPACITATED (model down on the ground, hitbox unchanged) it hung in open
+        // air well over her.
+        //
+        // 0.6 rather than a literal 0.5 centre: that is what AnchorBlockEntityRenderer shackleAttachPoint falls
+        // back to for a chain already seated on an anchor, so matching it stops the chain jumping the moment you
+        // attach it. No yaw term is needed now the point sits on her centre line.
+        Vec3 start = new Vec3(0.0, entity.getBbHeight() * 0.6, 0.0);
 
         // Holder hand and camera, in the same entity-local frame.
         Vec3 end = holder.getRopeHoldPosition(partialTick).subtract(entityPos);

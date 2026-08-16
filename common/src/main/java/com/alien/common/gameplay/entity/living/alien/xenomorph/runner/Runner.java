@@ -3,6 +3,7 @@ package com.alien.common.gameplay.entity.living.alien.xenomorph.runner;
 import com.alien.common.gameplay.entity.living.alien.Alien;
 import com.alien.common.gameplay.entity.living.alien.EggCarrier;
 import com.alien.common.gameplay.entity.living.alien.xenomorph.AttackType;
+import com.alien.common.gameplay.entity.living.alien.xenomorph.CrawlAttack;
 import com.alien.common.gameplay.entity.living.alien.xenomorph.EggPickupManager;
 import com.alien.common.gameplay.entity.living.alien.xenomorph.VentBuilder;
 import com.alien.common.gameplay.entity.living.alien.xenomorph.VentData;
@@ -34,6 +35,33 @@ import org.jetbrains.annotations.Nullable;
 import java.util.function.BiConsumer;
 
 public class Runner extends Xenomorph implements EggCarrier, GOAPUser<Runner>, VentBuilder, com.alien.common.gameplay.hive.structure.carve.CarveWorker {
+
+    /**
+     * ⭐⭐ THE PRONE ATTACKS. [stated] "when either leg is shot off it has to crawl there should be no other
+     * alternatives... the attacks they can do are only the crawl ones."
+     * <p>
+     * ⚠⚠ THE CLIPS AND THE DISPATCHER METHODS ALREADY EXISTED - what was missing was the ATTACK TYPES, so the crawl
+     * preference in {@code XenomorphAttackConfig} had nothing to restrict to and fell through to the standing set. A
+     * one-legged runner stood up to swing because there was literally nothing prone to pick.
+     * </p>
+     */
+    /** ⚠ Slightly softer than a standing swing, matching the predalien's existing crawl claw. */
+    private static final float CRAWL_DAMAGE_FRACTION = 0.8F;
+
+    public static final AttackType CRAWL_CLAW = CrawlAttack.create(
+        "runner_crawl_claw",
+        CRAWL_DAMAGE_FRACTION,
+        CrawlAttack.Limb.ARM,
+        16
+    );
+
+    /** ⚠ HEAD, NOT ARM - so a crawling runner that has also lost both arms still has a bite. */
+    public static final AttackType CRAWL_BITE = CrawlAttack.create(
+        "runner_crawl_bite",
+        CRAWL_DAMAGE_FRACTION,
+        CrawlAttack.Limb.HEAD,
+        14
+    );
 
     public static final AttackType CLAW = AttackType.builder("runner_claw")
         .requiresAnyArm()
@@ -82,6 +110,8 @@ public class Runner extends Xenomorph implements EggCarrier, GOAPUser<Runner>, V
                     XenomorphAttackConfig.builder()
                         .addRegular(CLAW)
                         .addRegular(BITE)
+                        .addRegular(CRAWL_CLAW)
+                        .addRegular(CRAWL_BITE)
                         .addRegular(TAIL_QUAD)
                         .build()
                 )

@@ -35,7 +35,19 @@ public class HarbingerAnimator extends AzEntityAnimator<Harbinger> {
     /** Ticks the current crawl transition one-shot still owns the track. */
     private int crawlOneShotHoldTicks;
 
-    private final CocoonAnimationStateTracker<Harbinger> cocoonAnimationStateTracker = new CocoonAnimationStateTracker<>();
+    /**
+     * ⚠⚠ EXPLICIT SELECTORS. The no-arg tracker hardcodes "molting" + "molt.enter", and this art has NEVER contained a
+     * clip called "molting" - so the loop half of every praetorian→harbinger molt was bind-posing SILENTLY. He was the
+     * LAST caste on the default; with this, every caste in the mod is off it.
+     * <p>
+     * Emerge-oriented: he is a molt DESTINATION only, so there is no enter clip and the tracker makes the cocooning
+     * half by reversing the emerge.
+     * </p>
+     */
+    private final CocoonAnimationStateTracker<Harbinger> cocoonAnimationStateTracker = new CocoonAnimationStateTracker<>(
+        harbinger -> HarbingerAnimationRefs.MOLT_LOOP_ANIMATION_NAME,
+        harbinger -> HarbingerAnimationRefs.MOLT_EMERGE_ANIMATION_NAME
+    );
 
     public HarbingerAnimator() {
         super(AzAnimatorConfig.defaultConfig());
@@ -114,7 +126,13 @@ public class HarbingerAnimator extends AzEntityAnimator<Harbinger> {
             if (attackId != previousAttackId) {
                 var speed = calculateAttackSpeed(harbinger, attackType);
 
-                if (attackType == Harbinger.BITE) {
+                // ⭐ POSTURE FIRST. Underwater it has a both-arms claw and a head-only bite - the bite is what a
+                // fully disarmed harbinger still has in the water.
+                if (attackType == Harbinger.SWIM_CLAWS) {
+                    dispatcher.swimClawsAttack();
+                } else if (attackType == Harbinger.SWIM_BITE) {
+                    dispatcher.swimBiteAttack();
+                } else if (attackType == Harbinger.BITE) {
                     dispatcher.biteAttack(speed);
                 } else if (attackType == Harbinger.CLAW) {
                     dispatcher.rightClawAttack(speed);
@@ -224,9 +242,9 @@ public class HarbingerAnimator extends AzEntityAnimator<Harbinger> {
         if (attackType == Harbinger.BITE) {
             animationName = HarbingerAnimationRefs.ATTACK_BITE_ANIMATION_NAME;
         } else if (attackType == Harbinger.CLAW) {
-            animationName = HarbingerAnimationRefs.ATTACK_CLAW_ANIMATION_NAME;
+            animationName = HarbingerAnimationRefs.ATTACK_CLAW_RIGHT_ANIMATION_NAME;
         } else if (attackType == Harbinger.TAIL) {
-            animationName = HarbingerAnimationRefs.ATTACK_TAIL_ANIMATION_NAME;
+            animationName = HarbingerAnimationRefs.ATTACK_TAIL_RIGHT_ANIMATION_NAME;
         } else if (attackType == Harbinger.CRAWL_BITE) {
             animationName = HarbingerAnimationRefs.ATTACK_BITE_ANIMATION_NAME;
         } else if (attackType == Harbinger.CRAWL_WHIPSTAB_LEFT) {
@@ -236,7 +254,7 @@ public class HarbingerAnimator extends AzEntityAnimator<Harbinger> {
         } else if (attackType == HarbingerGroundSlamAttack.ATTACK) {
             animationName = HarbingerAnimationRefs.ATTACK_GROUND_SLAM_ANIMATION_NAME;
         } else if (attackType == HarbingerBackhandAttack.ATTACK) {
-            animationName = HarbingerAnimationRefs.ATTACK_BACKHAND_ANIMATION_NAME;
+            animationName = HarbingerAnimationRefs.ATTACK_BACKHAND_RIGHT_ANIMATION_NAME;
         } else if (attackType == HarbingerKickAttack.ATTACK) {
             animationName = HarbingerAnimationRefs.ATTACK_KICK_ANIMATION_NAME;
         } else if (attackType == HarbingerFrontKickAttack.ATTACK) {
@@ -252,6 +270,15 @@ public class HarbingerAnimator extends AzEntityAnimator<Harbinger> {
         }
 
         var animation = getAnimation(harbinger, animationName);
+
+        // ⚠⚠ A MISSING CLIP MUST NEVER NPE THE RENDER THREAD. getAnimation returns NULL for a clip the loader
+        // threw away - and GeckoLib discards an ENTIRE clip when one Molang expression fails to parse, so a
+        // single bad keyframe in the art turns this line into a client crash the moment that animation is
+        // selected. That is exactly what killed the game when a queen lost a leg: the forced crawl asked for
+        // crawl.attack.*, which had been discarded, and this dereferenced null.
+        if (animation == null) {
+            return 1.0f;
+        }
 
         return (float) (animation.length() / durationInTicks);
     }

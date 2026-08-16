@@ -23,10 +23,11 @@ public final class AlienLimbDefinitionDataProvider extends LimbDefinitionDataPro
         var prefix = group.prefix();
         var parent = templateId(prefix);
         var template = template(parent);
-        var head = prefix.equals("queen")
-            ? template.fatalLimb(limb(prefix, "head"), LimbCategories.HEAD)
-            // Firearm headshots are bonus damage only; Xenomorph heads are never detachable.
-            : template.limb(limb(prefix, "head"), LimbCategories.HEAD);
+        // Every caste's head is fatal, not just the queen's. The old rule rested on the assumption in the comment it
+        // replaced -- that xenomorph heads are never detachable and a headshot is only bonus damage -- which the
+        // ravager's dismemberment attack has since made untrue. Taking a xenomorph's head off left it fighting on.
+        var head = template.fatalLimb(limb(prefix, "head"), LimbCategories.HEAD);
+
         head
             .limb(limb(prefix, "left_arm"), LimbCategories.ARM)
             .limb(limb(prefix, "right_arm"), LimbCategories.ARM)

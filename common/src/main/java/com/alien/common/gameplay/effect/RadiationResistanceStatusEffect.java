@@ -1,9 +1,7 @@
 package com.alien.common.gameplay.effect;
 
 import com.alien.common.gameplay.entity.living.alien.Alien;
-import com.alien.common.model.alien.variant.AlienVariant;
-import com.alien.common.registry.key.AlienDamageTypeKeys;
-import com.alien.common.util.AlienTransitionUtil;
+import com.alien.common.util.AlienIrradiationUtil;
 import com.alien.compatibility.avp_human.RadiationCompat;
 import net.minecraft.world.effect.MobEffect;
 import net.minecraft.world.effect.MobEffectCategory;
@@ -50,15 +48,7 @@ public class RadiationResistanceStatusEffect extends MobEffect {
             return;
         }
 
-        switch (alien.getVariant()) {
-            case ABERRANT -> alien.hurt(
-                alien.damageSources().source(AlienDamageTypeKeys.RADIATION_SICKNESS),
-                Float.MAX_VALUE
-            );
-            case NORMAL, NETHER -> AlienTransitionUtil.transitionIntoVariant(alien, AlienVariant.IRRADIATED);
-            // Already irradiated - it is bathing in its own element.
-            case IRRADIATED -> {}
-        }
+        AlienIrradiationUtil.irradiate(alien);
     }
 
     @Override

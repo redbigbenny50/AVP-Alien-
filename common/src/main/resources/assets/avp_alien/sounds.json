@@ -17,6 +17,18 @@
     ],
     "subtitle": "subtitles.block.resin.spread"
   },
+  "broadcast.war.all_clear": {
+    "sounds": [
+      "avp_alien:broadcast/war_all_clear"
+    ],
+    "subtitle": "subtitles.broadcast.war.all_clear"
+  },
+  "broadcast.war.sos": {
+    "sounds": [
+      "avp_alien:broadcast/war_sos"
+    ],
+    "subtitle": "subtitles.broadcast.war.sos"
+  },
   "effect.bone_crunch": {
     "sounds": [
       "avp_alien:effect/bone_crunch/bone_crunch_0",

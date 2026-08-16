@@ -119,6 +119,31 @@ public final class HivePieceCatalog {
         return owner.equals(strainFolderPrefix(variant));
     }
 
+    /**
+     * ⭐⭐ THE SAME PIECE, IN ANOTHER STRAIN'S SET. Returns {@code id} re-pointed at {@code variant}'s folder, or the id
+     * unchanged when it is already there.
+     * <p>
+     * A piece id encodes its strain as a FOLDER PREFIX ({@code hive/irradiated/...}), so re-straining one is a path
+     * swap rather than a lookup table. That is what lets a converted hive repair itself in its NEW colours - see
+     * {@code HiveStructureUpkeep.restamp}, where the stored {@code BuiltPlacement.pieceId} is frozen at build time and
+     * would otherwise re-lay the pre-conversion strain forever.
+     * </p>
+     */
+    public static ResourceLocation forStrain(
+        ResourceLocation id,
+        @org.jetbrains.annotations.Nullable com.alien.common.model.alien.variant.AlienVariant variant
+    ) {
+        var rest = id.getPath().substring("hive/".length());
+        for (var prefix : STRAIN_FOLDER_PREFIXES) {
+            if (rest.startsWith(prefix)) {
+                rest = rest.substring(prefix.length());
+                break;
+            }
+        }
+        var target = strainFolderPrefix(variant);
+        return ResourceLocation.fromNamespaceAndPath(Alien.MOD_ID, "hive/" + target + rest);
+    }
+
     private static ResourceLocation withStrainFolder(ResourceLocation normalId, String prefix) {
         var rest = normalId.getPath().substring("hive/".length());
         return ResourceLocation.fromNamespaceAndPath(Alien.MOD_ID, "hive/" + prefix + rest);

@@ -79,7 +79,16 @@ public final class HiveLocationLoadedTickTask {
             return;
         }
 
+        // ⭐⭐ REPAIR VENTS MISLABELLED BY THE OLD CLASSIFIER. Runs on the same slow cadence as the aggro sweep, and
+        // is a no-op for any hive whose vents are already right - it only ever promotes FRONTIER→SURFACE for vents
+        // that genuinely sit near the surface. Needed because classification is WRITE-ONCE and persisted, so
+        // existing worlds carry the old wrong answer forever otherwise.
         if (HiveTerritoryAggroTask.shouldFire(currentTick)) {
+            com.alien.common.gameplay.hive.vent.HiveVents.reclassifyStaleFrontierVents(
+                serverLevel,
+                location,
+                HiveLocationRegistry.INSTANCE.config().surfacePartySurfaceBandBlocks()
+            );
             HiveTerritoryAggroTask.run(serverLevel, location);
         }
         if (com.alien.common.gameplay.hive.defense.VentDefenseTask.shouldFire(currentTick)) {
@@ -180,13 +189,29 @@ public final class HiveLocationLoadedTickTask {
             BiomassHuntingPartyLifecycleTask.run(server, location, config);
             com.alien.common.gameplay.hive.party.HostHuntPartyDispatch.tryRun(server, location, config);
             com.alien.common.gameplay.hive.party.HostHuntPartyLifecycleTask.run(server, location, config);
+            // ⭐ A hostable intruder ALREADY INSIDE the hive. Runs after the surface hunt: both create a
+            // HiveParty.HostHunt and only one may be active, so the scheduled hunt keeps priority.
+            com.alien.common.gameplay.hive.party.InternalHostPartyDispatch.tryRun(server, location, config);
             AttackPartyDispatch.tryRun(server, location, config);
             AttackPartyLifecycleTask.run(server, location, config);
+
+            // The hive notices its own egg backlog. An egg only asks for a hauler within 16 blocks (the listener
+            // lives on the CARRIER, not on the vents the way a cry for help does), so eggs laid away from the
+            // workers are never heard about at all. This is the missing relay: find a waiting egg, hand it to a
+            // free worker, and let the existing duct-travel in PickUpEggAction carry him there.
+            com.alien.common.gameplay.hive.economy.EggHaulDispatch.run(serverLevel, location);
         }
 
         // Structure growth: grow one hive piece off an open frontier socket on a coarse cadence (every 200 ticks / 10s)
         // so the hive expands gradually and visibly rather than all at once. Bounded and event-driven off the frontier
         // set; does nothing when there are no open sockets.
+        // Take in the hive's own strays before anything asks how many workers it has. A host-born xenomorph that
+        // burst in the field never joined anything, so construction and repair could not see it even while it hauled
+        // eggs. Same beat as structure growth; see HiveStrayAdoption.
+        if (currentTick % com.alien.common.gameplay.hive.faction.HiveStrayAdoption.TICK_INTERVAL == 0L) {
+            com.alien.common.gameplay.hive.faction.HiveStrayAdoption.run(serverLevel, location);
+        }
+
         if (currentTick % 200L == 0L) {
             if (location.isBuildFrozenForWarPrep()) {
                 // No new pieces commissioned during the preparation truce.
@@ -206,6 +231,13 @@ public final class HiveLocationLoadedTickTask {
             // Idle host-born adults walk to a vent and fold into the brood bank: uncapped, off the member cap, and
             // drawn on before the main reserves.
             com.alien.common.gameplay.hive.economy.BroodBankTask.run(serverLevel, location);
+
+            // ⭐⭐ MEMBERS THAT CAN NEVER WALK HOME ARE BANKED. A nether xenomorph that falls into the lava under
+            // its own hive survives indefinitely, so it stays a MEMBER the hive can never use - which is why his
+            // log reported "no free drones, nothing in reserve" on every carve while drones plainly existed.
+            // ⚠ Runs on the member sweep that is already walking this list, so it costs one distance comparison
+            // per member per 2 seconds and no new iteration.
+            com.alien.common.gameplay.hive.economy.StrandedMemberRecovery.sweep(serverLevel, location);
         }
     }
 

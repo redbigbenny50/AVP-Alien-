@@ -4,11 +4,52 @@ public record XenomorphPathConfig(
     int entityWidth,
     int entityHeight,
     boolean canOpenDoors,
-    int crawlHeight
+    int crawlHeight,
+    WaterAffinity waterAffinity
 ) {
+
+    /**
+     * ⭐⭐ HOW A CASTE FEELS ABOUT WATER. A THREE-POSITION DIAL, NOT A BOOLEAN — [stated] "we are going to have an
+     * aquatic xenomorph who would benefit from an inversion of the avoid water goap rule where they would prefer it". A
+     * flag could express "can/cannot swim" but never "prefers", so the aquatic caste would have forced this open again
+     * in a month.
+     * <p>
+     * ⚠ THIS IS THE PATHING HALF ONLY. It decides where the navigator is WILLING to route, which is the enderman's
+     * first layer ({@code setPathfindingMalus(PathType.WATER, -1.0F)} — water simply is not a route). The BEHAVIOURAL
+     * half — actively leaving water you fell into, or returning to water you were dragged out of — is a GOAP goal, per
+     * [stated] "cant you just tell its goap to not go in water and path away from it". Neither half replaces the other:
+     * with AVOID the navigator will not route a juvenile OUT of water either, so the GOAP action is what rescues it.
+     * </p>
+     */
+    public enum WaterAffinity {
+
+        /**
+         * Will not path through water at all. [stated] "chest bursters ... arent very good at it and avoid the water",
+         * and [stated] "enderman do a very good job at avoiding it" — this is the enderman's layer one.
+         */
+        AVOID,
+
+        /** Every caste that shipped before this dial existed. Full water pathing, exactly as before. */
+        NEUTRAL,
+
+        /**
+         * Reserved for the aquatic caste. Paths through water as NEUTRAL does today; the preference itself belongs in
+         * its GOAP graph and its {@code WaterMoveControl}/swim speed, not here.
+         */
+        PREFER
+    }
+
+    public XenomorphPathConfig(int entityWidth, int entityHeight, boolean canOpenDoors, int crawlHeight) {
+        this(entityWidth, entityHeight, canOpenDoors, crawlHeight, WaterAffinity.NEUTRAL);
+    }
 
     public XenomorphPathConfig(int entityWidth, int entityHeight, boolean canOpenDoors) {
         this(entityWidth, entityHeight, canOpenDoors, 1);
+    }
+
+    /** This config with a different water affinity — so a caste can take a shared preset and only change the water. */
+    public XenomorphPathConfig withWaterAffinity(WaterAffinity affinity) {
+        return new XenomorphPathConfig(entityWidth, entityHeight, canOpenDoors, crawlHeight, affinity);
     }
 
     public static final XenomorphPathConfig SMALL_DOOR = new XenomorphPathConfig(1, 1, true);

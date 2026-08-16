@@ -1,6 +1,7 @@
 package com.alien.common.registry.init.block;
 
 import com.alien.Alien;
+import com.alien.common.gameplay.block.ResinContainerBlock;
 import com.alien.common.gameplay.block.capture.anchor.AnchorBlock;
 import com.alien.common.gameplay.block.crusher.CrusherHeadBlock;
 import com.alien.common.gameplay.block.crusher.CrusherHeadVariant;
@@ -28,6 +29,46 @@ import java.util.function.Supplier;
 public class AlienBlocks {
 
     public static final BLibRegistry<Block> REGISTRY = Alien.MOD.registries().create(BuiltInRegistries.BLOCK);
+
+    /**
+     * ⭐⭐ THE RESIN CONTAINERS, one per strain. [stated] "made from resin and chitin of its strain type... acid proof
+     * and explosion proof."
+     * <p>
+     * ⚠ THE IMMUNITIES ARE PROPERTIES AND TAGS, NOT CODE. `explosionResistance` above vanilla obsidian covers the nuke
+     * ([stated] "yes"), and acid is a tag membership - see AlienBlockTags.ACID_IMMUNE and its strain variants, which
+     * the acid system already consults. Neither needed a line in the block class.
+     * </p>
+     */
+    public static final BLibHolder<Block> RESIN_CONTAINER = create(
+        "resin_container",
+        () -> new ResinContainerBlock(resinContainerProperties(AlienBlockProperties.RESIN))
+    );
+
+    public static final BLibHolder<Block> NETHER_RESIN_CONTAINER = create(
+        "nether_resin_container",
+        () -> new ResinContainerBlock(resinContainerProperties(AlienBlockProperties.NETHER_RESIN))
+    );
+
+    public static final BLibHolder<Block> ABERRANT_RESIN_CONTAINER = create(
+        "aberrant_resin_container",
+        () -> new ResinContainerBlock(resinContainerProperties(AlienBlockProperties.ABERRANT_RESIN))
+    );
+
+    public static final BLibHolder<Block> IRRADIATED_RESIN_CONTAINER = create(
+        "irradiated_resin_container",
+        () -> new ResinContainerBlock(resinContainerProperties(AlienBlockProperties.IRRADIATED_RESIN))
+    );
+
+    /**
+     * ⚠ 1200 BLAST RESISTANCE puts it above obsidian (1200) territory deliberately: [stated] the nuke must not take
+     * one. ⚠ noOcclusion because the ribs open outward and would otherwise cull the faces behind them.
+     */
+    private static BlockBehaviour.Properties resinContainerProperties(BlockPropertyBuilder strain) {
+        return strain.build()
+            .strength(6.0F, 1200.0F)
+            .noOcclusion()
+            .sound(SoundType.SLIME_BLOCK);
+    }
 
     public static final BLibHolder<Block> ROYAL_JELLY_BLOCK = create(
         "royal_jelly_block",

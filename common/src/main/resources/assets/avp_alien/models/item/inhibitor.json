@@ -79,6 +79,6 @@
     }
   },
   "textures": {
-    "particle": "inhibitor"
+    "particle": "avp_alien:item/inhibitor"
   }
 }

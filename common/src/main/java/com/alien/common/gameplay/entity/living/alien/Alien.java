@@ -22,6 +22,7 @@ import com.alien.common.registry.tag.AlienDamageTypesTags;
 import com.alien.common.registry.tag.AlienEntityTypeTags;
 import com.alien.common.registry.tag.AlienMobEffectTags;
 import com.alien.common.util.AcidBleedUtil;
+import com.alien.common.util.AlienIrradiationUtil;
 import com.alien.common.util.AlienPredicates;
 import com.alien.common.util.AlienTransitionUtil;
 import com.alien.compatibility.avp_human.AVPHuman;
@@ -53,16 +54,19 @@ import net.minecraft.world.DifficultyInstance;
 import net.minecraft.world.damagesource.DamageSource;
 import net.minecraft.world.effect.MobEffectInstance;
 import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.EntityDimensions;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.LightningBolt;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.MobSpawnType;
+import net.minecraft.world.entity.Pose;
 import net.minecraft.world.entity.SpawnGroupData;
 import net.minecraft.world.entity.ai.attributes.Attribute;
 import net.minecraft.world.entity.ai.attributes.AttributeModifier;
 import net.minecraft.world.entity.ai.attributes.AttributeSupplier;
 import net.minecraft.world.entity.ai.attributes.Attributes;
 import net.minecraft.world.entity.monster.Monster;
+import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.entity.vehicle.Boat;
 import net.minecraft.world.entity.vehicle.Minecart;
 import net.minecraft.world.level.Level;
@@ -75,6 +79,9 @@ import java.util.Objects;
 import java.util.function.Predicate;
 
 public abstract class Alien extends Monster implements DataUser {
+
+    /** Chance, per three-second fallout tick, that an alien standing in the nuked biome is irradiated. */
+    private static final int IRRADIATION_CHANCE_PERCENT = 10;
 
     private static final String NBT_HOST_TYPE = "hostType";
 
@@ -164,7 +171,49 @@ public abstract class Alien extends Monster implements DataUser {
 
     protected abstract float getHealthRegenPerSecond();
 
+    /**
+     * ⭐⭐ A CRAWLING ALIEN IS SHORTER. [stated] "so wait while its crawling it still has a 5 tall hitbox how does that
+     * make sense? the hitbox should move with the body... its about 2.6 blocks tall when its crawling."
+     * <p>
+     * ⚠⚠ NOTHING SHRANK THE BOX BEFORE THIS, and it caused two separate faults on every tall caste. A harbinger, queen
+     * and empress are all 5.5 blocks standing, so {@code isTightSpace} put them into a permanent crawl indoors - while
+     * they still occupied a 5.5-tall collision box:
+     * </p>
+     * <ul>
+     * <li>STEPPING UP FAILED. {@code maxUpStep} of 1.5 is ample for a one-block rise, but the step only succeeds if the
+     * destination can FIT the box. Under a corridor ceiling there was nowhere to go, so they wedged and needed blocks
+     * broken out - [stated] "its like their getting stuck in the ground and we have to break some blocks".</li>
+     * <li>THEY COULD NOT SEE. Line of sight traces from EYE HEIGHT, about 5 blocks up on a 5.5-tall body - inside the
+     * ceiling of a 3-tall corridor. The harbinger was not short-sighted, it was looking out of solid rock, which is why
+     * [stated] "the tester had to get close to it for it to attack them" while FOLLOW_RANGE was a normal 35 on every
+     * caste.</li>
+     * </ul>
+     * <p>
+     * ⚠ WIDTH IS DELIBERATELY UNCHANGED. A prone body is not narrower - it is the same animal lying down - and
+     * shrinking the width would let a crawling alien slip through gaps its standing form cannot.
+     * </p>
+     * <p>
+     * ⚠ GROWING BACK IS SAFE BECAUSE OF WHO DECIDES. {@code isTightSpace} measures against the caste's STANDING height
+     * from its entity TYPE, not from these live dimensions - so the box shrinking can never trick it into standing up
+     * somewhere it does not fit, and a leg-forced crawl never stands at all.
+     * </p>
+     */
+    public static final float CRAWL_HEIGHT_SCALE = 0.5F;
+
+    // ⚠ getDefaultDimensions, NOT getDimensions - LivingEntity marks getDimensions FINAL, and this is the hook it
+    // calls through to. Overriding here also means the sleeping/pose handling above us keeps working.
     @Override
+    protected @NotNull EntityDimensions getDefaultDimensions(@NotNull Pose pose) {
+        var dimensions = super.getDefaultDimensions(pose);
+
+        if (!(this instanceof Xenomorph xenomorph) || !xenomorph.getCrawlingManager().isCrawling()) {
+            return dimensions;
+        }
+
+        // scale(width, height) - 1.0 on width keeps the footprint, so only the height comes down.
+        return dimensions.scale(1.0F, CRAWL_HEIGHT_SCALE);
+    }
+
     public float maxUpStep() {
         return 1.5F;
     }
@@ -217,6 +266,18 @@ public abstract class Alien extends Monster implements DataUser {
                 && (AlienPredicates.isHelplessKinQueen(this, livingEntity)
                     || AlienPredicates.isHelplessQueenStrikingKin(this, livingEntity))
         ) {
+            return;
+        }
+
+        // CREATIVE AND SPECTATOR ARE NOT QUARRY. [stated] "creative players shouldnt be targeted by the
+        // birthraids spectator either."
+        //
+        // Enforced HERE for the same reason kin mercy is: the hive hands targets out through half a dozen direct
+        // setTarget paths - raid dispatch, convoy interception, territory aggro, CryForHelpListener retargeting -
+        // and guarding any one of them leaves the others open. Every other hive system already skips these
+        // players (HiveTerritoryAggroTask, ConvoyInterception, HiveBreachRepair, RescueCampaignTask), so this is
+        // making an existing stance uniform rather than introducing a new one.
+        if (livingEntity instanceof Player player && (player.isCreative() || player.isSpectator())) {
             return;
         }
 
@@ -392,6 +453,49 @@ public abstract class Alien extends Monster implements DataUser {
         return super.finalizeSpawn(level, difficulty, spawnType, spawnGroupData);
     }
 
+    /**
+     * ⭐⭐ NOTHING LIVES WITHOUT ITS HEAD. [stated] "everything without a head should die not just the irradiated."
+     * <p>
+     * ⚠⚠ THERE WAS NO SUCH RULE ANYWHERE IN THE MOD - not for irradiated, not for anyone. A head could be torn off (the
+     * ravager's head-rip, an explosion's limb roll) and the body simply carried on, minus its attacks that
+     * {@code requiresHead()} but otherwise alive and pathing. He saw it on irradiated xenos because that is what he was
+     * fighting; it was never strain-specific.
+     * </p>
+     * <p>
+     * ⚠ GENERIC_KILL, NOT A BIG NUMBER. It is in {@code bypasses_invulnerability}, so a headless chrysalis curled in
+     * its defence stance still dies - which is right, that stance protects against being HIT, not against already
+     * having been decapitated. A plain damage source would have left exactly that immortal case behind.
+     * </p>
+     * <p>
+     * ⚠ THE isDeadOrDying GUARD IS LOAD-BEARING. Boiler and burster call {@code detachAllLimbs()} as part of their own
+     * death explosion - without this they would be killed a second time mid-detonation, from inside their own death
+     * handler.
+     * </p>
+     * <p>
+     * ⚠ SCOPE: this is on {@code Alien}, so it covers every xenomorph, ovomorph and facehugger. A decapitated MARINE is
+     * avp_human's to decide and is untouched.
+     * </p>
+     */
+    private void dieIfHeadless() {
+        if (isDeadOrDying() || !(this instanceof Dismemberable dismemberable)) {
+            return;
+        }
+
+        var manager = dismemberable.getDismembermentManager();
+
+        // Cheap exit: the overwhelming majority of aliens have never lost anything, and this runs every tick.
+        if (manager == null || !manager.hasAnyDetached()) {
+            return;
+        }
+
+        for (var definition : LimbDefinitionRegistry.getDefinitions(getType())) {
+            if (definition.category().equals(LimbCategories.HEAD) && manager.isDetached(definition)) {
+                hurt(damageSources().genericKill(), Float.MAX_VALUE);
+                return;
+            }
+        }
+    }
+
     @Override
     public void tick() {
         if (!level().isClientSide && ConvoyMemberTracker.discardStaleLoadedMember(this)) {
@@ -400,6 +504,10 @@ public abstract class Alien extends Monster implements DataUser {
         }
 
         super.tick();
+
+        if (!level().isClientSide) {
+            dieIfHeadless();
+        }
 
         // The withered mark, made visible. This was ParticleTypes.SMOKE at a quarter of ticks - vanilla's smoke is
         // GREY, and on something as small and quick as a chestburster, in a dark hive already full of acid, it read as
@@ -498,7 +606,11 @@ public abstract class Alien extends Monster implements DataUser {
     }
 
     /**
-     * 10% chance when in Nuked Biome to become Irradiated
+     * Rolls the fallout biome's chance to irradiate this alien.
+     * <p>
+     * What happens on a hit is NOT "become irradiated" — it is {@link AlienIrradiationUtil#irradiate}'s three-way rule,
+     * so an ABERRANT dies here rather than being promoted. This used to call the transition util directly and
+     * unguarded, which meant standing in fallout upgraded the one strain that is supposed to be killed by it.
      */
     private void becomeIrradiated() {
         if (!AVPHuman.MOD.isLoaded()) {
@@ -517,8 +629,10 @@ public abstract class Alien extends Monster implements DataUser {
             return;
         }
 
-        if (getRandom().nextIntBetweenInclusive(1, 100) >= 90) {
-            AlienTransitionUtil.transitionIntoVariant(this, AlienVariant.IRRADIATED);
+        // Was `>= 90`, which is 90..100 inclusive — eleven values, an 11% roll against a documented 10%. Stated as a
+        // percentage now so the number in the constant is the number in the design.
+        if (getRandom().nextIntBetweenInclusive(1, 100) <= IRRADIATION_CHANCE_PERCENT) {
+            AlienIrradiationUtil.irradiate(this);
         }
     }
 
@@ -1110,6 +1224,38 @@ public abstract class Alien extends Monster implements DataUser {
 
     @Override
     public void remove(@NotNull RemovalReason removalReason) {
+        // ⭐⭐ YANKED OUT OF THE WORLD ALIVE == DEAD, AS FAR AS THE HIVE IS CONCERNED.
+        //
+        // [stated] "theres a mod called mob capture tool that seems to corrupt or erase data affecting hives...
+        // erases lineage ID changes queen's personal ID as well as if she were an entirely different individual",
+        // then: "i think it should mark her as dead that way the hive replaces her and the revenge party is sent
+        // out."
+        //
+        // ⚠⚠ THE PROBLEM IS THAT `remove(KILLED)` NEVER CALLS `die()`. MobCapturingTool does exactly
+        // saveWithoutId -> remove(KILLED) -> EntityType.create + load, so a captured royal leaves the world
+        // without a single death hook firing: the founder seat still names her, the lineage still counts her, and
+        // the hive waits forever for a queen that is sitting in somebody's inventory. Releasing her later cannot
+        // repair that, because the faction registry that holds lineage membership is keyed OUTSIDE her NBT - it is
+        // the one part of her identity the capture round-trip cannot carry.
+        //
+        // ⚠ SO WE DO NOT TRY TO PRESERVE HER. Treating the removal as a death is cheaper and leaves the hive
+        // CONSISTENT rather than subtly wrong: the seat clears, a successor is crowned, and the grudge fires.
+        // If she is released later she is simply a queen with no seat - which the founding path already handles,
+        // she goes and digs her own hive.
+        //
+        // ⚠ THE ALIVE TEST IS WHAT KEEPS THIS SAFE. A genuinely killed entity has already run `die()` and is dead
+        // by the time it is removed, so it never reaches this branch and nothing runs twice. Only a removal that
+        // takes a LIVING entity out of the world - which no vanilla path does with KILLED - lands here.
+        if (
+            !level().isClientSide
+                && removalReason == RemovalReason.KILLED
+                && !isRemoved()
+                && isAlive()
+                && !isDeadOrDying()
+        ) {
+            onRemovedAliveTreatAsDeath();
+        }
+
         // DIAGNOSTIC (queen bug 1 - "she seems to despawn while digging her core"). Every mod-side removal path was
         // audited and none can touch a queen (eviction exempts avp mobs, brood bank is host-born-only, convoys never
         // carry queens, the reserve unload handler guards the QUEENS tag), and vanilla distance-despawn is disabled
@@ -1330,6 +1476,107 @@ public abstract class Alien extends Monster implements DataUser {
      * seat still has to be released. Null founder is the established "queenless" state the growth, economy and
      * maturation tasks already read - see QueenInhibitionService, which sets exactly this.
      */
+    /**
+     * A third party removed this alien from the world while it was still alive. Run the hive-side bookkeeping that
+     * {@code die} would have run, so the colony is not left holding a pointer to something that no longer exists.
+     * <p>
+     * ⚠ HIVE BOOKKEEPING ONLY - NO LOOT, NO LIMBS, NO DEATH ANIMATION. It deliberately does NOT call {@code die()}:
+     * that would spawn drops for a mob nobody killed and hand out advancements for a kill that never happened. What the
+     * hive needs is the STATE change, not the spectacle.
+     * </p>
+     * <p>
+     * ⚠ THE REVENGE RAID NEEDS A KILLER AND USUALLY WILL NOT HAVE ONE. {@code getKillCredit()} is only set by actual
+     * combat, and capturing a queen does no damage - so a player who simply pockets her gets no raid. If they softened
+     * her up first, the credit is still there and the raid fires. That asymmetry is honest: the hive avenges violence
+     * it can attribute, and a bloodless abduction leaves nobody to blame.
+     * </p>
+     */
+    private void onRemovedAliveTreatAsDeath() {
+        if (!getType().is(AlienEntityTypeTags.XENOMORPHS)) {
+            return;
+        }
+
+        com.alien.common.gameplay.entity.living.alien.xenomorph.ai.egg.EggSpotClaims.releaseAll(getUUID());
+        com.alien.common.gameplay.hive.party.PartyMemberDeath.onDeath(this);
+        ConvoyMemberTracker.unregisterKilled(this);
+
+        if (getType().is(AlienEntityTypeTags.QUEENS)) {
+            onRoyalDiedClearFounder();
+        }
+
+        if (getType().is(AlienEntityTypeTags.EMPRESSES)) {
+            onEmpressDied();
+        }
+
+        if (getType().is(AlienEntityTypeTags.QUEENS) && level() instanceof ServerLevel abductedLevel) {
+            var abductor = getKillCredit() instanceof ServerPlayer credited
+                ? credited
+                : recentTerritoryVisitor(abductedLevel);
+
+            if (abductor != null) {
+                onQueenKilled(abductor, abductedLevel);
+            }
+        }
+
+        com.alien.Alien.LOGGER.info(
+            "Hive: {} {} was removed from the world ALIVE (reason=KILLED) - treated as a death so the hive can move on",
+            getType().builtInRegistryHolder().key().location(),
+            getUUID()
+        );
+    }
+
+    /**
+     * ⭐⭐ WHO WAS IN THE HIVE WHEN SHE VANISHED. [stated] "the hive tracks who enters and is present in the hive area so
+     * whoever is present when the queen vanishes should be marked for the revenge."
+     * <p>
+     * ⚠ THIS IS THE FALLBACK, NOT THE PRIMARY. A real kill still uses {@code getKillCredit()} - vanilla already knows
+     * exactly who did it, and indirect kills (TNT, a fall she took from a broken block) resolve correctly there. This
+     * only answers the case credit CANNOT answer: an abduction does no damage, so there is no credit to read, and
+     * without this a queen could be pocketed with no consequence at all.
+     * </p>
+     * <p>
+     * ⚠ IT REUSES THE VISIT LEDGER THE HIVE ALREADY KEEPS. {@code HiveTerritoryAggroTask.recordVisitors} stamps every
+     * player it sees in the territory with the tick they were seen, so the answer is already written down - nothing new
+     * is tracked and nothing extra ticks.
+     * </p>
+     * <p>
+     * ⚠ MOST RECENT VISITOR, AND ONLY IF RECENT. Picking the newest stamp is what makes "present when she vanished"
+     * mean it: a player who walked through the claim an hour ago is not blamed for an abduction they were nowhere near.
+     * ⚠ AND THE PLAYER MUST STILL BE ONLINE - the raid targets a live player, and blaming someone who logged out would
+     * fire a campaign at nobody.
+     * </p>
+     */
+    private @Nullable ServerPlayer recentTerritoryVisitor(ServerLevel level) {
+        var location = com.alien.common.gameplay.hive.location.HiveLocationRegistry.INSTANCE.getByChunk(
+            level.dimension(),
+            new net.minecraft.world.level.ChunkPos(blockPosition())
+        );
+
+        if (location == null) {
+            return null;
+        }
+
+        var now = level.getGameTime();
+        ServerPlayer best = null;
+        var bestTick = Long.MIN_VALUE;
+
+        for (var visit : location.territoryVisits().entrySet()) {
+            if (now - visit.getValue() > ABDUCTION_WITNESS_WINDOW_TICKS || visit.getValue() <= bestTick) {
+                continue;
+            }
+
+            if (level.getServer().getPlayerList().getPlayer(visit.getKey()) instanceof ServerPlayer witness) {
+                best = witness;
+                bestTick = visit.getValue();
+            }
+        }
+
+        return best;
+    }
+
+    /** How recently a player must have been seen in the territory to be blamed for a royal vanishing. 30 seconds. */
+    private static final long ABDUCTION_WITNESS_WINDOW_TICKS = 600L;
+
     private void onRoyalDiedClearFounder() {
         for (var factionId : com.alien.Alien.MOD.factions().getFactionIds(getUUID())) {
             if (!com.alien.common.gameplay.hive.id.LineageIds.isLineageId(factionId)) {

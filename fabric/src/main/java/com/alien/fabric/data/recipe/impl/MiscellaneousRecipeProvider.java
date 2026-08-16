@@ -3,6 +3,7 @@ package com.alien.fabric.data.recipe.impl;
 import com.alien.common.registry.init.block.AlienBlocks;
 import com.alien.common.registry.init.item.AlienItems;
 import com.alien.common.registry.init.item.AlienXenomorphHeadItems;
+import com.alien.common.registry.tag.AlienItemTags;
 import com.alien.fabric.compatibility.avp_human.AVPHumanFabric;
 import com.blib.fabric.data.recipe.RecipeConstants;
 import com.blib.fabric.data.recipe.builder.RecipeBuilder;
@@ -28,6 +29,13 @@ public class MiscellaneousRecipeProvider {
             .pattern("III")
             .pattern("III")
             .into(1, AlienBlocks.ROYAL_JELLY_BLOCK);
+
+        // Field manual: a book plus a resin ball of ANY strain - the tag is what makes "any variant" work.
+        builder.shapeless()
+            .withCategory(RecipeCategory.TOOLS)
+            .requires(1, Items.BOOK)
+            .requires(1, AlienItemTags.RESIN_BALLS)
+            .into(1, AlienItems.FIELD_MANUAL);
 
         builder.shapeless()
             .withCategory(RecipeCategory.MISC)

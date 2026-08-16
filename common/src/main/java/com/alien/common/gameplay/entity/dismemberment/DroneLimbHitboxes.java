@@ -72,19 +72,29 @@ public final class DroneLimbHitboxes {
     private static AnimationTime animationFor(Drone drone, double partialTick) {
         var attackType = drone.attackType.get();
         if (!attackType.isNone()) {
+            // ⚠ THE CLAW MUST RESOLVE TO THE SAME SIDE THE DISPATCHER CHOSE. This runs SERVER-side to place the limb
+            // hitboxes, so picking the other clip of the mirrored pair would put the arm boxes on the opposite side of
+            // the body from the arm the player can see swinging. MirroredAttackSide keys off the synced attack start
+            // time precisely so both ends agree for the whole swing.
             var animation = attackType == Drone.BITE
-                ? DroneAnimationRefs.FULL_ATTACK_BITE_ANIMATION_NAME
+                ? DroneAnimationRefs.ATTACK_BITE_ANIMATION_NAME
                 : attackType == Drone.CLAW
-                    ? DroneAnimationRefs.FULL_ATTACK_CLAW_ANIMATION_NAME
-                    : DroneAnimationRefs.FULL_ATTACK_TAIL_ANIMATION_NAME;
+                    ? (MirroredAttackSide.useLeftArm(drone)
+                        ? DroneAnimationRefs.ATTACK_CLAW_LEFT_ANIMATION_NAME
+                        : DroneAnimationRefs.ATTACK_CLAW_RIGHT_ANIMATION_NAME)
+                    : DroneAnimationRefs.ATTACK_TAIL_ANIMATION_NAME;
             var elapsed = Math.max(0.0D, drone.level().getGameTime() - drone.attackStartedAtGameTime.get() + partialTick);
             var duration = Math.max(1, drone.attackDurationInTicks.get());
             return new AnimationTime(animation, elapsed * PROFILE.animationLengthSeconds(animation) / duration);
         }
         var animation = drone.isUnderWater()
             ? DroneAnimationRefs.SWIM_ANIMATION_NAME
+            // ⭐ Same crawl-pose match as StandardXenomorphLimbHitboxes - the moving gait and the crawl idle are
+            // different poses, and replaying the wrong one puts the limb volumes where the model is not.
             : drone.getCrawlingManager().isCrawling()
-                ? DroneAnimationRefs.CRAWL_ANIMATION_NAME
+                ? drone.isMovingHorizontally.get() && drone.onGround()
+                    ? DroneAnimationRefs.CRAWL_ANIMATION_NAME
+                    : DroneAnimationRefs.CRAWL_IDLE_ANIMATION_NAME
                 : drone.isMovingHorizontally.get() && drone.onGround()
                     ? drone.isMovingQuickly.get() ? DroneAnimationRefs.RUN_ANIMATION_NAME : DroneAnimationRefs.WALK_ANIMATION_NAME
                     : DroneAnimationRefs.IDLE_ANIMATION_NAME;

@@ -1,5 +1,6 @@
 package com.alien.common.gameplay.entity.living.alien.xenomorph.drone;
 
+import com.alien.common.gameplay.entity.dismemberment.MirroredAttackSide;
 import com.alien.common.util.AzAlienAnimationUtil;
 import com.blib.api.client.animation.v1.command.AzCommand;
 import com.blib.api.client.animation.v1.command.play_behavior.AzPlayBehaviors;
@@ -11,15 +12,15 @@ public class DroneAnimationDispatcher {
     private static final float DIG_ANIMATION_SPEED = 0.7F;
 
     private static final AzCommand<Drone> CLAW_ATTACK = AzCommand.<Drone>replay()
-        .play(AzAlienAnimationUtil.BODY, DroneAnimationRefs.FULL_ATTACK_CLAW_ANIMATION_NAME, AzPlayBehaviors.PLAY_ONCE)
+        .play(AzAlienAnimationUtil.BODY, DroneAnimationRefs.ATTACK_CLAW_RIGHT_ANIMATION_NAME, AzPlayBehaviors.PLAY_ONCE)
         .build();
 
     private static final AzCommand<Drone> BITE_ATTACK = AzCommand.<Drone>replay()
-        .play(AzAlienAnimationUtil.BODY, DroneAnimationRefs.FULL_ATTACK_BITE_ANIMATION_NAME, AzPlayBehaviors.PLAY_ONCE)
+        .play(AzAlienAnimationUtil.BODY, DroneAnimationRefs.ATTACK_BITE_ANIMATION_NAME, AzPlayBehaviors.PLAY_ONCE)
         .build();
 
     private static final AzCommand<Drone> TAIL_ATTACK = AzCommand.<Drone>replay()
-        .play(AzAlienAnimationUtil.BODY, DroneAnimationRefs.FULL_ATTACK_TAIL_ANIMATION_NAME, AzPlayBehaviors.PLAY_ONCE)
+        .play(AzAlienAnimationUtil.BODY, DroneAnimationRefs.ATTACK_TAIL_ANIMATION_NAME, AzPlayBehaviors.PLAY_ONCE)
         .build();
 
     private static final AzCommand<Drone> CRAWL = AzCommand.<Drone>idempotent()
@@ -59,6 +60,10 @@ public class DroneAnimationDispatcher {
     public DroneAnimationDispatcher(Drone drone) {
         this.drone = drone;
     }
+
+    private static final AzCommand<Drone> CLAW_ATTACK_LEFT = AzCommand.<Drone>replay()
+        .play(AzAlienAnimationUtil.BODY, DroneAnimationRefs.ATTACK_CLAW_LEFT_ANIMATION_NAME, AzPlayBehaviors.PLAY_ONCE)
+        .build();
 
     public void crawl() {
         CRAWL.dispatchForEntity(drone);
@@ -131,20 +136,120 @@ public class DroneAnimationDispatcher {
 
     public void biteAttack(float speed) {
         AzCommand.<Drone>replay()
-            .play(AzAlienAnimationUtil.BODY, DroneAnimationRefs.FULL_ATTACK_BITE_ANIMATION_NAME, AzPlayBehaviors.PLAY_ONCE)
+            .play(AzAlienAnimationUtil.BODY, DroneAnimationRefs.ATTACK_BITE_ANIMATION_NAME, AzPlayBehaviors.PLAY_ONCE)
             .setSpeed(AzAlienAnimationUtil.BODY, speed)
             .build()
             .dispatchForEntity(drone);
     }
 
+    /**
+     * A claw swing on whichever arm the drone still has.
+     * <p>
+     * ⚠ THE METHOD NAME IS HISTORICAL - it is kept so no caller has to change, but it is NO LONGER always the right
+     * arm. {@link MirroredAttackSide} decides per swing: a torn-off arm forces the survivor, and an intact drone
+     * alternates for variety. There is no mirror operation at dispatch, so left and right are separate authored clips.
+     * </p>
+     */
     public void rightClawAttack() {
-        CLAW_ATTACK.dispatchForEntity(drone);
+        clawAttack();
     }
 
     public void rightClawAttack(float speed) {
+        clawAttack(speed);
+    }
+
+    /** Claw swing, side chosen from the dismemberment state. */
+    public void clawAttack() {
+        if (MirroredAttackSide.useLeftArm(drone)) {
+            CLAW_ATTACK_LEFT.dispatchForEntity(drone);
+            return;
+        }
+        CLAW_ATTACK.dispatchForEntity(drone);
+    }
+
+    public void clawAttack(float speed) {
+        var clip = MirroredAttackSide.useLeftArm(drone)
+            ? DroneAnimationRefs.ATTACK_CLAW_LEFT_ANIMATION_NAME
+            : DroneAnimationRefs.ATTACK_CLAW_RIGHT_ANIMATION_NAME;
+
         AzCommand.<Drone>replay()
-            .play(AzAlienAnimationUtil.BODY, DroneAnimationRefs.FULL_ATTACK_CLAW_ANIMATION_NAME, AzPlayBehaviors.PLAY_ONCE)
+            .play(AzAlienAnimationUtil.BODY, clip, AzPlayBehaviors.PLAY_ONCE)
             .setSpeed(AzAlienAnimationUtil.BODY, speed)
+            .build()
+            .dispatchForEntity(drone);
+    }
+
+    /** Crawling claw swing - same side rule, ground clips. */
+    public void crawlAttack() {
+        var clip = MirroredAttackSide.useLeftArm(drone)
+            ? DroneAnimationRefs.CRAWL_ATTACK_LEFT_ANIMATION_NAME
+            : DroneAnimationRefs.CRAWL_ATTACK_RIGHT_ANIMATION_NAME;
+
+        AzCommand.<Drone>replay()
+            .play(AzAlienAnimationUtil.BODY, clip, AzPlayBehaviors.PLAY_ONCE)
+            .build()
+            .dispatchForEntity(drone);
+    }
+
+    /** Crawling bite - not mirrored, there is only the one clip. */
+    public void crawlBiteAttack() {
+        AzCommand.<Drone>replay()
+            .play(AzAlienAnimationUtil.BODY, DroneAnimationRefs.CRAWL_ATTACK_BITE_ANIMATION_NAME, AzPlayBehaviors.PLAY_ONCE)
+            .build()
+            .dispatchForEntity(drone);
+    }
+
+    /** Swimming claw swing - same side rule again. */
+    public void swimAttack() {
+        var clip = MirroredAttackSide.useLeftArm(drone)
+            ? DroneAnimationRefs.SWIM_ATTACK_LEFT_ANIMATION_NAME
+            : DroneAnimationRefs.SWIM_ATTACK_RIGHT_ANIMATION_NAME;
+
+        AzCommand.<Drone>replay()
+            .play(AzAlienAnimationUtil.BODY, clip, AzPlayBehaviors.PLAY_ONCE)
+            .build()
+            .dispatchForEntity(drone);
+    }
+
+    /**
+     * Leaving the ground.
+     * <p>
+     * ⚠ HOLD_ON_LAST_FRAME IS THE WHOLE POINT, and it is deliberate authoring, not a shortcut: [stated] "the jump
+     * pauses on the last frame on purpose so it can be extended however long it needs to until it lands." One clip
+     * therefore covers a hop over a two-block rise, a four-block running leap, and a fall off a cliff - the airborne
+     * pose simply holds for as long as the drone is in the air.
+     * </p>
+     */
+    public void jump() {
+        AzCommand.<Drone>replay()
+            .play(AzAlienAnimationUtil.BODY, DroneAnimationRefs.JUMP_ANIMATION_NAME, AzPlayBehaviors.HOLD_ON_LAST_FRAME)
+            .build()
+            .dispatchForEntity(drone);
+    }
+
+    /** Touching down. Plays once on the tick the drone regains the ground. */
+    public void land() {
+        AzCommand.<Drone>replay()
+            .play(AzAlienAnimationUtil.BODY, DroneAnimationRefs.LAND_ANIMATION_NAME, AzPlayBehaviors.PLAY_ONCE)
+            .build()
+            .dispatchForEntity(drone);
+    }
+
+    /** Getting INTO a crawl. A torn-off leg plays the SAME clip faster - speed, not a different clip. */
+    public void crawlDrop(float speed) {
+        AzAlienAnimationUtil.singleWithSpeed(
+            AzAlienAnimationUtil.BODY,
+            DroneAnimationRefs.CRAWL_DROP_ANIMATION_NAME,
+            AzPlayBehaviors.HOLD_ON_LAST_FRAME,
+            AzDispatchMode.PLAY_IF_NOT_PLAYING,
+            speed
+        ).dispatchForEntity(drone);
+    }
+
+    /** Getting back up. */
+    public void crawlRise() {
+        AzCommand.<Drone>replay()
+            .play(AzAlienAnimationUtil.BODY, DroneAnimationRefs.CRAWL_RISE_ANIMATION_NAME, AzPlayBehaviors.PLAY_ONCE)
             .build()
             .dispatchForEntity(drone);
     }
@@ -155,7 +260,7 @@ public class DroneAnimationDispatcher {
 
     public void tailAttack(float speed) {
         AzCommand.<Drone>replay()
-            .play(AzAlienAnimationUtil.BODY, DroneAnimationRefs.FULL_ATTACK_TAIL_ANIMATION_NAME, AzPlayBehaviors.PLAY_ONCE)
+            .play(AzAlienAnimationUtil.BODY, DroneAnimationRefs.ATTACK_TAIL_ANIMATION_NAME, AzPlayBehaviors.PLAY_ONCE)
             .setSpeed(AzAlienAnimationUtil.BODY, speed)
             .build()
             .dispatchForEntity(drone);

@@ -3,6 +3,7 @@ package com.alien.common.gameplay.entity.living.alien.xenomorph.queen;
 import com.alien.common.gameplay.entity.living.alien.xenomorph.Xenomorph;
 import com.alien.common.gameplay.hive.lifecycle.QueenInhibitionService;
 import com.alien.common.registry.init.item.AlienItems;
+import com.alien.common.util.AlienPredicates;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.InteractionHand;
@@ -376,6 +377,8 @@ public final class QueenRescueManager {
             && candidate != queen
             // Queens and empresses hold their thrones; the workers do the freeing.
             && !(candidate instanceof Queen)
+            // ⭐ And children do not mount rescues - they cannot claw an anchor open and cannot guard her.
+            && !AlienPredicates.isJuvenile(candidate)
             // Her own strain only - rival strains would sooner finish her (and are allowed to).
             && java.util.Objects.equals(candidate.getVariant(), queen.getVariant());
     }
