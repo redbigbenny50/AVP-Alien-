@@ -69,6 +69,14 @@ public final class PraetorianRenderedLimbPicker implements LimbHitPredictionProv
     }
 
     /**
+     * Drops the captured pose for an entity, e.g. when the render layer skipped capturing it this frame because it
+     * can't be targeted. Without this, a pose up to {@code MAX_SAMPLE_AGE_NANOS} old could still be hit.
+     */
+    public static void discard(int entityId) {
+        SAMPLES.remove(entityId);
+    }
+
+    /**
      * Returns the exact cube pose captured from this client's most recent Praetorian render. This is also what F3+B
      * must draw; using the server approximation there would make the diagnostic itself appear to lag behind a tail
      * animation.
