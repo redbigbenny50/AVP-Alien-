@@ -1,6 +1,7 @@
 package com.alien.common.gameplay.hive.structure;
 
 import com.alien.common.gameplay.hive.location.HiveLocation;
+import com.alien.common.gameplay.hive.location.HiveLocationRegistry;
 import com.alien.common.registry.init.block.AlienBlocks;
 import com.alien.common.registry.tag.AlienBlockTags;
 import net.minecraft.core.BlockPos;
@@ -40,6 +41,27 @@ import java.util.List;
  */
 public final class HiveStructureUpkeep {
 
+    /**
+     * Update flags for bulk hive placement: clients only, NO neighbour updates.
+     * <p>
+     * 🚨🚨 NEIGHBOUR UPDATES ARE WHAT KILLED A DEDICATED SERVER. Flag 3 includes UPDATE_NEIGHBORS, so every block the
+     * hive carved or stamped told its neighbours to re-evaluate - and vanilla blocks respond by SCHEDULING A TICK:
+     * leaves check decay, sand checks support, water checks flow. A hive spreading through terrain therefore queued a
+     * scheduled tick per disturbed neighbour, and a crash report showed block_ticks: 498,053 pending with the server
+     * stuck in LevelTicks.sortContainersToTick.
+     * </p>
+     * <p>
+     * ⭐ This is what VANILLA STRUCTURE GENERATION uses for the same reason. The hive is placing terrain in bulk, not
+     * operating a redstone contraption - it does not need the cascade.
+     * </p>
+     * <p>
+     * ⚠ TRADE-OFF, AND IT IS THE ONE WE WANT: water and lava no longer flow into freshly carved space and sand no
+     * longer falls into it. Interactive single placements - jelly vats, spawners, harvest capture - keep flag 3 and are
+     * untouched.
+     * </p>
+     */
+    private static final int BULK_HIVE_BLOCK_FLAGS = net.minecraft.world.level.block.Block.UPDATE_CLIENTS;
+
     private HiveStructureUpkeep() {}
 
     /** A hive-owned block held across the re-stamp. */
@@ -54,6 +76,19 @@ public final class HiveStructureUpkeep {
      * be resolved - upkeep is best-effort and must never be the reason a tick throws.
      */
     public static void tickPiece(ServerLevel level, HiveLocation location, ChunkPos originChunk, HiveLocation.BuiltPlacement placement) {
+        // NO MAINTENANCE: the hive leaves its structure exactly as it finds it.
+        //
+        // Guarded at the very TOP of both entry points, not inside the repair crew: this is the DETECTOR, so
+        // nothing is scanned, no breach recorded, no job filed and no drone drafted. Stopping it further down would
+        // still cost the scan every beat and still pull workers off their jobs.
+        //
+        // WARNING: this turns off BOTH halves - re-stamping damaged hive blocks AND clearing whatever is found in
+        // an authored air cell. The second half is what normally stops a player sealing a passage permanently, so
+        // with this on a corridor CAN be walled off for good. That is the trade the setting exists to make.
+        if (HiveLocationRegistry.INSTANCE.config().noMaintenance()) {
+            return;
+        }
+
         var registry = HivePieceRegistry.get(level.getServer());
         if (registry == null) {
             return;
@@ -85,6 +120,8 @@ public final class HiveStructureUpkeep {
         if (resolved == null) {
             return;
         }
+        // Oct 6 - clear floating growth on the same beat (see sweepFloatingDecor).
+        sweepFloatingDecor(level, resolved);
         if (HiveBreachRepair.hasJob(location, originChunk)) {
             return; // crew already dispatched - the detector's work is done until they finish
         }
@@ -105,7 +142,90 @@ public final class HiveStructureUpkeep {
      * The actual masonry, invoked by {@link HiveBreachRepair} once a crew has finished working the wound. Same
      * reconstruction and snapshot-stamp-restore dance the instant path used.
      */
+    /**
+     * Puts back hive blocks that were broken outside any structure piece - corridors, shafts, patched walls.
+     * <p>
+     * ⭐⭐ THE CHEAPEST REPAIR THERE IS. Every cell here came from an actual break, which recorded the exact position and
+     * the exact state, so this is a map walk and a setBlock - no scanning, no template diff, no volume search. Its cost
+     * is proportional to blocks broken, not to hive size, so a large hive with no damage costs one emptiness check per
+     * pass.
+     * </p>
+     * <p>
+     * ⚠ RESTORES ONLY INTO AIR OR FLUID. A cell a player has since filled with their own block is dropped rather than
+     * overwritten - the hive reclaims its own damage, it does not bulldoze someone's repair or their doorway.
+     * </p>
+     * <p>
+     * ⚠ Suppressed and client-only-updated, like every other hive placement: putting resin back must not itself
+     * register as a breach, and neighbour updates on hive blocks are what once filled a server's tick queue.
+     * </p>
+     */
+    public static void repairLooseCells(ServerLevel level, HiveLocation location, int budget) {
+        var cells = location.flaggedBreachCells();
+
+        if (cells.isEmpty()) {
+            return;
+        }
+
+        var iterator = cells.entrySet().iterator();
+        var repaired = 0;
+
+        while (iterator.hasNext() && repaired < budget) {
+            var entry = iterator.next();
+            var pos = entry.getKey();
+
+            if (!level.isLoaded(pos)) {
+                continue; // Not our chunk right now - leave it for a pass when it is loaded.
+            }
+
+            iterator.remove();
+
+            // Oct 6 - veins and webs are no longer recorded as breaches (MixinBlockBehaviour_HiveBreachFlag); any
+            // queued before that change are dropped here rather than put back into the air.
+            if (entry.getValue().is(AlienBlockTags.RESIN_VEINS) || entry.getValue().is(AlienBlockTags.RESIN_WEBS)) {
+                continue;
+            }
+
+            var current = level.getBlockState(pos);
+
+            if (!current.isAir() && current.getFluidState().isEmpty()) {
+                continue; // Someone filled it. Their block, their business.
+            }
+
+            HiveBuildSuppression.without(() -> {
+                level.setBlock(pos, entry.getValue(), net.minecraft.world.level.block.Block.UPDATE_CLIENTS);
+                return null;
+            });
+
+            repaired++;
+        }
+    }
+
     public static boolean restamp(ServerLevel level, HiveLocation location, ChunkPos originChunk, HiveLocation.BuiltPlacement placement) {
+        // 🚨🚨 THE HIVE MUST NOT FLAG ITSELF. Re-stamping replaces blocks, and any resin that goes to air during the
+        // stamp fires the breach hook - so a repair created the next breach and the crew looped forever on one
+        // chunk. See HiveBuildSuppression.
+        return HiveBuildSuppression.without(() -> restampUnsuppressed(level, location, originChunk, placement));
+    }
+
+    private static boolean restampUnsuppressed(
+        ServerLevel level,
+        HiveLocation location,
+        ChunkPos originChunk,
+        HiveLocation.BuiltPlacement placement
+    ) {
+        // NO MAINTENANCE: the hive leaves its structure exactly as it finds it.
+        //
+        // Guarded at the very TOP of both entry points, not inside the repair crew: this is the DETECTOR, so
+        // nothing is scanned, no breach recorded, no job filed and no drone drafted. Stopping it further down would
+        // still cost the scan every beat and still pull workers off their jobs.
+        //
+        // WARNING: this turns off BOTH halves - re-stamping damaged hive blocks AND clearing whatever is found in
+        // an authored air cell. The second half is what normally stops a player sealing a passage permanently, so
+        // with this on a corridor CAN be walled off for good. That is the trade the setting exists to make.
+        if (HiveLocationRegistry.INSTANCE.config().noMaintenance()) {
+            return false;
+        }
+
         var registry = HivePieceRegistry.get(level.getServer());
         if (registry == null) {
             return false;
@@ -151,6 +271,12 @@ public final class HiveStructureUpkeep {
             return false;
         }
         restore(level, preserved);
+        // Oct 6 - a re-stamp can take away what restored growth hung from (an intruding block, a vent in an air cell):
+        // clear whatever the restore left floating before the cells are judged.
+        var restamped = HiveStructurePlacer.resolvePlacement(level, location, match);
+        if (restamped != null) {
+            sweepFloatingDecor(level, restamped);
+        }
         markUnfixableCells(level, location, originChunk, match);
         return true;
     }
@@ -304,7 +430,16 @@ public final class HiveStructureUpkeep {
             if (!level.getBlockState(entry.pos()).isAir()) {
                 continue;
             }
-            level.setBlock(entry.pos(), entry.state(), 3);
+            // ⭐ Oct 6 - A VEIN COMES BACK ONLY ON FACES THAT STILL HAVE A WALL. The snapshot is taken before the stamp
+            // and the stamp can remove what a vein grew on; restoring it verbatim is one way veins ended up in midair.
+            var restoredState = entry.state();
+            if (restoredState.getBlock() instanceof net.minecraft.world.level.block.MultifaceBlock) {
+                restoredState = supportedVeinStateOrNull(level, entry.pos(), restoredState);
+                if (restoredState == null) {
+                    continue;
+                }
+            }
+            level.setBlock(entry.pos(), restoredState, BULK_HIVE_BLOCK_FLAGS);
             if (entry.blockEntity() == null) {
                 continue;
             }
@@ -321,6 +456,191 @@ public final class HiveStructureUpkeep {
      * variant is covered and new resin blocks inherit the exemption for free), plus the capture anchor, which is left
      * for the aliens to settle rather than being tidied away by masonry.
      */
+    /**
+     * {@code state} (a vein) with every face that no longer has something to cling to switched off, or null when none
+     * is left - the same {@code canAttachTo} test vanilla's multiface blocks use when they are placed.
+     */
+    private static @org.jetbrains.annotations.Nullable BlockState supportedVeinStateOrNull(
+        ServerLevel level,
+        BlockPos pos,
+        BlockState state
+    ) {
+        var anyFace = false;
+        var result = state;
+
+        for (var direction : net.minecraft.core.Direction.values()) {
+            var property = net.minecraft.world.level.block.MultifaceBlock.getFaceProperty(direction);
+
+            if (!result.hasProperty(property) || !result.getValue(property)) {
+                continue;
+            }
+
+            var supportPos = pos.relative(direction);
+
+            // ⚠ Review pass: never read a block in an unloaded chunk - ServerLevel.getBlockState would LOAD it
+            // synchronously. A wall we cannot see is assumed to still be there.
+            if (!level.isLoaded(supportPos)) {
+                anyFace = true;
+                continue;
+            }
+
+            if (net.minecraft.world.level.block.MultifaceBlock.canAttachTo(level, direction, supportPos, level.getBlockState(supportPos))) {
+                anyFace = true;
+            } else {
+                result = result.setValue(property, Boolean.FALSE);
+            }
+        }
+
+        return anyFace ? result : null;
+    }
+
+    /** Most web cells a floating cluster may hold before the sweep stops following it (and leaves it alone). */
+    private static final int MAX_WEB_CLUSTER = 256;
+
+    /**
+     * ⭐⭐ Oct 6 - CLEARS FLOATING HIVE GROWTH INSIDE A BUILT PIECE. [stated] "floating clusters of veins and web ...
+     * almost like they were ... making a vent in midair", in the raid ("spawner") room and others; [stated] "some of
+     * those veins were infact not touching the floor".
+     * <p>
+     * Only the piece's AUTHORED AIR CELLS are looked at - the open space of the room - so nothing the template itself
+     * built is ever touched (all 90 templates were checked: every authored vein faces an authored wall and every
+     * authored web cluster is anchored; no authored web stands alone). In that open space:
+     * </p>
+     * <ul>
+     * <li>A VEIN keeps only the faces that still have something to cling to, and goes when none are left. The hive's
+     * own carving and stamping send no neighbour updates (that is what once filled a server's tick queue), so a vein
+     * whose wall the hive removed was never told.</li>
+     * <li>A WEB CLUSTER stays only if it is part of something: it touches a vent, it touches a web the room was built
+     * with, or it is holding a captive. Otherwise it is the ring a vent left behind when the vent itself was cleared
+     * from the room - the clumps standing on room floors in his screenshots - and it goes.</li>
+     * </ul>
+     * <p>
+     * Runs on the upkeep beat for one piece at a time and only reads open cells, so the cost is a block read per open
+     * cell plus a few reads per piece of growth found. Removals are suppressed (never flagged as damage) and send no
+     * neighbour updates, like every other hive edit.
+     * </p>
+     */
+    static void sweepFloatingDecor(ServerLevel level, HiveStructurePlacer.ResolvedPlacement resolved) {
+        var airCells = resolved.template().filterBlocks(resolved.placeAt(), resolved.settings(), Blocks.AIR);
+
+        if (airCells.isEmpty()) {
+            return;
+        }
+
+        var airSet = new java.util.HashSet<BlockPos>(Math.max(16, airCells.size() * 2));
+        for (var cell : airCells) {
+            airSet.add(cell.pos());
+        }
+
+        var webs = new java.util.HashSet<BlockPos>();
+
+        for (var cell : airCells) {
+            var pos = cell.pos();
+
+            if (!level.isLoaded(pos)) {
+                continue;
+            }
+
+            var state = level.getBlockState(pos);
+
+            if (state.is(AlienBlockTags.RESIN_WEBS)) {
+                webs.add(pos);
+                continue;
+            }
+
+            if (state.is(AlienBlockTags.RESIN_VEINS) && state.getBlock() instanceof net.minecraft.world.level.block.MultifaceBlock) {
+                var supported = supportedVeinStateOrNull(level, pos, state);
+
+                if (supported != state) {
+                    // ⚠ Review pass: a waterlogged vein leaves its water behind, not a dry hole in a flooded room.
+                    var waterlogged = state.hasProperty(net.minecraft.world.level.block.state.properties.BlockStateProperties.WATERLOGGED)
+                        && state.getValue(net.minecraft.world.level.block.state.properties.BlockStateProperties.WATERLOGGED);
+                    var replacement = supported != null
+                        ? supported
+                        : waterlogged ? Blocks.WATER.defaultBlockState() : Blocks.AIR.defaultBlockState();
+                    HiveBuildSuppression.without(() -> {
+                        level.setBlock(pos, replacement, BULK_HIVE_BLOCK_FLAGS);
+                        return null;
+                    });
+                }
+            }
+        }
+
+        if (webs.isEmpty()) {
+            return;
+        }
+
+        var visited = new java.util.HashSet<BlockPos>();
+
+        for (var start : webs) {
+            if (visited.contains(start)) {
+                continue;
+            }
+
+            var cluster = new ArrayList<BlockPos>();
+            var queue = new java.util.ArrayDeque<BlockPos>();
+            queue.add(start);
+            visited.add(start);
+            var anchored = false;
+
+            while (!queue.isEmpty()) {
+                var pos = queue.poll();
+                cluster.add(pos);
+
+                if (cluster.size() > MAX_WEB_CLUSTER) {
+                    anchored = true; // too big to judge cheaply - leave it be
+                    break;
+                }
+
+                for (var direction : net.minecraft.core.Direction.values()) {
+                    var neighbour = pos.relative(direction);
+
+                    // ⚠ Review pass: a neighbour in an unloaded chunk is never read (that would load it); the cluster
+                    // is treated as anchored - leaving a web is always the safe mistake.
+                    if (!level.isLoaded(neighbour)) {
+                        anchored = true;
+                        continue;
+                    }
+
+                    var neighbourState = level.getBlockState(neighbour);
+
+                    if (neighbourState.is(AlienBlockTags.RESIN_VENTS)) {
+                        anchored = true; // a live vent's webbing
+                    } else if (neighbourState.is(AlienBlockTags.RESIN_WEBS)) {
+                        if (!airSet.contains(neighbour)) {
+                            anchored = true; // joined to webbing the room was built with
+                        } else if (webs.contains(neighbour) && visited.add(neighbour)) {
+                            queue.add(neighbour);
+                        }
+                    }
+                }
+            }
+
+            if (anchored) {
+                continue;
+            }
+
+            var holdsCaptive = false;
+            for (var pos : cluster) {
+                if (HostParking.holdsCaptive(level, pos)) {
+                    holdsCaptive = true;
+                    break;
+                }
+            }
+
+            if (holdsCaptive) {
+                continue;
+            }
+
+            HiveBuildSuppression.without(() -> {
+                for (var pos : cluster) {
+                    level.setBlock(pos, Blocks.AIR.defaultBlockState(), BULK_HIVE_BLOCK_FLAGS);
+                }
+                return null;
+            });
+        }
+    }
+
     private static boolean isPreserved(BlockState state) {
         if (state.isAir()) {
             return false;

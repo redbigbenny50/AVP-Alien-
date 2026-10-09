@@ -163,6 +163,18 @@ public class AlienDataSyncKeys {
             .build(0)
     );
 
+    /**
+     * ⭐ How far along a xenomorph's attempt to revive a downed royal is, 0 to 1.
+     * <p>
+     * ⚠ NETWORKED BUT NOT PERSISTED. It is a live gesture, not a fact about the creature - a rescuer that unloads
+     * mid-channel should come back doing nothing, not resume a bar the queen's manager has already forgotten.
+     * </p>
+     */
+    public static final BLibHolder<DataSyncKey<Float>> RESCUE_CHANNEL_PROGRESS = create(
+        "rescue_channel_progress",
+        builder -> builder.networkSynchronized(StreamCodecs.FLOAT).build(0.0F)
+    );
+
     public static final BLibHolder<DataSyncKey<Boolean>> QUEEN_HAS_INHIBITOR = create(
         "queen_has_inhibitor",
         builder -> builder.networkSynchronized(StreamCodecs.BOOLEAN)

@@ -89,9 +89,23 @@ public class OvipositorManager implements NBTSerializable {
             ovipositorCreationCooldown.reset();
         }
 
+        if (hasOvipositor && !hadOvipositorLastTick) {
+            onMounted();
+        }
+
         this.hadOvipositorLastTick = hasOvipositor;
 
         if (hasOvipositor) {
+            // ⚠ A queen on her eggsack never fights. The narrow graph she runs there has no combat actions, but a
+            // target can still be handed to her from outside (hive alerts, kin retaliation, a hit that did not rouse
+            // her). Anything that legitimately makes her fight rouses her off the sack FIRST (Queen.hurt ->
+            // abandonOvipositor), so while she is still on it a target is always stale. Field report Sep 22: "the queen
+            // still attacks things while on her sack and moves around with it."
+            if (queen.getTarget() != null) {
+                queen.setTarget(null);
+                queen.setLastHurtByMob(null);
+            }
+
             // Released: a chained eggsack on a queen who is no longer inhibited (inhibitor pried off) is dropped —
             // she's
             // free again, not a captive breeder.
@@ -211,6 +225,17 @@ public class OvipositorManager implements NBTSerializable {
             return;
         }
 
+        // 🚨🚨 BUILD-FREE: RESIN UNDER HER OWN FEET, AND SHE STAYS WHERE SHE IS.
+        //
+        // The path below stamps the pad at hiveFloorY() and moves her onto it. In build-free hiveFloorY() is the BOTTOM
+        // of a 48-block band, 24 blocks under her, so she was stamped a pad inside solid rock and teleported into it -
+        // a fresh build-free hive could never grow a sack (Oct 1 audit). She founded where she stands, so that is
+        // where the pad goes.
+        if (com.alien.common.gameplay.hive.config.BuildFreeMode.isEnabled() && !location.isEndStyleHive()) {
+            stampBuildFreeResinGround(location);
+            return;
+        }
+
         // NO HOLLOWING HERE. This used to carve the whole slab of her centre chunk out to air before stamping the
         // floor - a leftover from when the queen cleared her own chunk to make room for the eggsack. The carve
         // system now builds the core properly, so by the time she is ready to grow the sack the chamber and its
@@ -242,7 +267,30 @@ public class OvipositorManager implements NBTSerializable {
         );
     }
 
+    /** Left offset of the gEggHole marker on the chained sack, in blocks. */
+    private static final double CHAINED_EGG_LAY_LEFT = 5.44;
+
+    /** Backward offset of the same marker. */
+    private static final double CHAINED_EGG_LAY_BACKWARD = 2.21;
+
+    /**
+     * Where her egg emerges.
+     * <p>
+     * ⭐⭐ A CAPTIVE LAYS FROM HER CHAINED SACK, WHICH IS A DIFFERENT SHAPE. Measured from the {@code gEggHole} marker
+     * cube in chained_eggsack.geo.json, walked through its full bone chain: the hole sits 5.44 blocks to her left and
+     * 2.21 behind, against the free ovipositor's 6.0 and 2.5.
+     * </p>
+     * <p>
+     * ⚠ HEIGHT IS DELIBERATELY 0. The marker's Y is the one axis that shifts with Blockbench's rotation order, and it
+     * does not need to be exact: [stated] "if theres nothing under her then it falls". Laying at her own foot level and
+     * letting the egg drop is both simpler and what he described.
+     * </p>
+     */
     public Vec3 getEggLayingPosition() {
+        if (queen.isInhibited()) {
+            return EntityUtil.getRelativePosition(queen, CHAINED_EGG_LAY_LEFT, 0, CHAINED_EGG_LAY_BACKWARD);
+        }
+
         return EntityUtil.getRelativePosition(queen, 6, 0, 2.5);
     }
 
@@ -260,6 +308,29 @@ public class OvipositorManager implements NBTSerializable {
 
     public boolean hasOvipositor() {
         return getOvipositorOrNull() != null;
+    }
+
+    /**
+     * The eggsack has just attached. Drop whatever she was doing.
+     * <p>
+     * ⚠⚠ THE GRAPH SWAP ALONE DOES NOT STOP A RUNNING PLAN. {@code Queen.blib$getGOAPGraphOrNull} hands the agent the
+     * narrow egg-laying graph from this tick on, but {@code Agent.update(graph)} (read from just-goap 0.4.0 bytecode)
+     * only prepares world state, supplies a plan IF NONE IS RUNNING, and executes what it has - it never compares the
+     * graph to last tick's. A combat plan built on the wide graph therefore keeps executing on the sack for as long as
+     * its runtime preconditions hold, and since the sensors those preconditions read WERE registered on the narrow
+     * graph (to silence the "no sensor exists" warnings), they now hold. That is the queen walking around and swinging
+     * with the eggsack attached. The plan is abandoned here, explicitly, at the moment of mounting.
+     */
+    private void onMounted() {
+        var agent = queen.blib$getGOAPAgentOrNull();
+
+        if (agent != null) {
+            agent.getBackingAgent().abandonPlan();
+        }
+
+        queen.getNavigation().stop();
+        queen.setTarget(null);
+        queen.setLastHurtByMob(null);
     }
 
     /**
@@ -294,6 +365,20 @@ public class OvipositorManager implements NBTSerializable {
     }
 
     public void abandonOvipositor() {
+        // \u2b50\u2b50 NOTHING TO ABANDON, NOTHING TO DO. This is called from the rouse path, which fires on EVERY HIT
+        // - so an inhibited or suppressed queen being beaten down ran the whole method once per point of damage.
+        //
+        // \u26a0 A live log showed it FIFTEEN TIMES as one queen went from 233 health to 19, each line claiming she
+        // "lost her ability to reproduce" when she had had no eggsack the entire time. That is noise in a log
+        // someone will later read to diagnose something real, and each pass also ran an eight-block entity query.
+        //
+        // \u26a0 THE ORPHAN SWEEP BELOW IS STILL REACHED whenever she actually has a sack or is carrying passengers,
+        // which is the only situation that can leave one behind. Skipping it when she has neither cannot strand
+        // anything, because there was nothing riding her to strand.
+        if (!queen.hasOvipositor() && queen.getPassengers().isEmpty()) {
+            return;
+        }
+
         logEggsackRemoval("abandonOvipositor - she was roused or lost her ability to reproduce");
         getOvipositor().ifSome(Entity::stopRiding);
 
@@ -391,6 +476,17 @@ public class OvipositorManager implements NBTSerializable {
         if (location == null || location.founderId() == null || location.reproductiveEstablished()) {
             return false;
         }
+        // \u2b50\u2b50\u2b50 BUILD-FREE: NOTHING IS EVER EXCAVATED, SO NOTHING MAY WAIT ON EXCAVATION.
+        //
+        // \u26a0\u26a0 THIS IS THE GATE THE WHOLE MODE HANGS ON. setReproductiveEstablished(true) is set in exactly
+        // ONE place - when the ovipositor is created - and founding mode does not end until it is. A build-free queen
+        // who waited for a carve that never happens would stay in founding FOREVER: no eggs, so no drones (a drone
+        // costs one ovomorph), so no workers, so nothing builds and nothing defends. Every other part of this mode is
+        // dead code until this returns false.
+        if (com.alien.common.gameplay.hive.config.BuildFreeMode.isEnabled()) {
+            return false;
+        }
+
         var carveSite = location.activeCarveSite();
         if (carveSite != null) {
             return carveSite.isFoundingCore() && !carveSite.isFullyExcavated();
@@ -452,10 +548,63 @@ public class OvipositorManager implements NBTSerializable {
     }
 
     /**
+     * Build-free founding pad: paints the queen's strain resin onto the EXISTING ground around her, out to
+     * {@link #BUILD_FREE_PAD_RADIUS} - far enough to reach every eggsack support point ({@code canOvipositorFit} probes
+     * up to ~10 blocks behind her and looks up to 4 blocks down for resin).
+     * <p>
+     * ⚠ NOTHING IS CARVED, FILLED OR FLOATED. Per column it finds the top solid block within a few blocks of her feet
+     * that has open space above it, and re-skins only that block. Empty columns (a drop, a pit) are left alone, which
+     * is the whole point of the mode - the hive is the terrain as it was.
+     * </p>
+     */
+    private void stampBuildFreeResinGround(HiveLocation location) {
+        var level = queen.level();
+        var floorState = strainResinBone(queen).defaultBlockState();
+        var resinTag = AlienVariantTypes.getFor(queen.getVariant()).resinBlockTag();
+        var feet = queen.blockPosition();
+        var radiusSq = BUILD_FREE_PAD_RADIUS * BUILD_FREE_PAD_RADIUS;
+        var pos = new BlockPos.MutableBlockPos();
+        var above = new BlockPos.MutableBlockPos();
+
+        for (var dx = -BUILD_FREE_PAD_RADIUS; dx <= BUILD_FREE_PAD_RADIUS; dx++) {
+            for (var dz = -BUILD_FREE_PAD_RADIUS; dz <= BUILD_FREE_PAD_RADIUS; dz++) {
+                if (dx * dx + dz * dz > radiusSq) {
+                    continue;
+                }
+                for (var y = feet.getY() + 1; y >= feet.getY() - 4; y--) {
+                    pos.set(feet.getX() + dx, y, feet.getZ() + dz);
+                    if (!level.hasChunkAt(pos)) {
+                        break;
+                    }
+                    var state = level.getBlockState(pos);
+                    if (state.getCollisionShape(level, pos).isEmpty() || !state.getFluidState().isEmpty()) {
+                        continue; // still in the open - keep looking down
+                    }
+                    above.set(pos.getX(), y + 1, pos.getZ());
+                    var aboveState = level.getBlockState(above);
+                    if (!(aboveState.isAir() || aboveState.canBeReplaced())) {
+                        break; // buried - not a floor surface
+                    }
+                    if (!state.is(resinTag) && !state.hasBlockEntity() && state.getDestroySpeed(level, pos) >= 0.0F) {
+                        level.setBlock(pos, floorState, 3);
+                    }
+                    break;
+                }
+            }
+        }
+
+        var floorCost = HiveLocationRegistry.INSTANCE.config().ovipositorCreationBiomassCost();
+        location.setBiomass(Math.max(0, location.biomass() - floorCost));
+    }
+
+    /** Covers every eggsack support point ({@code canOvipositorFit}). */
+    private static final int BUILD_FREE_PAD_RADIUS = 10;
+
+    /**
      * Contained-captive eggsack gate: an inhibited, contained queen with no combat target may grow a chained eggsack.
      * Deliberately omits the founding gates (resin underfoot, hive-center, biomass) — a captive isn't founding; the
-     * eggsack hangs from her restraints. Egg-laying capacity/spacing are still enforced downstream by the egg-laying
-     * GOAP, which lays from her personal inhibited single-chunk location.
+     * eggsack hangs from her restraints. Egg-laying spacing is still enforced downstream by the egg-laying GOAP: since
+     * Oct 3 she holds no claim, so she lays into her single slot and ignores any hive she is standing over.
      */
     private boolean canCreateChainedEggsack() {
         return queen.isInhibited()

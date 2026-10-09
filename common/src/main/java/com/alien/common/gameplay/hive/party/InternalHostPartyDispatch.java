@@ -10,7 +10,6 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.LivingEntity;
-import net.minecraft.world.entity.MobSpawnType;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.phys.AABB;
 import org.jetbrains.annotations.Nullable;
@@ -155,7 +154,13 @@ public final class InternalHostPartyDispatch {
         for (var candidate : level.getEntitiesOfClass(LivingEntity.class, box, InternalHostPartyDispatch::isHostable)) {
             // Inside the BUILT hive, not merely inside the claim - a claim is enormous and a mob wandering the
             // territory is not an intruder, it is scenery.
-            if (!location.structurePieceByChunk().containsKey(new ChunkPos(candidate.blockPosition()))) {
+            // ⚠ Oct 1: build-free has no built hive, so this test never passed there. Its interior is the claim within
+            // the band - the same rule InteriorSweepDuty.isInsideHive uses - and the withinSlab check below still runs.
+            var candidateChunk = new ChunkPos(candidate.blockPosition());
+            var inside = com.alien.common.gameplay.hive.config.BuildFreeMode.isEnabled() && !location.isEndStyleHive()
+                ? location.claimedChunks().contains(candidateChunk)
+                : location.structurePieceByChunk().containsKey(candidateChunk);
+            if (!inside) {
                 continue;
             }
             if (!location.withinSlab(candidate.blockPosition().getY())) {
@@ -234,6 +239,8 @@ public final class InternalHostPartyDispatch {
         var spawned = 0;
 
         for (var type : new ArrayList<>(party.composition().getAvailableEntityTypes())) {
+            var spawnedOfType = 0;
+
             for (var i = 0; i < party.composition().getCount(type); i++) {
                 var entity = type.create(level);
                 if (!(entity instanceof net.minecraft.world.entity.Mob mob)) {
@@ -243,7 +250,8 @@ public final class InternalHostPartyDispatch {
                 // Emerge AT the vent. Unlike the surface hunt there is no need to find sky - this vent is indoors and
                 // the drone belongs on the other side of it.
                 mob.moveTo(spawnPos.getX() + 0.5D, spawnPos.getY(), spawnPos.getZ() + 0.5D, level.random.nextFloat() * 360F, 0F);
-                mob.finalizeSpawn(level, level.getCurrentDifficultyAt(spawnPos), MobSpawnType.MOB_SUMMONED, null);
+                com.alien.common.gameplay.hive.spawning.ReserveSpawnUtil
+                    .finalizePrepaidSpawn(level, mob, spawnPos);
 
                 if (!level.addFreshEntity(mob)) {
                     continue;
@@ -251,6 +259,15 @@ public final class InternalHostPartyDispatch {
 
                 party.trackMaterializedMember(mob.getUUID(), type);
                 spawned++;
+                spawnedOfType++;
+            }
+
+            // ⚠⚠ Oct 5 audit - THE SPAWNED DRONE WAS NEVER TAKEN OFF THE COMPOSITION. Every other dispatcher decrements
+            // per spawn; this one did not, so when the party resolved it banked the live drone AND the untouched
+            // composition entry for it - one free drone for every internal host party. Taken off in one step after the
+            // loop, so the loop bound (read from the composition each pass) is not disturbed mid-iteration.
+            if (spawnedOfType > 0) {
+                party.composition().add(type, -spawnedOfType);
             }
         }
 

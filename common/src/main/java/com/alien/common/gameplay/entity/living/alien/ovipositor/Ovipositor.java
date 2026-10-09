@@ -24,6 +24,96 @@ import org.jetbrains.annotations.NotNull;
 public class Ovipositor extends Mob implements DataUser {
 
     /**
+     * A static entity does no movement work at all.
+     * <p>
+     * 🚨 SAME WASTE AS THE OVOMORPH: this is a Mob that never moves, yet it ran the full vanilla pipeline every tick -
+     * travel -> move -> collide -> collideBoundingBox -> collectColliders -> BlockCollisions - for a delta of zero. A
+     * live server profile showed that collision chain as the heaviest branch under entity ticking.
+     * </p>
+     * <p>
+     * ⚠ ONLY WHEN GENUINELY AT REST - on the ground with no residual motion - so anything freshly spawned or falling
+     * still settles normally.
+     * </p>
+     */
+    @Override
+    public void travel(net.minecraft.world.phys.Vec3 travelVector) {
+        // ⭐ Oct 5 perf - WORN, IT DOES NOT TRAVEL. Riding its royal, the sack's position is set every tick by the
+        // royal's positionRider; vanilla still ran the whole travel step for it (friction, gravity, an entity
+        // collision query, the inside-blocks scan) only for the result to be overwritten. /blib perf measured that
+        // at ~26 us per tick for one sack - more than everything else it does.
+        if (isPassenger()) {
+            setDeltaMovement(net.minecraft.world.phys.Vec3.ZERO);
+            return;
+        }
+
+        // 🚨🚨 onGround() IS ONLY UPDATED BY Entity.move(), WHICH THIS SKIP BYPASSES. Once settled, the flag
+        // froze true - so when the block underneath was later mined the entity never re-evaluated and simply
+        // HUNG IN THE AIR. Reported as eggs floating.
+        //
+        // ⭐ So the support is verified directly instead of trusted. One block read per tick against the entire
+        // collision sweep it replaces - still overwhelmingly the cheaper path, and now it cannot go stale.
+        if (
+            onGround()
+                && getDeltaMovement().lengthSqr() < RESTING_MOTION_EPSILON
+                && hasSolidSupportBelow()
+        ) {
+            setDeltaMovement(net.minecraft.world.phys.Vec3.ZERO);
+            calculateEntityAnimation(false);
+            return;
+        }
+
+        super.travel(travelVector);
+    }
+
+    /**
+     * Whether the block underneath can actually hold this entity up.
+     * <p>
+     * ⚠ Checked every tick rather than cached: the whole point is to notice the moment the floor is removed.
+     * </p>
+     */
+    private boolean hasSolidSupportBelow() {
+        var below = blockPosition().below();
+
+        return level().getBlockState(below).entityCanStandOn(level(), below, this);
+    }
+
+    /** Below this squared speed the entity is treated as settled. */
+    private static final double RESTING_MOTION_EPSILON = 1.0E-7D;
+
+    /**
+     * ⭐⭐⭐ A CLICK ON THE EGGSACK IS A CLICK ON THE ROYAL WEARING IT.
+     * <p>
+     * ⚠⚠ THIS IS WHY PLAYERS "CONSTANTLY REPORT THEY CANT FEED THE QUEEN A ROYAL JELLY BLOCK". The ovipositor is 5.0 x
+     * 3.25 and rides her; her own hitbox is smaller, so THE SACK ENVELOPS HER. Aim at the queen and the ray hits the
+     * sack, which had no interaction handler at all - so the click did nothing and never reached the code that was
+     * working perfectly the whole time.
+     * </p>
+     * <p>
+     * ⚠ IT IS ALSO WHY THE REPORTS LOOKED INCONSISTENT: a queen WITHOUT her sack - newly founded, or just roused off it
+     * - accepts the block first try. The feature was only ever unreachable on a seated queen, which is exactly the
+     * queen anyone would want to promote.
+     * </p>
+     * <p>
+     * ⭐ Forwarding rather than duplicating: whatever the royal does with an item, the sack does too, now and for
+     * anything added later. Nothing about the jelly block is named here.
+     * </p>
+     */
+    @Override
+    public @NotNull net.minecraft.world.InteractionResult mobInteract(
+        @NotNull net.minecraft.world.entity.player.Player player,
+        @NotNull net.minecraft.world.InteractionHand hand
+    ) {
+        // ⚠ interact(), NOT mobInteract() - the latter is PROTECTED, so it cannot be called on another entity. And
+        // interact is the RIGHT door anyway: it is Mob's public, final entry point and runs the standard handling
+        // (name tag, lead) before dispatching to mobInteract, so the royal is treated exactly as if the player had
+        // clicked her directly.
+        if (getVehicle() instanceof Mob royal) {
+            return royal.interact(player, hand);
+        }
+        return super.mobInteract(player, hand);
+    }
+
+    /**
      * The eggsack burns only if its royal does.
      * <p>
      * There is ONE ovipositor type for every strain - the sack takes its strain from the queen it rides, which is why
@@ -72,8 +162,50 @@ public class Ovipositor extends Mob implements DataUser {
      * It used to vanish the instant the queen stood up, which read as the sack never having been real. Leaving it
      * behind gives the scene an aftermath: the thing she was tending is still lying there, and it is what tells a
      * player what happened here. It still yields nothing when it goes — this is scenery, not loot.
+     * <p>
+     * !! 120s -> 45s. [stated] Aug 24. THE DECIDING CASE IS THE EMPRESS MOLT, THE ONE TRANSFORMATION IN THE MOD WHERE
+     * THE MOLTING CREATURE OWNS AN EGGSACK. A queen dismounts, molts, and grows a NEW sack as an empress - so at 120s
+     * the dead husk was still lying in the clutch long after the new one appeared, two sacks overlapping in the throne
+     * room. 45s is long enough to still read as aftermath and short enough to clear before, or shortly after, she
+     * emerges.
+     * <p>
+     * ⚠ THIS IS BLANKET, NOT MOLT-ONLY. It also shortens the husk left by a queen who was KILLED or who UNLOADED, which
+     * is the common case. That is deliberate - a per-cause linger would put knowledge of why she left inside a sack
+     * that has no way to know it. The clock starts the tick it stops being carried, whatever the cause, and the log
+     * line below reads this constant so it always reports the real number.
      */
-    public static final int ABANDONED_LINGER_TICKS = 120 * 20;
+    public static final int ABANDONED_LINGER_TICKS = 45 * 20;
+
+    /**
+     * How far past the hitbox the eggsack is allowed to draw before the game may cull it.
+     * <p>
+     * [stated] "when i rotate a certain amount the eggsack vanishes on the empress kinda the same for queens ... any
+     * way we can have it not vanish until its actually out of view".
+     * </p>
+     * <p>
+     * !!! CULLING USES THE HITBOX, NOT THE MODEL. Minecraft decides whether to draw an entity by testing
+     * getBoundingBoxForCulling() against the view frustum, and that defaults to the COLLISION box - 6.5 x 3.7 for the
+     * empress sack, 5.0 x 3.25 for the queen's. The rendered sack sprawls well past both, so turning until the small
+     * box left the frustum made the whole model pop out while most of it was still on screen.
+     * </p>
+     * <p>
+     * ⚠ GENEROUS ON PURPOSE. An over-large culling box costs only the occasional draw of something just off screen; an
+     * under-sized one is a visible pop. There is no reason to tune this finely.
+     * </p>
+     */
+    private static final double CULLING_INFLATION_BLOCKS = 6.0D;
+
+    /**
+     * A deliberately oversized box so the sack is only culled once it is genuinely out of view.
+     * <p>
+     * ⚠ CULLING ONLY. This does not change collision, pathing or hit detection - those all still use the real bounding
+     * box.
+     * </p>
+     */
+    @Override
+    public net.minecraft.world.phys.AABB getBoundingBoxForCulling() {
+        return getBoundingBox().inflate(CULLING_INFLATION_BLOCKS);
+    }
 
     /** When it lost its royal, or {@link Long#MIN_VALUE} while it still has one. */
     private long abandonedAtGameTime = Long.MIN_VALUE;
@@ -128,6 +260,18 @@ public class Ovipositor extends Mob implements DataUser {
         }
 
         return super.hurt(damageSource, amount);
+    }
+
+    /**
+     * The eggsack takes exactly what its royal's strain takes. One entity type serves every strain, so no entity tag
+     * can say "a nether queen's sac ignores cold" - the royal's variant is remembered here for the renderer already,
+     * and it answers this too. [stated] Sep 22: "ovipositor and royal cocoon ... also have strains so the immunity
+     * should match their strain."
+     */
+    @Override
+    public boolean isInvulnerableTo(@NotNull DamageSource damageSource) {
+        return com.alien.common.gameplay.entity.living.alien.StrainHazardImmunity.isImmune(getRoyalVariant(), damageSource)
+            || super.isInvulnerableTo(damageSource);
     }
 
     @Override

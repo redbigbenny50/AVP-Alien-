@@ -7,8 +7,6 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 
-import java.util.ArrayList;
-
 /**
  * Per-tick (piggybacking {@code HiveLocationLoadedTickTask}'s 20-tick cadence) resolution for
  * {@link HiveParty.BiomassHunting} parties. No day/night cycle like {@link SurfacePartyLifecycleTask} — this party runs
@@ -56,46 +54,8 @@ public final class BiomassHuntingPartyLifecycleTask {
         HiveParty.BiomassHunting party,
         HiveConfig config
     ) {
-        var homeVent = nearestVent(serverLevel, location, config);
-
-        for (var entry : new ArrayList<>(party.materializedMembers().entrySet())) {
-            var entity = serverLevel.getEntity(entry.getKey());
-            party.untrackMaterializedMember(entry.getKey());
-            if (entity == null) {
-                // NOT loaded - and not dead: real deaths are untracked at the moment of death (PartyMemberDeath).
-                // Writing off every out-of-range member is what quietly drained the hive on each dispatch.
-                location.localReserves().addReturningMember(entry.getValue(), 1);
-                continue;
-            }
-            if (!entity.isAlive()) {
-                continue; // died this tick, before its death hook untracked it
-            }
-
-            if (homeVent != null) {
-                entity.teleportTo(homeVent.getX() + 0.5, homeVent.getY(), homeVent.getZ() + 0.5);
-            }
-
-            location.localReserves().addReturningMember(entry.getValue(), 1);
-            if (entity instanceof com.alien.common.gameplay.entity.living.alien.Alien alien) {
-                alien.clearPartyMembership();
-            }
-            // EGG DUTY: a carrier is refunded but NEVER discarded - discarding it mid-haul vanished the
-            // worker and dropped its egg. It stays alive to finish the delivery.
-            if (EggDutyGuard.isOnEggDuty(entity)) {
-                continue;
-            }
-            entity.discard();
-        }
-
-        // Any never-materialized remainder in composition also refunds.
-        for (var type : new ArrayList<>(party.composition().getAvailableEntityTypes())) {
-            var count = party.composition().getCount(type);
-            if (count <= 0) {
-                continue;
-            }
-            location.localReserves().addReturningMember(type, count);
-            party.composition().add(type, -count);
-        }
+        // Oct 5 audit: one shared return - see PartyReturn for the three bugs the four copies carried.
+        PartyReturn.returnHome(serverLevel, location, party, nearestVent(serverLevel, location, config));
 
         Alien.LOGGER.info("Hive: biomass hunting party resolved (duration elapsed) for location {}", location.id());
     }

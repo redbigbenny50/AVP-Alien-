@@ -16,7 +16,15 @@ import net.minecraft.world.phys.AABB;
  */
 public final class HiveStampEviction {
 
-    private static final int SLAB_BAND_BLOCKS = 16;
+    /**
+     * The vertical band a hive's structure occupies.
+     * <p>
+     * PUBLIC because SpreadZoneCheck derives its minimum burial depth from it. [stated] "it should be at least 17
+     * blocks underground because the height of the structure is 16" - so that rule is SLAB_BAND_BLOCKS + 1, and
+     * deriving it means the two can never drift apart if the hive gets taller.
+     * </p>
+     */
+    public static final int SLAB_BAND_BLOCKS = 16;
 
     private HiveStampEviction() {}
 

@@ -200,7 +200,7 @@ public final class NukeConversion {
                     continue;
                 }
 
-                member.hurt(member.damageSources().explosion(null, null), Float.MAX_VALUE);
+                member.hurt(member.damageSources().explosion(null, null), com.alien.common.util.LethalDamage.AMOUNT);
             }
         }
     }

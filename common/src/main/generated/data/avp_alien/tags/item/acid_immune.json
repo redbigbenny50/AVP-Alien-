@@ -9,6 +9,22 @@
     "avp_alien:plated_chitin",
     "avp_alien:plated_nether_chitin",
     "avp_alien:plated_aberrant_chitin",
-    "avp_alien:plated_irradiated_chitin"
+    "avp_alien:plated_irradiated_chitin",
+    {
+      "id": "avp_predator:jungle_predator_helmet",
+      "required": false
+    },
+    {
+      "id": "avp_predator:jungle_predator_chestplate",
+      "required": false
+    },
+    {
+      "id": "avp_predator:jungle_predator_leggings",
+      "required": false
+    },
+    {
+      "id": "avp_predator:jungle_predator_boots",
+      "required": false
+    }
   ]
 }

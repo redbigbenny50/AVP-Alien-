@@ -87,6 +87,20 @@ public final class HostCaptureRules {
             // nothing at all, and the capture sound machine-gunned as capture() fired over and over.
             return false;
         }
+        // 🚨🚨 A MASK STOPS A GRAB, NOT JUST A FACEHUGGER. The facehugger path has always honoured
+        // FACEHUGGER_RESISTANT_HELMETS - avp_predator puts jungle_predator_helmet in that tag - but this path never
+        // checked it, so a yautja at FULL HEALTH could be grabbed and cocooned while still masked.
+        //
+        // ⚠⚠ THE MASK IS THE GATE, NOT A HEALTH NUMBER. A yautja's mask breaks below half health, so "only grabbable
+        // under 50%" falls out of this check on its own - there is deliberately no health threshold here for them.
+        // Adding one would double-gate it and desync the moment the mask actually comes off.
+        //
+        // ⚠ Applies to anything wearing a listed helmet, not just yautja - which is the same rule the facehugger side
+        // already follows, so the two can no longer disagree about who is protected.
+        if (AlienPredicates.hasFacehuggerResistantHelmet(living)) {
+            return false;
+        }
+
         if (living instanceof Player player) {
             if (player.isCreative() || player.isSpectator()) {
                 return false;

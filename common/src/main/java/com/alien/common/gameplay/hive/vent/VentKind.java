@@ -30,7 +30,28 @@ public enum VentKind {
      * Dropped by a surface party out in the open air. The hive's front door, and the ONLY vent a host-hunt party will
      * use - both to launch from and to carry a captive back to.
      */
-    SURFACE;
+    SURFACE,
+
+    /**
+     * \u2b50\u2b50 A BEACHHEAD. Placed by an INVADING hive on ground it bought inside a rival's territory, so its
+     * attack parties have a door to come through.
+     * <p>
+     * [stated] "the vents that prexisted the claim are owned by the native hive. and vents placed by the invader are
+     * tied to the other hive. So there should be a clear distinction, maybe a 4th register."
+     * </p>
+     * <p>
+     * \u26a0\u26a0 IT IS A PARTY DOOR BUT NOT A DEFENDER EMERGENCE. A defender stepping out of one arrives deep inside
+     * hostile ground, alone, far from the hive it was summoned to protect - the same reason FRONTIER is excluded. Get
+     * this wrong and an invader's assault vent starts disgorging its own DEFENDERS every time an intruder wanders near
+     * the hive it was built to attack.
+     * </p>
+     * <p>
+     * \u26a0 NEVER INFERRED. This is a placement-time fact - "an invader put this here" - and cannot be read off a
+     * position afterwards, so {@code classifyUntagged} must never return it: a vent that loses its tag falls back to
+     * the positional rules instead.
+     * </p>
+     */
+    INVADER;
 
     /** Parse a persisted name, tolerating anything unrecognised (returns null so the vent is re-classified). */
     public static @Nullable VentKind byName(String name) {
@@ -44,7 +65,7 @@ public enum VentKind {
 
     /** Vents a party may launch from or return to, other than the surface door. */
     public boolean isPartyDoor() {
-        return this == SURFACE || this == FRONTIER;
+        return this == SURFACE || this == FRONTIER || this == INVADER;
     }
 
     /** Vents a defender may safely emerge from - inside the hive, or at its front door. */

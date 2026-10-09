@@ -104,6 +104,21 @@ public final class MigrationDispatch {
             return false;
         }
 
+        // ⭐⭐ A HIVE WITH A LIVE QUEEN NEVER MIGRATES - FIX B, [stated] Sep 23 "a" (option a). Migration drains the
+        // RESERVES into a convoy, and the reserves are counts; the founder queen is a loaded ENTITY and was simply left
+        // standing in the ruins, then re-founded on whatever block she stood on (the surface-hive loop of Aug 17).
+        // founderId == null is the tree's own meaning of "queenless" (QueenInhibitionService, the growth tasks), and
+        // claims regrow through ChunkPicker, so refusing here strands nobody: a hive that still has its queen keeps
+        // her, keeps its ground, and takes it back. Only a queenless remnant evacuates to a sister.
+        if (source.founderId() != null) {
+            Alien.LOGGER.info(
+                "Hive: migration declined for {} - it still has a live queen ({}); a hive with its queen holds its ground",
+                source.id(),
+                source.founderId()
+            );
+            return false;
+        }
+
         var destination = pickClosestSister(source, lineage);
         if (destination == null) {
             Alien.LOGGER.info(

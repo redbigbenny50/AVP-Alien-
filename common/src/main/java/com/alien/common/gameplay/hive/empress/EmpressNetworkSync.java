@@ -69,7 +69,7 @@ public final class EmpressNetworkSync {
         }
 
         for (var seat : seats.entrySet()) {
-            reconcileNetwork(lineages, seat.getKey(), seat.getValue());
+            reconcileNetwork(server, lineages, seat.getKey(), seat.getValue());
         }
 
         pruneRescueBudgets(lineages);
@@ -103,7 +103,12 @@ public final class EmpressNetworkSync {
         }
     }
 
-    private static void reconcileNetwork(List<LineageFactionData> lineages, UUID empressId, HiveLocation seat) {
+    private static void reconcileNetwork(
+        MinecraftServer server,
+        List<LineageFactionData> lineages,
+        UUID empressId,
+        HiveLocation seat
+    ) {
         var dimension = seat.dimension();
         var reachable = walkCorridor(lineages, seat, dimension);
 
@@ -127,14 +132,68 @@ public final class EmpressNetworkSync {
                 // territory here - whoever reached it first keeps it, and the loser simply has a smaller network.
                 if (current == null) {
                     lineage.setEmpressId(empressId);
+                    announceAdoption(server, lineage);
                     Alien.LOGGER.info("Hive: lineage {} joined the empress network of {}", lineage.factionId(), empressId);
                 }
             } else if (empressId.equals(current)) {
                 // The corridor was cut, or the claims that carried it are gone.
                 lineage.setEmpressId(null);
                 lineage.setPendingEmpressSeatId(null);
+                announceSeverance(server, lineage);
                 Alien.LOGGER.info("Hive: lineage {} severed from the empress network of {}", lineage.factionId(), empressId);
             }
+        }
+    }
+
+    /**
+     * ⭐⭐ A LINEAGE HAS JUST BEEN TAKEN INTO THE NETWORK — [stated] "also let it announce if a lineage adopts a hive
+     * especially if its one of the generated hibernated ones", clarified to include an isolated HIVE and not only a
+     * queen. This is that mechanic: corridor adoption absorbs a whole lineage, every hive it holds, in one pass.
+     * </p>
+     * <p>
+     * ⚠⚠⚠ IT ANNOUNCES AT THE ADOPTED HIVES, NEVER AT HER SEAT, AND THAT IS NOT A STYLE CHOICE. Her position is a
+     * designed secret: the ONLY intended way to learn it is the self-reveal on the second rescue transfer, which is the
+     * payoff for a player who pressured her network hard enough to over-extend it. A scream broadcast from her seat
+     * every time the corridor grew would hand that away for free and gut the whole reveal mechanic. Announcing at the
+     * absorbed hive is also simply where the player is: that is the hive they have been watching.
+     * </p>
+     * <p>
+     * ⚠ Fired only on a lineage that had NO empress and now has one — a lineage already answering a different empress
+     * is left alone by the branch above and says nothing.
+     * </p>
+     */
+    private static void announceAdoption(MinecraftServer server, LineageFactionData lineage) {
+        var level = server.getLevel(lineage.dimension());
+        if (level == null) {
+            return;
+        }
+        for (var location : lineage.locationsById().values()) {
+            if (!location.isAlive() || location.isExiled()) {
+                continue;
+            }
+            com.alien.common.gameplay.hive.growth.DaughterQueenAnnouncements
+                .announceAdoptedHive(level, location.centerPos());
+        }
+    }
+
+    /**
+     * The corridor to this lineage has been cut. Tell whoever is standing there that it worked.
+     * <p>
+     * ⭐ Mirrors {@link #announceAdoption} exactly, including the rule that it fires at the LINEAGE'S OWN HIVES and
+     * never at her seat: severance is the reward for cutting the network, not a second way to find her.
+     * </p>
+     */
+    private static void announceSeverance(MinecraftServer server, LineageFactionData lineage) {
+        var level = server.getLevel(lineage.dimension());
+        if (level == null) {
+            return;
+        }
+        for (var location : lineage.locationsById().values()) {
+            if (!location.isAlive() || location.isExiled()) {
+                continue;
+            }
+            com.alien.common.gameplay.hive.growth.DaughterQueenAnnouncements
+                .announceCorridorSevered(level, location.centerPos());
         }
     }
 

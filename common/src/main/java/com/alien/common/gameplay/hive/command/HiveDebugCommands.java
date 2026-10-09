@@ -41,8 +41,12 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.HoverEvent;
 import net.minecraft.world.level.ChunkPos;
 
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Objects;
+import java.util.UUID;
 
 /**
  * Debug-only commands for inspecting and seeding the new hive system. Live at {@code /avp_alien debug hive ...}. The
@@ -66,36 +70,525 @@ public final class HiveDebugCommands {
 
     private HiveDebugCommands() {}
 
+    /**
+     * ⭐⭐⭐ THE GROUPED COMMAND TREE. Was 52 FLAT subcommands under {@code /avp_alien debug hive <name>}.
+     * <p>
+     * [stated] "i think theres too many i think we can condense ... we need to have them seperated properly as location
+     * supply remove trigger and any other categories" and [stated] "can we further reduce it to just /avp hive".
+     * </p>
+     * <p>
+     * NOTHING WAS DELETED — every handler below is still reachable. The savings are structural:
+     * <ul>
+     * <li>SEVEN position-based inspects folded into {@code here}, which is also the answer to "an easier way to get the
+     * location id and lineage id" — it resolves both from under your feet and prints them click-copyable.</li>
+     * <li>SEVEN legacy-queen commands folded into {@code legacy &lt;list|wake|kill&gt; [all|area|nearest]}. They were
+     * the same two verbs crossed with the same three scopes, written out longhand.</li>
+     * <li>{@code dump_indexes} + {@code rebuild_indexes} → {@code maintenance indexes &lt;dump|rebuild&gt;};
+     * {@code validate} + {@code force_invariant_check} → {@code maintenance check &lt;registry|invariants&gt;}.</li>
+     * </ul>
+     * </p>
+     */
     public static LiteralArgumentBuilder<CommandSourceStack> create() {
         return Commands.literal("hive")
-            .then(Commands.literal("list_lineages").executes(HiveDebugCommands::listLineages))
-            .then(Commands.literal("list_tracked").executes(HiveDebugCommands::listTracked))
-            .then(Commands.literal("dump_indexes").executes(HiveDebugCommands::dumpIndexes))
-            .then(Commands.literal("inhibit_here").executes(HiveDebugCommands::inhibitHere))
-            .then(Commands.literal("web_host").executes(HiveDebugCommands::webHost))
+            .then(here())
+            .then(inspect())
+            .then(list())
+            .then(trigger())
+            .then(supply())
+            .then(remove())
+            .then(create_())
+            .then(legacy())
+            .then(maintenance())
+            .then(config())
+            .then(diag())
+            .then(debugToggles());
+    }
+
+    /**
+     * ⭐⭐ EVERYTHING UNDER YOUR FEET, IN ONE COMMAND. The seven inspects that took no argument and read from the
+     * player's position were seven commands only because nobody had grouped them.
+     * <p>
+     * Bare {@code here} runs the settlement read, which is the one that names both the location and its lineage — so
+     * the ID hunt that used to be {@code list_lineages} → copy → {@code inspect_lineage} → copy is now one command.
+     * </p>
+     */
+    private static LiteralArgumentBuilder<CommandSourceStack> here() {
+        return Commands.literal("here")
+            .requires(CommandSourceStack::isPlayer)
+            .executes(HiveDebugCommands::inspectHere)
+            .then(Commands.literal("settlement").executes(HiveDebugCommands::inspectSettlement))
+            .then(Commands.literal("queen").executes(HiveDebugCommands::inspectQueen))
+            .then(Commands.literal("empress").executes(HiveDebugCommands::inspectEmpress))
+            .then(Commands.literal("targeting").executes(HiveDebugCommands::inspectTargeting))
+            .then(Commands.literal("hunters").executes(HiveDebugCommands::inspectHunters))
+            .then(Commands.literal("ovipositor").executes(HiveDebugCommands::inspectOvipositor))
+            .then(Commands.literal("slab").executes(HiveDebugCommands::inspectSlab))
+            .then(Commands.literal("maturation").executes(HiveDebugCommands::inspectQueenlessMaturation));
+    }
+
+    /** Reads that need an ID. Everything positional lives under {@link #here()} instead. */
+    private static LiteralArgumentBuilder<CommandSourceStack> inspect() {
+        return Commands.literal("inspect")
             .then(
-                Commands.literal("inspect_location")
+                Commands.literal("location")
+                    .executes(HiveDebugCommands::inspectLocation)
                     .then(
                         Commands.argument(LOCATION_ID_ARG, ResourceLocationArgument.id())
+                            .suggests(HiveDebugCommands::suggestHiveNames)
                             .executes(HiveDebugCommands::inspectLocation)
                     )
             )
             .then(
-                Commands.literal("list_vents")
+                Commands.literal("lineage")
+                    .executes(HiveDebugCommands::inspectLineageNearest)
                     .then(
-                        Commands.argument(LOCATION_ID_ARG, ResourceLocationArgument.id())
-                            .executes(HiveDebugCommands::listVents)
+                        Commands.argument(LINEAGE_ID_ARG, ResourceLocationArgument.id())
+                            .suggests(HiveDebugCommands::suggestLineageNames)
+                            .executes(HiveDebugCommands::inspectLineageById)
                     )
             )
             .then(
-                Commands.literal("kill_location")
+                Commands.literal("variant")
+                    .then(
+                        Commands.argument(VARIANT_ARG, StringArgumentType.string())
+                            .executes(HiveDebugCommands::inspectVariant)
+                    )
+            )
+            .then(
+                Commands.literal("kills")
+                    .then(
+                        Commands.argument(LINEAGE_ID_ARG, ResourceLocationArgument.id())
+                            .suggests(HiveDebugCommands::suggestLineageNames)
+                            .executes(HiveDebugCommands::inspectKillAttribution)
+                    )
+            );
+    }
+
+    private static LiteralArgumentBuilder<CommandSourceStack> list() {
+        return Commands.literal("list")
+            .then(Commands.literal("lineages").executes(HiveDebugCommands::listLineages))
+            .then(Commands.literal("tracked").executes(HiveDebugCommands::listTracked))
+            .then(Commands.literal("convoys").executes(HiveDebugCommands::listConvoys))
+            .then(Commands.literal("emerging").executes(HiveDebugCommands::listEmerging))
+            .then(
+                Commands.literal("vents")
+                    .executes(HiveDebugCommands::listVents)
                     .then(
                         Commands.argument(LOCATION_ID_ARG, ResourceLocationArgument.id())
+                            .suggests(HiveDebugCommands::suggestHiveNames)
+                            .executes(HiveDebugCommands::listVents)
+                    )
+            );
+    }
+
+    /** Anything that makes the hive DO something now, rather than reading or granting. */
+    private static LiteralArgumentBuilder<CommandSourceStack> trigger() {
+        return Commands.literal("trigger")
+            .then(Commands.literal("emergence_scan").executes(HiveDebugCommands::forceEmergenceScan))
+            .then(Commands.literal("reinforcements").executes(HiveDebugCommands::forceDispatchReinforcements))
+            .then(
+                Commands.literal("party")
+                    .requires(CommandSourceStack::isPlayer)
+                    .then(Commands.literal("host_hunt").executes(ctx -> forceParty(ctx, "host_hunt")))
+                    .then(Commands.literal("biomass_hunting").executes(ctx -> forceParty(ctx, "biomass_hunting")))
+                    .then(Commands.literal("surface_spawn").executes(ctx -> forceParty(ctx, "surface_spawn")))
+            )
+            .then(
+                Commands.literal("raid")
+                    .requires(CommandSourceStack::isPlayer)
+                    .then(
+                        Commands.argument(LINEAGE_ID_ARG, ResourceLocationArgument.id())
+                            .suggests(HiveDebugCommands::suggestLineageNames)
+                            .executes(HiveDebugCommands::forceRaidOnSelf)
+                    )
+            )
+            .then(
+                Commands.literal("migration")
+                    .executes(HiveDebugCommands::forceMigration)
+                    .then(
+                        Commands.argument(LOCATION_ID_ARG, ResourceLocationArgument.id())
+                            .suggests(HiveDebugCommands::suggestHiveNames)
+                            .executes(HiveDebugCommands::forceMigration)
+                    )
+            )
+            .then(
+                Commands.literal("grow")
+                    .executes(HiveDebugCommands::forceGrowLocation)
+                    .then(
+                        Commands.argument(LOCATION_ID_ARG, ResourceLocationArgument.id())
+                            .suggests(HiveDebugCommands::suggestHiveNames)
+                            .executes(HiveDebugCommands::forceGrowLocation)
+                    )
+            )
+            .then(
+                Commands.literal("queenless_advance")
+                    .then(
+                        Commands.argument(LINEAGE_ID_ARG, ResourceLocationArgument.id())
+                            .suggests(HiveDebugCommands::suggestLineageNames)
+                            .executes(HiveDebugCommands::forceQueenlessAdvance)
+                    )
+            )
+            .then(
+                Commands.literal("join_nearby")
+                    .requires(CommandSourceStack::isPlayer)
+                    .then(Commands.literal("variant").executes(HiveDebugCommands::forceVariantJoinNearby))
+                    .then(Commands.literal("shed_check").executes(HiveDebugCommands::forceShedCheckNearby))
+                    .then(
+                        Commands.literal("lineage")
+                            .then(
+                                Commands.argument(LINEAGE_ID_ARG, ResourceLocationArgument.id())
+                                    .suggests(HiveDebugCommands::suggestLineageNames)
+                                    .executes(HiveDebugCommands::forceLineageJoinNearby)
+                            )
+                    )
+            )
+            .then(
+                Commands.literal("skip")
+                    .requires(CommandSourceStack::isPlayer)
+                    .then(Commands.literal("hibernation").executes(HiveDebugCommands::hibernationSkip))
+                    .then(Commands.literal("settlement").executes(HiveDebugCommands::skipSettlement))
+            );
+    }
+
+    /**
+     * Grants INTO a hive. [stated] "add a command for jelly to supply" — and BOTH jelly pools are here, because royal
+     * and scourge are separate economies with separate caps and topping up the wrong one looks like the command
+     * silently failing.
+     */
+    private static LiteralArgumentBuilder<CommandSourceStack> supply() {
+        return Commands.literal("supply")
+            .then(
+                Commands.literal("biomass")
+                    .then(
+                        Commands.argument(COUNT_ARG, IntegerArgumentType.integer())
+                            .executes(HiveDebugCommands::addBiomass)
+                            .then(
+                                Commands.argument(LOCATION_ID_ARG, ResourceLocationArgument.id())
+                                    .suggests(HiveDebugCommands::suggestHiveNames)
+                                    .executes(HiveDebugCommands::addBiomass)
+                            )
+                    )
+            )
+            .then(
+                Commands.literal("jelly")
+                    .then(
+                        Commands.literal("royal")
+                            .then(
+                                Commands.argument(COUNT_ARG, IntegerArgumentType.integer())
+                                    .executes(ctx -> addJelly(ctx, true))
+                                    .then(
+                                        Commands.argument(LOCATION_ID_ARG, ResourceLocationArgument.id())
+                                            .suggests(HiveDebugCommands::suggestHiveNames)
+                                            .executes(ctx -> addJelly(ctx, true))
+                                    )
+                            )
+                    )
+                    .then(
+                        Commands.literal("scourge")
+                            .then(
+                                Commands.argument(COUNT_ARG, IntegerArgumentType.integer())
+                                    .executes(ctx -> addJelly(ctx, false))
+                                    .then(
+                                        Commands.argument(LOCATION_ID_ARG, ResourceLocationArgument.id())
+                                            .suggests(HiveDebugCommands::suggestHiveNames)
+                                            .executes(ctx -> addJelly(ctx, false))
+                                    )
+                            )
+                    )
+            )
+            .then(
+                Commands.literal("reserve")
+                    .then(
+                        Commands.argument(ENTITY_TYPE_ARG, ResourceLocationArgument.id())
+                            .then(
+                                Commands.argument(COUNT_ARG, IntegerArgumentType.integer(1))
+                                    .executes(HiveDebugCommands::addReserve)
+                                    .then(
+                                        Commands.argument(LOCATION_ID_ARG, ResourceLocationArgument.id())
+                                            .suggests(HiveDebugCommands::suggestHiveNames)
+                                            .executes(HiveDebugCommands::addReserve)
+                                    )
+                            )
+                    )
+            );
+    }
+
+    private static LiteralArgumentBuilder<CommandSourceStack> remove() {
+        return Commands.literal("remove")
+            .then(
+                Commands.literal("location")
+                    .then(
+                        Commands.argument(LOCATION_ID_ARG, ResourceLocationArgument.id())
+                            .suggests(HiveDebugCommands::suggestHiveNames)
                             .executes(HiveDebugCommands::killLocation)
                     )
             )
             .then(
-                Commands.literal("mint_lineage_at_player")
+                Commands.literal("parties")
+                    .requires(CommandSourceStack::isPlayer)
+                    .executes(HiveDebugCommands::clearParties)
+            )
+            .then(
+                // ⚠⚠ NO "all" LITERAL ON ITS OWN. The word after `remove` decides whether one hive dies or every
+                // hive in the world does, and `location` vs `all` is a single keystroke apart in a command the
+                // player is already typing under pressure. The confirm token below is what actually protects this.
+                Commands.literal("all")
+                    .executes(HiveDebugCommands::wipeAllPrompt)
+                    .then(
+                        Commands.argument(WIPE_CONFIRM_ARG, StringArgumentType.word())
+                            .executes(HiveDebugCommands::wipeAllConfirmed)
+                    )
+            );
+    }
+
+    private static final String WIPE_CONFIRM_ARG = "confirm";
+
+    /** One-shot tokens, per player. ⚠ Cleared on use, so a re-run of the same chat click cannot fire twice. */
+    private static final Map<UUID, String> PENDING_WIPE = new HashMap<>();
+
+    /**
+     * ⭐⭐⭐ THE WARNING, WITH A CLICKABLE CONFIRM. Step one of two - this NEVER destroys anything.
+     * <p>
+     * [stated] "write in a proper kill command with a warning asking to confirm with a button menu popup."
+     * </p>
+     * <p>
+     * ⚠⚠ A TYPED CONFIRM WOULD NOT BE ENOUGH. The whole point is that the player reads what they are about to lose
+     * FIRST - so the prompt counts the hives, lineages and members by name before offering the button, and the token is
+     * random so nobody can learn the confirm string and skip the count.
+     * </p>
+     */
+    private static int wipeAllPrompt(com.mojang.brigadier.context.CommandContext<CommandSourceStack> ctx) {
+        var source = ctx.getSource();
+        var locations = new ArrayList<>(HiveLocationRegistry.INSTANCE.all());
+        var lineages = new java.util.HashSet<net.minecraft.resources.ResourceLocation>();
+        for (var location : locations) {
+            lineages.add(location.lineageFactionId());
+        }
+
+        // ⚠⚠ COUNT THE SAME WAY THE WIPE DESTROYS - by SWEEPING, not by summing hive membership. The first version
+        // counted totalReliableXenomorphPopulation per location and so promised a number that excluded every alien
+        // belonging to no hive, which is precisely the set that kept surviving the wipe.
+        var members = 0;
+        for (var level : source.getServer().getAllLevels()) {
+            for (var entity : level.getAllEntities()) {
+                if (
+                    entity instanceof com.alien.common.gameplay.entity.living.alien.Alien
+                        || entity instanceof com.alien.common.gameplay.entity.living.alien.ovipositor.Ovipositor
+                        || entity instanceof com.alien.common.gameplay.entity.living.alien.royal_cocoon.RoyalCocoon
+                ) {
+                    members++;
+                }
+            }
+        }
+
+        // ⚠ Counted for the prompt as well as destroyed, because they are the reason a "clean" world still refuses
+        // to let a queen found - a player who is not told about them cannot understand the result.
+        // 🚨🚨 THE LEGACY DATA IS A REASON TO RUN EVEN WITH NOTHING ELSE LEFT.
+        //
+        // ⚠⚠ MY EARLY-OUT MADE THE WIPE A NO-OP ON AN ALREADY-EMPTY WORLD, AND THAT IS EXACTLY WHEN IT WAS NEEDED.
+        // A player who had already wiped ran it again to clear the legacy data, got "There are no hives to remove",
+        // and the command returned BEFORE setting the purge flag - so recovery re-minted the sleepers on the next
+        // load and the "old echoes" refusal came straight back. The one case the guard rejected was the one case
+        // that still had work to do.
+        var legacyPending = com.alien.common.gameplay.hive.migration.LegacyHiveRecoveryData
+            .getOrCreate(source.getServer())
+            .isSomeAnd(data -> !data.legacyPurged());
+
+        if (locations.isEmpty() && members == 0 && !legacyPending) {
+            source.sendSuccess(() -> Component.literal("There are no hives to remove."), false);
+            return 0;
+        }
+
+        var token = Long.toHexString(java.util.concurrent.ThreadLocalRandom.current().nextLong() & 0xFFFFFFL);
+        var playerId = source.getEntity() == null ? null : source.getEntity().getUUID();
+        if (playerId != null) {
+            PENDING_WIPE.put(playerId, token);
+        }
+
+        var locationCount = locations.size();
+        var lineageCount = lineages.size();
+        var memberCount = members;
+
+        source.sendSuccess(
+            () -> Component.literal("⚠ THIS REMOVES EVERY HIVE IN THE WORLD ⚠")
+                .withStyle(net.minecraft.ChatFormatting.RED, net.minecraft.ChatFormatting.BOLD),
+            false
+        );
+        source.sendSuccess(
+            () -> Component.literal(
+                "  " + locationCount + " hive(s), " + lineageCount + " lineage(s), "
+                    + memberCount + " alien(s) will be destroyed."
+            ).withStyle(net.minecraft.ChatFormatting.GRAY),
+            false
+        );
+        source.sendSuccess(
+            () -> Component.literal("  This cannot be undone. Back up your save first.")
+                .withStyle(net.minecraft.ChatFormatting.GRAY),
+            false
+        );
+        source.sendSuccess(
+            () -> Component.literal("[ CONFIRM - DESTROY EVERYTHING ]")
+                .withStyle(
+                    style -> style.withColor(net.minecraft.ChatFormatting.DARK_RED)
+                        .withBold(true)
+                        .withClickEvent(
+                            new net.minecraft.network.chat.ClickEvent(
+                                net.minecraft.network.chat.ClickEvent.Action.RUN_COMMAND,
+                                "/avp hive remove all " + token
+                            )
+                        )
+                        .withHoverEvent(
+                            new net.minecraft.network.chat.HoverEvent(
+                                net.minecraft.network.chat.HoverEvent.Action.SHOW_TEXT,
+                                Component.literal("No further prompt. Everything above is destroyed immediately.")
+                            )
+                        )
+                ),
+            false
+        );
+        source.sendSuccess(
+            () -> Component.literal("[ Cancel ]")
+                .withStyle(
+                    style -> style.withColor(net.minecraft.ChatFormatting.GREEN)
+                        .withClickEvent(
+                            new net.minecraft.network.chat.ClickEvent(
+                                net.minecraft.network.chat.ClickEvent.Action.RUN_COMMAND,
+                                "/avp hive remove all cancel"
+                            )
+                        )
+                ),
+            false
+        );
+        return 1;
+    }
+
+    /**
+     * Step two. Removes every location, its lineage, and every member those hives own.
+     * <p>
+     * ⚠⚠ MEMBERS ARE DISCARDED TOO, AND THAT IS THE POINT. {@code killAdmin} removes the LOCATION and deliberately
+     * leaves members in the parent lineage - correct for one hive dying, useless for a reset, because it leaves a world
+     * full of homeless xenomorphs that get adopted or found again. A player asking for a clean slate means a clean
+     * slate.
+     * </p>
+     */
+    private static int wipeAllConfirmed(com.mojang.brigadier.context.CommandContext<CommandSourceStack> ctx) {
+        var source = ctx.getSource();
+        var given = StringArgumentType.getString(ctx, WIPE_CONFIRM_ARG);
+        var playerId = source.getEntity() == null ? null : source.getEntity().getUUID();
+
+        if ("cancel".equalsIgnoreCase(given)) {
+            if (playerId != null) {
+                PENDING_WIPE.remove(playerId);
+            }
+            source.sendSuccess(() -> Component.literal("Cancelled. Nothing was removed."), false);
+            return 1;
+        }
+
+        var expected = playerId == null ? null : PENDING_WIPE.remove(playerId);
+        if (expected == null || !expected.equals(given)) {
+            // ⚠ Covers a stale chat click from an earlier prompt as well as a guessed token - either way the count
+            // they were shown is no longer the world they would be destroying.
+            source.sendFailure(
+                Component.literal("That confirmation has expired. Run /avp hive remove all again to see the count.")
+            );
+            return 0;
+        }
+
+        // 🚨🚨 THE LEGACY DATA MUST GO TOO, OR THE SLATE IS NOT CLEAN.
+        //
+        // ⚠⚠ MY FIRST VERSION LEFT IT AND MY OWN "old echoes" RULE THEN BLOCKED THE FRESH START. A player wiped his
+        // world, placed a new queen, and she was refused founding by a SLEEPING LEGACY QUEEN reserving ground that
+        // he had just told the game to clear - "Legacy hive recovery: detected old hive data and repaired 18/18 hive
+        // snapshot(s)" in his log, after remove all reported success. The two features were correct on their own and
+        // wrong together.
+        //
+        // ⭐ Clearing legacyDetected is the switch isAwaitingLegacyWake reads FIRST, so it retires every dormant
+        // queen at once - they stop reserving ground, stop being exempt from dormancy, and behave as ordinary
+        // xenomorphs from here.
+        com.alien.common.gameplay.hive.migration.LegacyHiveRecoveryData.getOrCreate(source.getServer())
+            .ifSome(data -> {
+                data.setLegacyDetected(false);
+                data.setRecoveryApplied(true);
+                // ⭐ The one-way flag that makes the wipe survive a restart - see LegacyHiveRecoveryData#legacyPurged.
+                data.setLegacyPurged(true);
+            });
+
+        // 🚨🚨 AND THE SLEEPING QUEENS THEMSELVES, WHICH THE LOOP BELOW WILL NEVER REACH.
+        //
+        // ⚠⚠ CLEARING THE RECOVERY DATA IS NOT ENOUGH AND MY FIRST FIX FOR THIS WAS WRONG. `legacyDormant` is a
+        // field ON THE QUEEN ENTITY, and the founding rule filters on `queen.isLegacyDormant()` directly - so a
+        // queen already standing in the world keeps reserving her ground no matter what the save data says.
+        //
+        // ⚠⚠ AND SHE IS IN NO LOCATION'S MEMBER LIST. An unrecovered legacy queen belongs to no hive at all, so the
+        // per-location sweep below cannot see her: every claim really was dead and she was still there. That is
+        // exactly the report - "still getting the old echoes message" on a world with nothing left to own it.
+        // ⚠ The queens themselves are handled by the world sweep below - she is an Alien like any other. What is
+        // cleared HERE is the save data, so recovery cannot mint a fresh set of them on the next load.
+
+        var removedLocations = 0;
+        for (var location : new ArrayList<>(HiveLocationRegistry.INSTANCE.all())) {
+            var serverLevel = source.getServer().getLevel(location.dimension());
+            if (serverLevel == null) {
+                continue; // an unloaded dimension's hives are untouched; say so in the summary rather than pretend
+            }
+            var faction = Alien.MOD.factions().get(location.lineageFactionId());
+            if (faction != null && faction.data() instanceof LineageFactionData lineage) {
+                LocationDeathHandler.killAdmin(serverLevel, location, lineage, "remove all debug command");
+                removedLocations++;
+            }
+        }
+
+        // ⭐⭐⭐ THEN SWEEP THE WHOLE WORLD. EVERY ALIEN, WHATEVER IT BELONGS TO.
+        //
+        // [stated] "it shouldnt matter if shes in a hive or running to the store to buy smokes all xenos killed
+        // means all xenos killed ... its meant to wipe a world as if it never had aliens to begin with the only
+        // thing left behind is the blocks."
+        //
+        // ⚠⚠ I BUILT THIS THREE TIMES AS "ENUMERATE HIVES AND THEIR MEMBERS" AND PATCHED A CATEGORY EACH TIME - the
+        // loaded list, then the bank, then sleeping legacy queens - and every pass missed whatever belonged to no
+        // hive. A stray adopted by nobody, a hauler mid-journey, a facehugger on a host, a queen walking to found:
+        // none of them are in a member list. ENUMERATING CATEGORIES IS THE WRONG SHAPE. The instruction is every
+        // alien, so the code is every alien.
+        //
+        // ⚠ Alien is the root of everything living the mod spawns - Xenomorph, Parasite and Ovomorph all extend it.
+        // Ovipositor and RoyalCocoon do not (they are plain Mobs), so they are named explicitly rather than assumed.
+        var removedMembers = 0;
+        for (var level : source.getServer().getAllLevels()) {
+            // ⚠ getAllEntities returns an ITERABLE, not a Collection, so it cannot be handed to ArrayList directly -
+            // and it must be copied before discarding, because discarding mutates the very list being walked.
+            var present = new ArrayList<net.minecraft.world.entity.Entity>();
+            level.getAllEntities().forEach(present::add);
+            for (var entity : present) {
+                if (
+                    entity instanceof com.alien.common.gameplay.entity.living.alien.Alien
+                        || entity instanceof com.alien.common.gameplay.entity.living.alien.ovipositor.Ovipositor
+                        || entity instanceof com.alien.common.gameplay.entity.living.alien.royal_cocoon.RoyalCocoon
+                ) {
+                    entity.discard();
+                    removedMembers++;
+                }
+            }
+        }
+
+        var locationTotal = removedLocations;
+        var memberTotal = removedMembers;
+        var remaining = HiveLocationRegistry.INSTANCE.all().size();
+        source.sendSuccess(
+            () -> Component.literal(
+                "Removed " + locationTotal + " hive(s), " + memberTotal + " xenomorph(s)"
+                    + "."
+                    + (remaining == 0 ? "" : " " + remaining + " remain in unloaded dimensions.")
+            ),
+            true
+        );
+        return 1;
+    }
+
+    /** ⚠ Named {@code create_} because {@link #create()} is the tree root — the command word is still "create". */
+    private static LiteralArgumentBuilder<CommandSourceStack> create_() {
+        return Commands.literal("create")
+            .then(
+                Commands.literal("lineage")
                     .requires(CommandSourceStack::isPlayer)
                     .executes(ctx -> mintLineageAtPlayer(ctx, AlienVariant.NORMAL))
                     .then(
@@ -120,110 +613,455 @@ public final class HiveDebugCommands {
                     )
             )
             .then(
-                Commands.literal("mint_location_in_lineage")
+                Commands.literal("location")
                     .requires(CommandSourceStack::isPlayer)
                     .then(
                         Commands.argument(LINEAGE_ID_ARG, ResourceLocationArgument.id())
+                            .suggests(HiveDebugCommands::suggestLineageNames)
                             .executes(HiveDebugCommands::mintLocationInLineage)
                     )
             )
+            .then(Commands.literal("inhibit_here").executes(HiveDebugCommands::inhibitHere))
+            .then(Commands.literal("web_host").executes(HiveDebugCommands::webHost))
             .then(
-                Commands.literal("inspect_variant")
+                Commands.literal("claim_radius")
                     .then(
-                        Commands.argument(VARIANT_ARG, StringArgumentType.string())
-                            .executes(HiveDebugCommands::inspectVariant)
+                        Commands.argument("radius", IntegerArgumentType.integer(0, 32))
+                            .executes(HiveDebugCommands::claimRadius)
+                            .then(
+                                Commands.argument(LOCATION_ID_ARG, ResourceLocationArgument.id())
+                                    .suggests(HiveDebugCommands::suggestHiveNames)
+                                    .executes(HiveDebugCommands::claimRadius)
+                            )
+                    )
+            );
+    }
+
+    /**
+     * ⭐⭐ SEVEN COMMANDS BECOME TWO VERBS CROSSED WITH THREE SCOPES, which is what they always were.
+     * {@code wake_nearest_legacy_queen} / {@code wake_legacy_queens_in_area} / {@code wake_all_legacy_queens} and the
+     * three {@code kill_} twins were the same grid written out longhand.
+     */
+    private static LiteralArgumentBuilder<CommandSourceStack> legacy() {
+        return Commands.literal("legacy")
+            .then(Commands.literal("list").executes(HiveDebugCommands::listLegacyQueens))
+            .then(Commands.literal("purge").executes(HiveDebugCommands::purgeLegacy))
+            .then(
+                Commands.literal("wake")
+                    .then(Commands.literal("nearest").executes(HiveDebugCommands::wakeNearestLegacyQueen))
+                    .then(Commands.literal("all").executes(HiveDebugCommands::wakeAllLegacyQueens))
+                    .then(
+                        Commands.literal("area")
+                            .then(
+                                Commands.argument("radius", IntegerArgumentType.integer(1, MAX_LEGACY_AREA_RADIUS))
+                                    .executes(HiveDebugCommands::wakeLegacyQueensInArea)
+                            )
                     )
             )
             .then(
-                Commands.literal("force_variant_join_nearby")
-                    .requires(CommandSourceStack::isPlayer)
-                    .executes(HiveDebugCommands::forceVariantJoinNearby)
-            )
-            .then(
-                Commands.literal("force_lineage_join_nearby")
-                    .requires(CommandSourceStack::isPlayer)
+                Commands.literal("kill")
+                    .then(Commands.literal("nearest").executes(HiveDebugCommands::killNearestLegacyQueen))
+                    .then(Commands.literal("all").executes(HiveDebugCommands::killAllLegacyQueens))
                     .then(
-                        Commands.argument(LINEAGE_ID_ARG, ResourceLocationArgument.id())
-                            .executes(HiveDebugCommands::forceLineageJoinNearby)
+                        Commands.literal("area")
+                            .then(
+                                Commands.argument("radius", IntegerArgumentType.integer(1, MAX_LEGACY_AREA_RADIUS))
+                                    .executes(HiveDebugCommands::killLegacyQueensInArea)
+                            )
+                    )
+            );
+    }
+
+    /**
+     * \u2b50\u2b50 THE CONFIG, IN GAME. [stated] set applies LIVE; anything needing a reload says so.
+     * <p>
+     * {@code set} writes the file immediately, so a value tuned in-game survives the restart \u2014 which is the whole
+     * point, since until now the in-game inspector was the ONLY way to change a value and every change was lost.
+     * </p>
+     */
+    /**
+     * \u26a0\u26a0 A TOP-LEVEL GROUP, NOT A CHILD OF config(). I first nested this inside the config group by mistake,
+     * which made the real command "/avp hive config diag start" while every instruction said "/avp hive diag start" -
+     * and the only feedback was Brigadier's "Incorrect argument for command". A diagnostic nobody can invoke is worse
+     * than no diagnostic.
+     */
+    private static LiteralArgumentBuilder<CommandSourceStack> diag() {
+        return Commands.literal("diag")
+            .then(Commands.literal("start").executes(HiveDebugCommands::diagStart))
+            .then(Commands.literal("stop").executes(HiveDebugCommands::diagStop))
+            // ⭐ "all" measures the WHOLE SERVER, not just this mod. The hive diagnostic can only ever say "avp_alien
+            // was 1.7% - look elsewhere"; this says WHERE.
+            .then(
+                Commands.literal("all")
+                    .then(Commands.literal("start").executes(HiveDebugCommands::wideDiagStart))
+                    .then(Commands.literal("stop").executes(HiveDebugCommands::wideDiagStop))
+            )
+            // ⭐ Watches the nearest xenomorph and logs which animation branch it takes, every tick.
+            .then(Commands.literal("anim").executes(HiveDebugCommands::animDiag));
+    }
+
+    private static LiteralArgumentBuilder<CommandSourceStack> config() {
+        return Commands.literal("config")
+            .then(
+                Commands.literal("list")
+                    .executes(ctx -> listConfig(ctx, null))
+                    .then(
+                        Commands.argument("group", StringArgumentType.greedyString())
+                            .executes(ctx -> listConfig(ctx, StringArgumentType.getString(ctx, "group")))
                     )
             )
             .then(
-                Commands.literal("force_shed_check_nearby")
-                    .requires(CommandSourceStack::isPlayer)
-                    .executes(HiveDebugCommands::forceShedCheckNearby)
-            )
-            .then(Commands.literal("wake_nearest_legacy_queen").executes(HiveDebugCommands::wakeNearestLegacyQueen))
-            .then(
-                Commands.literal("wake_legacy_queens_in_area")
-                    .requires(CommandSourceStack::isPlayer)
+                Commands.literal("get")
                     .then(
-                        Commands.argument("radius", IntegerArgumentType.integer(1, MAX_LEGACY_AREA_RADIUS))
-                            .executes(HiveDebugCommands::wakeLegacyQueensInArea)
-                    )
-            )
-            .then(Commands.literal("wake_all_legacy_queens").executes(HiveDebugCommands::wakeAllLegacyQueens))
-            .then(Commands.literal("kill_nearest_legacy_queen").executes(HiveDebugCommands::killNearestLegacyQueen))
-            .then(
-                Commands.literal("kill_legacy_queens_in_area")
-                    .requires(CommandSourceStack::isPlayer)
-                    .then(
-                        Commands.argument("radius", IntegerArgumentType.integer(1, MAX_LEGACY_AREA_RADIUS))
-                            .executes(HiveDebugCommands::killLegacyQueensInArea)
-                    )
-            )
-            .then(Commands.literal("kill_all_legacy_queens").executes(HiveDebugCommands::killAllLegacyQueens))
-            .then(Commands.literal("list_legacy_queens").executes(HiveDebugCommands::listLegacyQueens))
-            .then(Commands.literal("rebuild_indexes").executes(HiveDebugCommands::rebuildIndexes))
-            .then(Commands.literal("force_invariant_check").executes(HiveDebugCommands::forceInvariantCheck))
-            .then(Commands.literal("list_emerging").executes(HiveDebugCommands::listEmerging))
-            .then(
-                Commands.literal("inspect_slab")
-                    .requires(CommandSourceStack::isPlayer)
-                    .executes(HiveDebugCommands::inspectSlab)
-            )
-            .then(
-                Commands.literal("inspect_ovipositor")
-                    .requires(CommandSourceStack::isPlayer)
-                    .executes(HiveDebugCommands::inspectOvipositor)
-            )
-            .then(
-                Commands.literal("inspect_queen")
-                    .requires(CommandSourceStack::isPlayer)
-                    .executes(HiveDebugCommands::inspectQueen)
-            )
-            .then(
-                Commands.literal("inspect_targeting")
-                    .requires(CommandSourceStack::isPlayer)
-                    .executes(HiveDebugCommands::inspectTargeting)
-            )
-            .then(
-                Commands.literal("inspect_empress")
-                    .requires(CommandSourceStack::isPlayer)
-                    .executes(HiveDebugCommands::inspectEmpress)
-            )
-            .then(
-                Commands.literal("inspect_lineage")
-                    .requires(CommandSourceStack::isPlayer)
-                    .executes(HiveDebugCommands::inspectLineageNearest)
-                    .then(
-                        Commands.argument(LINEAGE_ID_ARG, ResourceLocationArgument.id())
-                            .executes(HiveDebugCommands::inspectLineageById)
+                        Commands.argument("field", StringArgumentType.word())
+                            .executes(HiveDebugCommands::getConfig)
                     )
             )
             .then(
-                Commands.literal("hibernation_skip")
-                    .requires(CommandSourceStack::isPlayer)
-                    .executes(HiveDebugCommands::hibernationSkip)
+                Commands.literal("set")
+                    .then(
+                        Commands.argument("field", StringArgumentType.word())
+                            .then(
+                                Commands.argument("value", StringArgumentType.greedyString())
+                                    .executes(HiveDebugCommands::setConfig)
+                            )
+                    )
             )
             .then(
-                Commands.literal("skip_settlement")
+                Commands.literal("gui")
                     .requires(CommandSourceStack::isPlayer)
-                    .executes(HiveDebugCommands::skipSettlement)
+                    .executes(HiveDebugCommands::openConfigGui)
+            )
+            .then(Commands.literal("reload").executes(HiveDebugCommands::reloadConfig))
+            .then(Commands.literal("save").executes(HiveDebugCommands::saveConfig));
+    }
+
+    /** Every field, or one group's worth. Values that differ from the default are marked so tuning is visible. */
+    private static int listConfig(
+        com.mojang.brigadier.context.CommandContext<CommandSourceStack> ctx,
+        @org.jetbrains.annotations.Nullable String groupFilter
+    ) {
+        var source = ctx.getSource();
+        var config = HiveLocationRegistry.INSTANCE.config();
+        var shown = 0;
+
+        for (var group : com.alien.common.gameplay.hive.config.HiveConfigSchema.groups()) {
+            if (groupFilter != null && !group.name().equalsIgnoreCase(groupFilter)) {
+                continue;
+            }
+            source.sendSuccess(() -> Component.literal("-- " + group.name()).withStyle(ChatFormatting.GRAY), false);
+            for (var field : group.fields()) {
+                var value = com.alien.common.gameplay.hive.config.HiveConfigSchema.valueAsString(config, field.name());
+                var changed = !value.equals(field.defaultValue());
+                source.sendSuccess(
+                    () -> Component.literal("  " + field.name() + " = ")
+                        .append(
+                            Component.literal(value)
+                                .withStyle(changed ? ChatFormatting.YELLOW : ChatFormatting.WHITE)
+                        )
+                        .append(
+                            Component.literal(changed ? "  (default " + field.defaultValue() + ")" : "")
+                                .withStyle(ChatFormatting.DARK_GRAY)
+                        ),
+                    false
+                );
+                shown++;
+            }
+        }
+
+        if (shown == 0) {
+            source.sendFailure(Component.literal("No config group matched '" + groupFilter + "'."));
+            return 0;
+        }
+        return shown;
+    }
+
+    private static int getConfig(com.mojang.brigadier.context.CommandContext<CommandSourceStack> ctx) {
+        var name = StringArgumentType.getString(ctx, "field");
+        var field = com.alien.common.gameplay.hive.config.HiveConfigSchema.field(name);
+        if (field == null) {
+            ctx.getSource().sendFailure(Component.literal("Unknown config field: " + name));
+            return 0;
+        }
+        var value = com.alien.common.gameplay.hive.config.HiveConfigSchema
+            .valueAsString(HiveLocationRegistry.INSTANCE.config(), name);
+        ctx.getSource()
+            .sendSuccess(
+                () -> Component.literal(
+                    name + " = " + value + "  (" + field.type().displayName()
+                        + ", default " + field.defaultValue() + ", group " + field.group() + ")"
+                ),
+                false
+            );
+
+        // \u2b50 The plain-language explanation, right under the value. Same text the companion reference file
+        // carries, so an admin reading it in chat and a pack author reading it on disk get the identical wording.
+        var description = com.alien.common.gameplay.hive.config.HiveConfigDescriptions.of(name);
+        if (description != null) {
+            ctx.getSource()
+                .sendSuccess(
+                    () -> Component.literal("  " + description).withStyle(ChatFormatting.GRAY),
+                    false
+                );
+        }
+        return 1;
+    }
+
+    /**
+     * \u26a0 APPLIES LIVE AND SAVES. Most fields are read every time they are used, so the change bites immediately.
+     * The exceptions are values captured ONCE when something was created \u2014 a hive's slab band, a convoy's speed,
+     * an existing location's claim radius \u2014 which keep the value they were built with. The reply says so rather
+     * than pretending every field is instant.
+     */
+    private static int setConfig(com.mojang.brigadier.context.CommandContext<CommandSourceStack> ctx) {
+        var name = StringArgumentType.getString(ctx, "field");
+        var value = StringArgumentType.getString(ctx, "value");
+        var field = com.alien.common.gameplay.hive.config.HiveConfigSchema.field(name);
+        if (field == null) {
+            ctx.getSource().sendFailure(Component.literal("Unknown config field: " + name));
+            return 0;
+        }
+
+        try {
+            var updated = com.alien.common.gameplay.hive.config.HiveConfigSchema
+                .withParsedValue(HiveLocationRegistry.INSTANCE.config(), name, value);
+            HiveLocationRegistry.INSTANCE.setConfig(updated);
+        } catch (RuntimeException exception) {
+            ctx.getSource()
+                .sendFailure(
+                    Component.literal("'" + value + "' is not a valid " + field.type().displayName() + " for " + name)
+                );
+            return 0;
+        }
+
+        var server = ctx.getSource().getServer();
+        com.alien.common.gameplay.hive.config.HiveConfigFile.save(server);
+
+        ctx.getSource()
+            .sendSuccess(
+                () -> Component.literal(name + " = " + value + " (saved)")
+                    .append(
+                        Component.literal("  existing hives keep values captured when they were founded")
+                            .withStyle(ChatFormatting.DARK_GRAY)
+                    ),
+                true
+            );
+        return 1;
+    }
+
+    /**
+     * \u2b50\u2b50 Sends the live config to the player, whose client opens the screen on it.
+     * <p>
+     * \u26a0 THE COMMAND CANNOT OPEN THE SCREEN ITSELF - it runs on the SERVER and screens are client-side. Sending the
+     * values and letting the client open on arrival also means the screen never exists for a moment showing defaults it
+     * is about to overwrite.
+     * </p>
+     */
+    /**
+     * ⭐⭐ Starts the diagnostic. Deliberately trivial to explain: start, play, stop, send the file.
+     * <p>
+     * ⚠ The reply names the file explicitly, because the whole point is that the reporter should not have to know where
+     * anything lives or how to read a profiler.
+     * </p>
+     */
+    /**
+     * Starts the server-wide capture.
+     * <p>
+     * ⚠ THE WARNING IN THE MESSAGE IS NOT BOILERPLATE. A running capture times every entity and block entity on the
+     * server, which costs TPS in itself - so a long capture distorts the very thing being measured. Thirty seconds to a
+     * minute of the laggy behaviour is plenty.
+     * </p>
+     */
+    /**
+     * Watches the nearest xenomorph for 10 seconds and logs its animation decision every tick.
+     * <p>
+     * ⚠ Stand next to the mob that is misbehaving and run it, then let it do the thing - idle, walk, go stiff. The log
+     * shows whether the branch is wrong, flip-flopping, or correct-but-not-playing, which look identical on screen and
+     * have completely different causes.
+     * </p>
+     */
+    private static int animDiag(com.mojang.brigadier.context.CommandContext<CommandSourceStack> ctx) {
+        var subject = nearestXenomorph(ctx);
+
+        if (subject == null) {
+            ctx.getSource().sendFailure(Component.literal("No xenomorph within 32 blocks."));
+            return 0;
+        }
+
+        com.alien.common.gameplay.hive.diag.AnimationDiag.watch(subject.getUUID(), 200);
+        Alien.LOGGER.info(
+            "[animdiag] === watching {} ({}) for 200 ticks ===",
+            subject.getType().getDescriptionId(),
+            subject.getUUID()
+        );
+
+        ctx.getSource()
+            .sendSuccess(
+                () -> Component.literal(
+                    "Watching " + subject.getType().getDescriptionId()
+                        + " for 10s - see [animdiag] in latest.log."
+                ),
+                false
+            );
+        return 1;
+    }
+
+    private static int wideDiagStart(com.mojang.brigadier.context.CommandContext<CommandSourceStack> ctx) {
+        com.alien.common.gameplay.hive.diag.WideDiagProfiler.start();
+        ctx.getSource()
+            .sendSuccess(
+                () -> net.minecraft.network.chat.Component.literal(
+                    "Server-wide diagnostic started - this itself costs some TPS. Let it run through the lag for "
+                        + "30-60 seconds, then: /avp hive diag all stop"
+                ),
+                false
+            );
+        return 1;
+    }
+
+    private static int wideDiagStop(com.mojang.brigadier.context.CommandContext<CommandSourceStack> ctx) {
+        var report = com.alien.common.gameplay.hive.diag.WideDiagProfiler.stop(ctx.getSource().getServer());
+
+        if (report == null) {
+            ctx.getSource().sendFailure(Component.literal("No server-wide diagnostic was running."));
+            return 0;
+        }
+
+        // ⚠ THE LOG IS THE REAL OUTPUT. Chat truncates and scrolls; the report is wide and meant to be read or pasted
+        // from latest.log, which is also what gets sent when someone reports lag.
+        for (var line : report.split("\n")) {
+            Alien.LOGGER.info("[widediag] {}", line);
+        }
+
+        ctx.getSource()
+            .sendSuccess(
+                () -> Component.literal("Server-wide diagnostic written to the log - see [widediag] in latest.log."),
+                false
+            );
+        return 1;
+    }
+
+    private static int diagStart(com.mojang.brigadier.context.CommandContext<CommandSourceStack> ctx) {
+        com.alien.common.gameplay.hive.diag.DiagProfiler.start(ctx.getSource().getServer());
+        ctx.getSource()
+            .sendSuccess(
+                () -> net.minecraft.network.chat.Component.literal(
+                    "Hive diagnostic started. Play until it lags, then run: /avp hive diag stop"
+                ),
+                false
+            );
+        return 1;
+    }
+
+    /**
+     * ⭐⭐ Stops the diagnostic and offers BOTH routes: a file, and a click-to-copy.
+     * <p>
+     * ⚠ THE CLIPBOARD IS THE ROUTE MOST REPORTERS WILL USE. Plenty of people have no idea where their game directory
+     * is, and "send me the file at config/avp_alien-diag-....txt" ends the conversation. One click and a paste into
+     * Discord does not.
+     * </p>
+     */
+    private static int diagStop(com.mojang.brigadier.context.CommandContext<CommandSourceStack> ctx) {
+        var report = com.alien.common.gameplay.hive.diag.DiagProfiler.stop(ctx.getSource().getServer());
+        if (report == null) {
+            ctx.getSource()
+                .sendFailure(
+                    net.minecraft.network.chat.Component.literal("No diagnostic is running.")
+                );
+            return 0;
+        }
+
+        // ⚠ A chat packet is size-limited, and a long report would silently fail to send rather than truncate
+        // visibly. Trimming the CLIPBOARD copy keeps the click working; the file on disk always holds everything.
+        var clipboard = report.text().length() > CLIPBOARD_LIMIT
+            ? report.text().substring(0, CLIPBOARD_LIMIT)
+                + "\n\n[trimmed - the full report is in the file named above]"
+            : report.text();
+
+        var copy = net.minecraft.network.chat.Component.literal("[Click here to copy the report]")
+            .withStyle(
+                style -> style
+                    .withColor(net.minecraft.ChatFormatting.GREEN)
+                    .withClickEvent(
+                        new net.minecraft.network.chat.ClickEvent(
+                            net.minecraft.network.chat.ClickEvent.Action.COPY_TO_CLIPBOARD,
+                            clipboard
+                        )
+                    )
+                    .withHoverEvent(
+                        new net.minecraft.network.chat.HoverEvent(
+                            net.minecraft.network.chat.HoverEvent.Action.SHOW_TEXT,
+                            net.minecraft.network.chat.Component.literal("Copies the whole report - paste it to the devs")
+                        )
+                    )
+            );
+
+        ctx.getSource()
+            .sendSuccess(
+                () -> net.minecraft.network.chat.Component.literal(
+                    report.file() == null
+                        ? "Hive diagnostic finished (the file could not be written)."
+                        : "Hive diagnostic written to: " + report.file()
+                ),
+                false
+            );
+        ctx.getSource().sendSuccess(() -> copy, false);
+        return 1;
+    }
+
+    /** Chat packets are size-limited; the file always has the untrimmed report. */
+    private static final int CLIPBOARD_LIMIT = 30000;
+
+    private static int openConfigGui(com.mojang.brigadier.context.CommandContext<CommandSourceStack> ctx) {
+        var player = ctx.getSource().getPlayer();
+        if (player == null) {
+            return 0;
+        }
+        com.alien.Alien.MOD
+            .networking()
+            .sendToClient(
+                player,
+                new com.alien.common.network.payload.S2CHiveConfigSnapshotPayload(
+                    com.alien.common.gameplay.hive.config.HiveConfigSchema
+                        .toTag(HiveLocationRegistry.INSTANCE.config())
+                )
+            );
+        return 1;
+    }
+
+    private static int reloadConfig(com.mojang.brigadier.context.CommandContext<CommandSourceStack> ctx) {
+        com.alien.common.gameplay.hive.config.HiveConfigFile.load(ctx.getSource().getServer());
+        ctx.getSource().sendSuccess(() -> Component.literal("Hive config reloaded from disk."), true);
+        return 1;
+    }
+
+    private static int saveConfig(com.mojang.brigadier.context.CommandContext<CommandSourceStack> ctx) {
+        com.alien.common.gameplay.hive.config.HiveConfigFile.save(ctx.getSource().getServer());
+        ctx.getSource().sendSuccess(() -> Component.literal("Hive config written to disk."), true);
+        return 1;
+    }
+
+    private static LiteralArgumentBuilder<CommandSourceStack> maintenance() {
+        return Commands.literal("maintenance")
+            .then(
+                Commands.literal("indexes")
+                    .then(Commands.literal("dump").executes(HiveDebugCommands::dumpIndexes))
+                    .then(Commands.literal("rebuild").executes(HiveDebugCommands::rebuildIndexes))
             )
             .then(
-                Commands.literal("log_spawns")
-                    .executes(HiveDebugCommands::toggleDebugSpawns)
-            )
+                Commands.literal("check")
+                    .executes(ctx -> {
+                        validate(ctx);
+                        return forceInvariantCheck(ctx);
+                    })
+                    .then(Commands.literal("registry").executes(HiveDebugCommands::validate))
+                    .then(Commands.literal("invariants").executes(HiveDebugCommands::forceInvariantCheck))
+            );
+    }
+
+    /** Client-side overlays and log verbosity. Toggles, not actions — kept apart from {@link #trigger()}. */
+    private static LiteralArgumentBuilder<CommandSourceStack> debugToggles() {
+        return Commands.literal("debug")
             .then(
                 Commands.literal("render")
                     .requires(CommandSourceStack::isPlayer)
@@ -234,109 +1072,260 @@ public final class HiveDebugCommands {
                     .requires(CommandSourceStack::isPlayer)
                     .executes(HiveDebugCommands::toggleRouter)
             )
-            .then(Commands.literal("force_emergence_scan").executes(HiveDebugCommands::forceEmergenceScan))
-            .then(Commands.literal("inspect_settlement").executes(HiveDebugCommands::inspectSettlement))
-            .then(
-                Commands.literal("force_grow_location")
-                    .then(
-                        Commands.argument(LOCATION_ID_ARG, ResourceLocationArgument.id())
-                            .executes(HiveDebugCommands::forceGrowLocation)
-                    )
-            )
-            .then(Commands.literal("list_convoys").executes(HiveDebugCommands::listConvoys))
-            .then(Commands.literal("force_dispatch_reinforcements").executes(HiveDebugCommands::forceDispatchReinforcements))
-            .then(
-                Commands.literal("force_migration")
-                    .then(
-                        Commands.argument(LOCATION_ID_ARG, ResourceLocationArgument.id())
-                            .executes(HiveDebugCommands::forceMigration)
-                    )
-            )
-            .then(
-                Commands.literal("inspect_hunters")
-                    .requires(CommandSourceStack::isPlayer)
-                    .executes(HiveDebugCommands::inspectHunters)
-            )
-            .then(
-                Commands.literal("clear_parties")
-                    .requires(CommandSourceStack::isPlayer)
-                    .executes(HiveDebugCommands::clearParties)
-            )
-            .then(
-                Commands.literal("force_party")
-                    .requires(CommandSourceStack::isPlayer)
-                    .then(
-                        Commands.literal("host_hunt")
-                            .executes(ctx -> forceParty(ctx, "host_hunt"))
-                    )
-                    .then(
-                        Commands.literal("biomass_hunting")
-                            .executes(ctx -> forceParty(ctx, "biomass_hunting"))
-                    )
-                    .then(
-                        Commands.literal("surface_spawn")
-                            .executes(ctx -> forceParty(ctx, "surface_spawn"))
-                    )
-            )
-            .then(
-                Commands.literal("force_raid")
-                    .requires(CommandSourceStack::isPlayer)
-                    .then(
-                        Commands.argument(LINEAGE_ID_ARG, ResourceLocationArgument.id())
-                            .executes(HiveDebugCommands::forceRaidOnSelf)
-                    )
-            )
-            .then(
-                Commands.literal("inspect_kill_attribution")
-                    .then(
-                        Commands.argument(LINEAGE_ID_ARG, ResourceLocationArgument.id())
-                            .executes(HiveDebugCommands::inspectKillAttribution)
-                    )
-            )
-            .then(
-                Commands.literal("claim_radius")
-                    .then(
-                        Commands.argument(LOCATION_ID_ARG, ResourceLocationArgument.id())
-                            .then(
-                                Commands.argument("radius", IntegerArgumentType.integer(0, 32))
-                                    .executes(HiveDebugCommands::claimRadius)
-                            )
-                    )
-            )
-            .then(
-                Commands.literal("add_reserve")
-                    .then(
-                        Commands.argument(LOCATION_ID_ARG, ResourceLocationArgument.id())
-                            .then(
-                                Commands.argument(ENTITY_TYPE_ARG, ResourceLocationArgument.id())
-                                    .then(
-                                        Commands.argument(COUNT_ARG, IntegerArgumentType.integer(1))
-                                            .executes(HiveDebugCommands::addReserve)
-                                    )
-                            )
-                    )
-            )
-            .then(
-                Commands.literal("add_biomass")
-                    .then(
-                        Commands.argument(LOCATION_ID_ARG, ResourceLocationArgument.id())
-                            .then(
-                                // Negative amounts allowed on purpose: draining biomass is how testers trigger
-                                // construction starvation on demand. The executor clamps the balance at zero.
-                                Commands.argument(COUNT_ARG, IntegerArgumentType.integer())
-                                    .executes(HiveDebugCommands::addBiomass)
-                            )
-                    )
-            )
-            .then(
-                Commands.literal("force_queenless_advance")
-                    .then(
-                        Commands.argument(LINEAGE_ID_ARG, ResourceLocationArgument.id())
-                            .executes(HiveDebugCommands::forceQueenlessAdvance)
-                    )
-            )
-            .then(Commands.literal("inspect_queenless_maturation").executes(HiveDebugCommands::inspectQueenlessMaturation))
-            .then(Commands.literal("validate").executes(HiveDebugCommands::validate));
+            .then(Commands.literal("log_spawns").executes(HiveDebugCommands::toggleDebugSpawns));
+    }
+
+    // ------------------------------------------------------------------------------------------------------------
+    // [stated] Oct 3: hive commands accept SHORT NAMES. The full ids (lineage/20b149dc-...) are too long to type, so a
+    // hive location also answers to its name - no_1_2 for "Hive NO_1_2" (variant code, lineage number, location
+    // number) - and a lineage to no_1, or to the name of any of its hives. Full ids still work exactly as before.
+    // ⚠ Lowercase: these arguments are Minecraft resource ids, which accept no capitals; matching ignores case.
+    // ⚠ A lineage with no living hive has no hive name left to match - it still needs its full id.
+    // ------------------------------------------------------------------------------------------------------------
+
+    /** A hive location's short name, lowercase ("no_1_2"), or null if it has none yet. */
+    private static @org.jetbrains.annotations.Nullable String shortName(HiveLocation location) {
+        var faction = Alien.MOD.factions().get(location.id().value());
+        var name = faction == null ? null : faction.name();
+
+        if (name == null || name.isBlank()) {
+            return null;
+        }
+
+        return (name.startsWith("Hive ") ? name.substring("Hive ".length()) : name).toLowerCase(Locale.ROOT);
+    }
+
+    /** "no_1_2" -> "no_1": a hive name without its location number is its lineage's short name. */
+    private static String lineageShortName(String hiveShortName) {
+        var cut = hiveShortName.lastIndexOf('_');
+        return cut > 0 ? hiveShortName.substring(0, cut) : hiveShortName;
+    }
+
+    /** The hive location named {@code raw}'s path (a bare name parses as minecraft:no_1_2), or null. */
+    private static @org.jetbrains.annotations.Nullable HiveLocation locationByShortName(net.minecraft.resources.ResourceLocation raw) {
+        var wanted = raw.getPath().toLowerCase(Locale.ROOT);
+
+        for (var location : HiveLocationRegistry.INSTANCE.all()) {
+            if (wanted.equals(shortName(location))) {
+                return location;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * The lineage argument as a lineage id: a real lineage id is used as given; otherwise a lineage short name (no_1)
+     * or a hive name (no_1_2) is turned into that lineage's id. Anything unrecognised is passed through unchanged, so
+     * the command reports it exactly as it always did.
+     */
+    private static net.minecraft.resources.ResourceLocation resolveLineageArg(
+        com.mojang.brigadier.context.CommandContext<CommandSourceStack> ctx
+    ) {
+        var raw = ResourceLocationArgument.getId(ctx, LINEAGE_ID_ARG);
+
+        if (Alien.MOD.factions().get(raw) != null) {
+            return raw;
+        }
+
+        var wanted = raw.getPath().toLowerCase(Locale.ROOT);
+
+        for (var location : HiveLocationRegistry.INSTANCE.all()) {
+            var name = shortName(location);
+
+            if (name != null && (wanted.equals(name) || wanted.equals(lineageShortName(name)))) {
+                return location.lineageFactionId();
+            }
+        }
+
+        return raw;
+    }
+
+    /** Tab completion for hive arguments: every hive's short name. */
+    private static java.util.concurrent.CompletableFuture<com.mojang.brigadier.suggestion.Suggestions> suggestHiveNames(
+        com.mojang.brigadier.context.CommandContext<CommandSourceStack> ctx,
+        com.mojang.brigadier.suggestion.SuggestionsBuilder builder
+    ) {
+        return net.minecraft.commands.SharedSuggestionProvider.suggest(
+            HiveLocationRegistry.INSTANCE.all().stream().map(HiveDebugCommands::shortName).filter(java.util.Objects::nonNull).sorted(),
+            builder
+        );
+    }
+
+    /** Tab completion for lineage arguments: every living lineage's short name. */
+    private static java.util.concurrent.CompletableFuture<com.mojang.brigadier.suggestion.Suggestions> suggestLineageNames(
+        com.mojang.brigadier.context.CommandContext<CommandSourceStack> ctx,
+        com.mojang.brigadier.suggestion.SuggestionsBuilder builder
+    ) {
+        return net.minecraft.commands.SharedSuggestionProvider.suggest(
+            HiveLocationRegistry.INSTANCE.all()
+                .stream()
+                .map(HiveDebugCommands::shortName)
+                .filter(java.util.Objects::nonNull)
+                .map(HiveDebugCommands::lineageShortName)
+                .distinct()
+                .sorted(),
+            builder
+        );
+    }
+
+    /**
+     * ⭐⭐ THE LOCATION ID IS OPTIONAL EVERYWHERE, AND WHEN GIVEN IT IS ALWAYS THE LAST ARGUMENT.
+     * <p>
+     * [stated] "for things like reserve the location id is really long and you cant actually see what you are typing in
+     * so maybe make the location the last input value you enter."
+     * </p>
+     * <p>
+     * A hive location id is a UUID-length string, so on a multi-argument command it pushed everything after it off the
+     * visible width of the chat box and you were typing the amount blind. Moving it last means the short, meaningful
+     * arguments are always readable, and the long one is the thing you paste and hit enter on.
+     * </p>
+     * <p>
+     * ⭐ AND USUALLY YOU DO NOT NEED IT AT ALL. Every one of these commands is something you run while standing in the
+     * hive you are talking about, so an omitted id resolves to the location under your feet. Typing the id is now the
+     * exception - for a hive you are not standing in - rather than the rule.
+     * </p>
+     */
+    private static @org.jetbrains.annotations.Nullable HiveLocation resolveLocationArgOrHere(
+        com.mojang.brigadier.context.CommandContext<CommandSourceStack> ctx
+    ) {
+        net.minecraft.resources.ResourceLocation locationId = null;
+        try {
+            locationId = ResourceLocationArgument.getId(ctx, LOCATION_ID_ARG);
+        } catch (IllegalArgumentException ignored) {
+            // The argument node was not matched - Brigadier's own signal for "this optional was omitted".
+        }
+
+        if (locationId != null) {
+            var byId = HiveLocationRegistry.INSTANCE.get(HiveLocationId.of(locationId));
+
+            // [stated] Oct 3: a short hive name works too - no_1_2 for "Hive NO_1_2".
+            if (byId == null) {
+                byId = locationByShortName(locationId);
+            }
+
+            if (byId == null) {
+                ctx.getSource().sendFailure(Component.literal("No hive location with id " + locationId));
+            }
+            return byId;
+        }
+
+        var player = ctx.getSource().getPlayer();
+        if (player == null) {
+            ctx.getSource().sendFailure(Component.literal("No location id given, and the console is not standing anywhere."));
+            return null;
+        }
+
+        var here = HiveLocationRegistry.INSTANCE.getByChunk(player.level().dimension(), player.chunkPosition());
+        if (here == null || !here.isAlive()) {
+            ctx.getSource()
+                .sendFailure(Component.literal("You are not standing in a hive claim - give a location id instead."));
+            return null;
+        }
+        return here;
+    }
+
+    /**
+     * ⭐⭐⭐ ONE COMMAND, EVERYTHING ABOUT WHERE YOU ARE STANDING.
+     * <p>
+     * [stated] "if we can condense them into one command with multiple questions answered thats fine. especially the
+     * inspect here because that should give you all the info you would want about that exact area."
+     * </p>
+     * <p>
+     * ⚠ THIS IS THE ONE PLACE THE OVERHAUL ACTUALLY REDUCES THE COMMAND COUNT rather than re-homing it. Grouping
+     * fifty-two flat names under ten parents made them findable, but every leaf still had to be invoked separately -
+     * eight reads meant eight commands. This runs all eight, in the order you would want them: WHERE you are, then WHO
+     * is here, then WHAT they are doing.
+     * </p>
+     * <p>
+     * Each section stays individually addressable ({@code here queen}, {@code here slab}...) for when you want one
+     * answer without the wall of text. A section that finds nothing SAYS so - "no ovipositor" is information about the
+     * area too.
+     * </p>
+     */
+    private static int inspectHere(com.mojang.brigadier.context.CommandContext<CommandSourceStack> ctx) {
+        var source = ctx.getSource();
+        var player = source.getPlayer();
+        if (player == null) {
+            return 0;
+        }
+
+        var pos = player.blockPosition();
+        source.sendSuccess(
+            () -> Component.literal("=== HIVE REPORT @ ")
+                .append(copyableId(pos.getX() + " " + pos.getY() + " " + pos.getZ()))
+                .append(Component.literal(" in " + player.level().dimension().location() + " ===")),
+            false
+        );
+
+        section(ctx, "SETTLEMENT", HiveDebugCommands::inspectSettlement);
+        section(ctx, "QUEEN", HiveDebugCommands::inspectQueen);
+        section(ctx, "EMPRESS", HiveDebugCommands::inspectEmpress);
+        section(ctx, "OVIPOSITOR", HiveDebugCommands::inspectOvipositor);
+        section(ctx, "QUEENLESS MATURATION", HiveDebugCommands::inspectQueenlessMaturation);
+        section(ctx, "TARGETING", HiveDebugCommands::inspectTargeting);
+        section(ctx, "HUNTERS", HiveDebugCommands::inspectHunters);
+        section(ctx, "SLAB", HiveDebugCommands::inspectSlab);
+
+        return 1;
+    }
+
+    /**
+     * Runs one section of the report under its own heading.
+     * <p>
+     * ⚠ THE CATCH IS DELIBERATE. These handlers were written as standalone commands and several assume a subject exists
+     * - {@code Objects.requireNonNull(getPlayer())}, a queen within range, a slab underfoot. Standalone that is fine,
+     * because you only ran the one you meant; in a combined report ONE missing subject would abort the other seven. A
+     * section that blows up reports itself and the report carries on.
+     * </p>
+     */
+    private static void section(
+        com.mojang.brigadier.context.CommandContext<CommandSourceStack> ctx,
+        String heading,
+        java.util.function.ToIntFunction<com.mojang.brigadier.context.CommandContext<CommandSourceStack>> body
+    ) {
+        ctx.getSource()
+            .sendSuccess(() -> Component.literal("-- " + heading).withStyle(ChatFormatting.GRAY), false);
+        try {
+            body.applyAsInt(ctx);
+        } catch (Exception exception) {
+            ctx.getSource()
+                .sendSuccess(
+                    () -> Component.literal("   (unavailable here)").withStyle(ChatFormatting.DARK_GRAY),
+                    false
+                );
+        }
+    }
+
+    /**
+     * [stated] "add a command for jelly to supply". Mirrors {@link #addBiomass} exactly, including clamping at zero so
+     * a negative amount drains rather than underflows.
+     */
+    private static int addJelly(
+        com.mojang.brigadier.context.CommandContext<CommandSourceStack> ctx,
+        boolean royal
+    ) {
+        var location = resolveLocationArgOrHere(ctx);
+        if (location == null) {
+            return 0;
+        }
+        var locationId = location.id();
+        var amount = IntegerArgumentType.getInteger(ctx, COUNT_ARG);
+
+        var pool = royal ? "Royal" : "Scourge";
+        if (royal) {
+            location.setRoyalJelly(Math.max(0, location.royalJelly() + amount));
+        } else {
+            location.setScourgeJelly(Math.max(0, location.scourgeJelly() + amount));
+        }
+
+        var now = royal ? location.royalJelly() : location.scourgeJelly();
+        ctx.getSource()
+            .sendSuccess(
+                () -> Component.literal(pool + " jelly for " + locationId + " is now " + now + "."),
+                true
+            );
+        return now;
     }
 
     /**
@@ -357,6 +1346,15 @@ public final class HiveDebugCommands {
      * Dump what every nearby xenomorph thinks it is doing about host hunting: is it a party member, does the party
      * still exist, does it see a quarry, and is an attack target blocking the capture goal.
      */
+    /** Where this worker has been sent to collect an egg, or none. */
+    private static String haulTargetOf(com.alien.common.gameplay.entity.living.alien.Alien alien) {
+        if (!(alien instanceof com.alien.common.gameplay.entity.living.alien.EggCarrier carrier)) {
+            return "n/a";
+        }
+        var egg = carrier.getEggPickupManager().getTargetOvomorphOrNull();
+        return egg == null ? "none" : egg.blockPosition().toShortString();
+    }
+
     private static int inspectHunters(com.mojang.brigadier.context.CommandContext<CommandSourceStack> ctx) {
         var source = ctx.getSource();
         var player = source.getPlayer();
@@ -388,7 +1386,12 @@ public final class HiveDebugCommands {
                 + " onHunt=" + onHunt
                 + " quarry=" + (quarry == null ? "none" : quarry.getType().getDescription().getString())
                 + " attackTarget=" + (target == null ? "none" : target.getType().getDescription().getString())
-                + " carrying=" + carrying;
+                + " carrying=" + carrying
+                // ⭐⭐ THE ERRAND, NOT JUST THE FIGHT. Every field on this line was about combat, so a worker sent to
+                // fetch an egg forty blocks away printed identically to one standing idle - which is exactly how a
+                // report of runners "attacking nothing" went unanswered until it was guessed at. The POSITION is the
+                // point: it says at once whether the thing it is charging at is simply off-screen.
+                + " haulingEggAt=" + haulTargetOf(alien);
             source.sendSuccess(() -> Component.literal(line), false);
         }
         return 1;
@@ -829,6 +1832,45 @@ public final class HiveDebugCommands {
     }
 
     /** Who is still asleep and where - so the nearest-queen command can be aimed instead of guessed at. */
+    /**
+     * ⭐⭐ RETIRES THIS WORLD'S LEGACY DATA WITHOUT DESTROYING ANYTHING ELSE.
+     * <p>
+     * ⚠⚠ {@code remove all} ALSO SETS THE PURGE FLAG, BUT IT IS THE WRONG TOOL ONCE A PLAYER HAS STARTED REBUILDING. He
+     * wiped his world, then began placing the queens he actually wants - and re-running the wipe to clear the legacy
+     * data would kill those queens too. This does the legacy half on its own: the sleepers go, the flag is set, and
+     * every hive he has since founded is untouched.
+     * </p>
+     * <p>
+     * ⚠ Recovery re-detects on EVERY load while {@code hive_data.dat} sits on disk, so clearing the sleepers without
+     * setting the flag would last exactly until the next restart. Both halves or neither.
+     * </p>
+     */
+    private static int purgeLegacy(com.mojang.brigadier.context.CommandContext<CommandSourceStack> ctx) {
+        var source = ctx.getSource();
+        var sleepers = com.alien.common.gameplay.hive.migration.LegacyHiveRecovery
+            .loadedDormantLegacyQueens(source.getServer());
+        for (var sleeper : sleepers) {
+            sleeper.discard();
+        }
+        var removed = sleepers.size();
+
+        com.alien.common.gameplay.hive.migration.LegacyHiveRecoveryData.getOrCreate(source.getServer())
+            .ifSome(data -> {
+                data.setLegacyDetected(false);
+                data.setRecoveryApplied(true);
+                data.setLegacyPurged(true);
+            });
+
+        source.sendSuccess(
+            () -> Component.literal(
+                "Legacy data purged. " + removed + " sleeping legacy queen(s) removed."
+                    + " Old hive data on disk will no longer be recovered, and this survives a restart."
+            ),
+            true
+        );
+        return 1;
+    }
+
     private static int listLegacyQueens(com.mojang.brigadier.context.CommandContext<CommandSourceStack> ctx) {
         var source = ctx.getSource();
         var dormant = com.alien.common.gameplay.hive.migration.LegacyHiveRecovery
@@ -1006,12 +2048,11 @@ public final class HiveDebugCommands {
     }
 
     private static int inspectLocation(com.mojang.brigadier.context.CommandContext<CommandSourceStack> ctx) {
-        var locationId = ResourceLocationArgument.getId(ctx, LOCATION_ID_ARG);
-        var location = HiveLocationRegistry.INSTANCE.get(HiveLocationId.of(locationId));
+        var location = resolveLocationArgOrHere(ctx);
         if (location == null) {
-            ctx.getSource().sendFailure(Component.literal("No hive location with id " + locationId));
             return 0;
         }
+        var locationId = location.id();
 
         ctx.getSource()
             .sendSuccess(
@@ -1156,6 +2197,23 @@ public final class HiveDebugCommands {
             );
 
         var castePop = com.alien.common.gameplay.hive.economy.CastePopulation.popByCaste(location);
+
+        // ⭐⭐ THE SECOND CAP, and the one that usually explains "why has my hive stopped growing". population=X/Y
+        // above is populationPerChunk x claimedChunks; THIS is HiveBalanceTask.MEMBER_CAP (250, 400 under an
+        // empress), and it is measured against WORKING ADULTS ONLY - queens, every military caste, the founding
+        // retinue and the carve crew are all subtracted first. Either ceiling can halt production and they are not
+        // interchangeable, so both are printed. Read straight off HiveBalanceTask so the two cannot drift.
+        var workers = com.alien.common.gameplay.hive.economy.HiveBalanceTask.workingAdults(location, castePop);
+        var workerCap = com.alien.common.gameplay.hive.economy.HiveBalanceTask.memberCapFor(location);
+        ctx.getSource()
+            .sendSuccess(
+                () -> Component.literal(
+                    "  workers=" + workers + "/" + workerCap
+                        + (workers >= workerCap ? "  (AT WORKER CAP - no more will be bought)" : "")
+                ),
+                false
+            );
+
         ctx.getSource().sendSuccess(() -> Component.literal("  per-caste:"), false);
         for (var entry : castePop.entrySet()) {
             if (entry.getValue() > 0) {
@@ -1212,15 +2270,13 @@ public final class HiveDebugCommands {
     }
 
     private static int addReserve(com.mojang.brigadier.context.CommandContext<CommandSourceStack> ctx) {
-        var locationId = ResourceLocationArgument.getId(ctx, LOCATION_ID_ARG);
-        var entityTypeId = ResourceLocationArgument.getId(ctx, ENTITY_TYPE_ARG);
-        var count = IntegerArgumentType.getInteger(ctx, COUNT_ARG);
-
-        var location = HiveLocationRegistry.INSTANCE.get(HiveLocationId.of(locationId));
+        var location = resolveLocationArgOrHere(ctx);
         if (location == null) {
-            ctx.getSource().sendFailure(Component.literal("No hive location with id " + locationId));
             return 0;
         }
+        var locationId = location.id();
+        var entityTypeId = ResourceLocationArgument.getId(ctx, ENTITY_TYPE_ARG);
+        var count = IntegerArgumentType.getInteger(ctx, COUNT_ARG);
 
         if (!BuiltInRegistries.ENTITY_TYPE.containsKey(entityTypeId)) {
             ctx.getSource().sendFailure(Component.literal("No entity type with id " + entityTypeId));
@@ -1313,7 +2369,7 @@ public final class HiveDebugCommands {
         var player = Objects.requireNonNull(ctx.getSource().getPlayer());
         var level = ctx.getSource().getLevel();
 
-        var lineageFactionId = ResourceLocationArgument.getId(ctx, LINEAGE_ID_ARG);
+        var lineageFactionId = resolveLineageArg(ctx);
         var faction = Alien.MOD.factions().get(lineageFactionId);
         if (faction == null || !(faction.data() instanceof LineageFactionData lineageData)) {
             ctx.getSource().sendFailure(Component.literal("No lineage with id " + lineageFactionId));
@@ -1430,7 +2486,7 @@ public final class HiveDebugCommands {
         var player = Objects.requireNonNull(ctx.getSource().getPlayer());
         var level = ctx.getSource().getLevel();
 
-        var lineageFactionId = ResourceLocationArgument.getId(ctx, LINEAGE_ID_ARG);
+        var lineageFactionId = resolveLineageArg(ctx);
         var faction = Alien.MOD.factions().get(lineageFactionId);
 
         if (faction == null || !(faction.data() instanceof LineageFactionData lineageData)) {
@@ -1570,12 +2626,11 @@ public final class HiveDebugCommands {
      * re-register on chunk load, so unloaded territory may under-report until visited.
      */
     private static int listVents(com.mojang.brigadier.context.CommandContext<CommandSourceStack> ctx) {
-        var locationId = ResourceLocationArgument.getId(ctx, LOCATION_ID_ARG);
-        var location = HiveLocationRegistry.INSTANCE.get(HiveLocationId.of(locationId));
+        var location = resolveLocationArgOrHere(ctx);
         if (location == null) {
-            ctx.getSource().sendFailure(Component.literal("No hive location with id " + locationId));
             return 0;
         }
+        var locationId = location.id();
 
         var vents = location.ventManager().allVents();
         ctx.getSource()
@@ -1599,13 +2654,12 @@ public final class HiveDebugCommands {
      * passive income.
      */
     private static int addBiomass(com.mojang.brigadier.context.CommandContext<CommandSourceStack> ctx) {
-        var locationId = ResourceLocationArgument.getId(ctx, LOCATION_ID_ARG);
-        var amount = IntegerArgumentType.getInteger(ctx, COUNT_ARG);
-        var location = HiveLocationRegistry.INSTANCE.get(HiveLocationId.of(locationId));
+        var location = resolveLocationArgOrHere(ctx);
         if (location == null) {
-            ctx.getSource().sendFailure(Component.literal("No hive location with id " + locationId));
             return 0;
         }
+        var locationId = location.id();
+        var amount = IntegerArgumentType.getInteger(ctx, COUNT_ARG);
         location.setBiomass(Math.max(0, location.biomass() + amount));
         ctx.getSource()
             .sendSuccess(
@@ -1635,6 +2689,19 @@ public final class HiveDebugCommands {
         var report = queen.getOvipositorManager().debugReport();
         ctx.getSource().sendSuccess(() -> Component.literal(report), false);
         return 1;
+    }
+
+    /** The nearest xenomorph of ANY caste within 32 blocks, for the animation watch. */
+    private static com.alien.common.gameplay.entity.living.alien.xenomorph.Xenomorph nearestXenomorph(
+        com.mojang.brigadier.context.CommandContext<CommandSourceStack> ctx
+    ) {
+        var player = Objects.requireNonNull(ctx.getSource().getPlayer());
+        var level = ctx.getSource().getLevel();
+
+        return level.getEntitiesOfClass(
+            com.alien.common.gameplay.entity.living.alien.xenomorph.Xenomorph.class,
+            player.getBoundingBox().inflate(32.0)
+        ).stream().min(java.util.Comparator.comparingDouble(x -> x.distanceToSqr(player))).orElse(null);
     }
 
     private static com.alien.common.gameplay.entity.living.alien.xenomorph.queen.Queen nearestQueen(
@@ -1865,16 +2932,50 @@ public final class HiveDebugCommands {
         } else {
             var idStr = home.id().toString();
             var biomass = home.biomass();
-            var members = home.knownMembersByType().values().stream().mapToInt(java.util.Set::size).sum();
+            var loadedMembers = loadedAdultCount(home);
+            var totalMembers = com.alien.common.gameplay.hive.economy.CastePopulation
+                .totalReliableXenomorphPopulation(home);
             src.sendSuccess(
                 () -> Component.literal("  location: ")
                     .append(copyableId(idStr))
-                    .append(Component.literal("  biomass=" + biomass + "  members=" + members)),
+                    .append(
+                        Component.literal(
+                            "  biomass=" + biomass
+                                + "  members=" + totalMembers
+                                + " (loaded=" + loadedMembers + " banked=" + (totalMembers - loadedMembers) + ")"
+                        )
+                    ),
                 false
             );
         }
 
         return 1;
+    }
+
+    /**
+     * Adults of this location that are LOADED RIGHT NOW - the ones you could walk up to and count.
+     * <p>
+     * ⚠⚠ THE OLD {@code members=} READ {@code knownMembersByType} AND WAS WRONG IN BOTH DIRECTIONS AT ONCE. That map is
+     * a persisted roster of member UUIDs: it holds NO reserves at all, and it keeps the UUIDs of members that unloaded
+     * without being banked (queens, convoy members, name-tagged specimens) forever. A live log had it print
+     * {@code members=1} for a hive that four minutes later evacuated FIFTY-TWO members - they were all in the bank,
+     * which that map never sees. {@code CastePopulation}'s own header says known members are deliberately excluded from
+     * the real counts "because unloaded UUIDs can become stale", and this was the last readout still trusting them.
+     * </p>
+     * <p>
+     * The commands now print the reliable total (loaded + all three reserve banks - the SAME figure as the boss bar)
+     * and break the two apart, because "how many are standing here" and "how many does this hive own" are both
+     * questions worth answering and conflating them is what made the number look broken.
+     * </p>
+     */
+    private static int loadedAdultCount(HiveLocation location) {
+        var count = 0;
+        for (var entry : location.loadedMembersByType().entrySet()) {
+            if (entry.getKey().is(com.alien.common.registry.tag.AlienEntityTypeTags.XENOMORPHS)) {
+                count += entry.getValue().size();
+            }
+        }
+        return count;
     }
 
     /**
@@ -1903,7 +3004,7 @@ public final class HiveDebugCommands {
     }
 
     private static int inspectLineageById(com.mojang.brigadier.context.CommandContext<CommandSourceStack> ctx) {
-        return printLineage(ctx, ResourceLocationArgument.getId(ctx, LINEAGE_ID_ARG));
+        return printLineage(ctx, resolveLineageArg(ctx));
     }
 
     private static int printLineage(
@@ -1942,7 +3043,9 @@ public final class HiveDebugCommands {
             }
             loaded++;
             var biomass = location.biomass();
-            var members = location.knownMembersByType().values().stream().mapToInt(java.util.Set::size).sum();
+            var members = com.alien.common.gameplay.hive.economy.CastePopulation
+                .totalReliableXenomorphPopulation(location);
+            var loadedMembers = loadedAdultCount(location);
             totalBiomass += biomass;
             totalMembers += members;
 
@@ -1956,7 +3059,9 @@ public final class HiveDebugCommands {
                     .append(copyableId(idStr))
                     .append(
                         Component.literal(
-                            "  biomass=" + biomass + "  members=" + members
+                            "  biomass=" + biomass
+                                + "  members=" + members
+                                + " (loaded=" + loadedMembers + " banked=" + (members - loadedMembers) + ")"
                                 + "  @ " + dimPath + " " + center.getX() + " " + center.getY() + " " + center.getZ()
                                 + "  founder=" + founderStr
                         )
@@ -1985,6 +3090,19 @@ public final class HiveDebugCommands {
      * commit path ({@code SpreadZoneCheck} -> {@code HiveLocationFoundingService}); if the spread-zone check blocks her
      * (e.g. too close to another claim) it reports that reason instead of founding.
      */
+    /**
+     * Founds the nearest queen where she stands, from ANY phase.
+     * <p>
+     * ⭐⭐ ONE CODE PATH WITH THE POISON JELLY BLOCK, ON PURPOSE. This used to carry its own copy of the logic and had
+     * drifted: it required isReadyToFound(), so it only worked on a queen ALREADY in FOUNDING_HANDOFF - useless on a
+     * new queen, which is the only kind anyone wants to place. The block handles any phase, and a command that does
+     * less than the survival item is a command nobody can be told to use.
+     * </p>
+     * <p>
+     * ⚠ THE TERRITORY GUARD COMES WITH IT. ForcedQueenSettlement waives only the surface rule; another hive's ground
+     * still refuses, so this cannot be used to overlap hives either.
+     * </p>
+     */
     private static int skipSettlement(com.mojang.brigadier.context.CommandContext<CommandSourceStack> ctx) {
         var queen = nearestQueen(ctx);
         if (queen == null) {
@@ -1992,41 +3110,22 @@ public final class HiveDebugCommands {
             return 0;
         }
 
-        var phaseManager = queen.getLifecyclePhaseManager();
-        if (!phaseManager.isReadyToFound()) {
-            ctx.getSource()
-                .sendFailure(
-                    Component.literal(
-                        "Nearest queen is in phase "
-                            + phaseManager.getPhase()
-                            + " \u2014 not ready to found (must finish developing -> location -> hibernation first)."
-                    )
-                );
+        if (!(queen.level() instanceof net.minecraft.server.level.ServerLevel serverLevel)) {
+            ctx.getSource().sendFailure(Component.literal("Server level only."));
             return 0;
         }
 
-        var pos = new ChunkPos(queen.blockPosition()).getMiddleBlockPosition(queen.blockPosition().getY());
-        var result = com.alien.common.gameplay.hive.lifecycle.SpreadZoneCheck.evaluate(queen, pos);
-        if (result instanceof com.alien.common.gameplay.hive.lifecycle.SpreadZoneResult.Blocked blocked) {
-            ctx.getSource()
-                .sendFailure(Component.literal("Spread-zone check blocked founding: " + blocked.reason()));
+        var refusal = com.alien.common.gameplay.hive.lifecycle.ForcedQueenSettlement
+            .force(serverLevel, queen, ctx.getSource().getPlayer());
+
+        if (refusal != null) {
+            ctx.getSource().sendFailure(Component.literal(refusal));
             return 0;
         }
 
-        QueenSettlementDetector.forget(queen.getUUID());
-        var locationId =
-            com.alien.common.gameplay.hive.lifecycle.HiveLocationFoundingService.foundFromResult(queen, pos, result);
-        if (locationId == null) {
-            ctx.getSource().sendFailure(Component.literal("Founding service returned no location (see server log)."));
-            return 0;
-        }
-
-        final var foundedId = locationId;
         ctx.getSource()
             .sendSuccess(
-                () -> Component.literal(
-                    "Skipped settlement \u2014 queen " + queen.getUUID() + " founded location " + foundedId + "."
-                ),
+                () -> Component.literal("Queen " + queen.getUUID() + " founded her hive where she was standing."),
                 true
             );
         return 1;
@@ -2137,14 +3236,12 @@ public final class HiveDebugCommands {
     }
 
     private static int claimRadius(com.mojang.brigadier.context.CommandContext<CommandSourceStack> ctx) {
-        var locationId = ResourceLocationArgument.getId(ctx, LOCATION_ID_ARG);
-        var radius = IntegerArgumentType.getInteger(ctx, "radius");
-        var location = HiveLocationRegistry.INSTANCE.get(HiveLocationId.of(locationId));
-
+        var location = resolveLocationArgOrHere(ctx);
         if (location == null) {
-            ctx.getSource().sendFailure(Component.literal("No hive location with id " + locationId));
             return 0;
         }
+        var locationId = location.id();
+        var radius = IntegerArgumentType.getInteger(ctx, "radius");
 
         var centerChunk = new ChunkPos(location.centerPos());
         var serverLevel = ctx.getSource().getLevel();
@@ -2219,13 +3316,11 @@ public final class HiveDebugCommands {
     }
 
     private static int killLocation(com.mojang.brigadier.context.CommandContext<CommandSourceStack> ctx) {
-        var locationId = ResourceLocationArgument.getId(ctx, LOCATION_ID_ARG);
-        var location = HiveLocationRegistry.INSTANCE.get(HiveLocationId.of(locationId));
-
+        var location = resolveLocationArgOrHere(ctx);
         if (location == null) {
-            ctx.getSource().sendFailure(Component.literal("No hive location with id " + locationId));
             return 0;
         }
+        var locationId = location.id();
 
         var faction = Alien.MOD.factions().get(location.lineageFactionId());
         if (faction == null || !(faction.data() instanceof LineageFactionData lineage)) {
@@ -2247,13 +3342,11 @@ public final class HiveDebugCommands {
     }
 
     private static int forceGrowLocation(com.mojang.brigadier.context.CommandContext<CommandSourceStack> ctx) {
-        var locationId = ResourceLocationArgument.getId(ctx, LOCATION_ID_ARG);
-        var location = HiveLocationRegistry.INSTANCE.get(HiveLocationId.of(locationId));
-
+        var location = resolveLocationArgOrHere(ctx);
         if (location == null) {
-            ctx.getSource().sendFailure(Component.literal("No hive location with id " + locationId));
             return 0;
         }
+        var locationId = location.id();
 
         var faction = Alien.MOD.factions().get(location.lineageFactionId());
         if (faction == null || !(faction.data() instanceof LineageFactionData lineage)) {
@@ -2381,13 +3474,11 @@ public final class HiveDebugCommands {
     }
 
     private static int forceMigration(com.mojang.brigadier.context.CommandContext<CommandSourceStack> ctx) {
-        var locationId = ResourceLocationArgument.getId(ctx, LOCATION_ID_ARG);
-        var location = HiveLocationRegistry.INSTANCE.get(HiveLocationId.of(locationId));
-
+        var location = resolveLocationArgOrHere(ctx);
         if (location == null) {
-            ctx.getSource().sendFailure(Component.literal("No hive location with id " + locationId));
             return 0;
         }
+        var locationId = location.id();
 
         var faction = Alien.MOD.factions().get(location.lineageFactionId());
         if (faction == null || !(faction.data() instanceof LineageFactionData lineage)) {
@@ -2410,7 +3501,7 @@ public final class HiveDebugCommands {
 
     private static int forceRaidOnSelf(com.mojang.brigadier.context.CommandContext<CommandSourceStack> ctx) {
         var player = Objects.requireNonNull(ctx.getSource().getPlayer());
-        var lineageFactionId = ResourceLocationArgument.getId(ctx, LINEAGE_ID_ARG);
+        var lineageFactionId = resolveLineageArg(ctx);
         var faction = Alien.MOD.factions().get(lineageFactionId);
 
         if (faction == null || !(faction.data() instanceof LineageFactionData lineage)) {
@@ -2437,7 +3528,7 @@ public final class HiveDebugCommands {
     }
 
     private static int inspectKillAttribution(com.mojang.brigadier.context.CommandContext<CommandSourceStack> ctx) {
-        var lineageFactionId = ResourceLocationArgument.getId(ctx, LINEAGE_ID_ARG);
+        var lineageFactionId = resolveLineageArg(ctx);
         var faction = Alien.MOD.factions().get(lineageFactionId);
 
         if (faction == null || !(faction.data() instanceof LineageFactionData lineage)) {
@@ -2570,7 +3661,7 @@ public final class HiveDebugCommands {
     }
 
     private static int forceQueenlessAdvance(com.mojang.brigadier.context.CommandContext<CommandSourceStack> ctx) {
-        var lineageId = ResourceLocationArgument.getId(ctx, LINEAGE_ID_ARG);
+        var lineageId = resolveLineageArg(ctx);
         var advanced = com.alien.common.gameplay.hive.lifecycle.QueenlessMaturationTask.forceAdvance(
             ctx.getSource().getServer(),
             lineageId

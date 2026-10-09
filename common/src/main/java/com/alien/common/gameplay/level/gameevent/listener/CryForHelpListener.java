@@ -3,7 +3,6 @@ package com.alien.common.gameplay.level.gameevent.listener;
 import com.alien.common.data.AlienVariantTypes;
 import com.alien.common.gameplay.block.entity.resin.vent.ResinVentBlockEntity;
 import com.alien.common.gameplay.hive.location.HiveLocation;
-import com.alien.common.gameplay.hive.spawning.ReserveSpawnUtil;
 import com.alien.common.registry.tag.AlienBlockTags;
 import com.alien.common.registry.tag.AlienEntityTypeTags;
 import com.blib.api.common.spatial.v1.block.BlockPosUtil;
@@ -13,7 +12,6 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.Mob;
-import net.minecraft.world.entity.MobSpawnType;
 import net.minecraft.world.level.gameevent.GameEvent;
 import net.minecraft.world.level.gameevent.GameEventListener;
 import net.minecraft.world.level.gameevent.PositionSource;
@@ -148,17 +146,18 @@ public class CryForHelpListener implements GameEventListener {
         ResinVentBlockEntity vent
     ) {
         var randomType = reserveTypes.get(sourceEntity.getRandom().nextInt(reserveTypes.size()));
-        if (!location.localReserves().canSpawn(randomType)) {
-            return false;
-        }
 
-        var summoned = randomType.spawn(level, spawnPos, MobSpawnType.MOB_SUMMONED);
+        // ⚠⚠ THIS USED TO SPEND TWO UNITS PER DEFENDER. A vent sits inside a claimed chunk, so
+        // Alien.finalizeSpawn already debited the bank for the summoned alien - and then this method debited it a
+        // second time by hand. Going through the shared reserve door settles that (it measures the bank either side
+        // of the spawn and only pays when finalizeSpawn did not), and it also lets a cry draw a banked IDENTITY
+        // member rather than only ever conjuring a fresh body from the abstract count.
+        var summoned = com.alien.common.gameplay.hive.spawning.HiveLoadedSpawner
+            .trySpawnFromReserves(level, location, randomType, spawnPos);
         if (summoned == null) {
             return false;
         }
 
-        ReserveSpawnUtil.markSpawnedFromReserves(summoned);
-        location.localReserves().trySpawn(randomType);
         vent.getAlienSpawnCooldown().reset();
         retargetIfPossible(sourceEntity, summoned);
         return true;

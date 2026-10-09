@@ -111,6 +111,11 @@ public final class NukeStrike {
         var culprits = new java.util.LinkedHashSet<UUID>();
 
         for (var player : level.players()) {
+            // ⚠ Oct 2 - a creative or spectator player watching from inside the footprint is not a culprit. They were
+            // named anyway, and the birth raid then waited for them to leave creative so it could come for them.
+            if (com.alien.common.util.AlienPredicates.isIgnoredByHive(player)) {
+                continue;
+            }
             if (HiveFootprint.contains(location, player.getX(), player.getZ())) {
                 culprits.add(player.getUUID());
             }
@@ -127,6 +132,9 @@ public final class NukeStrike {
         var closestDistance = Double.MAX_VALUE;
 
         for (var player : level.players()) {
+            if (com.alien.common.util.AlienPredicates.isIgnoredByHive(player)) {
+                continue; // Oct 2 - see resolveAllCulprits
+            }
             if (!HiveFootprint.contains(location, player.getX(), player.getZ())) {
                 continue;
             }
@@ -243,7 +251,7 @@ public final class NukeStrike {
                     continue;
                 }
 
-                member.hurt(member.damageSources().explosion(null, null), Float.MAX_VALUE);
+                member.hurt(member.damageSources().explosion(null, null), com.alien.common.util.LethalDamage.AMOUNT);
                 killed++;
             }
         }

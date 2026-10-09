@@ -11,7 +11,6 @@ import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.Mob;
-import net.minecraft.world.entity.MobSpawnType;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
@@ -101,6 +100,17 @@ public final class CarveWorkers {
             if (!(worker instanceof Xenomorph drone) || !(drone instanceof CarveWorker) || !drone.isAlive()) {
                 // Dead, despawned, or wandered out of loaded range: off the roster (design \u00a78.2 - replace, and the
                 // clock just slows meanwhile). A materialized one that died stays dead; no reserve refund for a corpse.
+                // !!! CLEAR THE GAIT HERE TOO, NOT ONLY IN release(). This branch dropped the worker with a bare
+                // iterator.remove(), leaving carveDigMode at 1 or 2 - and that flag is SYNCED, so the client kept
+                // playing the dig animation forever on a xenomorph no longer on any roster. Reported as "this drone
+                // is doing the digging animation ... but they arent carving", beside a site logging "unstaffed".
+                //
+                // ⚠ Only reachable for a worker that is still LOADED but no longer a live CarveWorker - a dead or
+                // unloaded one cannot be told anything, and picks the flag up again from its own saved data.
+                if (worker instanceof CarveWorker leaving && leaving.carveDigMode().get() != 0) {
+                    leaving.carveDigMode().set(0);
+                }
+
                 iterator.remove();
                 site.materializedWorkers.remove(entry.getKey());
                 continue;
@@ -178,6 +188,65 @@ public final class CarveWorkers {
      * workers can pause instead of release): no egg duty, no party, no passenger (an egg on the back or a host in the
      * claws IS the higher-priority job).
      */
+    /**
+     * How long a marked worker is given to reach a vent before the departure is written off.
+     * <p>
+     * Deliberately longer than BroodBankTask's own two-minute absorb grace, so a drone that IS in reach is banked
+     * normally and only one that never got there is released.
+     * </p>
+     */
+    private static final long RESERVE_RETURN_GIVE_UP_TICKS = 3L * 60L * 20L;
+
+    /**
+     * Whether a marked worker's departure has plainly failed, so the mark should be dropped and it can work again.
+     * <p>
+     * !!! THE MARK HAD NO WAY BACK, AND THAT IS WHAT RETIRED THE WORKFORCE. CarveWorkers marks a released crew for
+     * reserve return and starts it walking to a vent; hasRealTask then counts the mark as BUSY, so the drone is
+     * invisible to every future site. BroodBankTask is what folds it into the bank - but its scan box is bounded by
+     * hiveFloorY()..hiveCeilingY(), so a drone that wandered out of the slab is never even considered, its grace never
+     * expires, and the mark is PERMANENT.
+     * </p>
+     * <p>
+     * ⚠ ON A SURFACE HIVE THAT IS THE NORMAL CASE. The slab is a thin band; drones stroll onto the hillside and out of
+     * it. Every completed site retired its crew this way, which is why a live log showed SEVENTEEN commissions all
+     * reporting "unstaffed - no free drones, nothing in reserve" while the hive was visibly full of drones.
+     * </p>
+     * <p>
+     * ⭐ RELEASED, NOT BANKED. [stated] "first yeah" - a failed departure puts the drone back to work rather than
+     * banking it where it stands, which would make drones blink out in the open exactly as the vent walk exists to
+     * avoid. BroodBankTask still banks the ones it can actually reach.
+     * </p>
+     */
+    private static boolean releaseStaleReserveMark(Xenomorph drone) {
+        if (!drone.isMarkedForReserveReturn()) {
+            return false;
+        }
+
+        var elapsed = drone.level().getGameTime() - drone.reserveReturnMarkedAtTick();
+        if (elapsed < RESERVE_RETURN_GIVE_UP_TICKS) {
+            return false;
+        }
+
+        drone.clearReserveReturnMark();
+        Alien.LOGGER.info(
+            "Hive: carve worker {} never reached a vent after {}t - dropping its reserve-return mark so it can work again.",
+            drone.getUUID(),
+            elapsed
+        );
+        return true;
+    }
+
+    /**
+     * Whether this xenomorph is already committed to hive work.
+     * <p>
+     * ⚠ Public so combat targeting can ask the same question - a worker mid-job should not drop it to chase vermin
+     * while a carve site sits unstaffed. See XenomorphTargetSensors.applyWorkerDutyDisarm.
+     * </p>
+     */
+    public static boolean isOnHiveDuty(Xenomorph drone) {
+        return hasRealTask(drone);
+    }
+
     private static boolean hasRealTask(Xenomorph drone) {
         // A worker marked for reserve return is LEAVING - it is walking to a vent to fold into the bank, and
         // re-drafting it onto the next site would strand it marked-and-busy (the brood bank could then yank it
@@ -235,6 +304,9 @@ public final class CarveWorkers {
                 if (!(level.getEntity(id) instanceof Xenomorph drone) || !(drone instanceof CarveWorker) || !drone.isAlive()) {
                     continue;
                 }
+                // ⚠ ASK BEFORE THE BUSY TEST. A stale mark reads as "busy" and would skip this drone forever.
+                releaseStaleReserveMark(drone);
+
                 if (drone.getTarget() != null || hasRealTask(drone)) {
                     continue;
                 }
@@ -299,11 +371,11 @@ public final class CarveWorkers {
                 var jitterZ = spawnPos.getZ() + 0.5 + (level.random.nextDouble() - 0.5) * 2.0;
                 entity.moveTo(jitterX, spawnPos.getY(), jitterZ, level.random.nextFloat() * 360.0F, 0.0F);
                 if (entity instanceof Mob mob) {
-                    mob.finalizeSpawn(level, level.getCurrentDifficultyAt(spawnPos), MobSpawnType.MOB_SUMMONED, null);
+                    com.alien.common.gameplay.hive.spawning.ReserveSpawnUtil
+                        .finalizePrepaidSpawn(level, mob, spawnPos);
                     mob.setPersistenceRequired();
                 }
                 level.addFreshEntityWithPassengers(entity);
-                com.alien.common.gameplay.hive.spawning.ReserveSpawnUtil.markSpawnedFromReserves(entity);
                 assign(site, entity.getUUID(), added, neededDiggers, neededPlacers, true);
                 progressed = true;
             }
@@ -347,6 +419,42 @@ public final class CarveWorkers {
      * only after the same grace window the bank uses - the bank never wedges. A hive with no vents at all keeps the old
      * instant absorb. Borrowed workers just get their gait back, unchanged.
      */
+    /**
+     * Clears a dig gait left on a xenomorph that is not on any carve site.
+     * <p>
+     * !!! THE FLAG CAN OUTLIVE EVERY PLACE THAT CLEARS IT. carveDigMode is SYNCED and SAVED, and both roster exits skip
+     * a worker that is not loaded at that moment - disband's first {@code continue} is exactly that case. An unloaded
+     * drone cannot be told anything, so it comes back later still carrying the flag, mining thin air in a room that was
+     * finished while it was away.
+     * </p>
+     * <p>
+     * ⚠ Reported as "i keep seeing alot of workers doing digging animations in rooms already done". Fixing the exits
+     * alone could never reach those - like the orphaned royal cocoon, the only thing that can clear it is the entity
+     * itself, once it is loaded again.
+     * </p>
+     * <p>
+     * ⚠ ONE MAP LOOKUP ON A SLOW BEAT, and only for a worker whose flag is actually set - which is nobody, almost
+     * always.
+     * </p>
+     */
+    public static void clearStaleDigGait(Xenomorph xenomorph) {
+        if (!(xenomorph instanceof CarveWorker worker) || worker.carveDigMode().get() == 0) {
+            return;
+        }
+
+        var location = com.alien.common.gameplay.hive.faction.HiveMemberLocationResolver
+            .reserveReturnLocation(xenomorph);
+
+        if (location != null) {
+            var site = location.activeCarveSite();
+            if (site != null && site.workers.containsKey(xenomorph.getUUID())) {
+                return; // genuinely on the crew
+            }
+        }
+
+        worker.carveDigMode().set(0);
+    }
+
     static void disband(ServerLevel level, HiveLocation location, CarveSite site) {
         for (UUID id : new ArrayList<>(site.workers.keySet())) {
             if (!(level.getEntity(id) instanceof Xenomorph drone) || !(drone instanceof CarveWorker) || !drone.isAlive()) {

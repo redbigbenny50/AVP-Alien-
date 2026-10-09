@@ -79,6 +79,30 @@ public class AzAlienAnimationUtil {
         TAIL
     );
 
+    /**
+     * \u2b50 Oct 3 - IS THIS ALIEN HAULING SOMETHING: a captured host held to its chest, or an egg on its back.
+     * <p>
+     * Shared by every animator with a carry clip, and deliberately the SAME rule the server uses for a captive
+     * ({@code HostCaptureTask.carriedHost}: any living, non-alien passenger that is not a royal's eggsack) - the drone
+     * animator used to keep its own list (the HOSTS tag), so anything the server could capture but the tag did not name
+     * was carried with its arms at its sides. Passengers are synced to the client, so this needs no new network state.
+     * </p>
+     *
+     * @param alien the alien being animated
+     * @return true if it is carrying a host or an ovomorph
+     */
+    public static boolean isHauling(Alien alien) {
+        if (com.alien.common.gameplay.hive.party.HostCaptureTask.carriedHost(alien) != null) {
+            return true;
+        }
+        for (var passenger : alien.getPassengers()) {
+            if (passenger.getType().is(com.alien.common.registry.tag.AlienEntityTypeTags.OVOMORPHS)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     public static float crawlAnimationSpeed(Alien alien) {
         var crawlSpeedMultiplier = CrawlingManager.getCrawlSpeedMultiplier(alien);
         var movementSpeed = actualHorizontalMovementSpeed(alien);

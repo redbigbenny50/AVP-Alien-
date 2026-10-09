@@ -30,8 +30,37 @@ public final class HostSensors {
 
     public static final Sensor.Mono<Xenomorph, Boolean> HAS_TARGET_HOST = Sensors.map(
         StateKey.sensed("has_target_host"),
-        xenomorph -> findCaptureTarget(xenomorph) != null
+        HostSensors::hasTargetHost
     );
+
+    /**
+     * ⭐ Oct 1 - THE SCAN IS MEMOISED, THE GUARDS ARE NOT. {@code findCaptureTarget} is an entity query over a 32-block
+     * box with claim and reachability filters, and this sensor ran it for every hunting or sweeping drone every tick.
+     * <p>
+     * ⚠ Deliberately NOT {@code Sensors.every} on the whole sensor: "already carrying a host" must stay live - holding
+     * a stale "has a target" while the drone carries one is exactly the capture/deliver flicker documented below. So
+     * the carry check runs every tick, and a remembered target is re-validated (alive, not being carried, not claimed
+     * by another drone) before it is believed. {@code CaptureHostAction} resolves its own target live, so the path
+     * always goes to the real host - this only decides whether to plan a capture, up to half a second later.
+     * </p>
+     */
+    private static boolean hasTargetHost(Xenomorph xenomorph) {
+        if (isCarryingHost(xenomorph)) {
+            return false;
+        }
+        var remembered = TARGET_SCAN.get(
+            xenomorph,
+            xenomorph.level(),
+            () -> new java.lang.ref.WeakReference<>(findCaptureTarget(xenomorph))
+        ).get();
+        return remembered != null
+            && remembered.isAlive()
+            && !remembered.isPassenger()
+            && !HostClaims.isClaimedByOther(remembered, xenomorph);
+    }
+
+    private static final com.alien.common.gameplay.entity.living.alien.xenomorph.ai.SensorMemo<Xenomorph, java.lang.ref.WeakReference<LivingEntity>> TARGET_SCAN =
+        new com.alien.common.gameplay.entity.living.alien.xenomorph.ai.SensorMemo<>(10);
 
     public static final Sensor.Mono<Xenomorph, Boolean> IS_CARRYING_HOST = Sensors.map(
         StateKey.sensed("is_carrying_host"),

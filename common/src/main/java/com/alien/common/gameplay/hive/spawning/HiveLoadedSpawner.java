@@ -81,13 +81,23 @@ public final class HiveLoadedSpawner {
             }
 
             var loadedCount = countLoadedXenomorphs(location);
-            if (loadedCount >= config.hiveSpawnerMinimumLoadedXenomorphs()) {
+            // \u2b50\u2b50 BUILD-FREE RAISES THE ACTIVE CEILING. hiveSpawnerMinimumLoadedXenomorphs is a MAXIMUM
+            // despite its name - the reject log below literally says "at loaded cap". 20 is right for a chamber
+            // cluster and nearly empty across a 48-block slab and a 19x19 territory, which is a whole building: a
+            // team could clear three floors and meet two aliens.
+            //
+            // \u26a0 Parties, raids and vent defenders spawn ON TOP of this, so a fight still goes well above it.
+            // This is the RESTING population - what the place feels like when nothing has been provoked.
+            var loadedCap = com.alien.common.gameplay.hive.config.BuildFreeMode.isEnabled()
+                ? config.buildFreeActiveXenomorphs()
+                : config.hiveSpawnerMinimumLoadedXenomorphs();
+            if (loadedCount >= loadedCap) {
                 if (DEBUG_SPAWN_REJECTS) {
                     com.alien.Alien.LOGGER.info(
                         "[hive-spawn] {} skipped: at loaded cap ({} >= {})",
                         location.id(),
                         loadedCount,
-                        config.hiveSpawnerMinimumLoadedXenomorphs()
+                        loadedCap
                     );
                 }
                 continue;
@@ -149,6 +159,20 @@ public final class HiveLoadedSpawner {
     private static List<ServerPlayer> nearbyPlayers(ServerLevel level, HiveLocation location) {
         var radius = HiveLocationRegistry.INSTANCE.config().bossBarDisplayRadiusBlocks();
         var radiusSqr = (double) radius * radius;
+        // \u26a0\u26a0 CREATIVE AND SPECTATOR COUNT HERE, AND MUST. This is PRESENCE, not threat.
+        //
+        // I previously filtered them out along with every other player check, and it starved hives outright: no
+        // qualifying player nearby means NO AMBIENT SPAWNING, so a hive observed only by someone in creative or
+        // spectator produced no drones, could not staff a carve site, and never built anything. Paired with the same
+        // mistake in the biomass tick it also left the queen too poor to grow an ovipositor. Four separate field
+        // reports - "they dont build", "they just spread resin", "she doesnt sack", "their iq got lowered" - were all
+        // this one over-reach.
+        //
+        // [stated] the actual ask was narrow: "the reason we made that change was creative and spectator players were
+        // triggering attack responses that happen because of being in hive territory too long. so we need to prevent
+        // that but nothing that stops the hive from functioning." Threat paths stay blind to them
+        // (HiveTerritoryAggroTask's dwell, attack campaigns, the kill ledger, siege damage, Alien.setTarget); the
+        // question "is anyone here, so should this hive be alive" is a different question and takes any player.
         return level.players()
             .stream()
             .filter(player -> player.blockPosition().distSqr(location.centerPos()) <= radiusSqr)
@@ -171,8 +195,120 @@ public final class HiveLoadedSpawner {
             return null;
         }
 
+        var spawnType = type.is(AlienEntityTypeTags.QUEENS) ? MobSpawnType.MOB_SUMMONED : MobSpawnType.NATURAL;
+        return trySpawnFromReserves(level, location, type, pos, spawnType);
+    }
+
+    /**
+     * ⭐⭐ THE GENERAL RESERVE DOOR - USE THIS, NOT {@link #trySpawnIdentityReserve}.
+     * <p>
+     * A location's bank has THREE pools: the IDENTITY list (whole captured entities, only ever filled when a loaded
+     * member unloads, is absorbed by the brood bank, or a carve crew folds back), the ABSTRACT bank (plain type → count
+     * - where every purchase the hive makes lands), and the brood bank. {@code trySpawnIdentityReserve} draws the
+     * IDENTITY list ALONE and returns null when it holds nothing of that type.
+     * </p>
+     * <p>
+     * ⚠⚠ That is why the hive looked dead. Vent defence, war mobilisation, throne defence, breach repair and the
+     * dormant-queen purge all asked {@code getCount}/{@code getReliableCount} - which include the abstract bank - and
+     * then spent through the identity door, which does not. A hive whose population was BOUGHT rather than unloaded had
+     * a full bank that no defence path could reach, so nothing ever came out and nothing was even logged. Every one of
+     * those call sites now comes through here.
+     * </p>
+     * <p>
+     * ⚠ THE DEBIT IS MEASURED, NOT PREDICTED. {@code Alien.finalizeSpawn} debits the bank itself for any alien spawning
+     * inside a claimed chunk, so debiting here unconditionally would spend TWO units per defender (the bug
+     * {@code CryForHelpListener} used to have). Predicting it is not safe either: the chunk may belong to a different
+     * location, and a brood WILDCARD draw does not match the per-type test {@code finalizeSpawn} uses. So we read the
+     * bank total either side of the spawn and only debit - and only mark, and only join - when it did not.
+     * </p>
+     */
+    /**
+     * Gives a freshly materialised member the genes of the royal currently seated in this hive.
+     * <p>
+     * ⚠ Only a royal WITH an ovipositor counts - she is the one laying. With no seated royal the member simply arrives
+     * without genes, which is the same as today and correct: nothing laid it.
+     * </p>
+     */
+    private static void applySeatedRoyalGenes(ServerLevel level, HiveLocation location, Entity entity) {
+        if (!(entity instanceof com.alien.common.gameplay.entity.living.alien.Alien alien)) {
+            return;
+        }
+
+        for (var entry : location.loadedMembersByType().entrySet()) {
+            if (!entry.getKey().is(AlienEntityTypeTags.QUEENS)) {
+                continue;
+            }
+
+            for (var uuid : entry.getValue()) {
+                if (
+                    level.getEntity(uuid) instanceof com.alien.common.gameplay.entity.living.alien.xenomorph.ai.egg_laying.EggLayer royal
+                        && royal.asEntity().isAlive()
+                        && royal.hasOvipositor()
+                ) {
+                    switch (royal.getGeneManager()) {
+                        case com.alien.compatibility.avp_human.GeneManagerProxy.EMPTY ignored -> { /* NO-OP */ }
+                        case com.alien.compatibility.avp_human.GeneManagerProxy.Wrapper wrapper ->
+                            wrapper.transfer(alien.getGeneManager(), false);
+                    }
+
+                    return;
+                }
+            }
+        }
+    }
+
+    /** Loaded xenomorphs at or above which the bank releases no more non-royals. Matches the cry-for-help ceiling. */
+    private static final int LOADED_DRAW_CEILING = 60;
+
+    private static boolean isExemptFromDrawCeiling(EntityType<?> type) {
+        return type.is(AlienEntityTypeTags.QUEENS)
+            || type.is(AlienEntityTypeTags.EMPRESSES)
+            || type.is(AlienEntityTypeTags.HARBINGERS);
+    }
+
+    private static int loadedXenomorphs(HiveLocation location) {
+        var total = 0;
+        for (var entry : location.loadedMembersByType().entrySet()) {
+            if (entry.getKey().is(AlienEntityTypeTags.XENOMORPHS)) {
+                total += entry.getValue().size();
+            }
+        }
+        return total;
+    }
+
+    public static @Nullable Entity trySpawnFromReserves(
+        ServerLevel level,
+        HiveLocation location,
+        EntityType<?> type,
+        BlockPos pos
+    ) {
+        return trySpawnFromReserves(level, location, type, pos, MobSpawnType.MOB_SUMMONED);
+    }
+
+    /**
+     * As {@link #trySpawnFromReserves(ServerLevel, HiveLocation, EntityType, BlockPos)} with an explicit spawn type.
+     */
+    public static @Nullable Entity trySpawnFromReserves(
+        ServerLevel level,
+        HiveLocation location,
+        EntityType<?> type,
+        BlockPos pos,
+        MobSpawnType spawnType
+    ) {
+        // 🚨 Oct 2 - THE BACKSTOP FOR EVERY RESERVE DRAW. Each caller (vent defence, throne guard, war muster, repair
+        // crews, purge squads...) carried its own limit, and three of them had holes that let one hive empty its whole
+        // bank into the world - [stated] "critical entity lag. which is what the reserves were specifically designed to
+        // stop." Those three are fixed at the source; this is the net under all of them, including any added later:
+        // no non-royal leaves the bank while the hive already has LOADED_DRAW_CEILING xenomorphs loaded. Royals and the
+        // harbinger are exempt - succession and the sanctum reveal must never be refused. A refused draw returns null,
+        // which every caller already handles as "the bank could not supply one".
+        if (!isExemptFromDrawCeiling(type) && loadedXenomorphs(location) >= LOADED_DRAW_CEILING) {
+            return null;
+        }
+
         var restored = trySpawnIdentityReserve(level, location, type, pos);
         if (restored != null) {
+            ReserveSpawnUtil.markSpawnedFromReserves(restored);
             return restored;
         }
 
@@ -180,8 +316,34 @@ public final class HiveLoadedSpawner {
             return null;
         }
 
-        var spawnType = type.is(AlienEntityTypeTags.QUEENS) ? MobSpawnType.MOB_SUMMONED : MobSpawnType.NATURAL;
+        var bankBefore = location.localReserves().getCount();
         var entity = type.spawn(level, pos, spawnType);
+        if (entity == null) {
+            return null;
+        }
+
+        // 🚨 A XENOMORPH MATERIALISING OUT OF THE FUNGIBLE BANK TAKES THE SEATED ROYAL'S GENES.
+        //
+        // ⚠⚠ [stated] "for eggs and the xenos that are created in the reserves they should have the seated
+        // queen/empress genes when they are created ... at the time an egg becomes physical it takes the genes of who
+        // laid it at the time because even if its banked or new its being laid for the first time and gets its genes
+        // assigned then." An abstract reserve entry is a TYPE AND A COUNT, so this one has no genes of its own to
+        // restore - it is being born now, and it is born of the royal sitting in this hive now.
+        //
+        // ⚠ HOST-BORN MEMBERS NEVER COME THROUGH HERE. They bank as IDENTITY entries and are restored from their own
+        // NBT with their unique queen-plus-host set intact - see HiveIdentityReserveUnloadHandler.
+        applySeatedRoyalGenes(level, location, entity);
+
+        if (location.localReserves().getCount() >= bankBefore) {
+            // finalizeSpawn did not take it (spawned outside this location's claim, or drawn as a brood wildcard),
+            // so the whole arrival is settled here instead: pay for it, mature it, and put it on the roster.
+            location.localReserves().trySpawn(type);
+            ReserveSpawnUtil.markSpawnedFromReserves(entity);
+            if (type.is(AlienEntityTypeTags.XENOMORPHS)) {
+                LocationMembership.join(location, entity);
+            }
+        }
+
         if (entity instanceof Queen queen && location.founderId() == null) {
             location.setFounderId(queen.getUUID());
         }
@@ -261,6 +423,21 @@ public final class HiveLoadedSpawner {
                 continue;
             }
             if (type.is(AlienEntityTypeTags.HARBINGERS) && loadedHarbingerCount > 0) {
+                continue;
+            }
+            // \u2b50\u2b50 WORKERS STAY DOWN WHILE THE HIVE IS UNDER ATTACK AND SOLDIERS REMAIN.
+            //
+            // \u26a0\u26a0 WITHOUT THIS THE RETREAT IS A REVOLVING DOOR: BroodBankTask banks a drone the moment an
+            // intruder is in the territory, this picker spawns one straight back out, and the two fight each other
+            // every tick - strictly worse for performance than never retreating, which is the entire point of the
+            // feature. The suppression and the retreat have to share the same condition or neither works.
+            //
+            // \u26a0 It lifts on its own: once the soldiers are spent the workers are all that is left, and they
+            // pour out as the last stand [stated] "or theirs no more soldier castes to come out".
+            if (
+                com.alien.common.gameplay.hive.economy.BroodBankTask.isSuppressingWorkers(level, location)
+                    && (type.is(AlienEntityTypeTags.DRONES) || type.is(AlienEntityTypeTags.RUNNERS))
+            ) {
                 continue;
             }
 
@@ -419,6 +596,8 @@ public final class HiveLoadedSpawner {
         var hasPlayerInRange = false;
 
         for (var player : level.players()) {
+            // \u26a0 Creative and spectator count here too - see nearbyPlayers above. The min-distance veto is about
+            // not spawning a xenomorph in somebody's face, which is just as true for a player in creative.
             var distanceSqr = player.blockPosition().distSqr(pos);
             if (distanceSqr < minSqr) {
                 return false;

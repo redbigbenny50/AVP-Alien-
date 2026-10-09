@@ -201,6 +201,17 @@ public final class CarveSite {
     final Map<UUID, CarveWorkers.Role> workers = new LinkedHashMap<>();
 
     /**
+     * Whether this site has drafted that worker.
+     * <p>
+     * Public because the idle sensor needs it: a drone on a crew must not read as bored, or its wander plan holds the
+     * MOVE mask and fights this site for the navigator.
+     * </p>
+     */
+    public boolean hasWorker(UUID uuid) {
+        return workers.containsKey(uuid);
+    }
+
+    /**
      * The subset of {@link #workers} that was materialized from reserves (vs borrowed loaded drones). These fold back
      * into reserves at completion, and are exempt from the working-adult member cap while assigned (design §8.5).
      */

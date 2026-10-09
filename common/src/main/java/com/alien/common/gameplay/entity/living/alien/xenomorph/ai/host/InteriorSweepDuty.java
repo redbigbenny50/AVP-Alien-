@@ -111,7 +111,8 @@ public final class InteriorSweepDuty {
             return entry[1] != 0L;
         }
         boolean found = false;
-        var chunks = location.structurePieceByChunk().keySet();
+        // Oct 1: build-free has no pieces, so "the hive's footprint" is its claim (see isInsideHive).
+        var chunks = isBuildFree(location) ? location.claimedChunks() : location.structurePieceByChunk().keySet();
         if (!chunks.isEmpty()) {
             int minX = Integer.MAX_VALUE, minZ = Integer.MAX_VALUE, maxX = Integer.MIN_VALUE, maxZ = Integer.MIN_VALUE;
             for (var chunk : chunks) {
@@ -176,7 +177,17 @@ public final class InteriorSweepDuty {
      */
     public static boolean isInsideHive(HiveLocation location, LivingEntity entity) {
         var pos = entity.blockPosition();
+        // ⚠ Oct 1 - BUILD-FREE HAS NO BUILT STRUCTURE, SO THE TEST ABOVE WAS ALWAYS FALSE. Nothing that wandered in was
+        // ever swept up, and a carrier that grabbed a host inside the hive walked it OUT to a surface vent. With no
+        // pieces, the hive is its claim within its band - the same rule HiveVents uses to call a vent STRUCTURE.
+        if (isBuildFree(location)) {
+            return location.claimedChunks().contains(new ChunkPos(pos)) && location.withinSlab(pos.getY());
+        }
         return location.structurePieceByChunk().containsKey(new ChunkPos(pos))
             && location.withinSlab(pos.getY());
+    }
+
+    private static boolean isBuildFree(HiveLocation location) {
+        return com.alien.common.gameplay.hive.config.BuildFreeMode.isEnabled() && !location.isEndStyleHive();
     }
 }

@@ -99,6 +99,41 @@ public final class HiveLocationRegistry {
      * Inserts a location into all four indexes. Caller is responsible for persisting the location into its owning
      * {@link LineageFactionData}; this registry only maintains in-memory views.
      */
+    /**
+     * \u2b50\u2b50\u2b50 TELL BLib THE LINEAGE CHANGED. CALLED AT BOTH CHOKE POINTS - register AND unregister.
+     * <p>
+     * \u26a0\u26a0 BLib ONLY WRITES FACTION DATA MARKED DIRTY ({@code BLibFactionManager.save}: {@code if
+     * (internalData.isDirty())}), and every hive location lives inside {@code LineageFactionData}.
+     * {@code HiveLocationLoadedTickTask} marks the lineage once per LOADED tick, which quietly covers most callers -
+     * and hides the ones it does not.
+     * </p>
+     * <p>
+     * \u26a0\u26a0 THIS WAS A REAL, REPORTED BUG. Clamping an inhibitor onto a queen mints her a personal severed
+     * claim, and that claim is what makes the lifecycle treat her as established and leave her inert. Nothing marked
+     * the lineage dirty, so it never reached disk - and on reload she owned no location, ran the normal front-end, and
+     * DUG. [stated] "if I spawn a queen and put a inhibitor on her she will not dig but if I exit the world and reenter
+     * she digs." The inhibitor FLAG persists fine, which is exactly why it was confusing.
+     * </p>
+     * <p>
+     * \u2b50 PUT HERE RATHER THAN AT THE EIGHT CALL SITES ON PURPOSE. Minting and removing a location is what every one
+     * of them ultimately does, and a future caller gets this for free instead of joining the list of places that
+     * forgot. Costs one map lookup on an operation that already touches several.
+     * </p>
+     * <p>
+     * \u26a0 Marking during the load-time registry rebuild is harmless - it rewrites data identical to what was read.
+     * {@code clear()} is deliberately NOT marked: it is a teardown, and there is nothing left to persist.
+     * </p>
+     */
+    private static void markLineageDirty(HiveLocation location) {
+        var faction = Alien.MOD.factions().get(location.lineageFactionId());
+        if (
+            faction != null
+                && faction.data() instanceof com.alien.common.gameplay.hive.faction.LineageFactionData lineage
+        ) {
+            lineage.markDirty();
+        }
+    }
+
     public void register(HiveLocation location) {
         if (byId.containsKey(location.id())) {
             Alien.LOGGER.warn("HiveLocationRegistry.register called for already-registered id {}", location.id());
@@ -106,6 +141,7 @@ public final class HiveLocationRegistry {
         }
 
         byId.put(location.id(), location);
+        markLineageDirty(location);
 
         byLineage
             .computeIfAbsent(location.lineageFactionId(), $ -> new LinkedHashSet<>())
@@ -130,6 +166,7 @@ public final class HiveLocationRegistry {
         }
 
         location.onUnregistered();
+        markLineageDirty(location);
 
         var siblings = byLineage.get(location.lineageFactionId());
         if (siblings != null) {
@@ -512,6 +549,17 @@ public final class HiveLocationRegistry {
         if (!byId.isEmpty()) {
             for (var location : new ArrayList<>(byId.values())) {
                 if (!location.isAlive()) {
+                    // 🚨 A DEAD HIVE MUST DROP ITS BOSS BAR IMMEDIATELY, not whenever it is finally unregistered.
+                    //
+                    // ⚠⚠ THE BAR IS RE-EVALUATED IN HiveLocationBossBar.updateTrackingPlayers, which is gated on
+                    // location.ageInTicks() % INTERVAL - and age only advances for a LIVE location, right below this
+                    // guard. So the moment a hive died its bar froze with every watching player still attached, and
+                    // nothing could remove them until onUnregistered ran. Between death and removal the bar simply
+                    // stayed on screen.
+                    //
+                    // ⚠ Reported as raid bars staying up. Cheap and idempotent - removeAllPlayers on an empty bar
+                    // does nothing.
+                    location.dropBossBarViewers();
                     continue;
                 }
 
@@ -563,33 +611,69 @@ public final class HiveLocationRegistry {
         ticksSinceLastDispatch++;
         if (ticksSinceLastDispatch >= REINFORCEMENT_DISPATCH_INTERVAL_TICKS) {
             ticksSinceLastDispatch = 0L;
+            var t_reinforcement = com.alien.common.gameplay.hive.diag.DiagProfiler.isRunning() ? System.nanoTime() : 0L;
             com.alien.common.gameplay.hive.convoy.ReinforcementDispatcher.scanAndDispatch(server);
+            if (t_reinforcement != 0L) {
+                com.alien.common.gameplay.hive.diag.DiagProfiler.record("registry/reinforcement", t_reinforcement);
+            }
+            var t_migration = com.alien.common.gameplay.hive.diag.DiagProfiler.isRunning() ? System.nanoTime() : 0L;
             com.alien.common.gameplay.hive.convoy.MigrationDispatch.scanAndDispatch(server);
+            if (t_migration != 0L) {
+                com.alien.common.gameplay.hive.diag.DiagProfiler.record("registry/migration", t_migration);
+            }
+            var t_raid_dispatch = com.alien.common.gameplay.hive.diag.DiagProfiler.isRunning() ? System.nanoTime() : 0L;
             com.alien.common.gameplay.hive.convoy.RaidDispatch.scanAndDispatch(server);
+            if (t_raid_dispatch != 0L) {
+                com.alien.common.gameplay.hive.diag.DiagProfiler.record("registry/raid_dispatch", t_raid_dispatch);
+            }
             com.alien.common.gameplay.hive.empress.EmpressEmergenceTask.scanAndStart(server);
             // Corridor membership BEFORE influence: the network decides which lineages carry her empressId, and
             // influence is derived from that id. Reversed, a lineage severed this sweep would keep her buffs for
             // one more pass.
+            var t_empress_network = com.alien.common.gameplay.hive.diag.DiagProfiler.isRunning() ? System.nanoTime() : 0L;
             com.alien.common.gameplay.hive.empress.EmpressNetworkSync.syncAll(server);
+            if (t_empress_network != 0L) {
+                com.alien.common.gameplay.hive.diag.DiagProfiler.record("registry/empress_network", t_empress_network);
+            }
             // Re-assert the router's memory-only empress-influence set. Reconciled rather than pushed, so it
             // survives restarts and needs no hook on every event that could change the answer.
+            var t_empress_influence = com.alien.common.gameplay.hive.diag.DiagProfiler.isRunning() ? System.nanoTime() : 0L;
             com.alien.common.gameplay.hive.empress.EmpressInfluenceSync.syncAll(server);
+            if (t_empress_influence != 0L) {
+                com.alien.common.gameplay.hive.diag.DiagProfiler.record("registry/empress_influence", t_empress_influence);
+            }
         }
 
         if (server.overworld().getGameTime() % Math.max(1L, config.contestTickWindow()) == 0L) {
+            var t_war_scan = com.alien.common.gameplay.hive.diag.DiagProfiler.isRunning() ? System.nanoTime() : 0L;
             com.alien.common.gameplay.hive.war.AlienTerritoryWarSystem.scanAndApply(server);
+            if (t_war_scan != 0L) {
+                com.alien.common.gameplay.hive.diag.DiagProfiler.record("registry/war_scan", t_war_scan);
+            }
             // Open wars are resolved on the same cadence, off the registry rather than a loaded tick: a war between
             // two hives nobody is standing near still has to reach a victor.
+            var t_war_tick = com.alien.common.gameplay.hive.diag.DiagProfiler.isRunning() ? System.nanoTime() : 0L;
             com.alien.common.gameplay.hive.war.AlienTerritoryWarSystem.tickWars(server);
+            if (t_war_tick != 0L) {
+                com.alien.common.gameplay.hive.diag.DiagProfiler.record("registry/war_tick", t_war_tick);
+            }
         }
 
         ticksSinceLastScan++;
         if (ticksSinceLastScan >= config.lineageScanIntervalTicks()) {
             ticksSinceLastScan = 0L;
+            var t_pressure_decay = com.alien.common.gameplay.hive.diag.DiagProfiler.isRunning() ? System.nanoTime() : 0L;
             com.alien.common.gameplay.hive.growth.PopulationPressureDecayTask.scanAll(server);
+            if (t_pressure_decay != 0L) {
+                com.alien.common.gameplay.hive.diag.DiagProfiler.record("registry/pressure_decay", t_pressure_decay);
+            }
             // Phase 11: full lifecycle dispatch (dormancy, contests, lineage death) layered on top of
             // variant-mismatch invariants.
+            var t_lineage_invariant = com.alien.common.gameplay.hive.diag.DiagProfiler.isRunning() ? System.nanoTime() : 0L;
             com.alien.common.gameplay.hive.faction.LineageInvariantTask.scanAllWithLifecycle(server);
+            if (t_lineage_invariant != 0L) {
+                com.alien.common.gameplay.hive.diag.DiagProfiler.record("registry/lineage_invariant", t_lineage_invariant);
+            }
         }
     }
 

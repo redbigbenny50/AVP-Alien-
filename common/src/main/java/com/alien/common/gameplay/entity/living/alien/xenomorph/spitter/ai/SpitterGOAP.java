@@ -20,6 +20,10 @@ public class SpitterGOAP {
     public static final Graph<Spitter> GRAPH = Graph.<Spitter>builder()
         .apply(XenomorphGOAP::addSensorsPackage)
         .apply(SpitterGOAP::addCombatPackage)
+        // !! THIS CASTE HAD NO SWIM PACKAGE. addSwimPackage was added to applyBaseGraph, but the spitter,
+        // the carrier and the chrysalis build their graphs by hand and were never given it - so those three
+        // could not reach shore at all, whatever else was fixed.
+        .apply(XenomorphGOAP::addSwimPackage)
         .apply(XenomorphGOAP::addIdlePackage)
         .apply(b -> XenomorphGOAP.addLungePackage(b, LUNGE_CONFIG))
         .apply(SpitterGOAP::addSpitPackage)

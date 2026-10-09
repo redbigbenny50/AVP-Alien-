@@ -261,7 +261,9 @@ public final class AlienTerritoryWarSystem implements TerritoryContestListener {
         var power = 2;
 
         for (var player : level.players()) {
-            if (!owner.equals(player.getUUID())) {
+            // A creative or spectator owner adds no standing to his own claim - the hive contests the ground as if
+            // he were not on it.
+            if (!owner.equals(player.getUUID()) || com.alien.common.util.AlienPredicates.isIgnoredByHive(player)) {
                 continue;
             }
 
@@ -347,6 +349,11 @@ public final class AlienTerritoryWarSystem implements TerritoryContestListener {
             return null;
         }
         return lineage;
+    }
+
+    /** ⚠ Exposed so the targeting predicates can ask the same question this class already answers internally. */
+    public static @org.jetbrains.annotations.Nullable ResourceLocation lineageOf(UUID entityId) {
+        return lineageFor(entityId);
     }
 
     private static ResourceLocation lineageFor(UUID entityId) {
@@ -674,7 +681,7 @@ public final class AlienTerritoryWarSystem implements TerritoryContestListener {
         if (first.isAtWarWith(secondId) || first.pendingWars().containsKey(secondId)) {
             return;
         }
-        if (empressRestraintHolds(first, second)) {
+        if (empressRestraintHolds(level.getGameTime(), first, second)) {
             return;
         }
 
@@ -703,10 +710,33 @@ public final class AlienTerritoryWarSystem implements TerritoryContestListener {
      * a seat free, a same-strain rival is a lineage to absorb, not an enemy. The restraint dies with the last free
      * seat, and it never applies across strains: a foreign strain is a war whatever the seat count says.
      */
-    private static boolean empressRestraintHolds(HiveLocation first, HiveLocation second) {
+    private static boolean empressRestraintHolds(long graceNow, HiveLocation first, HiveLocation second) {
         if (!java.util.Objects.equals(first.lineageVariantOrNull(), second.lineageVariantOrNull())) {
             return false; // different strain - normal activation
         }
+
+        // ⭐⭐⭐ TWO CROWNS MEETING IS A CONTEST, NOT A SHRUG.
+        //
+        // ⚠⚠ THIS WAS A PERMANENT STALEMATE. The restraint below declines war while EITHER side still has a free
+        // seat, and EmpressNetworkSync only ever adopts lineages that have NO empress. So two empresses with room to
+        // grow could neither fight nor absorb each other - they sat side by side indefinitely doing nothing, which
+        // is the one outcome nobody wants to watch.
+        //
+        // [stated] "She should try to absorb it and if the other empress fails the roll then it gets lost. However if
+        // the other empress succeeds the roll then it becomes an empress proxy war."
+        //
+        // ⚠ A REFUSED ABSORPTION FALLS THROUGH TO THE ORDINARY WAR DECLARATION BELOW, which is exactly what the proxy
+        // war is: the wars themselves are already empire-aware through isInEmpressWar, so holding her ground opens a
+        // real war rather than needing a parallel one.
+        if (
+            com.alien.common.gameplay.hive.empress.EmpressAbsorption
+                .tryResolveMeeting(graceNow, first, second)
+                || com.alien.common.gameplay.hive.empress.EmpressAbsorption
+                    .tryResolveMeeting(graceNow, second, first)
+        ) {
+            return true; // one empire swallowed the other - there is nothing left to fight about
+        }
+
         return hasRoomUnderEmpress(first) || hasRoomUnderEmpress(second);
     }
 

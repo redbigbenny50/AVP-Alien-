@@ -30,6 +30,23 @@ public final class AlienClientPacketListener {
         ClientHiveInspectionCache.apply(payload);
     }
 
+    /**
+     * ⭐ The server has sent the live config - open the screen on it.
+     * <p>
+     * ⚠ THE SCREEN IS OPENED BY THE REPLY, NOT BY THE COMMAND. The command runs server-side and cannot open a client
+     * screen; asking for the values and opening when they arrive is what stops the screen existing for a moment with
+     * nothing in it, showing defaults it would then overwrite.
+     * </p>
+     */
+    public static void handleHiveConfigSnapshot(
+        com.alien.common.network.payload.S2CHiveConfigSnapshotPayload payload,
+        Player player
+    ) {
+        // ⚠ MUST stay a plain static call. Constructing the screen here forces Screen to load during verification
+        // of THIS class, which kills mod init in any SERVER environment - including runDatagen.
+        com.alien.client.screen.HiveConfigScreen.open(payload.data());
+    }
+
     /** Server-pushed capture-chain grab/release: mirror it into the client hold map for rendering. */
     public static void handleCaptureHold(S2CCaptureHoldPayload payload, Player player) {
         if (payload.holderId() < 0) {

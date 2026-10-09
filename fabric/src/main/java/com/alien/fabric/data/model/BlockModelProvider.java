@@ -274,31 +274,32 @@ public class BlockModelProvider extends FabricModelProvider {
 
         generators.createNonTemplateModelBlock(AlienBlocks.ROYAL_JELLY_BLOCK.get());
         generators.createNonTemplateModelBlock(AlienBlocks.SCOURGE_JELLY_BLOCK.get());
+        generators.createNonTemplateModelBlock(AlienBlocks.POISON_JELLY_BLOCK.get());
         generators.createNonTemplateModelBlock(AlienBlocks.IRRADIATED_JELLY_BLOCK.get());
 
         generators.family(AberrantAlienResinBlocks.ABERRANT_RESIN_BRICKS.get())
             .slab(AberrantAlienResinBlocks.ABERRANT_RESIN_BRICK_SLAB.get())
             .stairs(AberrantAlienResinBlocks.ABERRANT_RESIN_BRICK_STAIRS.get())
             .wall(AberrantAlienResinBlocks.ABERRANT_RESIN_BRICK_WALL.get());
-        generators.createTrivialCube(AberrantAlienResinBlocks.ABERRANT_RESIN_VENT.get());
+        createVent(generators, AberrantAlienResinBlocks.ABERRANT_RESIN_VENT.get());
 
         generators.family(IrradiatedAlienResinBlocks.IRRADIATED_RESIN_BRICKS.get())
             .slab(IrradiatedAlienResinBlocks.IRRADIATED_RESIN_BRICK_SLAB.get())
             .stairs(IrradiatedAlienResinBlocks.IRRADIATED_RESIN_BRICK_STAIRS.get())
             .wall(IrradiatedAlienResinBlocks.IRRADIATED_RESIN_BRICK_WALL.get());
-        generators.createTrivialCube(IrradiatedAlienResinBlocks.IRRADIATED_RESIN_VENT.get());
+        createVent(generators, IrradiatedAlienResinBlocks.IRRADIATED_RESIN_VENT.get());
 
         generators.family(NetherAlienResinBlocks.NETHER_RESIN_BRICKS.get())
             .slab(NetherAlienResinBlocks.NETHER_RESIN_BRICK_SLAB.get())
             .stairs(NetherAlienResinBlocks.NETHER_RESIN_BRICK_STAIRS.get())
             .wall(NetherAlienResinBlocks.NETHER_RESIN_BRICK_WALL.get());
-        generators.createTrivialCube(NetherAlienResinBlocks.NETHER_RESIN_VENT.get());
+        createVent(generators, NetherAlienResinBlocks.NETHER_RESIN_VENT.get());
 
         generators.family(AlienResinBlocks.RESIN_BRICKS.get())
             .slab(AlienResinBlocks.RESIN_BRICK_SLAB.get())
             .stairs(AlienResinBlocks.RESIN_BRICK_STAIRS.get())
             .wall(AlienResinBlocks.RESIN_BRICK_WALL.get());
-        generators.createTrivialCube(AlienResinBlocks.RESIN_VENT.get());
+        createVent(generators, AlienResinBlocks.RESIN_VENT.get());
 
         createRotatedPillar(generators, AberrantAlienResinBlocks.RIBBED_ABERRANT_RESIN.get(), TexturedModel.CUBE);
         createRotatedPillar(generators, IrradiatedAlienResinBlocks.RIBBED_IRRADIATED_RESIN.get(), TexturedModel.CUBE);
@@ -383,6 +384,30 @@ public class BlockModelProvider extends FabricModelProvider {
         }
 
         generators.blockStateOutput.accept(MultiVariantGenerator.multiVariant(block, variants));
+    }
+
+    /**
+     * Emits a vent blockstate covering BOTH values of {@code dormant}.
+     * <p>
+     * 🚨 createTrivialCube CANNOT BE USED HERE ANY MORE. It writes a single {@code ""} variant, which is only valid for
+     * a block with NO properties - Minecraft looks up "dormant=false" for each state and would report a missing model
+     * for every vent. The dormant state exists so a hiveless vent can stop ticking; it does not change how the block
+     * LOOKS, so both values map to the same cube.
+     * </p>
+     */
+    private void createVent(BlockModelGenerators generators, Block vent) {
+        var model = TexturedModel.CUBE.create(vent, generators.modelOutput);
+
+        generators.blockStateOutput.accept(
+            MultiVariantGenerator.multiVariant(vent, Variant.variant().with(VariantProperties.MODEL, model))
+                .with(
+                    net.minecraft.data.models.blockstates.PropertyDispatch.property(
+                        com.alien.common.gameplay.block.resin.vent.ResinVentBlock.DORMANT
+                    )
+                        .select(false, Variant.variant())
+                        .select(true, Variant.variant())
+                )
+        );
     }
 
     private void createRotatedPillar(BlockModelGenerators generators, Block rotatedPillarBlock, TexturedModel.Provider modelProvider) {

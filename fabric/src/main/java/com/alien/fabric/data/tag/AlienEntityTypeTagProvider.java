@@ -2,15 +2,15 @@ package com.alien.fabric.data.tag;
 
 import com.alien.common.registry.init.AlienEntityTypes;
 import com.alien.common.registry.tag.AlienEntityTypeTags;
-import com.alien.compatibility.avp_human.AVPHuman;
 import com.alien.fabric.compatibility.stellaris.common.registry.tag.StellarisEntityTypeTags;
-import com.human.common.registry.tag.HumanEntityTypeTags;
 import mods.cybercat.gigeresque.common.tags.GigTags;
 import net.fabricmc.fabric.api.datagen.v1.FabricDataOutput;
 import net.fabricmc.fabric.api.datagen.v1.provider.FabricTagProvider;
 import net.minecraft.core.HolderLookup;
+import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.tags.EntityTypeTags;
+import net.minecraft.tags.TagKey;
 import net.minecraft.world.entity.EntityType;
 
 import java.util.concurrent.CompletableFuture;
@@ -19,6 +19,32 @@ public class AlienEntityTypeTagProvider extends FabricTagProvider.EntityTypeTagP
 
     public AlienEntityTypeTagProvider(FabricDataOutput output, CompletableFuture<HolderLookup.Provider> completableFuture) {
         super(output, completableFuture);
+    }
+
+    /**
+     * ⭐⭐ A SIBLING MOD'S ENTITY TAG, NAMED BY STRING RATHER THAN BY ITS CLASS.
+     * <p>
+     * ⚠⚠ NEVER IMPORT A TAG-HOLDER CLASS FROM avp_human OR avp_predator INTO A DATAGEN PROVIDER. Both are
+     * {@code modCompileOnly} in {@code fabric/build.gradle}, which puts them on the COMPILE classpath and NOT the
+     * RUNTIME one - and datagen runs on the runtime classpath. The import compiles perfectly and then
+     * {@code PredatorEntityTypeTags.EM_VISIBLE} throws {@code NoClassDefFoundError} the moment datagen touches it,
+     * killing THIS ENTIRE PROVIDER and every entity tag the mod ships with it, not just the one line.
+     * </p>
+     * <p>
+     * Guarding with {@code isLoaded()} avoids the crash but trades it for silence: the sibling is not on the datagen
+     * runtime classpath, so the guard is always false and the file is simply never written. That is exactly what
+     * happened to {@code avp_human:radiation_resistant} - the method was correct, it was called, and the JSON has never
+     * existed in any shipped jar.
+     * </p>
+     * <p>
+     * A string-built {@link TagKey} needs neither mod present at any stage. It emits byte-identical JSON, it always
+     * generates, and it is immune to the build-order trap where avp_alien compiles against a STALE published sibling
+     * jar that predates the tag being added. Same reasoning as the local {@code StellarisEntityTypeTags} shim, and as
+     * the {@code addOptional(ResourceLocation...)} calls used for minecolonies throughout this file.
+     * </p>
+     */
+    private static TagKey<EntityType<?>> siblingEntityTag(String namespace, String path) {
+        return TagKey.create(Registries.ENTITY_TYPE, ResourceLocation.fromNamespaceAndPath(namespace, path));
     }
 
     @Override
@@ -66,21 +92,33 @@ public class AlienEntityTypeTagProvider extends FabricTagProvider.EntityTypeTagP
         addWarriors();
         addXenomorphs();
 
-        // ⚠⚠ NOT INSIDE THE AVPHuman GUARD BELOW. juvenile_prey is a list of VANILLA mobs (chicken, fox,
-        // axolotl...) and has nothing to do with avp_human; putting it there meant it only generated when that mod
-        // happened to be loaded during datagen, which is why two runs produced no file.
+        // ⚠ juvenile_prey is a list of VANILLA mobs (chicken, fox, axolotl...) and has nothing to do with any
+        // sibling mod. It once sat inside an isLoaded() guard and therefore only generated when that mod happened to
+        // be present during datagen, which is why two runs produced no file. No such guard exists anywhere in this
+        // provider any more - see siblingEntityTag for why none is needed.
         addJuvenilePrey();
 
         // Compatibility
         addCompatibilityTags();
 
-        if (AVPHuman.MOD.isLoaded()) {
-            addRadiationResistant();
-        }
+        // ⚠⚠ THE isLoaded() GUARD IS GONE AND MUST STAY GONE. avp_human is modCompileOnly, so it is never
+        // on the datagen runtime classpath, so this guard was ALWAYS FALSE and
+        // data/avp_human/tags/entity_type/radiation_resistant.json has never existed in a single shipped jar -
+        // meaning no xenomorph has ever actually been radiation-immune. The guard existed only to stop
+        // HumanEntityTypeTags being class-loaded; siblingEntityTag removes that need entirely.
+        //
+        // Emitting a tag file for an absent mod is harmless - nothing reads it until avp_human is installed.
+        addRadiationResistant();
+        addSpaceHazardImmunities();
     }
 
     private void addAberrantAliens() {
         getOrCreateTagBuilder(AlienEntityTypeTags.ABERRANT_ALIENS)
+            // Same omission the nether and irradiated cocoons had: the strain tag rolls up into ALIENS, so a cocoon
+            // left out of it was left out of every alien-wide rule. [stated] Sep 22 "these rules apply to the non
+            // alien xenos like the ovipositor the royal cocoon etc" - the strain tag is where a cocoon's strain
+            // rules come from, so it goes here rather than being listed against each hazard by hand.
+            .add(AlienEntityTypes.ABERRANT_ROYAL_COCOON.get())
             .add(
                 AlienEntityTypes.ABERRANT_ADOLESCENT.get(),
                 AlienEntityTypes.ABERRANT_BOILER.get(),
@@ -332,7 +370,22 @@ public class AlienEntityTypeTagProvider extends FabricTagProvider.EntityTypeTagP
             // Stellaris.
             .addOptional(ResourceLocation.fromNamespaceAndPath("stellaris", "alien"))
             .addOptional(ResourceLocation.fromNamespaceAndPath("stellaris", "pygro"))
-            .addOptional(ResourceLocation.fromNamespaceAndPath("stellaris", "pygro_brute"));
+            .addOptional(ResourceLocation.fromNamespaceAndPath("stellaris", "pygro_brute"))
+            // Ad Astra. Folded in from the community avp_ad_astra datapack, Sep 22.
+            .addOptional(ResourceLocation.fromNamespaceAndPath("ad_astra", "lunarian"))
+            .addOptional(ResourceLocation.fromNamespaceAndPath("ad_astra", "lunarian_wandering_trader"))
+            .addOptional(ResourceLocation.fromNamespaceAndPath("ad_astra", "corrupted_lunarian"))
+            .addOptional(ResourceLocation.fromNamespaceAndPath("ad_astra", "pygro"))
+            .addOptional(ResourceLocation.fromNamespaceAndPath("ad_astra", "pygro_brute"))
+            // Villagers Reborn (mod id slimpatch). From the community avp_villagers_reborn_hosts datapack, Sep 22. Its
+            // types extend the vanilla villager/illager classes but are NOT in #minecraft:illager, so each is named.
+            .addOptional(ResourceLocation.fromNamespaceAndPath("slimpatch", "evoker"))
+            .addOptional(ResourceLocation.fromNamespaceAndPath("slimpatch", "female_villager"))
+            .addOptional(ResourceLocation.fromNamespaceAndPath("slimpatch", "human_trader"))
+            .addOptional(ResourceLocation.fromNamespaceAndPath("slimpatch", "male_villager"))
+            .addOptional(ResourceLocation.fromNamespaceAndPath("slimpatch", "pillager"))
+            .addOptional(ResourceLocation.fromNamespaceAndPath("slimpatch", "vindicator"))
+            .addOptional(ResourceLocation.fromNamespaceAndPath("slimpatch", "wandering_trader"));
     }
 
     private void addIgnoredByXenomorphs() {
@@ -419,7 +472,12 @@ public class AlienEntityTypeTagProvider extends FabricTagProvider.EntityTypeTagP
                 EntityType.ZOMBIE,
                 EntityType.ZOMBIE_VILLAGER,
                 EntityType.ZOMBIFIED_PIGLIN
-            );
+            )
+            // Villagers Reborn illagers and zombie villager, mirroring the vanilla types above.
+            .addOptional(ResourceLocation.fromNamespaceAndPath("slimpatch", "pillager"))
+            .addOptional(ResourceLocation.fromNamespaceAndPath("slimpatch", "vindicator"))
+            .addOptional(ResourceLocation.fromNamespaceAndPath("slimpatch", "evoker"))
+            .addOptional(ResourceLocation.fromNamespaceAndPath("slimpatch", "human_zombie_villager"));
 
         getOrCreateTagBuilder(AlienEntityTypeTags.XENOMORPH_THREAT_3_HIGH_DANGER)
             .add(EntityType.PLAYER)
@@ -431,12 +489,60 @@ public class AlienEntityTypeTagProvider extends FabricTagProvider.EntityTypeTagP
             .addOptional(ResourceLocation.fromNamespaceAndPath("avp_human", "sentry_turret"))
             .addOptional(ResourceLocation.fromNamespaceAndPath("avp_predator", "predator"))
             .addOptional(ResourceLocation.fromNamespaceAndPath("avp_predator", "yautja"))
-            .addOptionalTag(ResourceLocation.fromNamespaceAndPath("avp_predator", "predators"));
+            .addOptionalTag(ResourceLocation.fromNamespaceAndPath("avp_predator", "predators"))
+            // ⭐⭐ GIGERESQUE - A RIVAL STRAIN TOO, AND ONE TAG COVERS ALL OF IT.
+            //
+            // gigeresque:gigeresquealiens is a TAG OF TAGS - classic, aqua, runners, mutants, neos, temple beasts and
+            // misc - so this one line takes in every alien they ship (41 entity types at 0.8.16) AND anything they add
+            // later, with no further change here. That is why it is preferred over listing individuals, exactly as the
+            // #avp_predator:predators entry above is.
+            //
+            // ⚠ The mod is modCompileOnly, so this MUST be addOptionalTag with a string id and never a GigTags
+            // constant - see the cross-mod datagen trap: a modCompileOnly class reference compiles and then kills the
+            // WHOLE provider at datagen time with NoClassDefFoundError, taking every other tag with it.
+            .addOptionalTag(ResourceLocation.fromNamespaceAndPath("gigeresque", "gigeresquealiens"))
+            // ⚠ NOT in gigeresquealiens, added deliberately. [stated] Sep 28: "yes attack its a threat to hosts."
+            // Spore pods are how the neomorph line infects, so they are a rival strain's breeding stock in the same
+            // sense a rival hive's ovomorphs are - the hive clears them rather than walking past them.
+            .addOptional(ResourceLocation.fromNamespaceAndPath("gigeresque", "neomorph_spore_pods"))
+            // ⭐⭐ OVOMORPHOSIS - A RIVAL STRAIN, SO THE TOP TIER. [stated] Sep 28: "Treat them as a rival strain
+            // so should be highest threat tier."
+            //
+            // Their xenomorphs attacked ours and ours did not answer, because a mod we have never heard of sits in no
+            // tier at all and only the personal retaliation grudge could reach it. The companion fix (AlienRetaliation)
+            // makes the hive ANSWER any attacker; this is what makes it INITIATE, which is what two alien mods sharing
+            // a world should do.
+            //
+            // ⚠ ALL FIVE, JUVENILES INCLUDED, AND THAT IS CONSISTENT: a rival strain's eggs and huggers are enemy
+            // hive members, exactly as another avp_alien lineage's would be. The tier only lifts the THREAT GATE -
+            // canContinueTargeting still applies on top, so anything the hive independently refuses to attack it
+            // still refuses.
+            //
+            // ⚠ addOptional throughout: the mod is not a dependency and must not break datagen when absent.
+            .addOptional(ResourceLocation.fromNamespaceAndPath("ovomorphosis", "xenomorph"))
+            .addOptional(ResourceLocation.fromNamespaceAndPath("ovomorphosis", "runner"))
+            .addOptional(ResourceLocation.fromNamespaceAndPath("ovomorphosis", "chestburster"))
+            .addOptional(ResourceLocation.fromNamespaceAndPath("ovomorphosis", "facehugger"))
+            .addOptional(ResourceLocation.fromNamespaceAndPath("ovomorphosis", "ovomorph"))
+            // Ad Astra. Folded in from the community avp_ad_astra datapack, Sep 22.
+            .addOptional(ResourceLocation.fromNamespaceAndPath("ad_astra", "star_crawler"))
+            .addOptional(ResourceLocation.fromNamespaceAndPath("ad_astra", "zombified_mogler"))
+            .addOptional(ResourceLocation.fromNamespaceAndPath("ad_astra", "zombified_pygro"))
+            .addOptional(ResourceLocation.fromNamespaceAndPath("ad_astra", "corrupted_lunarian"))
+            .addOptional(ResourceLocation.fromNamespaceAndPath("ad_astra", "pygro"))
+            .addOptional(ResourceLocation.fromNamespaceAndPath("ad_astra", "pygro_brute"))
+            .addOptional(ResourceLocation.fromNamespaceAndPath("ad_astra", "martian_raptor"))
+            .addOptional(ResourceLocation.fromNamespaceAndPath("ad_astra", "mogler"))
+            .addOptional(ResourceLocation.fromNamespaceAndPath("ad_astra", "glacian_ram"));
     }
 
     private void addIrradiatedAliens() {
         getOrCreateTagBuilder(AlienEntityTypeTags.IRRADIATED_ALIENS)
             .add(
+                // ⚠ Every other irradiated caste was here and the cocoon was not. IRRADIATED_ALIENS rolls up into
+                // ALIENS, so being absent excluded her from every alien-wide rule that tag drives - not just the
+                // strain-specific ones.
+                AlienEntityTypes.IRRADIATED_ROYAL_COCOON.get(),
                 AlienEntityTypes.IRRADIATED_SPITTER.get(),
                 AlienEntityTypes.IRRADIATED_FACEHUGGER.get(),
                 AlienEntityTypes.IRRADIATED_OVOMORPH.get(),
@@ -496,6 +602,8 @@ public class AlienEntityTypeTagProvider extends FabricTagProvider.EntityTypeTagP
 
     private void addNormalAliens() {
         getOrCreateTagBuilder(AlienEntityTypeTags.NORMAL_ALIENS)
+            // See addAberrantAliens - the plain royal cocoon was missing from its strain tag the same way.
+            .add(AlienEntityTypes.ROYAL_COCOON.get())
             .add(
                 AlienEntityTypes.ADOLESCENT.get(),
                 AlienEntityTypes.BOILER.get(),
@@ -737,7 +845,11 @@ public class AlienEntityTypeTagProvider extends FabricTagProvider.EntityTypeTagP
             .addOptional(ResourceLocation.fromNamespaceAndPath("naturalist", "mammoth"))
             // Stellaris.
             .addOptional(ResourceLocation.fromNamespaceAndPath("stellaris", "martian_raptor"))
-            .addOptional(ResourceLocation.fromNamespaceAndPath("stellaris", "mogler"));
+            .addOptional(ResourceLocation.fromNamespaceAndPath("stellaris", "mogler"))
+            // Ad Astra. Folded in from the community avp_ad_astra datapack, Sep 22.
+            .addOptional(ResourceLocation.fromNamespaceAndPath("ad_astra", "martian_raptor"))
+            .addOptional(ResourceLocation.fromNamespaceAndPath("ad_astra", "mogler"))
+            .addOptional(ResourceLocation.fromNamespaceAndPath("ad_astra", "glacian_ram"));
     }
 
     private void addRunners() {
@@ -802,6 +914,77 @@ public class AlienEntityTypeTagProvider extends FabricTagProvider.EntityTypeTagP
         getOrCreateTagBuilder(GigTags.FACEHUGGER_BLACKLIST)
             .addTag(AlienEntityTypeTags.ALIENS);
 
+        // AVP: Predator's electromagnetic vision. The species is invisible to THERMAL by design — they are insects and
+        // carry no body heat, which is the whole reason the second vision mode exists — so this is the only way a
+        // predator sees them at all. Declared here rather than in avp_predator because the strain tags live on this
+        // side and stay correct as castes are added; ALIENS covers every entity extending Alien.
+        getOrCreateTagBuilder(siblingEntityTag("avp_predator", "em_visible"))
+            .addTag(AlienEntityTypeTags.ALIENS);
+
+        // AVP: Predator's capture net. The apex castes cannot be netted — his ruling. NOT a technical limit:
+        // harbingers, queens and empresses all have the molt clips a captured pose would use, so this is a
+        // deliberate "you do not put a leash on these" rule and should stay one even if the animation side changes.
+        //
+        // ⚠ BY TAG, NOT BY ENTITY. HARBINGERS and EMPRESSES already carry every strain — aberrant, irradiated,
+        // nether and base — so listing entities by hand would miss the next strain the moment one is added, and the
+        // failure mode is silent: a nether queen that can suddenly be netted, with nothing to point at.
+        // EMPRESSES already contains all four QUEENS, so QUEENS is not repeated here.
+        //
+        // ⚠ Declared through siblingEntityTag for the reason at the top of this file: importing a
+        // PredatorEntityTypeTags holder compiles and then throws NoClassDefFoundError at datagen, killing EVERY
+        // entity tag this mod ships, not just this one.
+        // [stated] "queen, harbinger, empress, ovipositor, empress ovipositor, royal cocoon" are net immune. The
+        // ovipositors and royal cocoons are plain Mobs with no strain tag, so they are listed by hand - the same
+        // blind spot as NO_OXYGEN_NEEDED below.
+        // ⚠ QUEENS contains #empresses, not the other way round — the generated jar proved it. Listing EMPRESSES alone
+        // left every queen nettable.
+        // ⚠⚠ NET ESCAPE TIERS, declared from THIS side. avp_predator decides a netted creature's escape chance from
+        // five sibling tags and falls back to the BOUNDING BOX for anything untagged — which would put a drone and a
+        // praetorian in the same bracket. The castes are placed here, where the caste tags live, so a new caste joins
+        // the right bracket automatically by being added to its strain tag.
+        // none = captured on contact, no struggle | medium 5% | medium_large 10% | large 15%
+        // Queens, empresses, harbingers, both ovipositors and the royal cocoons are NET IMMUNE below and need no tier.
+        getOrCreateTagBuilder(siblingEntityTag("avp_predator", "net_escape_none"))
+            .addTag(AlienEntityTypeTags.OVOMORPHS)
+            .addTag(AlienEntityTypeTags.FACEHUGGERS)
+            .addTag(AlienEntityTypeTags.PARASITES)
+            .addTag(AlienEntityTypeTags.CHESTBURSTERS)
+            .addTag(AlienEntityTypeTags.PREDALIEN_CHESTBURSTERS);
+
+        getOrCreateTagBuilder(siblingEntityTag("avp_predator", "net_escape_medium"))
+            .addTag(AlienEntityTypeTags.ADOLESCENTS)
+            .addTag(AlienEntityTypeTags.PREDALIEN_ADOLESCENTS);
+
+        // [stated] "if its a medium-large creature like a drone or warrior its a 10% chance"
+        getOrCreateTagBuilder(siblingEntityTag("avp_predator", "net_escape_medium_large"))
+            .addTag(AlienEntityTypeTags.DRONES)
+            .addTag(AlienEntityTypeTags.WARRIORS)
+            .addTag(AlienEntityTypeTags.RUNNERS)
+            .addTag(AlienEntityTypeTags.PROWLERS)
+            .addTag(AlienEntityTypeTags.SPITTERS)
+            .addTag(AlienEntityTypeTags.RAZOR_CLAWS)
+            .addTag(AlienEntityTypeTags.CARRIERS);
+
+        // [stated] "if its large like a praetorian or ravenger (the pillager beast) its 15%"
+        getOrCreateTagBuilder(siblingEntityTag("avp_predator", "net_escape_large"))
+            .addTag(AlienEntityTypeTags.PRAETORIANS)
+            .addTag(AlienEntityTypeTags.CRUSHERS)
+            .addTag(AlienEntityTypeTags.RAVAGERS)
+            .addTag(AlienEntityTypeTags.PREDALIENS)
+            .addTag(AlienEntityTypeTags.CHRYSALISES);
+
+        getOrCreateTagBuilder(siblingEntityTag("avp_predator", "net_immune"))
+            .addTag(AlienEntityTypeTags.HARBINGERS)
+            .addTag(AlienEntityTypeTags.QUEENS)
+            .add(
+                AlienEntityTypes.OVIPOSITOR.get(),
+                AlienEntityTypes.EMPRESS_OVIPOSITOR.get(),
+                AlienEntityTypes.ROYAL_COCOON.get(),
+                AlienEntityTypes.ABERRANT_ROYAL_COCOON.get(),
+                AlienEntityTypes.NETHER_ROYAL_COCOON.get(),
+                AlienEntityTypes.IRRADIATED_ROYAL_COCOON.get()
+            );
+
         // Nothing in the species breathes. The ALIENS tag covers every entity that extends Alien; the rest are
         // listed by hand because they are plain Mobs and no strain tag will ever hold them - the same blind spot
         // that left nether cocoons flammable. The ovipositors were remembered here and the royal cocoons were not,
@@ -815,7 +998,10 @@ public class AlienEntityTypeTagProvider extends FabricTagProvider.EntityTypeTagP
                 AlienEntityTypes.EMPRESS_OVIPOSITOR.get(),
                 AlienEntityTypes.ROYAL_COCOON.get(),
                 AlienEntityTypes.ABERRANT_ROYAL_COCOON.get(),
-                AlienEntityTypes.NETHER_ROYAL_COCOON.get()
+                AlienEntityTypes.NETHER_ROYAL_COCOON.get(),
+                // ⚠ Same blind spot as the note above - a new cocoon strain that is not listed here suffocates
+                // inside its own shell.
+                AlienEntityTypes.IRRADIATED_ROYAL_COCOON.get()
             );
     }
 
@@ -865,9 +1051,79 @@ public class AlienEntityTypeTagProvider extends FabricTagProvider.EntityTypeTagP
     }
 
     private void addRadiationResistant() {
-        getOrCreateTagBuilder(HumanEntityTypeTags.RADIATION_RESISTANT)
+        // ⭐ Sep 22 ruling: "all strains are immune to no oxygen and radiation except for the aberrant which are weak
+        // to radiation." This is already every strain but aberrant - unchanged, recorded here so it is not "fixed".
+        getOrCreateTagBuilder(siblingEntityTag("avp_human", "radiation_resistant"))
             .addTag(AlienEntityTypeTags.NORMAL_ALIENS)
             .addTag(AlienEntityTypeTags.NETHER_ALIENS)
             .addTag(AlienEntityTypeTags.IRRADIATED_ALIENS);
+        // No ovipositor line: they are one entity type across every strain, so a tag cannot follow the aberrant
+        // exception. Ovipositor.isInvulnerableTo answers radiation from the royal's variant instead. The cocoons
+        // need no line either - each sits in its strain tag, and the aberrant cocoon is excluded with its strain.
+    }
+
+    /**
+     * The space mods' own hazard tags, from the Sep 22 ruling: every strain lives without air; every strain but
+     * aberrant shrugs off radiation; only the nether and irradiated strains stand extreme heat. The tag names and what
+     * each gates were read from the 1.4.25 Stellaris and 1.16.26 Ad Astra jars, not guessed:
+     * <ul>
+     * <li>{@code stellaris:no_oxygen_needed} - consulted by {@code DimensionOxygenManager.breath}; already emitted
+     * above with the ovipositors and cocoons.</li>
+     * <li>{@code stellaris:radiations_invulnerable} - consulted by {@code RadioactiveBlockEntity}.</li>
+     * <li>{@code ad_astra:lives_without_oxygen} - {@code OxygenApiImpl.entityTick}: oxygen only.</li>
+     * <li>{@code ad_astra:can_survive_extreme_heat} - {@code TemperatureApiImpl.entityTick}: heat only.</li>
+     * </ul>
+     * ⚠ NOT {@code ad_astra:can_survive_in_space}: that one grants oxygen, heat AND cold in one go, which is more than
+     * he ruled; cold and acid rain each get their own line below with their own set. Stellaris also declares a
+     * {@code planet_fire} entity tag, but nothing in the 1.4.25 jar reads it, so it is not filled.
+     * <p>
+     * Same rule as {@link #siblingEntityTag}: raw ResourceLocations, because neither mod is on the datagen classpath
+     * and a tag file for an absent mod is harmless until that mod is installed.
+     */
+    private void addSpaceHazardImmunities() {
+        getOrCreateTagBuilder(siblingEntityTag("stellaris", "radiations_invulnerable"))
+            .addTag(AlienEntityTypeTags.NORMAL_ALIENS)
+            .addTag(AlienEntityTypeTags.NETHER_ALIENS)
+            .addTag(AlienEntityTypeTags.IRRADIATED_ALIENS);
+
+        // Mirrors the Stellaris no-oxygen set exactly, ovipositors and cocoons included, for the same reasons
+        // written above it.
+        getOrCreateTagBuilder(siblingEntityTag("ad_astra", "lives_without_oxygen"))
+            .addTag(AlienEntityTypeTags.ALIENS)
+            .add(
+                AlienEntityTypes.OVIPOSITOR.get(),
+                AlienEntityTypes.EMPRESS_OVIPOSITOR.get(),
+                AlienEntityTypes.ROYAL_COCOON.get(),
+                AlienEntityTypes.ABERRANT_ROYAL_COCOON.get(),
+                AlienEntityTypes.NETHER_ROYAL_COCOON.get(),
+                AlienEntityTypes.IRRADIATED_ROYAL_COCOON.get()
+            );
+
+        getOrCreateTagBuilder(siblingEntityTag("ad_astra", "can_survive_extreme_heat"))
+            .addTag(AlienEntityTypeTags.NETHER_ALIENS)
+            .addTag(AlienEntityTypeTags.IRRADIATED_ALIENS);
+        // Ovipositors: Ovipositor.fireImmune mirrors its royal, and Ad Astra's heat is vanilla fire, so the strain
+        // rule already holds for them without a tag.
+
+        // Sep 22: "irradiated, normal, and aberrant should be immune to cold and the nether would take the damage."
+        // Ad Astra's cold is vanilla freeze; this tag stops it ticking for these strains, and the damage-side rule in
+        // StrainHazardImmunity (freeze refused for every strain but nether) covers the ovipositors, which cannot be
+        // tagged by strain. ⚠ Freeze was removed from DOES_NOT_HURT_ALIENS for this - it had made nether immune too.
+        getOrCreateTagBuilder(siblingEntityTag("ad_astra", "can_survive_extreme_cold"))
+            .addTag(AlienEntityTypeTags.NORMAL_ALIENS)
+            .addTag(AlienEntityTypeTags.IRRADIATED_ALIENS)
+            .addTag(AlienEntityTypeTags.ABERRANT_ALIENS);
+
+        // Sep 22: "acid rain all strains are immune to it." Same set as the no-oxygen tag, props included.
+        getOrCreateTagBuilder(siblingEntityTag("ad_astra", "can_survive_in_acid_rain"))
+            .addTag(AlienEntityTypeTags.ALIENS)
+            .add(
+                AlienEntityTypes.OVIPOSITOR.get(),
+                AlienEntityTypes.EMPRESS_OVIPOSITOR.get(),
+                AlienEntityTypes.ROYAL_COCOON.get(),
+                AlienEntityTypes.ABERRANT_ROYAL_COCOON.get(),
+                AlienEntityTypes.NETHER_ROYAL_COCOON.get(),
+                AlienEntityTypes.IRRADIATED_ROYAL_COCOON.get()
+            );
     }
 }

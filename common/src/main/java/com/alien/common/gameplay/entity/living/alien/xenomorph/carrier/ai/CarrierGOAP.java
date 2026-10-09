@@ -15,6 +15,10 @@ public class CarrierGOAP {
     public static final Graph<Carrier> GRAPH = Graph.<Carrier>builder()
         .apply(XenomorphGOAP::addSensorsPackage)
         .apply(CarrierGOAP::addCombatPackage)
+        // !! THIS CASTE HAD NO SWIM PACKAGE. addSwimPackage was added to applyBaseGraph, but the spitter,
+        // the carrier and the chrysalis build their graphs by hand and were never given it - so those three
+        // could not reach shore at all, whatever else was fixed.
+        .apply(XenomorphGOAP::addSwimPackage)
         .apply(XenomorphGOAP::addIdlePackage)
         .apply(CarrierGOAP::addPanicReleasePackage)
         .apply(CarrierGOAP::addThrowPackage)

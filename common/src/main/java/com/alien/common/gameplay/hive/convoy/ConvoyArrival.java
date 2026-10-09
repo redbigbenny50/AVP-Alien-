@@ -287,6 +287,10 @@ public final class ConvoyArrival {
 
             LocationMembership.join(destinationLocation, queen);
 
+            // \u2b50 Oct 3 - the location was minted on paper at a placeholder Y with no queen chamber. Tag her so
+            // DaughterHiveSiting gives her a real underground site and commissions the chamber - see that class.
+            queen.setPendingDaughterLocationId(destinationLocation.id().value().toString());
+
             Alien.LOGGER.info(
                 "Hive: founder queen {} materialized at location {} ({}) - daughter hive is now alive",
                 queen.getUUID(),

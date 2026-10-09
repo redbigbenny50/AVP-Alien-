@@ -40,6 +40,11 @@ public final class HiveLocationClaims {
             return false;
         }
 
+        // ⭐⭐ ADOPT ANY RUINED VENTS IN THIS CHUNK. A vent whose hive died goes DORMANT and stops ticking, which means
+        // it cannot notice a new hive by itself - so the new hive notices IT, here, exactly once per claim. Ruins left
+        // by an old hive come back to life when a new one grows over them.
+        reviveDormantVents(level, chunk);
+
         location.chunkClaimTicks().put(chunk, currentTick);
         HiveLocationRegistry.INSTANCE.onChunkClaimed(location, chunk);
 
@@ -123,6 +128,17 @@ public final class HiveLocationClaims {
      * claimed structure chunks, so an amputated room also silently stopped functioning.
      */
     public static int releaseDisconnectedClaims(ServerLevel level, HiveLocation location) {
+        // \u2b50 BUILD-FREE: NO CONTIGUITY PRUNE - [stated] "the prune doesnt need to be".
+        //
+        // \u26a0 Claims here are made by a xenomorph WALKING somewhere inside the territory box, so an isolated
+        // pocket is normal and temporary: a scout reaches a far corner before the chunks between it and the hive are
+        // filled in. Pruning it would release ground that is about to be reclaimed, churning the claim set and the
+        // BLib territory writes behind it for no gain. The radius box already bounds everything, which is the job
+        // contiguity was doing.
+        if (com.alien.common.gameplay.hive.config.BuildFreeMode.isEnabled()) {
+            return 0;
+        }
+
         var centerChunk = new ChunkPos(location.centerPos());
         if (!location.claimedChunks().contains(centerChunk)) {
             return 0;
@@ -250,6 +266,55 @@ public final class HiveLocationClaims {
      * Total claimed-chunk count across every location of {@code lineage}. Used by claim attempts to enforce the
      * per-lineage chunk cap.
      */
+    /**
+     * Wakes any dormant (hiveless) resin vents in a chunk that has just been claimed.
+     * <p>
+     * ⚠ Only touches chunks that are ALREADY LOADED - a claim of an unloaded chunk leaves its ruins asleep, which is
+     * correct: they will simply stay scenery until something loads and re-claims them, and this must never force a
+     * chunk load.
+     * </p>
+     */
+    /**
+     * Wakes dormant vents across every loaded chunk this location owns.
+     * <p>
+     * ⚠ THE SAFETY NET, not the normal path. A vent normally revives the moment its chunk is claimed; this exists for
+     * the case where one went dormant WRONGLY - a startup race where the location registry was still loading when the
+     * block entity began ticking - on a hive that has finished claiming and would therefore never call claim() again.
+     * </p>
+     * <p>
+     * ⚠ Called on a slow interval from HiveLocationLoadedTickTask, and skips unloaded chunks, so a large hive costs a
+     * short walk of already-resident chunks and nothing else.
+     * </p>
+     */
+    public static void reviveDormantVentsForLocation(ServerLevel level, HiveLocation location) {
+        for (var chunk : location.claimedChunks()) {
+            reviveDormantVents(level, chunk);
+        }
+    }
+
+    private static void reviveDormantVents(ServerLevel level, ChunkPos chunk) {
+        if (!level.hasChunk(chunk.x, chunk.z)) {
+            return;
+        }
+
+        var loaded = level.getChunk(chunk.x, chunk.z);
+
+        for (var pos : new java.util.ArrayList<>(loaded.getBlockEntitiesPos())) {
+            var state = level.getBlockState(pos);
+
+            if (
+                state.getBlock() instanceof com.alien.common.gameplay.block.resin.vent.ResinVentBlock
+                    && state.getValue(com.alien.common.gameplay.block.resin.vent.ResinVentBlock.DORMANT)
+            ) {
+                level.setBlock(
+                    pos,
+                    state.setValue(com.alien.common.gameplay.block.resin.vent.ResinVentBlock.DORMANT, false),
+                    net.minecraft.world.level.block.Block.UPDATE_CLIENTS
+                );
+            }
+        }
+    }
+
     public static int totalChunksFor(LineageFactionData lineage) {
         var total = 0;
         for (var location : lineage.locationsById().values()) {

@@ -55,6 +55,19 @@ public final class CaptureChainInteraction {
                     && !MobChainManager.isLinked(mob)
                     && !MobChainManager.isLinked(heldOther)
             ) {
+                // \u2b50 Oct 3 - [stated] "the chain breaks when shes attached to another mob." A queen is never
+                // chained to another mob: the chain is spent and snaps, and a queen who was being held goes free.
+                var queen = heldOther instanceof com.alien.common.gameplay.entity.living.alien.xenomorph.queen.Queen q
+                    ? q
+                    : mob instanceof com.alien.common.gameplay.entity.living.alien.xenomorph.queen.Queen q2 ? q2 : null;
+                if (queen != null) {
+                    CaptureHoldManager.release(heldOther);
+                    com.alien.common.gameplay.hive.lifecycle.QueenCaptivity.announceShacklesBroken(queen);
+                    if (!player.getAbilities().instabuild) {
+                        player.getItemInHand(hand).shrink(1);
+                    }
+                    return InteractionResult.SUCCESS;
+                }
                 MobChainManager.link(heldOther, mob);
                 CaptureHoldManager.release(heldOther);
                 if (!player.getAbilities().instabuild) {

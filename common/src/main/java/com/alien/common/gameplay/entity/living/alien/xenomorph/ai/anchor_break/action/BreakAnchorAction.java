@@ -31,6 +31,9 @@ public final class BreakAnchorAction {
     /** How long a defender hammers on an anchor before it gives way. */
     private static final int BREAK_DURATION_TICKS = 40;
 
+    /** A defender working a CHAINED anchor strikes the chain once per this many ticks. */
+    private static final int CHAIN_STRIKE_INTERVAL_TICKS = 20;
+
     /** Close enough to be hitting it. */
     private static final double BREAK_RANGE_SQUARED = 9.0;
 
@@ -54,6 +57,27 @@ public final class BreakAnchorAction {
         }
 
         if (xenomorph.blockPosition().distSqr(target) <= BREAK_RANGE_SQUARED) {
+            // \u2b50 Oct 3 - AN ANCHOR WITH A CHAIN ON IT IS A RESCUE, NOT A DEMOLITION. [stated] "the rescueers would
+            // be
+            // trying to break the chain not the anchors". The defender strikes the chain about once a second (the same
+            // roll a kin rescuer makes) and leaves the block standing. Once it is empty the ordinary teardown below
+            // applies to it like any other anchor planted in the hive's territory.
+            if (
+                xenomorph.level()
+                    .getBlockEntity(target) instanceof com.alien.common.gameplay.block.entity.capture.anchor.AnchorBlockEntity anchor
+                    && anchor.hasChain()
+            ) {
+                blackboard.set(KEY_WORK_START_TICK, -1);
+                xenomorph.getLookControl().setLookAt(Vec3.atCenterOf(target));
+                if (xenomorph.tickCount % CHAIN_STRIKE_INTERVAL_TICKS == 0) {
+                    com.alien.common.gameplay.hive.lifecycle.QueenCaptivity.strikeChain(
+                        xenomorph,
+                        target,
+                        com.alien.common.gameplay.hive.lifecycle.QueenCaptivity.RESCUE_CHAIN_BREAK_CHANCE
+                    );
+                }
+                return Action.Signal.CONTINUE;
+            }
             var startedAt = blackboard.getOrDefault(KEY_WORK_START_TICK, -1);
             if (startedAt < 0) {
                 blackboard.set(KEY_WORK_START_TICK, xenomorph.tickCount);
@@ -70,7 +94,17 @@ public final class BreakAnchorAction {
             return Action.Signal.CONTINUE;
         }
 
-        var result = NeoMoveToPosAction.perform(context, Vec3.atBottomCenterOf(target), 0.5);
+        // ⚠ target is reassigned above, so it cannot be captured by a lambda directly.
+        var anchorTarget = target;
+        var result = com.alien.common.gameplay.hive.diag.DiagProfiler.timed(
+            "path/BreakAnchorAction",
+            () -> NeoMoveToPosAction.perform(
+                context,
+                // Oct 2 - an anchor across the hive is reached through the ducts when that is shorter.
+                com.alien.common.gameplay.hive.vent.DuctRouting.stepToward(xenomorph, Vec3.atBottomCenterOf(anchorTarget)),
+                0.5
+            )
+        );
         return switch (result) {
             case MOVING, FINISHED -> Action.Signal.CONTINUE;
             default -> {

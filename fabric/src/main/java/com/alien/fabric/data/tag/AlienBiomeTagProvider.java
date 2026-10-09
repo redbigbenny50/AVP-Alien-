@@ -5,6 +5,7 @@ import net.fabricmc.fabric.api.datagen.v1.FabricDataOutput;
 import net.fabricmc.fabric.api.datagen.v1.provider.FabricTagProvider;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.core.registries.Registries;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.tags.BiomeTags;
 import net.minecraft.world.level.biome.Biome;
 import net.minecraft.world.level.biome.Biomes;
@@ -23,7 +24,11 @@ public class AlienBiomeTagProvider extends FabricTagProvider<Biome> {
             .add(Biomes.BADLANDS);
 
         getOrCreateTagBuilder(AlienBiomeTags.HAS_DESERT_ALTAR)
-            .add(Biomes.DESERT);
+            .add(Biomes.DESERT)
+            // Ad Astra. Folded in from the community avp_ad_astra datapack, Sep 22.
+            .addOptional(ResourceLocation.fromNamespaceAndPath("ad_astra", "martian_wastelands"))
+            .addOptional(ResourceLocation.fromNamespaceAndPath("ad_astra", "martian_canyon_creek"))
+            .addOptional(ResourceLocation.fromNamespaceAndPath("ad_astra", "venus_wastelands"));
 
         getOrCreateTagBuilder(AlienBiomeTags.HAS_DEEPSLATE_ALTAR)
             .addOptionalTag(BiomeTags.IS_OVERWORLD);
@@ -35,7 +40,9 @@ public class AlienBiomeTagProvider extends FabricTagProvider<Biome> {
 
         getOrCreateTagBuilder(AlienBiomeTags.HAS_NETHER_ALTAR)
             .add(Biomes.NETHER_WASTES)
-            .add(Biomes.CRIMSON_FOREST);
+            .add(Biomes.CRIMSON_FOREST)
+            // Ad Astra. Folded in from the community avp_ad_astra datapack, Sep 22.
+            .addOptional(ResourceLocation.fromNamespaceAndPath("ad_astra", "mercury_deltas"));
 
         getOrCreateTagBuilder(AlienBiomeTags.HAS_ALTAR)
             .addTag(AlienBiomeTags.HAS_BADLANDS_ALTAR)

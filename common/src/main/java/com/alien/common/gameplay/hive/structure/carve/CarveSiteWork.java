@@ -197,7 +197,7 @@ public final class CarveSiteWork {
         // the claim loop; carve was simply never part of it, which is why a daughter reliably had her CLAIM and never
         // her chamber.
         if (site.isFoundingCore() && founderCanDig) {
-            catchUpFoundingDig(site, now);
+            catchUpFoundingDig(location, site, now);
         }
 
         var digStaffed = (site.isFoundingCore() && founderCanDig) || crew.diggers() > 0;
@@ -208,7 +208,9 @@ public final class CarveSiteWork {
             if (now >= site.nextDigTick) {
                 digStep(level, location, site);
                 site.nextDigTick = now
-                    + (site.isFoundingCore() ? coreDigIntervalTicks(crew.diggers()) : digIntervalTicks(crew.diggers()));
+                    + (site.isFoundingCore()
+                        ? coreDigIntervalTicks(crew.diggers(), location.isForcedEmpressFounding())
+                        : digIntervalTicks(crew.diggers()));
             }
         }
 
@@ -253,12 +255,15 @@ public final class CarveSiteWork {
      * transient field, so a restart would have reset the anchor to 0 and silently forgiven the whole debt.
      * </p>
      */
-    private static void catchUpFoundingDig(CarveSite site, long now) {
+    private static void catchUpFoundingDig(HiveLocation location, CarveSite site, long now) {
         if (site.nextDigTick == 0L || site.isFullyExcavated()) {
             return;
         }
 
-        var interval = coreDigIntervalTicks(0); // unattended: she dug alone out there
+        // \u26a0 The unattended catch-up must use the SAME interval the loaded path would have, forced flag included -
+        // otherwise a forced empress's hive would credit her natural-pace progress for every minute nobody watched,
+        // and the 2x would silently apply only while a player stood there.
+        var interval = coreDigIntervalTicks(0, location.isForcedEmpressFounding());
         var owed = (now - site.nextDigTick) / interval;
         if (owed <= 0L) {
             return; // nothing missed - this is just the ordinary loaded path
@@ -443,10 +448,10 @@ public final class CarveSiteWork {
             founderId != null
                 && level.getEntity(
                     founderId
-                ) instanceof com.alien.common.gameplay.entity.living.alien.xenomorph.queen.Queen queen
-                && queen.standDiggingSynced.get()
+                ) instanceof com.alien.common.gameplay.entity.living.alien.xenomorph.CarvingRoyal queen
+                && queen.isStandDigging()
         ) {
-            queen.standDiggingSynced.set(false);
+            queen.setStandDigging(false);
         }
     }
 
@@ -470,13 +475,15 @@ public final class CarveSiteWork {
         if (
             !(level.getEntity(
                 founderId
-            ) instanceof com.alien.common.gameplay.entity.living.alien.xenomorph.queen.Queen queen)
-                || !queen.isAlive()
+            ) instanceof com.alien.common.gameplay.entity.living.alien.xenomorph.CarvingRoyal queen)
+                || !queen.asMob().isAlive()
         ) {
             return false;
         }
 
-        return !queen.isInhibited() && !queen.getBindManager().isFullyBound();
+        // ⚠ Was `!isInhibited() && !getBindManager().isFullyBound()` — both queen-only. The empress can be
+        // neither chained nor inhibited, so each royal answers for herself instead.
+        return queen.canCarve();
     }
 
     private static void tickQueenDig(
@@ -493,14 +500,14 @@ public final class CarveSiteWork {
         if (
             !(level.getEntity(
                 founderId
-            ) instanceof com.alien.common.gameplay.entity.living.alien.xenomorph.queen.Queen queen)
-                || !queen.isAlive()
+            ) instanceof com.alien.common.gameplay.entity.living.alien.xenomorph.CarvingRoyal queen)
+                || !queen.asMob().isAlive()
         ) {
             return;
         }
         var shouldDig = !site.isFullyExcavated() && founderCanDig;
-        if (queen.standDiggingSynced.get() != shouldDig) {
-            queen.standDiggingSynced.set(shouldDig);
+        if (queen.isStandDigging() != shouldDig) {
+            queen.setStandDigging(shouldDig);
         }
 
         if (shouldDig) {
@@ -532,14 +539,14 @@ public final class CarveSiteWork {
      */
     private static void bootstrapFoundingCrew(
         HiveLocation location,
-        com.alien.common.gameplay.entity.living.alien.xenomorph.queen.Queen queen,
+        com.alien.common.gameplay.entity.living.alien.xenomorph.CarvingRoyal queen,
         boolean unstaffed
     ) {
         if (!unstaffed || !CREW_BOOTSTRAPPED.add(location.id())) {
             return;
         }
 
-        queen.spawnFoundingCrew();
+        queen.spawnFoundingCrewForCarve();
         Alien.LOGGER.info("Hive at {}: founding queen had no workers - spawned her founding crew.", location.centerPos());
     }
 
@@ -591,14 +598,14 @@ public final class CarveSiteWork {
         ServerLevel level,
         HiveLocation location,
         CarveSite site,
-        com.alien.common.gameplay.entity.living.alien.xenomorph.queen.Queen queen
+        com.alien.common.gameplay.entity.living.alien.xenomorph.CarvingRoyal queen
     ) {
         var footprint = siteFootprint(site, location);
         var atSite = footprint.inflate(AT_SITE_MARGIN, AT_SITE_VERTICAL_MARGIN, AT_SITE_MARGIN)
-            .contains(queen.position());
-        var previous = LAST_DIGGER_POS.put(location.id(), queen.position());
+            .contains(queen.asMob().position());
+        var previous = LAST_DIGGER_POS.put(location.id(), queen.asMob().position());
 
-        if (atSite || previous == null || previous.distanceTo(queen.position()) > STUCK_MOVE_EPSILON) {
+        if (atSite || previous == null || previous.distanceTo(queen.asMob().position()) > STUCK_MOVE_EPSILON) {
             STUCK_TICKS.remove(location.id());
             return;
         }
@@ -614,10 +621,10 @@ public final class CarveSiteWork {
         var core = footprint.getCenter();
         // Measured BEFORE the teleport. The old version logged it after, so it always printed "0 blocks" - which hid
         // the fact that she was never actually stranded.
-        var strandedBy = (int) queen.position().distanceTo(core);
+        var strandedBy = (int) queen.asMob().position().distanceTo(core);
 
-        queen.teleportTo(core.x, footprint.minY, core.z);
-        queen.getNavigation().stop();
+        queen.asMob().teleportTo(core.x, footprint.minY, core.z);
+        queen.asMob().getNavigation().stop();
         Alien.LOGGER.info(
             "Hive at {}: founding queen was stranded {} blocks outside her core footprint for {} ticks - warped back to {}.",
             location.centerPos(),
@@ -672,8 +679,26 @@ public final class CarveSiteWork {
      * still visibly excavates, the crew just stops watching her do it.
      */
     private static int coreDigIntervalTicks(int helperDiggers) {
+        return coreDigIntervalTicks(helperDiggers, false);
+    }
+
+    /**
+     * \u2b50\u2b50 A FORCED EMPRESS DIGS HER FOUNDING CORE AT DOUBLE PACE.
+     * <p>
+     * [stated] "this can happen 2x as fast the carving biomass for royal chamber is free for empress just to make them
+     * not be as impaitent." The feature exists BECAUSE players will not wait; letting it be equally slow would not
+     * solve the problem it was asked for.
+     * </p>
+     * <p>
+     * \u26a0 HALVES THE INTERVAL RATHER THAN DOUBLING THE CLAWS, so it composes cleanly with helper diggers instead of
+     * competing with them - a forced core with a full crew is twice as fast as a natural core with a full crew, not
+     * twice as fast as a solo queen.
+     * </p>
+     */
+    private static int coreDigIntervalTicks(int helperDiggers, boolean forced) {
         var claws = 1 + Math.min(helperDiggers, CarveWorkers.MAX_DIGGERS);
-        return Math.max(1, QUEEN_DIG_INTERVAL_TICKS / claws);
+        var interval = QUEEN_DIG_INTERVAL_TICKS / claws;
+        return Math.max(1, forced ? interval / 2 : interval);
     }
 
     /** Up to {@code limit} columns still needing excavation, in work order - one standing spot per digger. */

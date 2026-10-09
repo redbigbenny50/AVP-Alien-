@@ -57,7 +57,21 @@ public class MixinBlockBehaviour_HiveBreachFlag {
             return;
         }
 
+        // ⚠⚠ THE HIVE'S OWN BUILDING IS NOT A BREACH. Stamping and carving replace blocks, so resin going to air
+        // during them would otherwise flag a breach the hive then sends a crew to repair - which stamps again.
+        if (com.alien.common.gameplay.hive.structure.HiveBuildSuppression.isSuppressed()) {
+            return;
+        }
+
         if (!blockState.is(AlienBlockTags.RESIN)) {
+            return;
+        }
+
+        // ⭐ Oct 6 - VEINS AND WEBS ARE GROWTH, NOT MASONRY. Both sit in the RESIN tag, so breaking one was recorded
+        // as a wound with its exact state, and the loose-cell repair put it straight back into the empty cell - with
+        // no check that anything held it up. [stated] "when i try to break it it gets restored": that was this. A
+        // broken vein or web now stays broken; the walls they grow on are still repaired as before.
+        if (blockState.is(AlienBlockTags.RESIN_VEINS) || blockState.is(AlienBlockTags.RESIN_WEBS)) {
             return;
         }
 
@@ -69,7 +83,8 @@ public class MixinBlockBehaviour_HiveBreachFlag {
         var location = HiveLocationRegistry.INSTANCE.getByChunk(serverLevel.dimension(), new ChunkPos(blockPos));
 
         if (location != null && location.isAlive()) {
-            location.flagBreachAt(blockPos);
+            // Pass the state that was broken: the repair puts back exactly what was there, with no template lookup.
+            location.flagBreachAt(blockPos, blockState);
         }
     }
 }

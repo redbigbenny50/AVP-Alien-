@@ -7,8 +7,6 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 
-import java.util.ArrayList;
-
 /**
  * Per-tick (piggybacking {@code HiveLocationLoadedTickTask}'s 20-tick cadence) resolution for
  * {@link HiveParty.AttackParty}. Resolves when either the fixed {@code config.attackPartyDurationTicks()} active
@@ -103,7 +101,11 @@ public final class AttackPartyLifecycleTask {
         var campaign = location.attackCampaigns().get(party.targetPlayerId());
         if (campaign != null) {
             var target = serverLevel.getPlayerByUUID(party.targetPlayerId());
-            var targetDead = target == null || !target.isAlive();
+            // ⚠⚠ Oct 5 audit - LOGGING OUT WAS COUNTED AS DYING. getPlayerByUUID is null for an OFFLINE player too, and
+            // this read null as "target defeated" and cleared the whole retribution campaign - so leaving the game
+            // cancelled it. The wave still goes home (no point haunting an empty spot), but the campaign survives
+            // the logout unless this was already the final wave. Raids handle the same case with an expiry grace.
+            var targetDead = target != null && !target.isAlive();
             if (targetDead || campaign.wavesSent() >= 2) {
                 campaign.markCleared();
 
@@ -122,45 +124,8 @@ public final class AttackPartyLifecycleTask {
             }
         }
 
-        var homeVent = nearestVent(serverLevel, location, config);
-
-        for (var entry : new ArrayList<>(party.materializedMembers().entrySet())) {
-            var entity = serverLevel.getEntity(entry.getKey());
-            party.untrackMaterializedMember(entry.getKey());
-            if (entity == null) {
-                // Not loaded - NOT dead (real deaths are untracked in PartyMemberDeath). Refund it: writing
-                // off every out-of-range member is what quietly drained the hive on each dispatch.
-                location.localReserves().addReturningMember(entry.getValue(), 1);
-                continue;
-            }
-            if (!entity.isAlive()) {
-                continue; // died this tick, before its death hook untracked it
-            }
-
-            if (homeVent != null) {
-                entity.teleportTo(homeVent.getX() + 0.5, homeVent.getY(), homeVent.getZ() + 0.5);
-            }
-
-            location.localReserves().addReturningMember(entry.getValue(), 1);
-            if (entity instanceof com.alien.common.gameplay.entity.living.alien.Alien alien) {
-                alien.clearPartyMembership();
-            }
-            // EGG DUTY: a carrier is refunded but NEVER discarded - discarding it mid-haul vanished the
-            // worker and dropped its egg. It stays alive to finish the delivery.
-            if (EggDutyGuard.isOnEggDuty(entity)) {
-                continue;
-            }
-            entity.discard();
-        }
-
-        for (var type : new ArrayList<>(party.composition().getAvailableEntityTypes())) {
-            var count = party.composition().getCount(type);
-            if (count <= 0) {
-                continue;
-            }
-            location.localReserves().addReturningMember(type, count);
-            party.composition().add(type, -count);
-        }
+        // Oct 5 audit: one shared return - see PartyReturn for the three bugs the four copies carried.
+        PartyReturn.returnHome(serverLevel, location, party, nearestVent(serverLevel, location, config));
 
         Alien.LOGGER.info("Hive: attack party resolved for location {} (target {})", location.id(), party.targetPlayerId());
     }

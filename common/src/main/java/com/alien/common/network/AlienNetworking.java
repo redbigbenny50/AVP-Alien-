@@ -56,6 +56,12 @@ public final class AlienNetworking {
             new PacketDirection.S2C<>(S2CHiveInspectionPayload.TYPE, S2CHiveInspectionPayload.CODEC)
         );
         registry.registerPacketDirection(
+            new PacketDirection.S2C<>(
+                com.alien.common.network.payload.S2CHiveConfigSnapshotPayload.TYPE,
+                com.alien.common.network.payload.S2CHiveConfigSnapshotPayload.CODEC
+            )
+        );
+        registry.registerPacketDirection(
             new PacketDirection.C2S<>(C2SToggleHiveRenderPayload.TYPE, C2SToggleHiveRenderPayload.CODEC)
         );
         registry.registerPacketDirection(
@@ -116,6 +122,13 @@ public final class AlienNetworking {
                 S2CHiveInspectionPayload.TYPE,
                 S2CHiveInspectionPayload.CODEC,
                 AlienClientPacketListener::handleHiveInspection
+            )
+        );
+        registry.registerPacketHandler(
+            new NetworkHandler.FromServer<>(
+                com.alien.common.network.payload.S2CHiveConfigSnapshotPayload.TYPE,
+                com.alien.common.network.payload.S2CHiveConfigSnapshotPayload.CODEC,
+                AlienClientPacketListener::handleHiveConfigSnapshot
             )
         );
         registry.registerPacketHandler(

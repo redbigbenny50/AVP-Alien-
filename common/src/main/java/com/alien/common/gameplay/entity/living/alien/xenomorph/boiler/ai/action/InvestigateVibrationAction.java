@@ -77,7 +77,12 @@ public class InvestigateVibrationAction {
             }
         }
 
-        var result = NeoMoveToPosAction.perform(context, vibrationPos, 0.5);
+        // ⚠ vibrationPos is reassigned above, so it cannot be captured by a lambda directly.
+        var vibrationPosFinal = vibrationPos;
+        var result = com.alien.common.gameplay.hive.diag.DiagProfiler.timed(
+            "path/InvestigateVibrationAction",
+            () -> NeoMoveToPosAction.perform(context, vibrationPosFinal, 0.5)
+        );
 
         return switch (result) {
             case FINISHED, MOVING -> Action.Signal.CONTINUE;

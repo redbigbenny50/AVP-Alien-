@@ -122,6 +122,7 @@ public class Alien {
         AlienDecoratedPotPatterns.initialize();
         AlienCompostingChances.initialize();
         AlienDataSyncKeys.initialize();
+        com.alien.common.registry.init.AlienDataStoreTypes.initialize();
         AlienFactionDataTypes.initialize();
 
         // Depends on entity types.
@@ -212,6 +213,31 @@ public class Alien {
      * Single per-server-tick driver for the new hive system. Gated to Overworld so it fires once per server tick total;
      * the registry itself iterates every dimension internally (fixes {@code HIVE_SYSTEM_ANALYSIS.md} § 9.1.2).
      */
+    /** The server whose hive config has been read. Identity-compared, so a new server object re-reads the file. */
+    private static @org.jetbrains.annotations.Nullable MinecraftServer configLoadedFor;
+
+    /**
+     * The running server, kept so code with no server in scope can ask whether we are shutting down.
+     * <p>
+     * \u26a0 Set from the hive tick, which only runs on a live server, and never cleared - a stopped server still
+     * answers {@code isRunning() == false}, which is exactly the answer callers want.
+     * </p>
+     */
+    private static @org.jetbrains.annotations.Nullable MinecraftServer currentServer;
+
+    /**
+     * \u2b50\u2b50 WHETHER THE SERVER IS TEARING DOWN. Read by the entity-unload mixin, which has no server reference
+     * of its own and must not virtualize hive members during shutdown.
+     * <p>
+     * {@code isRunning()} goes false when {@code halt} is called, which happens BEFORE {@code stopServer} performs its
+     * final save and closes the levels - so by the time the shutdown chunk unloads run, this is already true.
+     * </p>
+     */
+    public static boolean isShuttingDown() {
+        var server = currentServer;
+        return server != null && !server.isRunning();
+    }
+
     private static void tickHiveRegistry(Level level) {
         if (level.isClientSide || !level.dimension().equals(Level.OVERWORLD)) {
             return;
@@ -220,6 +246,33 @@ public class Alien {
         var server = level.getServer();
 
         if (server != null) {
+            // \u2b50\u2b50 LOAD THE CONFIG FILE ONCE, on the first overworld tick of this server.
+            //
+            // \u26a0 Deliberately NOT a server-start event: this mod family registers no lifecycle listeners beyond
+            // what it already has, and the first-tick latch needs no new hook, no new import and no ordering
+            // argument with the registry it configures. The flag is reset when the server object changes, so a
+            // single-player world opened, quit and reopened re-reads the file rather than keeping the old one.
+            currentServer = server;
+
+            // \u2b50 Stamp every player's surroundings so chunks remember they are visited. Once a second is plenty
+            // for a signal measured in in-game days, and it keeps this off the per-tick path entirely.
+            if (level.getGameTime() % 20L == 0L) {
+                for (var player : server.getPlayerList().getPlayers()) {
+                    if (player.level() instanceof net.minecraft.server.level.ServerLevel playerLevel) {
+                        com.alien.common.gameplay.hive.containment.ContainmentDetector.stampPlayerVisit(
+                            playerLevel,
+                            player.chunkPosition(),
+                            playerLevel.getGameTime()
+                        );
+                    }
+                }
+            }
+
+            if (configLoadedFor != server) {
+                configLoadedFor = server;
+                com.alien.common.gameplay.hive.config.HiveConfigFile.load(server);
+            }
+
             HiveLocationRegistry.INSTANCE.tick(server);
             com.alien.common.gameplay.hive.bootstrap.RoyalBootstrapResolver.tick(server);
             com.alien.common.network.handler.HiveRenderToggleHandler.tick(server);

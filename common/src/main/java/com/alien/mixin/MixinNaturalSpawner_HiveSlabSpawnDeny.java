@@ -83,6 +83,11 @@ public abstract class MixinNaturalSpawner_HiveSlabSpawnDeny {
             return;
         }
 
+        // ⭐ Oct 1 - every deny below is switched by hiveBlocksMobSpawns (on by default), in every hive mode.
+        if (!level.getGameRules().getBoolean(com.alien.common.registry.init.AlienGameRules.HIVE_BLOCKS_MOB_SPAWNS)) {
+            return;
+        }
+
         var chunk = new ChunkPos(pos);
         var location = HiveLocationRegistry.INSTANCE.getByChunk(level.dimension(), chunk);
 

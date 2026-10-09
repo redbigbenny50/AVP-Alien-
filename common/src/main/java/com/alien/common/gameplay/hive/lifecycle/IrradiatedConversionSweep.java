@@ -42,6 +42,9 @@ public final class IrradiatedConversionSweep {
     /** Where each hive's last pass stopped, so the next one resumes rather than restarting. */
     private static final Map<net.minecraft.resources.ResourceLocation, Integer> CURSORS = new HashMap<>();
 
+    /** Only walk the registry to prune once the cursor map has grown past any plausible live hive count. */
+    private static final int CURSOR_PRUNE_THRESHOLD = 256;
+
     /** Cached name mapping, built lazily - the registry lookup is not free and the answers never change. */
     private static final Map<Block, Block> IRRADIATED_EQUIVALENT = new HashMap<>();
 
@@ -121,6 +124,17 @@ public final class IrradiatedConversionSweep {
 
             index = (index + 1) % built.size();
         } while (budget > 0 && index != start);
+
+        // ⚠ DROP CURSORS FOR HIVES THAT NO LONGER EXIST. Keyed by location id and never cleaned, so every hive that
+        // was ever swept left a boxed int behind permanently. Only pruned when the map has actually grown, so the
+        // registry walk is rare rather than per sweep.
+        if (CURSORS.size() > CURSOR_PRUNE_THRESHOLD) {
+            var live = new java.util.HashSet<net.minecraft.resources.ResourceLocation>();
+            for (var known : com.alien.common.gameplay.hive.location.HiveLocationRegistry.INSTANCE.all()) {
+                live.add(known.id().value());
+            }
+            CURSORS.keySet().retainAll(live);
+        }
 
         CURSORS.put(location.id().value(), index);
     }

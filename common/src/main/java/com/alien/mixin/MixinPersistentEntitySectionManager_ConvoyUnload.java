@@ -31,6 +31,27 @@ public abstract class MixinPersistentEntitySectionManager_ConvoyUnload<T extends
         long chunkPos,
         CallbackInfoReturnable<Boolean> cir
     ) {
+        // \u2b50\u2b50\u2b50 NEVER VIRTUALIZE DURING SHUTDOWN. THIS IS THE FIX FOR "reloging IS killing workers".
+        //
+        // \u26a0\u26a0 THE SHUTDOWN ORDER DESTROYS BOTH COPIES OF A VIRTUALIZED MEMBER:
+        // 1. stopServer -> saveAllChunks : chunks written WITH their entities
+        // 2. BLib writes factions at the TAIL of saveEverything - the bank as it stood, WITHOUT the deposit
+        // 3. level.close() -> chunks unload -> THIS METHOD banks the member and DISCARDS the entity
+        // 4. closing re-saves the chunks - now WITHOUT the discarded entity
+        // The deposit exists only in memory that is never written again, and the entity is gone from the chunk that
+        // was rewritten. Marking the faction dirty in step 3 cannot help: BLib already wrote in step 2.
+        //
+        // Confirmed in the field: members=4 before quitting, members=1 after, banked=0 on both sides, biomass
+        // preserved across the same relog (so the location itself saves fine), and [stated] "the are genuienly gone i
+        // have the em vision on if they were still there id see em".
+        //
+        // An entity left alone simply serializes with its chunk and comes back. Queens are already exempted from
+        // virtualization for this exact reason - "she vanishes on relog and the orphaned location then decays" - so
+        // this is that same fix, applied to the one moment when it can happen to anything.
+        if (com.alien.Alien.isShuttingDown()) {
+            return;
+        }
+
         var convoyMembers = new ArrayList<Alien>();
         var hiveMembers = new ArrayList<Alien>();
         this.sectionStorage.getExistingSectionsInChunk(chunkPos)

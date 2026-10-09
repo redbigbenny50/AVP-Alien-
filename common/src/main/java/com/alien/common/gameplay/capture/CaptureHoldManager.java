@@ -65,9 +65,29 @@ public final class CaptureHoldManager {
 
     private CaptureHoldManager() {}
 
+    /**
+     * \u2b50 Oct 3 - A HELD QUEEN. [stated] "When held it counts as 1 chain with a 24 block limit but it doesnt break
+     * at 24 shes being pulled." Held counts as captive (QueenCaptivity.isCaptive), and the hold never snaps for her:
+     * past {@value #QUEEN_HOLD_LENGTH} blocks she is dragged after her holder instead.
+     */
+    private static final double QUEEN_HOLD_LENGTH = 24.0;
+
+    /**
+     * Safety valve, not a rule: a holder who TELEPORTS this far (ender pearl, command, portal-free warp) cannot drag
+     * her through the world, so the hold lets go rather than leaving a chain stretched across the map.
+     */
+    private static final double QUEEN_HOLD_TELEPORT_RELEASE = 64.0;
+
     /** Register {@code mob} as held by {@code player}, replacing any prior holder. */
     public static void hold(Mob mob, Player player) {
         HELD.put(mob.getUUID(), player.getUUID());
+        // A held queen counts as one chain, and the first chain is the moment of capture: sever her from her hive.
+        if (
+            mob instanceof com.alien.common.gameplay.entity.living.alien.xenomorph.queen.Queen queen
+                && mob.level() instanceof ServerLevel serverLevel
+        ) {
+            com.alien.common.gameplay.hive.lifecycle.QueenCaptivity.onCaptured(serverLevel, queen);
+        }
         // Chain clank when the mob is grabbed to be walked around (the anchor path plays its own in
         // AnchorBlockEntity.bind; this covers the hand-held hold, which never touches an anchor).
         if (!mob.level().isClientSide) {
@@ -149,7 +169,24 @@ public final class CaptureHoldManager {
             }
 
             double dist = mob.distanceTo(holder);
-            if (dist > BREAK_DISTANCE) {
+            if (mob instanceof com.alien.common.gameplay.entity.living.alien.xenomorph.queen.Queen) {
+                if (dist > QUEEN_HOLD_TELEPORT_RELEASE) {
+                    it.remove();
+                    broadcast(mob, RELEASE);
+                    continue;
+                }
+                if (dist > QUEEN_HOLD_LENGTH) {
+                    // The end of her chain: drag her the rest of the way, with collision. No break.
+                    Vec3 toHolder = holder.position().subtract(mob.position());
+                    double len = toHolder.length();
+                    if (len > 1.0e-4) {
+                        Vec3 haul = toHolder.scale((dist - QUEEN_HOLD_LENGTH) / len);
+                        mob.move(MoverType.SELF, new Vec3(haul.x, 0.0, haul.z));
+                        mob.hasImpulse = true;
+                        mob.hurtMarked = true;
+                    }
+                }
+            } else if (dist > BREAK_DISTANCE) {
                 it.remove();
                 broadcast(mob, RELEASE);
                 continue;
@@ -168,7 +205,11 @@ public final class CaptureHoldManager {
             // shift her either. Hauling the position directly sidesteps all of that. It still goes through
             // move(), so walls, ledges and collisions behave normally - she is dragged along the floor, not
             // teleported through it.
-            if (!mob.isEffectiveAi()) {
+            // ⭐ A NETTED MOB IS DRAGGED LIMP TOO - [stated] "netted mobs should be dragged limp." The net no longer
+            // uses setNoAi (it cancels serverAiStep instead, Sep 16), so isEffectiveAi() stays TRUE for a netted mob
+            // and it fell through to the velocity tether below - led like a dog on a lead instead of hauled. Asked of
+            // avp_predator through a server-side gate; false whenever the net mod is absent.
+            if (!mob.isEffectiveAi() || com.alien.compatibility.avp_predator.PredatorNetServerProxy.isNetted(mob)) {
                 if (dist > LIMP_FOLLOW_DISTANCE) {
                     Vec3 toHolder = holder.position().subtract(mob.position());
                     double len = toHolder.length();

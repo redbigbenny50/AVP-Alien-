@@ -170,6 +170,11 @@ public class WarriorAnimator extends AzEntityAnimator<Warrior> {
         } else if (isMoving) {
             if (isCrawling) {
                 animFunction = () -> dispatcher.crawl(AzAlienAnimationUtil.crawlAnimationSpeed(warrior));
+            } else if (AzAlienAnimationUtil.isHauling(warrior)) {
+                // \u2b50 Oct 3 - THE WARRIOR NEVER PLAYED ITS CARRY CLIP. WarriorAnimationDispatcher.walkCarry and the
+                // walk.carry clip both existed; this animator simply never called it. Laden outranks run, as on the
+                // drone: there is no run-carry clip.
+                animFunction = dispatcher::walkCarry;
             } else if (warrior.isMovingQuickly.get()) {
                 animFunction = dispatcher::run;
             } else {
@@ -177,7 +182,13 @@ public class WarriorAnimator extends AzEntityAnimator<Warrior> {
             }
         } else {
             // TODO: idle crawl
-            animFunction = isCrawling ? dispatcher::crawlHold : dispatcher::idle;
+            if (isCrawling) {
+                animFunction = dispatcher::crawlHold;
+            } else if (AzAlienAnimationUtil.isHauling(warrior)) {
+                animFunction = dispatcher::walkCarryHold; // standing with a load: hold the carry pose
+            } else {
+                animFunction = dispatcher::idle;
+            }
         }
 
         animFunction.run();

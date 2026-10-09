@@ -232,4 +232,107 @@ public class EmpressAnimationDispatcher {
             .build()
             .dispatchForEntity(empress);
     }
+
+    /** One-shot: she plants and starts burrowing straight down. Holds on the last frame into the digging loop. */
+    public void digDown() {
+        AzCommand.<Empress>replay()
+            .play(
+                AzAlienAnimationUtil.BODY,
+                EmpressAnimationRefs.DIG_DOWN_ANIMATION_NAME,
+                AzPlayBehaviors.HOLD_ON_LAST_FRAME
+            )
+            .build()
+            .dispatchForEntity(empress);
+    }
+
+    /** Looping vertical dig at the queen's 70% - [stated] "same rules as the queen and speeds". */
+    public void digging() {
+        AzAlienAnimationUtil.singleWithSpeed(
+            AzAlienAnimationUtil.BODY,
+            EmpressAnimationRefs.DIGGING_ANIMATION_NAME,
+            AzPlayBehaviors.LOOP,
+            AzDispatchMode.PLAY_IF_NOT_PLAYING,
+            DIG_ANIMATION_SPEED
+        ).dispatchForEntity(empress);
+    }
+
+    /** One-shot: she pulls up out of the dig and returns toward idle. */
+    public void digUp() {
+        AzCommand.<Empress>replay()
+            .play(AzAlienAnimationUtil.BODY, EmpressAnimationRefs.DIG_UP_ANIMATION_NAME, AzPlayBehaviors.PLAY_ONCE)
+            .build()
+            .dispatchForEntity(empress);
+    }
+
+    /** One-shot: she raises her hands to begin a horizontal dig. */
+    public void digStandStart() {
+        AzCommand.<Empress>replay()
+            .play(
+                AzAlienAnimationUtil.BODY,
+                EmpressAnimationRefs.DIG_STAND_START_ANIMATION_NAME,
+                AzPlayBehaviors.PLAY_ONCE
+            )
+            .build()
+            .dispatchForEntity(empress);
+    }
+
+    /** Looping horizontal dig. */
+    public void standDigging() {
+        AzAlienAnimationUtil.singleWithSpeed(
+            AzAlienAnimationUtil.BODY,
+            EmpressAnimationRefs.STAND_DIGGING_ANIMATION_NAME,
+            AzPlayBehaviors.LOOP,
+            AzDispatchMode.PLAY_IF_NOT_PLAYING,
+            DIG_ANIMATION_SPEED
+        ).dispatchForEntity(empress);
+    }
+
+    /** One-shot: she lowers her hands out of the horizontal dig. */
+    public void digStandStop() {
+        AzCommand.<Empress>replay()
+            .play(
+                AzAlienAnimationUtil.BODY,
+                EmpressAnimationRefs.DIG_STAND_STOP_ANIMATION_NAME,
+                AzPlayBehaviors.PLAY_ONCE
+            )
+            .build()
+            .dispatchForEntity(empress);
+    }
+
+    /** One-shot: she goes down. Holds on the last frame into the incapacitated loop. */
+    public void incapacitatedDrop() {
+        AzCommand.<Empress>replay()
+            .play(
+                AzAlienAnimationUtil.BODY,
+                EmpressAnimationRefs.INCAPACITATED_DROP_ANIMATION_NAME,
+                AzPlayBehaviors.HOLD_ON_LAST_FRAME
+            )
+            .build()
+            .dispatchForEntity(empress);
+    }
+
+    /** Looping sprawl while she is down and the finisher bar is up. */
+    public void incapacitated() {
+        INCAPACITATED.dispatchForEntity(empress);
+    }
+
+    /** ⚠ Idempotent, like the queen's - a looping sprawl must not restart every tick she stays down. */
+    private static final AzCommand<Empress> INCAPACITATED = AzCommand.<Empress>idempotent()
+        .play(AzAlienAnimationUtil.BODY, EmpressAnimationRefs.INCAPACITATED_ANIMATION_NAME, AzPlayBehaviors.LOOP)
+        .build();
+
+    /** One-shot: she gets back up after being rescued or recovering. */
+    public void incapacitatedRise() {
+        AzCommand.<Empress>replay()
+            .play(
+                AzAlienAnimationUtil.BODY,
+                EmpressAnimationRefs.INCAPACITATED_RISE_ANIMATION_NAME,
+                AzPlayBehaviors.PLAY_ONCE
+            )
+            .build()
+            .dispatchForEntity(empress);
+    }
+
+    /** The queen's dig speed, shared so the two royals cannot drift apart. */
+    private static final float DIG_ANIMATION_SPEED = 0.7F;
 }

@@ -54,6 +54,13 @@ public class QueenLifecyclePhaseManager implements NBTSerializable {
     public static final int HIBERNATION_DURATION_TICKS = 3 * 24000;
 
     /**
+     * Sleep length for a HAND-PLACED queen (spawn egg, command, dispenser): 1 Minecraft day. [stated] Sep 22 "change
+     * the hand place wait to 1 mc day natural keep 3". A natural wild queen keeps {@link #HIBERNATION_DURATION_TICKS};
+     * a hive-raised daughter still skips the sleep entirely.
+     */
+    public static final int PLACED_HIBERNATION_DURATION_TICKS = 24000;
+
+    /**
      * HEALTH she must be down before she will leave her post — not damage dealt to her.
      * <p>
      * The difference matters. Damage dealt is what an attacker rolls; health lost is what actually came off her bar
@@ -90,6 +97,12 @@ public class QueenLifecyclePhaseManager implements NBTSerializable {
     }
 
     // ---- Weighted target-Y bands (AVP_Queen_Lifecycle_Design.pdf, location phase). Config candidates for later. ----
+    /**
+     * How much ground must sit above a committed anchor. Keeps a rolled band from landing in open air on a shallow or
+     * superflat world.
+     */
+    private static final int MIN_TERRAIN_COVER_BLOCKS = 3;
+
     private static final int COMMON_Y_MIN = -15;
 
     private static final int COMMON_Y_MAX = 20;
@@ -128,6 +141,8 @@ public class QueenLifecyclePhaseManager implements NBTSerializable {
     private static final String ANCHOR_TAG = "lifecycleAnchor";
 
     private static final String HIBERNATION_TICKS_REMAINING_TAG = "lifecycleHibernationTicksRemaining";
+
+    private static final String RAISED_BY_HIVE_TAG = "lifecycleRaisedByHive";
 
     private static final String WILD_SPAWNED_TAG = "lifecycleWildSpawned";
 
@@ -193,6 +208,36 @@ public class QueenLifecyclePhaseManager implements NBTSerializable {
     /** The committed hive anchor (chunk-center XZ + target Y) chosen in LOCATION. Null until then; never re-chosen. */
     private @Nullable BlockPos anchor;
 
+    /** How many times the dig to the committed anchor has been stopped by an undiggable block. */
+    private int blockedDigAttempts;
+
+    /**
+     * How many blocked digs before the site is abandoned and a new one chosen.
+     * <p>
+     * Low on purpose: each attempt costs her a walk and a dig, and the usual cause - another hive's resin between her
+     * and the anchor - will not clear on its own.
+     * </p>
+     */
+    private static final int MAX_BLOCKED_DIG_ATTEMPTS = 3;
+
+    /**
+     * Whether this queen has already been cut loose from the hive that raised her. Transient by design - a reload
+     * simply re-checks, and the check is idempotent.
+     */
+    private boolean announcedIndependence;
+
+    /**
+     * ⭐ SHE WAS RAISED BY A HIVE - remembered at the moment {@link #releaseFromMotherHive()} cuts her loose.
+     * <p>
+     * ⚠⚠ THE TWO RULES COLLIDED. {@link #enterHibernation()} lets a hive-raised daughter skip the 3-day sleep by asking
+     * "is she a member of a hive location?" - but {@link #releaseFromMotherHive()} runs on her FIRST tick and removes
+     * exactly that membership, so by the time she dug to her anchor the answer was always no and every daughter slept
+     * the full 72,000 ticks (an hour of loaded time, frozen whenever her chunk stops ticking). Field report Sep 22:
+     * "daughter queens ... dont make hives. They waited over an hour." Persisted, so a relog cannot lose it.
+     * </p>
+     */
+    private boolean raisedByHive;
+
     public QueenLifecyclePhaseManager(Queen queen) {
         this.queen = queen;
         this.phase = QueenLifecyclePhase.DEVELOPING;
@@ -254,10 +299,26 @@ public class QueenLifecyclePhaseManager implements NBTSerializable {
         // Bound queens are frozen: a captured queen does not develop, locate, dig, hibernate, or hand off to founding.
         // Clear any in-progress dig so she stays physical for the bind clamp, then hold the front-end until fully
         // released. Without this she resumes the LOCATION dig on reload and soft-locks against the clamp.
-        if (queen.getBindManager().hasAnyChain()) {
+        //
+        // \u26a0\u26a0 Oct 3 - THE INHIBITOR IS HELD HERE TOO NOW. It used to get away without this because the
+        // inhibitor
+        // minted her a personal claim, which made isAlreadyEstablished() true and parked her in FOUNDING_HANDOFF.
+        // Captives hold no claim any more, so without this an inhibited queen reloads as unestablished, runs
+        // DEVELOPING -> LOCATION and DIGS - the Aug 19 bug, by a different road.
+        if (com.alien.common.gameplay.hive.lifecycle.QueenCaptivity.isCaptive(queen)) {
             if (queen.isDigging()) {
                 queen.setDigging(false);
             }
+            // \u2b50 CAPTURE WAKES A SLEEPING QUEEN - chains, the inhibitor and the hand-hold alike. [stated] "make
+            // sure
+            // inhibitors or chains can wake up hibernating queens." The inhibitor used to do it by accident (its claim
+            // made her established); chains never did, so a queen chained in her sleep stayed asleep in her chains.
+            // This is the same wake her own sleep clock runs at the end of HIBERNATION, so nothing downstream sees a
+            // difference: the sleep is OVER, not paused - freed later she founds, she does not lie back down.
+            if (phase == QueenLifecyclePhase.HIBERNATION || queen.isHibernating.get()) {
+                wakeFromCapture();
+            }
+            homelessTicks = 0;
             return;
         }
 
@@ -292,6 +353,28 @@ public class QueenLifecyclePhaseManager implements NBTSerializable {
             return;
         }
 
+        // ⭐⭐ SHE LOST HER HIVE. RE-ARM THE FRONT-END SO SHE DIGS A NEW ONE INSTEAD OF SQUATTING ON THE SURFACE.
+        //
+        // ⚠⚠ THIS IS WHY TESTERS SAW HIVES ON TOP OF THE WATER. FOUNDING_HANDOFF is terminal, and
+        // isAlreadyEstablished() below returns true for ANY queen wearing an ovipositor - so a queen who had founded
+        // once could never re-enter LOCATION. When her location went away (migration evacuates the reserves and
+        // removes the source without ever handling the live founder queen; natural decay, war and admin removal do
+        // the same), HiveManager.hasFoundedLocation went false, isReadyToFound stayed true, and settlementTicks
+        // later she founded a fresh hive AT WHATEVER BLOCK SHE WAS STANDING ON. Her own /hive readout said it:
+        // "phase=FOUNDING_HANDOFF ... anchor=null". LOCATION is the ONLY thing that ever puts a queen underground.
+        //
+        // ⚠ IT IS A LOOP, NOT A ONE-OFF: a surface hive cannot build, so it never grows past its core claim, so
+        // it trips the 2-chunk migration floor, so it evacuates, so its queen re-founds on the surface again.
+        //
+        // ⚠ THE OVIPOSITOR GATE IS THE WHOLE DISCRIMINATOR. A daughter queen walking out of her mother's hive is
+        // ALSO in FOUNDING_HANDOFF with no location of her own - and she must be left alone, because she has already
+        // been through LOCATION and is standing on a dug anchor. Only a queen who has been REPRODUCTIVE (and so owns
+        // an ovipositor) can have lost a hive, which makes hasOvipositor() the exact test for "was established".
+        if (phase == QueenLifecyclePhase.FOUNDING_HANDOFF && shouldRearmAfterHiveLoss()) {
+            rearmAfterHiveLoss();
+            return;
+        }
+
         if (phase == QueenLifecyclePhase.FOUNDING_HANDOFF) {
             return;
         }
@@ -300,9 +383,9 @@ public class QueenLifecyclePhaseManager implements NBTSerializable {
         // that has already founded) has no front-end to run: if she owns a live location or already has an ovipositor,
         // jump straight to the inert terminal state so we never re-run developing on an established queen.
         if (isAlreadyEstablished()) {
-            // WAKE HER ON THE WAY THROUGH. A queen can acquire a location while still ASLEEP - the inhibitor is
-            // exactly that case, because QueenInhibitionService mints her a personal severed claim with her as
-            // founder the moment it is clamped on, which is what isAlreadyEstablished() looks for.
+            // WAKE HER ON THE WAY THROUGH. A queen can acquire a location while still ASLEEP. (This used to be the
+            // inhibitor's personal claim; since Oct 3 the inhibitor mints nothing and the captive guard at the top of
+            // tick() wakes her instead, but any other route to a location while asleep still lands here.)
             //
             // The jump below is terminal and sits BEFORE the phase switch, so tickHibernation never runs again -
             // and tickHibernation is the only thing that ever clears the sleep flag on this path. Left as it was,
@@ -332,11 +415,93 @@ public class QueenLifecyclePhaseManager implements NBTSerializable {
             return;
         }
 
+        // ⭐⭐ A DAUGHTER RAISED INSIDE HER MOTHER'S HIVE MUST BE CUT LOOSE, AND MUST SAY SO.
+        //
+        // ⚠⚠ QueenPromotionService cocoons a praetorian into a queen and STOPS - it sets no phase, and it never
+        // evicts her. She emerges as a MEMBER of the location she was raised in, standing in her mother's claim,
+        // which is ground SpreadZoneCheck Rule 1 will refuse her forever. Reported as "his natural daughters just
+        // wander around and never leave the hive, but his forced ones do" - forced queens work precisely because
+        // they bypass this machine entirely.
+        //
+        // ⭐ And it LOGS. DEVELOPING is silent by design, so a daughter waiting out her five minutes looked
+        // identical to one stuck for good, which is why this took a whole session to see.
+        if (!announcedIndependence) {
+            announcedIndependence = true;
+            releaseFromMotherHive();
+        }
+
         switch (phase) {
             case DEVELOPING -> tickDeveloping();
-            case LOCATION -> tickLocation();
+            // \u2b50 Oct 3 - [stated] no digging for 5 minutes after she is freed, released or arrives, outside a
+            // hive's
+            // slab. The phase simply waits; her dig sensor is gated the same way (LocationMoveSensors).
+            case LOCATION -> {
+                if (com.alien.common.gameplay.hive.lifecycle.QueenCaptivity.isGraceBlocking(queen)) {
+                    if (queen.isDigging()) {
+                        queen.setDigging(false);
+                    }
+                } else {
+                    tickLocation();
+                }
+            }
             case HIBERNATION -> tickHibernation();
             case FOUNDING_HANDOFF -> { /* inert */ }
+        }
+    }
+
+    /**
+     * Drops the membership of the hive that raised her, so the founding rules treat her as her own queen.
+     * <p>
+     * ⚠ MEMBERSHIP ONLY - her lineage, genes and variant are untouched. She is still her mother's daughter; she is
+     * simply no longer counted among that location's members, so nothing treats her as settled and the spacing rules
+     * apply to her the way they would to any founding queen.
+     * </p>
+     * <p>
+     * ⚠ A queen who FOUNDED the location she is in is left alone: she is established, not a daughter waiting to leave,
+     * and isAlreadyEstablished has already handed her off before this runs.
+     * </p>
+     */
+    private void releaseFromMotherHive() {
+        if (!(queen.level() instanceof ServerLevel)) {
+            return;
+        }
+
+        var uuid = queen.getUUID();
+        var member = com.blib.api.common.faction.v1.FactionMember.entity(queen);
+        var released = false;
+
+        for (var factionId : new java.util.ArrayList<>(Alien.MOD.factions().getFactionIds(uuid))) {
+            // ⚠ HIVE MEMBERSHIP ONLY - HER LINEAGE STAYS. She is still her mother's daughter, still the same variant,
+            // still carries the family's genes; she simply stops being counted among that LOCATION's members, so
+            // nothing treats her as settled and the founding rules apply to her as they would to any new queen.
+            if (!com.alien.common.gameplay.hive.id.HiveLocationIds.isHiveLocationId(factionId)) {
+                continue;
+            }
+
+            var faction = Alien.MOD.factions().get(factionId);
+            if (faction == null) {
+                continue;
+            }
+
+            // ⚠ NO FOUNDER CHECK NEEDED HERE. isAlreadyEstablished() runs earlier in tick() and hands a queen who
+            // owns a live location straight to FOUNDING_HANDOFF, so by the time this runs she demonstrably founded
+            // nothing - she is a daughter standing in someone else's hive.
+
+            faction.membership().removeMember(member);
+            released = true;
+        }
+
+        if (released && !queen.isPlayerPlaced()) {
+            raisedByHive = true;
+        }
+
+        if (released) {
+            Alien.LOGGER.info(
+                "Queen lifecycle: {} was raised inside another hive and is now her own queen - developing for {}s"
+                    + " before she looks for a site.",
+                uuid,
+                developingTicksRemaining / 20
+            );
         }
     }
 
@@ -373,6 +538,10 @@ public class QueenLifecyclePhaseManager implements NBTSerializable {
         if (!isEnabled()) {
             return false;
         }
+        // Oct 3 - same gate as the join itself, asked first so a refusal changes nothing (no wake, no LOCATION).
+        if (!com.alien.common.gameplay.hive.lifecycle.QueenCaptivity.mayJoinHive(queen)) {
+            return false;
+        }
         var faction = Alien.MOD.factions().get(location.lineageFactionId());
         if (
             faction == null
@@ -383,13 +552,53 @@ public class QueenLifecyclePhaseManager implements NBTSerializable {
         }
         com.alien.common.gameplay.hive.faction.LocationMembership.join(location, queen);
         queen.isHibernating.set(false);
-        phase = QueenLifecyclePhase.FOUNDING_HANDOFF;
+
+        // 🚨 SHE NEEDS A SITE, NOT JUST A PHASE. This used to drop her straight into FOUNDING_HANDOFF with anchor
+        // STILL NULL - and the handoff phase does nothing but wait for a site that was never chosen. The comment
+        // above says "so she founds her own location under that lineage"; without an anchor she founds nothing and
+        // stands where she was adopted, forever.
+        //
+        // ⚠⚠ REPORTED REPEATEDLY as "daughter queens go out and sit in the middle of nowhere without creating a hive
+        // around y level 60". A live diag showed it exactly: phase=FOUNDING_HANDOFF, readyToFound=true, anchor=null.
+        //
+        // ⭐ Sending her back through LOCATION is the fix rather than anchoring her here: LOCATION picks a chunk that
+        // respects spacing from the lineage's existing hives, commits a depth, and digs. Anchoring her on the spot
+        // would just found a second hive inside the one that adopted her, which Rule 1 refuses anyway.
+        enterLocation();
+        announceAdoption();
         Alien.LOGGER.info(
             "Queen lifecycle: freed queen {} adopted by lineage {} as a daughter queen — rescue debt honored",
             queen.getUUID(),
             location.lineageFactionId()
         );
         return true;
+    }
+
+    /**
+     * ⭐ SUCCESSION: this queen takes over a hive that ALREADY EXISTS, rather than going off to dig her own.
+     * <p>
+     * A queen pulled out of the bank to replace a killed one is spawned inside a standing hive with rooms, vents and an
+     * eggsack site already carved. Left to the ordinary lifecycle she would walk out of it, pick a weighted-Y anchor
+     * somewhere else and start a SECOND hive - which is why this exists: it drops her straight into
+     * {@link QueenLifecyclePhase#FOUNDING_HANDOFF}, the terminal inert state meaning "the established systems own her
+     * now", with no locating, no dig and no hibernation.
+     * </p>
+     * <p>
+     * ⚠ Deliberately NOT {@code tryAdoptIntoLineage}, which looks similar. That one is the wild-rescue recipe and
+     * refuses at the 8-location adoption cap - a rule about taking in STRANGERS. A hive replacing its own queen is not
+     * gaining a location and must never be refused for owning too many.
+     * </p>
+     */
+    public void assumeVacantThrone(com.alien.common.gameplay.hive.location.HiveLocation location) {
+        com.alien.common.gameplay.hive.faction.LocationMembership.join(location, queen);
+        queen.isHibernating.set(false);
+        this.anchor = location.centerPos();
+        this.phase = QueenLifecyclePhase.FOUNDING_HANDOFF;
+        Alien.LOGGER.info(
+            "Queen lifecycle: {} has taken the vacant throne of location {} - no relocation, no hibernation",
+            queen.getUUID(),
+            location.id()
+        );
     }
 
     /**
@@ -448,6 +657,67 @@ public class QueenLifecyclePhaseManager implements NBTSerializable {
         );
     }
 
+    /**
+     * ⭐⭐ STOP TRYING. Used when the mode has already decided WHERE she founds and that answer was refused.
+     * <p>
+     * ⚠⚠ THE ALTERNATIVE WAS AN INFINITE LOOP. In build-free "founds where placed" mode {@code enterLocation} commits
+     * to her current position, so {@code restartLocationPhase} hands her straight back to the same refused spot. A live
+     * log caught 128 rounds of it in one session, and because she never completes the handoff she never establishes and
+     * NEVER LAYS AN EGG.
+     * </p>
+     * <p>
+     * ⚠ Logged ONCE per queen, not once per attempt: the whole problem was a message a second saying the same thing.
+     * She keeps her anchor and simply stops re-entering the phase, so a mapmaker can move her or clear the neighbouring
+     * hive and nothing has been destroyed in the meantime.
+     * </p>
+     */
+    public void haltFoundingInPlace(String reason) {
+        // 🚨🚨 THE FIRST VERSION OF THIS ONLY SILENCED THE LOG. Nothing read the flag, so the settlement detector
+        // banked its timer again, refused her again, re-sent the "This hive still lives" line to every nearby player
+        // and kept the founding dust running - forever. [stated, relayed] "every 5 seconds in my freebuild hive and
+        // the queen is only making black particles and no eggsack." HiveManager now reads isHoldingHaltedFounding()
+        // and stands her down for HALT_RETRY_TICKS between attempts.
+        foundingHaltRetryTick = queen.level().getGameTime() + HALT_RETRY_TICKS;
+        if (foundingInPlaceHalted) {
+            return;
+        }
+        foundingInPlaceHalted = true;
+        Alien.LOGGER.warn(
+            "Queen lifecycle: {} cannot found where she was placed - {}. She will wait here rather than searching;"
+                + " move her or remove the neighbouring hive.",
+            queen.getUUID(),
+            reason
+        );
+    }
+
+    /** True once she has been refused in place at least once - the refusal line has already been shown. */
+    public boolean isFoundingInPlaceHalted() {
+        return foundingInPlaceHalted;
+    }
+
+    /**
+     * True while a halted queen is inside her quiet window: no settlement timer, no founding dust, no chat line. Once
+     * the window lapses she gets ONE quiet re-try, so clearing the neighbour (or an emptied throne) is picked up.
+     */
+    public boolean isHoldingHaltedFounding() {
+        return foundingInPlaceHalted && queen.level().getGameTime() < foundingHaltRetryTick;
+    }
+
+    /** She founded or took a throne - the refusal no longer describes her. */
+    public void clearFoundingHalt() {
+        foundingInPlaceHalted = false;
+        foundingHaltRetryTick = 0L;
+    }
+
+    /** ⚠ Not persisted - a reload re-tries once, which is the right amount of optimism after a world change. */
+    private boolean foundingInPlaceHalted;
+
+    /** Game tick at which a halted queen may try once more. Transient, like the flag. */
+    private long foundingHaltRetryTick;
+
+    /** One minute between quiet re-tries for a halted queen. */
+    private static final long HALT_RETRY_TICKS = 1200L;
+
     public void restartLocationPhase() {
         if (!isEnabled()) {
             return;
@@ -456,8 +726,98 @@ public class QueenLifecyclePhaseManager implements NBTSerializable {
         enterLocation();
     }
 
+    /**
+     * ⭐⭐⭐ SEND HER DOWN TO A SPECIFIC ANCHOR AND MAKE HER DIG TO IT.
+     * <p>
+     * ⚠⚠ THIS IS WHAT WAS MISSING FROM FORCED FOUNDING. {@code ForcedEmpressFounding} picked a shallow anchor and
+     * called {@code foundNewLineage} straight away, so the LOCATION appeared at depth while she stood where the player
+     * fed her. She never dug, and the descent hook left for the animations was an empty method. [stated] the whole
+     * point was that "she would basically dig straight down and do the carving/building".
+     * </p>
+     * <p>
+     * ⭐ THE DIGGING ITSELF ALREADY EXISTS AND IS NOT DUPLICATED HERE. {@code LocationMoveActions} runs only during the
+     * LOCATION phase - windup, {@code setDigging(true)}, then travel to {@code anchor}. Committing the anchor and
+     * entering that phase is the whole job; the existing action carries her the rest of the way and plays the clips.
+     * </p>
+     * <p>
+     * ⚠ The caller founds when she ARRIVES, not when she is sent - see {@code FOUNDING_HANDOFF}.
+     * </p>
+     */
+    /**
+     * Drops her straight into the handoff at her current block, from any earlier phase.
+     * <p>
+     * The poison jelly block's mechanism. Same shape as {@link #beginForcedDescent}, aimed at where she is rather than
+     * at a target below her: anchor here, phase terminal, sleep clock cleared.
+     * </p>
+     * <p>
+     * ⚠ THE DIG FLAG AND THE SETTLEMENT TIMER BOTH HAVE TO GO. She may be mid-descent (noPhysics is on and the dig
+     * action is running) or mid-sleep, and the settlement detector banks time independently of the phase machine -
+     * leaving either behind means a queen who founds and then keeps digging, or founds twice.
+     * </p>
+     */
+    /** The ordinary-play "found where standing" config flag. Separate from the build-free one - see HiveConfig. */
+    public static boolean foundsWhereStanding() {
+        return HiveLocationRegistry.INSTANCE.config().queenFoundsWhereStanding();
+    }
+
+    public void forceHandoffWhereStanding() {
+        this.anchor = queen.blockPosition();
+        this.phase = QueenLifecyclePhase.FOUNDING_HANDOFF;
+        this.hibernationTicksRemaining = 0;
+        this.hibernationActivity = HibernationActivity.ASLEEP;
+        this.disturbanceCalmTicks = 0;
+        queen.isHibernating.set(false);
+        queen.setDigging(false);
+        com.alien.common.gameplay.hive.lifecycle.QueenSettlementDetector.forget(queen.getUUID());
+
+        Alien.LOGGER.info(
+            "Queen lifecycle: {} forced into FOUNDING_HANDOFF where standing at {}",
+            queen.getUUID(),
+            anchor
+        );
+    }
+
+    public void beginForcedDescent(BlockPos target) {
+        this.anchor = target;
+        this.phase = QueenLifecyclePhase.LOCATION;
+        this.hibernationTicksRemaining = 0;
+        queen.isHibernating.set(false);
+        Alien.LOGGER.info(
+            "Queen lifecycle: {} beginning a FORCED descent to {} - she digs down from here",
+            queen.getUUID(),
+            target
+        );
+    }
+
     /** Reads her situation and commits a hive anchor (chunk-center XZ + weighted target Y), then enters LOCATION. */
     private void enterLocation() {
+        // \u2b50\u2b50 BUILD-FREE + FOUND-WHERE-PLACED: she founds ON THE SPOT, exactly like the End branch below and
+        // like the world's first wild queen. The mapmaker put her in the reactor room on purpose; locating an anchor
+        // and digging to it would move her out of the set piece - and in a mode with no carving she could not dig
+        // there anyway, so she would stand in LOCATION forever.
+        //
+        // \u26a0 Gated on the SEPARATE queenFoundsWherePlaced flag, not on build-free alone: an open-world player can
+        // run build-free and still want queens that travel and settle on their own, just without carving.
+        // ⭐ TWO FLAGS REACH THIS BRANCH. BuildFreeMode.queenFoundsWherePlaced is the mapmaker's switch and does
+        // nothing unless build-free is on; queenFoundsWhereStanding is the ordinary-play version, added because
+        // [stated] "someone was asking if we can have a config setting to let queens naturally found where they are
+        // standing." Same behaviour, different audiences, and they must stay separate - the build-free one also
+        // zeroes daughter slots, which would be wrong here.
+        if (
+            (com.alien.common.gameplay.hive.config.BuildFreeMode.queenFoundsWherePlaced() || foundsWhereStanding())
+                && queen.level() instanceof ServerLevel
+        ) {
+            this.anchor = queen.blockPosition();
+            this.phase = QueenLifecyclePhase.FOUNDING_HANDOFF;
+            queen.isHibernating.set(false);
+            Alien.LOGGER.info(
+                "Queen lifecycle: {} entering FOUNDING_HANDOFF in place (founds where standing) at {}",
+                queen.getUUID(),
+                anchor
+            );
+            return;
+        }
+
         // END-STYLE: no digging - there is only void below the island. She founds WHERE SHE STANDS, the same shape
         // the world's first wild queen uses (anchor in place, straight to the handoff), skipping LOCATION and the
         // hibernation that follows it entirely. The player placed her deliberately; siting the island IS the
@@ -476,6 +836,24 @@ public class QueenLifecyclePhaseManager implements NBTSerializable {
             );
             return;
         }
+        // ⭐⭐ FLAT WORLDS: NO DIGGING, EVER. [stated] Sep 23 "on flat worlds queens should not dig like at all." A
+        // superflat world has a few blocks of dirt over one layer of bedrock - there is nothing to dig into, and the
+        // dig ends pressed against bedrock (a field log caught one queen falling out of the world from there). She
+        // stays exactly where she is and goes straight into her sleep IN PLACE, so every sleep rule still holds:
+        // a hive-raised daughter skips it, a hand-placed queen sleeps one day, a natural wild queen three.
+        if (
+            queen.level() instanceof ServerLevel flatCheckLevel
+                && com.alien.common.gameplay.hive.lifecycle.SpreadZoneCheck.isFlatWorld(flatCheckLevel)
+        ) {
+            this.anchor = queen.blockPosition();
+            if (queen.isDigging()) {
+                queen.setDigging(false);
+            }
+            Alien.LOGGER.info("Queen lifecycle: {} is on a flat world - no dig, sleeping in place at {}", queen.getUUID(), anchor);
+            enterHibernation();
+            return;
+        }
+
         var chunk = pickAnchorChunk();
         var targetY = pickTargetY();
         // She digs down or settles level - never rises. If she is already at or below the rolled depth
@@ -490,7 +868,8 @@ public class QueenLifecyclePhaseManager implements NBTSerializable {
             queen.level() instanceof ServerLevel foundingLevel
                 && foundingLevel.isLoaded(chunk.getWorldPosition())
         ) {
-            var probe = chunk.getMiddleBlockPosition(targetY);
+            var start = chunk.getMiddleBlockPosition(targetY);
+            var probe = start;
             int maxY = queen.blockPosition().getY();
             while (
                 probe.getY() < maxY
@@ -500,10 +879,53 @@ public class QueenLifecyclePhaseManager implements NBTSerializable {
             ) {
                 probe = probe.above();
             }
+            // \u2b50 Oct 3 - OUT OF THE WATER GOES DOWN, NOT UP, WHEN UP IS ILLEGAL. Climbing out of a deep lava lake a
+            // few
+            // blocks is right; climbing out of an OCEAN walks the anchor to the sea surface, a site SpreadZoneCheck
+            // always refuses - she re-picks around herself, lands in the same sea, and loops. If the climb ended
+            // somewhere the founding rules would refuse, search DOWN through the water for the first dry pocket in the
+            // seabed rock instead (deeper is always legal by the depth rule).
+            //
+            // \u26a0 WATER ONLY, AND ONLY UNDER A SKY. This is the ocean case. In a ceiling dimension the liquid is a
+            // lava sea:
+            // searching down through it would anchor a non-fireproof queen a block under the lava, and she would have
+            // to
+            // dig through it - so there the old climb stands, and Rule 0 sends her elsewhere as it always did.
+            var profile = com.alien.common.gameplay.hive.dimension.DimensionHiveProfiles.get(foundingLevel);
+            var waterAtAnchor = foundingLevel.getFluidState(start).is(net.minecraft.tags.FluidTags.WATER)
+                || foundingLevel.getFluidState(start.above()).is(net.minecraft.tags.FluidTags.WATER);
+            if (
+                waterAtAnchor
+                    && profile.surfaceMode() == com.alien.common.gameplay.hive.dimension.DimensionHiveProfiles.SurfaceMode.SKY_SURFACE
+                    && com.alien.common.gameplay.hive.lifecycle.SpreadZoneCheck.isUnfitFoundingSite(foundingLevel, probe)
+                    && !com.alien.common.gameplay.hive.lifecycle.SpreadZoneCheck.isFlatWorld(foundingLevel)
+            ) {
+                var lavaSafety = com.alien.common.gameplay.hive.dimension.DimensionHiveProfiles.needsLavaSafety(
+                    profile,
+                    queen.getVariant()
+                );
+                var minY = foundingLevel.getMinBuildHeight() + 6;
+                for (var down = start; down.getY() >= minY; down = down.below()) {
+                    if (
+                        !foundingLevel.getBlockState(down).liquid()
+                            && !foundingLevel.getBlockState(down.above()).liquid()
+                            && !foundingLevel.getBlockState(down.below()).liquid()
+                            && !com.alien.common.gameplay.hive.lifecycle.SpreadZoneCheck.isUnfitFoundingSite(foundingLevel, down)
+                            && !(lavaSafety
+                                && !com.alien.common.gameplay.hive.dimension.DimensionHiveProfiles.isLavaSafe(foundingLevel, down, 2))
+                    ) {
+                        probe = down;
+                        break;
+                    }
+                }
+            }
             targetY = probe.getY();
         }
         this.anchor = chunk.getMiddleBlockPosition(targetY);
         this.phase = QueenLifecyclePhase.LOCATION;
+
+        // A fresh site gets a fresh budget - the previous failures belonged to the anchor we just abandoned.
+        blockedDigAttempts = 0;
 
         Alien.LOGGER.info(
             "Queen lifecycle: {} entering LOCATION — committed anchor chunk {} target Y {} (anchor {})",
@@ -515,6 +937,15 @@ public class QueenLifecyclePhaseManager implements NBTSerializable {
     }
 
     private void tickLocation() {
+        // A queen already mid-dig on a flat world when this rule arrived (or saved mid-dig) stops where she is.
+        if (
+            queen.level() instanceof ServerLevel flatCheckLevel
+                && com.alien.common.gameplay.hive.lifecycle.SpreadZoneCheck.isFlatWorld(flatCheckLevel)
+        ) {
+            enterLocation();
+            return;
+        }
+
         if (anchor == null) {
             // Defensive: a LOCATION-phase queen with no committed anchor (partial/legacy state) recomputes one.
             enterLocation();
@@ -546,8 +977,18 @@ public class QueenLifecyclePhaseManager implements NBTSerializable {
         if (queen.isPlayerPlaced()) {
             return false;
         }
+        if (raisedByHive) {
+            return true;
+        }
         for (var factionId : com.alien.Alien.MOD.factions().getFactionIds(queen.getUUID())) {
             if (com.alien.common.gameplay.hive.id.HiveLocationIds.isHiveLocationId(factionId)) {
+                return true;
+            }
+            // A daughter saved BEFORE the raisedByHive flag existed has already lost her location membership, but
+            // her LINEAGE membership is never touched by the release. Wild queens are excluded by wildSpawned (they
+            // only ever gain a lineage by founding or adoption, both of which hand off without sleeping), and
+            // player-placed queens by the check above - so a lineage member here is a hive-raised daughter.
+            if (!wildSpawned && com.alien.common.gameplay.hive.id.LineageIds.isLineageId(factionId)) {
                 return true;
             }
         }
@@ -578,7 +1019,9 @@ public class QueenLifecyclePhaseManager implements NBTSerializable {
         // mother's location membership across the molt, so she already belongs to a hive; a wild or hand-spawned
         // queen belongs to nothing. Only the dispatched one skips - she was raised in a defended chamber and left
         // with orders, which is the whole reason she does not need to lie dormant first.
-        this.hibernationTicksRemaining = wasDispatchedByAHive() ? 0 : HIBERNATION_DURATION_TICKS;
+        this.hibernationTicksRemaining = wasDispatchedByAHive()
+            ? 0
+            : queen.isPlayerPlaced() ? PLACED_HIBERNATION_DURATION_TICKS : HIBERNATION_DURATION_TICKS;
         this.hibernationActivity = HibernationActivity.ASLEEP;
         this.disturbanceCalmTicks = 0;
         queen.isHibernating.set(true);
@@ -619,6 +1062,23 @@ public class QueenLifecyclePhaseManager implements NBTSerializable {
             }
         }
 
+        // A daughter who went to sleep under the old rule is holding a full 72,000-tick countdown she was never meant
+        // to
+        // have. Wake her the next time she ticks rather than make every existing world wait out the hour.
+        if (hibernationTicksRemaining > 0 && !wildSpawned && wasDispatchedByAHive()) {
+            Alien.LOGGER.info(
+                "Queen lifecycle: {} is a hive-raised daughter - skipping the {} tick sleep she should never have had",
+                queen.getUUID(),
+                hibernationTicksRemaining
+            );
+            hibernationTicksRemaining = 0;
+        }
+
+        // A hand-placed queen that went to sleep under the old 3-day rule keeps only what is left of one day.
+        if (queen.isPlayerPlaced() && hibernationTicksRemaining > PLACED_HIBERNATION_DURATION_TICKS) {
+            hibernationTicksRemaining = PLACED_HIBERNATION_DURATION_TICKS;
+        }
+
         if (hibernationTicksRemaining > 0) {
             hibernationTicksRemaining--;
             return;
@@ -646,6 +1106,11 @@ public class QueenLifecyclePhaseManager implements NBTSerializable {
      */
     private boolean tryWildAdoption() {
         if (!(queen.level() instanceof ServerLevel serverLevel)) {
+            return false;
+        }
+        // Oct 3 - no adoption during her grace outside a slab. LocationMembership.join would refuse anyway; asking
+        // here stops her being woken and sent off as "adopted" by a join that never happened.
+        if (!com.alien.common.gameplay.hive.lifecycle.QueenCaptivity.mayJoinHive(queen)) {
             return false;
         }
 
@@ -689,7 +1154,12 @@ public class QueenLifecyclePhaseManager implements NBTSerializable {
 
             com.alien.common.gameplay.hive.faction.LocationMembership.join(location, queen);
             queen.isHibernating.set(false);
-            phase = QueenLifecyclePhase.FOUNDING_HANDOFF;
+
+            // 🚨 SAME MISSING ANCHOR AS tryAdoptIntoLineage. "waking to found" needs a SITE; the handoff phase only
+            // waits for one. Straight to FOUNDING_HANDOFF with anchor==null leaves her standing where she was
+            // adopted, which is the "daughter queens sit in the middle of nowhere at y 60" report.
+            enterLocation();
+            announceAdoption();
             Alien.LOGGER.info(
                 "Queen lifecycle: wild queen {} adopted by lineage {} — waking to found",
                 queen.getUUID(),
@@ -769,6 +1239,19 @@ public class QueenLifecyclePhaseManager implements NBTSerializable {
                 .withStyle(com.alien.common.data.AlienVariantTypes.getFor(queen).chatColor()),
             true
         );
+    }
+
+    /**
+     * Both adoption routes announce identically, so they share one call.
+     * <p>
+     * ⚠ Fired AFTER the membership join and the phase handoff, so the line is only ever heard for an adoption that
+     * actually took — the cap and faction checks above both bail before reaching it.
+     * </p>
+     */
+    private void announceAdoption() {
+        if (queen.level() instanceof ServerLevel adoptionLevel) {
+            com.alien.common.gameplay.hive.growth.DaughterQueenAnnouncements.announceAdopted(adoptionLevel, queen);
+        }
     }
 
     /** Sends a wild-queen message to every player within {@link #WILD_AWAKENING_BROADCAST_RANGE} blocks of her. */
@@ -869,6 +1352,27 @@ public class QueenLifecyclePhaseManager implements NBTSerializable {
                 String.format("%.1f", queen.getHealth()),
                 String.format("%.1f", queen.getMaxHealth())
             );
+            // ⭐⭐⭐ A PLAYER WHO CROSSES THE THRESHOLD ENDS THE HIBERNATION FOR GOOD.
+            //
+            // [stated] testers reported "attacking a queen sleeping makes her wake up attack then go back to sleep",
+            // and [stated] the fix should be "player damage crossing a threshold" rather than any hit at all.
+            //
+            // ⚠⚠ THE THRESHOLD IS DELIBERATELY UNCHANGED. She still has to lose DISTURBANCE_THRESHOLD health faster
+            // than she regenerates it - a single poke moves nothing, because regeneration repays the debt on its own.
+            // What changes is only what happens AFTER that bar is genuinely emptied: an ambient mob that manages it
+            // still just gets a fight and she resettles, but a PLAYER who does gets a hive.
+            //
+            // ⚠ Making ANY player hit wake her permanently would have deleted the whole mechanic - one arrow would
+            // force every wild queen in the world to found, which is the opposite of the patience hibernation exists
+            // to impose and the same impatience the forced-empress feature charges a royal jelly block for.
+            if (queen.wasDisturbedByPlayer() && phase == QueenLifecyclePhase.HIBERNATION) {
+                hibernationTicksRemaining = 0;
+                Alien.LOGGER.info(
+                    "Queen lifecycle: {} was driven off her rest by a player - she will found rather than resettle",
+                    queen.getUUID()
+                );
+            }
+
             rouse(disturbanceAccumulator, "health lost");
             return true;
         }
@@ -928,6 +1432,11 @@ public class QueenLifecyclePhaseManager implements NBTSerializable {
         disturbanceAccumulator = 0.0F;
         lastKnownHealth = queen.getHealth();
         lastKnownMaxHealth = queen.getMaxHealth();
+
+        // ⚠ THE PLAYER FLAG CLEARS WITH THE BAR, and it has to. The bar is what a player must fill to move her; if
+        // the flag outlived it, a queen poked once and left alone for days would be evicted the moment a skeleton
+        // happened to finish the job. They are two halves of the same "somebody is currently attacking her" state.
+        queen.clearDisturbedByPlayer();
     }
 
     private void rouse(float amount, String reason) {
@@ -1054,14 +1563,72 @@ public class QueenLifecyclePhaseManager implements NBTSerializable {
      * pass, so she settles where she stands. Retargets the anchor to her current block, which trips the normal arrival
      * flow (pocket-clear + hand-off) on the next tick.
      */
-    public void onDigBlocked() {
-        if (phase == QueenLifecyclePhase.LOCATION) {
-            this.anchor = queen.blockPosition();
+    public void onDigBlocked(BlockPos blocker) {
+        if (phase != QueenLifecyclePhase.LOCATION) {
+            return;
+        }
+
+        // !!! THIS SAYS WHICH BLOCK STOPPED HER, AND NOTHING USED TO. A live log showed a queen commit to Y -32 and
+        // hibernate at Y 55 - eighty-seven blocks short, treated as an arrival - and there was no way to tell what
+        // she hit. isDiggable refuses three things (a block entity, an unbreakable block, anything in
+        // XENOMORPH_IMMUNE) and they want very different answers, so the next report should not have to guess.
+        var state = queen.level().getBlockState(blocker);
+        Alien.LOGGER.info(
+            "Queen lifecycle: {} stopped digging at {} - {} is undiggable (blockEntity={}, unbreakable={}, immune={}). "
+                + "Committed anchor was {}; she settles {} blocks short.",
+            queen.getUUID(),
+            blocker,
+            net.minecraft.core.registries.BuiltInRegistries.BLOCK.getKey(state.getBlock()),
+            state.hasBlockEntity(),
+            state.getDestroySpeed(queen.level(), blocker) < 0.0F,
+            state.is(com.alien.common.registry.tag.AlienBlockTags.XENOMORPH_IMMUNE),
+            anchor,
+            anchor == null ? -1 : queen.blockPosition().getY() - anchor.getY()
+        );
+
+        // 🚨🚨 BEING BLOCKED IS NOT ARRIVING. This used to do `this.anchor = queen.blockPosition()`, which threw away
+        // the anchor she had COMMITTED to and declared wherever she got stuck to be her hive site.
+        //
+        // ⚠⚠ THAT CREATED AN ENDLESS LOOP, caught in full by a live log: she commits to chunk [-12,-12] at
+        // {x=-184, z=-184}, digs a few blocks, hits an avp_alien:resin_web (which is XENOMORPH_IMMUNE, so she can
+        // never break it), has her anchor rewritten to {x=12, z=-44} - 196 blocks from where she was going -
+        // hibernates there, wakes, is refused because that chunk is already claimed, re-picks the SAME distant
+        // anchor, hits the SAME web, and repeats forever. Reported as "she will try to dig then rehibernate".
+        //
+        // ⭐ The anchor is now kept. A blocked dig is a routing problem, not a destination: she stops digging so the
+        // navigator can walk around the obstruction and resume from the other side. Her committed site is unchanged.
+        blockedDigAttempts++;
+        queen.setDigging(false);
+
+        // ⚠ AFTER ENOUGH FAILURES THE SITE ITSELF IS THE PROBLEM - typically because the only route to it runs
+        // through another hive's resin. Re-pick rather than grind: enterLocation chooses a fresh chunk that respects
+        // spacing, and the counter resets with it.
+        if (blockedDigAttempts >= MAX_BLOCKED_DIG_ATTEMPTS) {
+            Alien.LOGGER.info(
+                "Queen lifecycle: {} could not reach her site after {} blocked digs - choosing a different one",
+                queen.getUUID(),
+                blockedDigAttempts
+            );
+            blockedDigAttempts = 0;
+            this.anchor = null;
+            enterLocation();
         }
     }
 
     /** Carves a small breathable pocket around the anchor (floor preserved), skipping air and undiggable blocks. */
     private void clearArrivalPocket() {
+        clearArrivalPocket(queen, anchor);
+    }
+
+    /**
+     * As above, at an arbitrary position.
+     * <p>
+     * ⚠⚠ PUBLIC BECAUSE THE SETTLE PATH NEEDS IT TOO. This carve only ever ran from {@code tickLocation}, i.e. for a
+     * queen who walked to a committed anchor — so a queen who SETTLED WHERE SHE STOOD was never dug out and could found
+     * while sealed in terrain. {@code HiveManager} now calls this on that path as well. [stated] "when shes in solid
+     * blocks shes supposed to dig out a cube of air around her."
+     */
+    public static void clearArrivalPocket(Queen queen, @Nullable BlockPos anchor) {
         if (anchor == null || !(queen.level() instanceof ServerLevel serverLevel)) {
             return;
         }
@@ -1234,6 +1801,28 @@ public class QueenLifecyclePhaseManager implements NBTSerializable {
         return out;
     }
 
+    /** Ends HIBERNATION for good because she was captured - the same wake as the end of her sleep clock. */
+    private void wakeFromCapture() {
+        var wasAsleep = phase == QueenLifecyclePhase.HIBERNATION;
+        hibernationTicksRemaining = 0;
+        hibernationActivity = HibernationActivity.ASLEEP;
+        queen.isHibernating.set(false);
+        if (wasAsleep) {
+            phase = QueenLifecyclePhase.FOUNDING_HANDOFF;
+            Alien.LOGGER.info("Queen lifecycle: {} was captured in her sleep - woken, hibernation over", queen.getUUID());
+        }
+    }
+
+    /**
+     * The weighted founding depth every queen on foot digs to, rolled for this queen - shared with
+     * {@code DaughterHiveSiting} so a convoy-delivered daughter is sited in the same band as a queen who dug there.
+     *
+     * @return a target Y in this dimension's founding band
+     */
+    public int rollFoundingTargetY() {
+        return pickTargetY();
+    }
+
     private int pickTargetY() {
         var random = queen.getRandom();
         var roll = random.nextInt(COMMON_WEIGHT + RARE_WEIGHT + VERY_RARE_WEIGHT);
@@ -1251,6 +1840,24 @@ public class QueenLifecyclePhaseManager implements NBTSerializable {
         if (queen.level() instanceof ServerLevel bandLevel) {
             var profile = com.alien.common.gameplay.hive.dimension.DimensionHiveProfiles.get(bandLevel);
             rolled = com.alien.common.gameplay.hive.dimension.DimensionHiveProfiles.remapFromOverworldBand(rolled, profile);
+
+            // !!! THE BAND IS A PREFERENCE; THE TERRAIN IS THE AUTHORITY. The rolled Y assumes a world whose ground is
+            // above it - on a SUPERFLAT world the surface is around y 4, so the very-rare band (25-45) is OPEN SKY and
+            // she would commit to an anchor in mid-air. Reported for the empress with a screenshot of a hive standing
+            // on legs; her band has the identical flaw.
+            //
+            // ⚠ WORLD_SURFACE, not MOTION_BLOCKING - leaves and fluids must not read as ground. That distinction is
+            // what stopped queens founding on top of forests; see SpreadZoneCheck.isTooShallow.
+            var here = queen.blockPosition();
+            var surface = bandLevel.getHeight(
+                net.minecraft.world.level.levelgen.Heightmap.Types.WORLD_SURFACE,
+                here.getX(),
+                here.getZ()
+            );
+            var deepestAllowed = surface - MIN_TERRAIN_COVER_BLOCKS;
+            var floor = bandLevel.getMinBuildHeight() + 1;
+
+            rolled = deepestAllowed < floor ? floor : Math.max(floor, Math.min(rolled, deepestAllowed));
         }
         return rolled;
     }
@@ -1263,6 +1870,93 @@ public class QueenLifecyclePhaseManager implements NBTSerializable {
      * Whether the queen is already past the front-end: she has an ovipositor, or she is the founder of any live
      * location in her dimension. Resolved by founder UUID across the registry, mirroring {@code FoundingMoveSensors}.
      */
+    /** Consecutive ticks she has been observed homeless. Transient: a reload simply restarts the count. */
+    private int homelessTicks;
+
+    /**
+     * Grace before a homeless established queen is re-armed. Deliberately SHORTER than {@code settlementTicks} (200) so
+     * the re-arm always wins the race against her founding where she stands, while still absorbing any transient blip
+     * in the location registry.
+     */
+    private static final int HOMELESS_REARM_GRACE_TICKS = 60;
+
+    /** True once an established queen has held no live location for {@link #HOMELESS_REARM_GRACE_TICKS}. */
+    private boolean shouldRearmAfterHiveLoss() {
+        // A captive is not homeless, she is held. Digging while chained, inhibited or downed is never right.
+        if (com.alien.common.gameplay.hive.lifecycle.QueenCaptivity.isHeld(queen)) {
+            homelessTicks = 0;
+            return false;
+        }
+        if (!queen.hasOvipositor() || ownsLiveLocation()) {
+            homelessTicks = 0;
+            return false;
+        }
+        homelessTicks++;
+        return homelessTicks >= HOMELESS_REARM_GRACE_TICKS;
+    }
+
+    /**
+     * Puts a queen who has lost her hive back at the start of the founding sequence: she picks a fresh weighted-Y
+     * anchor and digs to it, exactly as she did the first time.
+     * <p>
+     * ⚠ THE EGGSACK IS DROPPED FIRST, and it has to be. It is what makes {@code isAlreadyEstablished()} true, so
+     * leaving it on would send her straight back to FOUNDING_HANDOFF on the very next tick - and a queen dragging a
+     * sack down a fresh dig shaft was never the intent anyway. The sack lingers on the ground for its own 120s and her
+     * 180s regrowth cooldown starts on its own, so she raises a new one once the new chamber is hers.
+     * </p>
+     * <p>
+     * ⚠ The settlement timer is FORGOTTEN too. It banks out-of-combat time independently of the phase machine, so
+     * without this she would arrive at her new anchor with the clock already most of the way run and found early.
+     * </p>
+     */
+    /**
+     * ⚠ PUBLIC FOR A SECOND CALLER: an empress taking a hive DISPLACES its queen, and a displaced ruler is in exactly
+     * the state this method exists for — she has a lifecycle but no longer a hive. Reusing it means the succession path
+     * inherits the build-free branch below for free rather than growing its own copy that would forget it.
+     */
+    public void rearmAfterHiveLoss() {
+        homelessTicks = 0;
+        Alien.LOGGER.info(
+            "Queen lifecycle: {} has no hive left - dropping her eggsack and re-entering LOCATION to dig a new one",
+            queen.getUUID()
+        );
+        // \u26a0\u26a0 BUILD-FREE + FOUND-WHERE-PLACED: RE-FOUND ON THE SPOT, DO NOT SEND HER TO DIG.
+        //
+        // The re-arm exists to rescue a queen orphaned by a migration - it drops her back into LOCATION so she picks
+        // an anchor and digs a fresh hive. In a mode with no carving that strands her permanently: LOCATION never
+        // completes, so she wanders with no hive and no way to make one. This is the same trap the daughter-slot
+        // clamp avoids, reached from the other direction.
+        if (com.alien.common.gameplay.hive.config.BuildFreeMode.queenFoundsWherePlaced() || foundsWhereStanding()) {
+            queen.getOvipositorManager().abandonOvipositor();
+            this.anchor = queen.blockPosition();
+            this.phase = QueenLifecyclePhase.FOUNDING_HANDOFF;
+            queen.isHibernating.set(false);
+            Alien.LOGGER.info(
+                "Queen lifecycle: {} lost her hive and re-founds in place (build-free) at {}",
+                queen.getUUID(),
+                anchor
+            );
+            return;
+        }
+
+        queen.getOvipositorManager().abandonOvipositor();
+        com.alien.common.gameplay.hive.lifecycle.QueenSettlementDetector.forget(queen.getUUID());
+        this.anchor = null;
+        restartLocationPhase();
+    }
+
+    /** A registered, living location naming her as founder. The same test {@code isAlreadyEstablished} uses. */
+    private boolean ownsLiveLocation() {
+        var dimension = queen.level().dimension();
+        var founderId = queen.getUUID();
+        for (var location : HiveLocationRegistry.INSTANCE.all()) {
+            if (location.isAlive() && founderId.equals(location.founderId()) && location.dimension().equals(dimension)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     private boolean isAlreadyEstablished() {
         if (queen.hasOvipositor()) {
             return true;
@@ -1286,6 +1980,19 @@ public class QueenLifecyclePhaseManager implements NBTSerializable {
                 compoundTag.getString(PHASE_TAG),
                 QueenLifecyclePhase.DEVELOPING
             );
+        } else {
+            // ⚠⚠ NO PHASE TAG = A PRE-LIFECYCLE SAVE. This is the ONLY place that can tell, and until now nothing
+            // acted on it: Queen.loadedWithoutLifecycleState was read twice by LegacyHiveRecovery and set to true
+            // NOWHERE, so the intended discriminator was dead and the UUID tables were doing all the work alone.
+            //
+            // ⭐ [stated] Sep 28: legacy means "the original avp mod" or "avp_alien 0.1.4 and prior"; 0.2.x is where
+            // new queens appeared. A 0.2.x queen ALWAYS writes this tag, so she can never be caught here - which is
+            // what makes wiring the flag safe rather than a change in who counts as legacy.
+            //
+            // ⚠ Left on DEVELOPING deliberately: the enum has no unset value, so the phase alone can never
+            // distinguish a legacy queen from a new one. THIS FLAG IS THE ONLY SIGNAL. Do not try to infer it from
+            // the phase later.
+            queen.markLoadedWithoutLifecycleState();
         }
 
         if (compoundTag.contains(DEVELOPING_TICKS_REMAINING_TAG)) {
@@ -1299,6 +2006,7 @@ public class QueenLifecyclePhaseManager implements NBTSerializable {
         }
 
         this.wildSpawned = compoundTag.getBoolean(WILD_SPAWNED_TAG);
+        this.raisedByHive = compoundTag.getBoolean(RAISED_BY_HIVE_TAG);
     }
 
     @Override
@@ -1307,6 +2015,7 @@ public class QueenLifecyclePhaseManager implements NBTSerializable {
         compoundTag.putInt(DEVELOPING_TICKS_REMAINING_TAG, developingTicksRemaining);
         compoundTag.putInt(HIBERNATION_TICKS_REMAINING_TAG, hibernationTicksRemaining);
         compoundTag.putBoolean(WILD_SPAWNED_TAG, wildSpawned);
+        compoundTag.putBoolean(RAISED_BY_HIVE_TAG, raisedByHive);
         if (anchor != null) {
             compoundTag.putLong(ANCHOR_TAG, anchor.asLong());
         }

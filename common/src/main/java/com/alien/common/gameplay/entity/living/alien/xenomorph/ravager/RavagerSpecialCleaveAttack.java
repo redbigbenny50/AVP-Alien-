@@ -131,7 +131,18 @@ public final class RavagerSpecialCleaveAttack {
                 }
 
                 if (RavagerAreaAttackUtil.isSmallerThanRavager(ravager, target)) {
-                    target.hurt(damageSource, Float.MAX_VALUE);
+                    // 🚨🚨 NEVER Float.MAX_VALUE. Vanilla's damage pipeline MULTIPLIES and SUBTRACTS the amount
+                    // (armour absorb, magic absorb, absorption hearts), and MAX_VALUE reaches Infinity on the way
+                    // through - after which Infinity minus Infinity is NaN.
+                    //
+                    // ⚠⚠ NaN HEALTH DOES NOT KILL. setHealth clamps with Mth.clamp, and every comparison against
+                    // NaN is false, so the clamp passes it through untouched. isDeadOrDying then tests health <= 0,
+                    // which is ALSO false for NaN - so the player sits at empty hearts, alive and unkillable.
+                    //
+                    // ⭐ A large FINITE value does the same job with no overflow path. Armour caps at 80% reduction,
+                    // so this still lands over a thousand damage on a fully armoured player, and every intermediate
+                    // step stays a real number.
+                    target.hurt(damageSource, com.alien.common.util.LethalDamage.AMOUNT);
                     RavagerHeadDismemberment.tryDismemberHead(
                         target,
                         RavagerHeadDismemberment.knockbackAwayFrom(ravager)

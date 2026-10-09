@@ -53,6 +53,48 @@ public class ResinWebBlock extends Block {
      * actual freeing happens in {@link #onRemove} a moment later - so an explosion or a piston still frees a captive,
      * it just does not pin the blame on anyone.
      */
+    /**
+     * ⭐ Oct 6 - A WEB WITH NOTHING NEXT TO IT FALLS. This block had no support rule at all, so a web whose wall, floor,
+     * vent or neighbour web went away stayed hanging in the air for ever. Now, whenever a neighbour changes, a web with
+     * all six sides open goes too. Webs in a cluster hold each other up (a web next to a web is not alone); a cluster
+     * left floating by the hive's own building, which sends no neighbour updates, is cleared by the room upkeep sweep
+     * (HiveStructureUpkeep.sweepFloatingDecor).
+     */
+    @Override
+    protected @NotNull BlockState updateShape(
+        @NotNull BlockState blockState,
+        @NotNull net.minecraft.core.Direction direction,
+        @NotNull BlockState neighborState,
+        @NotNull net.minecraft.world.level.LevelAccessor level,
+        @NotNull BlockPos blockPos,
+        @NotNull BlockPos neighborPos
+    ) {
+        // Only in a live world: during world generation (a WorldGenRegion) a neighbour read outside the region is an
+        // error, and generated ruins are decorated as authored.
+        if (neighborState.isAir() && level instanceof net.minecraft.world.level.Level && isAlone(level, blockPos)) {
+            return net.minecraft.world.level.block.Blocks.AIR.defaultBlockState();
+        }
+
+        return super.updateShape(blockState, direction, neighborState, level, blockPos, neighborPos);
+    }
+
+    private static boolean isAlone(net.minecraft.world.level.LevelAccessor level, BlockPos blockPos) {
+        for (var side : net.minecraft.core.Direction.values()) {
+            var neighbour = blockPos.relative(side);
+
+            // An unloaded neighbour is never read (that would load it) and counts as support.
+            if (level instanceof net.minecraft.world.level.Level live && !live.isLoaded(neighbour)) {
+                return false;
+            }
+
+            if (!level.getBlockState(neighbour).isAir()) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
     @Override
     public @NotNull BlockState playerWillDestroy(
         @NotNull Level level,

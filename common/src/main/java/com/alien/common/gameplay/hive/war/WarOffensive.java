@@ -139,7 +139,10 @@ public final class WarOffensive {
                 }
                 member.setTarget(null);
                 member.getNavigation().stop();
-                member.teleportTo(home.getX() + 0.5, location.hiveFloorY() + 1, home.getZ() + 0.5);
+                member.teleportTo(home.getX() + 0.5, location.throneFloorY(level) + 1, home.getZ() + 0.5); // Oct 1: was
+                                                                                                           // hiveFloorY
+                                                                                                           // - rock in
+                                                                                                           // build-free
                 recalled++;
             }
         }
@@ -222,7 +225,7 @@ public final class WarOffensive {
             }
         }
         var centre = target.centerPos();
-        return new BlockPos(centre.getX(), target.hiveFloorY() + 1, centre.getZ());
+        return new BlockPos(centre.getX(), target.throneFloorY(level) + 1, centre.getZ()); // Oct 1: was hiveFloorY
     }
 
     /**
@@ -266,7 +269,7 @@ public final class WarOffensive {
             if (attacker.getTarget() != null && attacker.getTarget().isAlive()) {
                 continue; // already busy with something it found itself
             }
-            attacker.getNavigation().moveTo(throne.getX(), target.hiveFloorY() + 1, throne.getZ(), MARCH_SPEED);
+            attacker.getNavigation().moveTo(throne.getX(), target.throneFloorY(level) + 1, throne.getZ(), MARCH_SPEED);
         }
 
         // AND COMMAND THE DEFENCE. Nothing here ever told a defender who to fight - the whole method only ever

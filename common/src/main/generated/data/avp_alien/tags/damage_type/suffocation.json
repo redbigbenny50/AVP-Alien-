@@ -1,0 +1,12 @@
+{
+  "values": [
+    {
+      "id": "ad_astra:oxygen",
+      "required": false
+    },
+    {
+      "id": "stellaris:oxygen",
+      "required": false
+    }
+  ]
+}

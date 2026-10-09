@@ -20,6 +20,70 @@
     {
       "id": "#avp_predator:predators",
       "required": false
+    },
+    {
+      "id": "#gigeresque:gigeresquealiens",
+      "required": false
+    },
+    {
+      "id": "gigeresque:neomorph_spore_pods",
+      "required": false
+    },
+    {
+      "id": "ovomorphosis:xenomorph",
+      "required": false
+    },
+    {
+      "id": "ovomorphosis:runner",
+      "required": false
+    },
+    {
+      "id": "ovomorphosis:chestburster",
+      "required": false
+    },
+    {
+      "id": "ovomorphosis:facehugger",
+      "required": false
+    },
+    {
+      "id": "ovomorphosis:ovomorph",
+      "required": false
+    },
+    {
+      "id": "ad_astra:star_crawler",
+      "required": false
+    },
+    {
+      "id": "ad_astra:zombified_mogler",
+      "required": false
+    },
+    {
+      "id": "ad_astra:zombified_pygro",
+      "required": false
+    },
+    {
+      "id": "ad_astra:corrupted_lunarian",
+      "required": false
+    },
+    {
+      "id": "ad_astra:pygro",
+      "required": false
+    },
+    {
+      "id": "ad_astra:pygro_brute",
+      "required": false
+    },
+    {
+      "id": "ad_astra:martian_raptor",
+      "required": false
+    },
+    {
+      "id": "ad_astra:mogler",
+      "required": false
+    },
+    {
+      "id": "ad_astra:glacian_ram",
+      "required": false
     }
   ]
 }

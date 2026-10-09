@@ -275,6 +275,20 @@ public final class HiveTerritoryAggroTask {
         if (!entity.isAlive() || entity.isRemoved()) {
             return false;
         }
+
+        // 🚨🚨 THE NAME SAYS "NonPlayer" AND THE TAG DISAGREES. avp_alien:hated_by_xenomorphs CONTAINS
+        // minecraft:player, and this predicate feeds a getEntitiesOfClass(LivingEntity.class, ...) sweep - which
+        // includes players. So the careful creative/spectator skip in the player loop above was silently defeated:
+        // the builder was excluded by name and then re-admitted by tag, with NO game-mode check on this path.
+        //
+        // ⚠⚠ REPORTED AS "are you sure its not counting me in creative as an intruder?" - he was right. Waves kept
+        // coming with no findable intruder, and the vent recall could never start its quiet minute because the
+        // observer WAS the incident.
+        //
+        // ⭐ Players are handled once, in the loop above, where the game mode is checked. This path never claims one.
+        if (entity instanceof Player) {
+            return false;
+        }
         return entity.getType().is(AlienEntityTypeTags.HATED_BY_XENOMORPHS)
             || entity.getType().is(AlienEntityTypeTags.XENOMORPH_THREAT_3_HIGH_DANGER);
     }

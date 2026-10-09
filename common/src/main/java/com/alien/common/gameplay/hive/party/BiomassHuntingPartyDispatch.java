@@ -3,7 +3,6 @@ package com.alien.common.gameplay.hive.party;
 import com.alien.Alien;
 import com.alien.common.gameplay.hive.config.HiveConfig;
 import com.alien.common.gameplay.hive.location.HiveLocation;
-import com.alien.common.gameplay.hive.spawning.ReserveSpawnUtil;
 import com.alien.common.registry.tag.AlienEntityTypeTags;
 import com.blib.api.common.entity.v1.EntityReserves;
 import net.minecraft.core.BlockPos;
@@ -11,7 +10,6 @@ import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.Mob;
-import net.minecraft.world.entity.MobSpawnType;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -27,6 +25,13 @@ public final class BiomassHuntingPartyDispatch {
     private BiomassHuntingPartyDispatch() {}
 
     public static void tryRun(MinecraftServer server, HiveLocation location, HiveConfig config) {
+        // ⚠ BUILD-FREE TOGGLE. Biomass hunts are a surface activity for the same reason.
+        //
+        // Gated at the DISPATCH entry rather than deeper in, so a switched-off party type costs nothing at
+        // all - no scan, no vent lookup, no composition drain that has to be refunded.
+        if (com.alien.common.gameplay.hive.config.BuildFreeMode.isEnabled() && !config.buildFreeBiomassSurfacePartiesEnabled()) {
+            return;
+        }
         // Three-day cooldown: a party of this kind is an EVENT, not a conveyor belt. Back-to-back dispatches
         // drained the reserves as fast as the hive could breed them, so the population never settled and
         // never got promoted into warriors or prowlers.
@@ -199,11 +204,11 @@ public final class BiomassHuntingPartyDispatch {
                 var jitterZ = emergePos.getZ() + 0.5 + (level.random.nextDouble() - 0.5) * 2.0;
                 entity.moveTo(jitterX, emergePos.getY(), jitterZ, level.random.nextFloat() * 360.0F, 0.0F);
                 if (entity instanceof Mob mob) {
-                    mob.finalizeSpawn(level, level.getCurrentDifficultyAt(spawnPos), MobSpawnType.MOB_SUMMONED, null);
+                    com.alien.common.gameplay.hive.spawning.ReserveSpawnUtil
+                        .finalizePrepaidSpawn(level, mob, spawnPos);
                     mob.setPersistenceRequired();
                 }
                 level.addFreshEntityWithPassengers(entity);
-                ReserveSpawnUtil.markSpawnedFromReserves(entity);
                 if (entity instanceof com.alien.common.gameplay.entity.living.alien.Alien alien) {
                     alien.setPartyMembership(new PartyMembership(party.sourceLocationId(), party.id()));
                 }

@@ -41,9 +41,11 @@ public final class AlienIrradiationUtil {
 
         switch (alien.getVariant()) {
             case ABERRANT -> {
+                // ⚠ Finite - Float.MAX_VALUE reaches NaN through the damage pipeline and leaves the target alive
+                // with empty hearts. See LethalDamage.
                 alien.hurt(
                     alien.damageSources().source(AlienDamageTypeKeys.RADIATION_SICKNESS),
-                    Float.MAX_VALUE
+                    LethalDamage.AMOUNT
                 );
 
                 return true;

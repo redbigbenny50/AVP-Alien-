@@ -140,7 +140,35 @@ public final class HiveBalanceTask {
         }
     }
 
+    /**
+     * Oct 8 - UNLOADED HIVES BREED WORKERS, AND ONLY WORKERS, UP TO 50. [stated] "set unloaded hives or hives that
+     * start unloaded to a max of 50 members all worker class so runner and drone" - and, because 50 is under the 70 a
+     * hive needs to spread, "it wont cause cascading expansion". This replaces the old behaviour while unloaded, where
+     * the full loaded economy ran unseen (soldiers included, up to the land's cap) for established hives and NOTHING
+     * ran for a founding or still-arriving daughter.
+     */
+    public static final int UNLOADED_WORKER_CAP = 50;
+
+    /** Oct 8 - one unloaded worker birth per this many ticks per hive: two per five-minute window. */
+    private static final long UNLOADED_BIRTH_INTERVAL_TICKS = 150L;
+
+    /** Oct 8 - the tick of each hive's last unloaded birth (transient; a restart simply starts the clock again). */
+    private static final Map<HiveLocationId, Long> LAST_UNLOADED_BIRTH = new HashMap<>();
+
     private static void evaluate(MinecraftServer server, HiveLocation location, LineageFactionData lineage, int populationPerChunk) {
+        var level = server.getLevel(location.dimension());
+
+        if (
+            level != null
+                && !com.alien.common.gameplay.hive.tick.HiveLocationLoadedTickTask.hasLoadedClaimedChunk(level, location)
+        ) {
+            evaluateUnloaded(server, location, lineage, level.getGameTime());
+            return;
+        }
+
+        // Loaded again: the unloaded birth clock is not needed (and the entry would otherwise outlive a dead hive).
+        LAST_UNLOADED_BIRTH.remove(location.id());
+
         // Founding lockout: a queen-founded hive buys NO population units until its queen is reproductive. Otherwise
         // this
         // task spends biomass on drones/runners the instant the hive can afford them, draining the pool the queen needs
@@ -156,24 +184,8 @@ public final class HiveBalanceTask {
         // defense: 250, raised to 400 under empress influence. Exempt: the queen, eggs (never tracked), and
         // the queen's founding retinue (1 praetorian + 2 drones). Members from other sources currently count
         // too (origin isn't tagged); if convoy bonuses visibly eat cap space, origin tagging is the fix.
-        var memberCap = com.alien.common.gameplay.hive.empress.EmpressCaps.scale(location, MEMBER_CAP);
-        var retinueAllowance = Math.min(1, pop.getOrDefault(AlienEntityTypeTags.PRAETORIANS, 0))
-            + Math.min(2, pop.getOrDefault(AlienEntityTypeTags.DRONES, 0));
-        // Carve-crew transients (design §8.5): reserve-materialized build workers don't count against the cap while
-        // assigned to the active carve site; they fold back into reserves at completion. Borrowed drones counted
-        // before they picked up a shovel and still do.
-        var carveCrewAllowance = location.activeCarveSite() != null
-            ? location.activeCarveSite().materializedWorkerCount()
-            : 0;
-
-        // The member cap counts WORKERS only. Soldiers, spitters and the scourge tier each have their own cap
-        // (max_entity_count_in_location on their purchase) and live OUTSIDE this one - otherwise raising an army
-        // would squeeze out the very drones and runners it is promoted from, and the hive would eat itself.
-        var workingAdults = totalPop
-            - pop.getOrDefault(AlienEntityTypeTags.QUEENS, 0)
-            - militaryPopulation(pop)
-            - retinueAllowance
-            - carveCrewAllowance;
+        var memberCap = memberCapFor(location);
+        var workingAdults = workingAdults(location, pop);
         if (workingAdults >= memberCap) {
             return;
         }
@@ -201,6 +213,113 @@ public final class HiveBalanceTask {
         // same currency; and each one's own purchase conditions (min_population, per-caste cap) decide when it is
         // actually allowed. This simply stops the task returning before it ever asks.
         tryBalanceComposition(server, location, lineage, pop, chunks, totalPop);
+    }
+
+    /**
+     * Oct 8 - the unloaded economy: drones and runners only, while the hive holds fewer than
+     * {@link #UNLOADED_WORKER_CAP} members, at most one birth per {@link #UNLOADED_BIRTH_INTERVAL_TICKS}.
+     * <p>
+     * Runs for a FOUNDING hive too (no founding lockout while unloaded) and for a daughter whose founder queen is still
+     * on her way (her convoy counts as the queen) - [stated] "count them as ready to found". The 50 counts every
+     * member, banked and loaded alike, so a hive left already above 50 simply stops.
+     */
+    private static void evaluateUnloaded(MinecraftServer server, HiveLocation location, LineageFactionData lineage, long now) {
+        var last = LAST_UNLOADED_BIRTH.get(location.id());
+
+        if (last != null && now - last < UNLOADED_BIRTH_INTERVAL_TICKS && now >= last) {
+            return;
+        }
+
+        var pop = CastePopulation.popByCaste(location);
+        var totalPop = pop.values().stream().mapToInt(Integer::intValue).sum();
+
+        if (totalPop >= UNLOADED_WORKER_CAP) {
+            return;
+        }
+
+        if (CastePopulation.countCaste(location, AlienEntityTypeTags.QUEENS) <= 0 && !founderQueenEnRoute(lineage, location)) {
+            return;
+        }
+
+        // Drones and runners in the usual balance order - and never through caste substitution, which can turn a
+        // worker purchase into something else.
+        for (var caste : populationFillOrder(pop, Math.max(1, location.claimedChunks().size()))) {
+            if (caste != AlienEntityTypeTags.DRONES && caste != AlienEntityTypeTags.RUNNERS) {
+                continue;
+            }
+
+            if (abstractWorkerBirth(location, lineage, caste)) {
+                LAST_UNLOADED_BIRTH.put(location.id(), now);
+                // Outside the loaded tick nothing else marks this lineage for saving (see blib-faction persistence).
+                lineage.markDirty();
+                return;
+            }
+        }
+    }
+
+    /**
+     * Oct 8 - one ABSTRACT worker birth: pays the caste's normal biomass cost and banks one worker in reserves.
+     * <p>
+     * ⚠ No egg is consumed. A loaded purchase turns an ovomorph into the worker, but an unloaded hive has no laying
+     * queen and a founding or arriving daughter has no eggs at all, so requiring one would mean no births ever - the
+     * thing this exists to fix. Everything else a purchase checks still applies: the variant's caste type, the runner
+     * cap, irradiated purchase rules, the reserve accepting the type, and affordability.
+     */
+    private static boolean abstractWorkerBirth(HiveLocation location, LineageFactionData lineage, TagKey<EntityType<?>> caste) {
+        var outputType = CasteResolver.entityTypeForCaste(lineage.variant(), caste);
+
+        if (outputType == null) {
+            return false;
+        }
+
+        if (
+            outputType.is(AlienEntityTypeTags.RUNNERS)
+                && CastePopulation.countCaste(location, AlienEntityTypeTags.RUNNERS) >= runnerCapFor(location)
+        ) {
+            return false;
+        }
+
+        var purchase = HiveUnitPurchaseRegistry.forOutputEntity(outputType);
+
+        if (purchase == null) {
+            return false;
+        }
+
+        if (IrradiatedHiveRules.isIrradiated(location) && !IrradiatedHiveRules.allowsPurchase(purchase)) {
+            return false;
+        }
+
+        if (!location.localReserves().accepts(outputType)) {
+            return false;
+        }
+
+        var cost = biomassCost(purchase, location);
+
+        if (location.biomass() < cost) {
+            return false;
+        }
+
+        location.setBiomass(location.biomass() - cost);
+        location.localReserves().tryAdd(outputType, 1);
+        return true;
+    }
+
+    /** Oct 8 - {@return whether a founder convoy carrying a queen is heading for this hive} */
+    private static boolean founderQueenEnRoute(LineageFactionData lineage, HiveLocation location) {
+        for (var convoy : lineage.convoys()) {
+            if (
+                convoy instanceof com.alien.common.gameplay.hive.convoy.Convoy.Reinforcement reinforcement
+                    && location.id().equals(reinforcement.destinationLocationId())
+            ) {
+                for (var type : reinforcement.composition().getAvailableEntityTypes()) {
+                    if (type.is(AlienEntityTypeTags.QUEENS) && reinforcement.composition().getCount(type) > 0) {
+                        return true;
+                    }
+                }
+            }
+        }
+
+        return false;
     }
 
     private static boolean tryFillPopulation(
@@ -267,6 +386,60 @@ public final class HiveBalanceTask {
     }
 
     /** Everything living outside the worker member cap: the standing army, spitters, and the scourge tier. */
+    /**
+     * This location's WORKER ceiling: {@link #MEMBER_CAP} (250), raised to 400 under empress influence.
+     * <p>
+     * ⚠ NOT the same thing as {@code populationPerChunk x claimedChunks}, which is what {@code /hive} prints as
+     * {@code population=X/Y}. Both are live and both can stop production; this is the one that usually does.
+     * </p>
+     */
+    /**
+     * How many runners this location may hold: half its worker ceiling.
+     * <p>
+     * Drones are the caste that takes losses - carve crews, egg hauling and host hunts - so without a bound on runners
+     * a hive slowly converts its worker population into the caste that has no jobs. Half leaves drones a guaranteed
+     * majority share while still allowing a substantial runner population.
+     * </p>
+     */
+    public static int runnerCapFor(HiveLocation location) {
+        return Math.max(1, memberCapFor(location) / 2);
+    }
+
+    public static int memberCapFor(HiveLocation location) {
+        return com.alien.common.gameplay.hive.empress.EmpressCaps.scale(location, MEMBER_CAP);
+    }
+
+    /**
+     * ⭐⭐ THE NUMBER {@link #memberCapFor} IS ACTUALLY MEASURED AGAINST - and, until now, the only figure in the whole
+     * hive economy that decided whether a hive keeps growing while being printed NOWHERE.
+     * <p>
+     * THE MEMBER CAP COUNTS WORKERS ONLY. Soldiers, spitters and the scourge tier each have their own ceiling
+     * ({@code max_entity_count_in_location} on their purchase) and live OUTSIDE this one - otherwise raising an army
+     * would squeeze out the very drones and runners it is promoted from, and the hive would eat itself. The queen, the
+     * founding retinue (1 praetorian + 2 drones) and the carve crew are exempt for the same reason: none of them is
+     * discretionary workforce.
+     * </p>
+     * <p>
+     * Public so {@code /hive inspect_settlement} can report it without restating the formula and drifting from it.
+     * </p>
+     */
+    public static int workingAdults(HiveLocation location, Map<TagKey<EntityType<?>>, Integer> pop) {
+        var totalPop = pop.values().stream().mapToInt(Integer::intValue).sum();
+        var retinueAllowance = Math.min(1, pop.getOrDefault(AlienEntityTypeTags.PRAETORIANS, 0))
+            + Math.min(2, pop.getOrDefault(AlienEntityTypeTags.DRONES, 0));
+        // Carve-crew transients (design §8.5): reserve-materialized build workers don't count against the cap while
+        // assigned to the active carve site; they fold back into reserves at completion. Borrowed drones counted
+        // before they picked up a shovel and still do.
+        var carveCrewAllowance = location.activeCarveSite() != null
+            ? location.activeCarveSite().materializedWorkerCount()
+            : 0;
+        return totalPop
+            - pop.getOrDefault(AlienEntityTypeTags.QUEENS, 0)
+            - militaryPopulation(pop)
+            - retinueAllowance
+            - carveCrewAllowance;
+    }
+
     private static int militaryPopulation(Map<TagKey<EntityType<?>>, Integer> pop) {
         var total = 0;
         for (var tag : MILITARY_CASTES) {
@@ -408,6 +581,25 @@ public final class HiveBalanceTask {
             return false;
         }
 
+        // 🚨 RUNNERS ARE CAPPED AT HALF THE WORKER CEILING, SO THERE IS ALWAYS ROOM FOR DRONES.
+        //
+        // ⚠⚠ THIS IS AN ATTRITION FIX, NOT A BALANCE ONE. Drones do the dangerous work - they crew carve sites, haul
+        // eggs and go out on host hunts, and a host party that runs into a predator usually loses drones. Runners do
+        // none of that, so they do not die at the same rate, and over time a hive drifts runner-heavy with no drones
+        // left for the jobs that actually need them.
+        //
+        // ⭐ A CEILING RATHER THAN A HARD SPLIT. A 125/125 split would leave a hive that legitimately wants 150
+        // drones sitting at its cap with unusable headroom. This bounds only the caste that over-accumulates; drones
+        // may still take the whole worker cap if the hive needs them.
+        //
+        // ⚠ Scales with empress influence exactly as the worker cap does, so a 400-worker hive allows 200 runners.
+        if (
+            outputType.is(AlienEntityTypeTags.RUNNERS)
+                && CastePopulation.countCaste(location, AlienEntityTypeTags.RUNNERS) >= runnerCapFor(location)
+        ) {
+            return false;
+        }
+
         var purchase = HiveUnitPurchaseRegistry.forOutputEntity(outputType);
         if (purchase == null) {
             return false;
@@ -437,7 +629,22 @@ public final class HiveBalanceTask {
         // [stated] every promotion costs a flat 1 biomass + 1 jelly, whatever the caste. The merged pool lives in
         // royalJelly for an irradiated hive - scourgeJelly is zeroed at conversion and stays zero - so one field
         // answers the whole cost. Everything that used royal or scourge simply uses irradiated instead.
-        var biomassCost = irradiated ? IrradiatedHiveRules.PROMOTION_BIOMASS_COST : biomassCost(purchase, location);
+        // ⭐⭐⭐ A BREAKAWAY LINEAGE RAISES TROOPS WITHOUT PAYING BIOMASS FOR THREE DAYS.
+        //
+        // [stated] "member production has no biomass cost just a jelly cost. This was a hive with a grace period has
+        // a period of member growth to make the war possible."
+        //
+        // ⚠⚠ THIS IS THE HALF THAT MAKES THE SCHISM WORK, not the absorption immunity. She founds ONE hive beside an
+        // empire of eight, with no economy and no stores. Protecting her from absorption while leaving her unable to
+        // BUILD would only postpone the same loss by three days - the player who spawned her would still watch her
+        // do nothing and then lose.
+        //
+        // ⚠ THE JELLY COST STAYS, deliberately: she cannot conjure an army from nothing, she spends what she has
+        // faster. Same shape as the irradiated and forced-empress carve waivers - waive the DEBT, never the TIME.
+        var schismGrace = isInSchismGrace(server, location);
+        var biomassCost = schismGrace
+            ? 0
+            : irradiated ? IrradiatedHiveRules.PROMOTION_BIOMASS_COST : biomassCost(purchase, location);
         var jellyCost = irradiated ? IrradiatedHiveRules.PROMOTION_JELLY_COST : purchase.royalJelly();
         var scourgeCost = irradiated ? 0 : purchase.scourgeJelly();
 
@@ -480,6 +687,14 @@ public final class HiveBalanceTask {
         }
         location.localReserves().tryAdd(purchase.outputEntity(), 1);
         return true;
+    }
+
+    /** Whether this hive's lineage is inside its breakaway grace window. */
+    private static boolean isInSchismGrace(MinecraftServer server, HiveLocation location) {
+        var faction = Alien.MOD.factions().get(location.lineageFactionId());
+        return faction != null
+            && faction.data() instanceof com.alien.common.gameplay.hive.faction.LineageFactionData lineage
+            && lineage.isInSchismGrace(server.overworld().getGameTime());
     }
 
     private static int biomassCost(HiveUnitPurchase purchase, HiveLocation location) {

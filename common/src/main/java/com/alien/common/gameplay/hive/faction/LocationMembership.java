@@ -27,6 +27,14 @@ public final class LocationMembership {
      * match the parent lineage's variant — see {@link FactionVariantPolicy}.
      */
     public static void join(HiveLocation location, Entity entity) {
+        // \u2b50\u2b50 Oct 3 - THE CHOKE POINT FOR "A CAPTIVE JOINS NOTHING". Every way into a hive ends here: the
+        // spawn
+        // auto-join (whole claim column, any height), autoJoinAtPosition after a molt, stray adoption, wild adoption
+        // and the rescue reconciliation. A captive queen, or one in her release grace outside a hive's slab, is turned
+        // away. Anything that is not a queen passes untouched. See QueenCaptivity.mayJoinHive.
+        if (!com.alien.common.gameplay.hive.lifecycle.QueenCaptivity.mayJoinHive(entity)) {
+            return;
+        }
         var factions = Alien.MOD.factions();
         var member = FactionMember.entity(entity);
 

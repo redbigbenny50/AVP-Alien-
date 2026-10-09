@@ -50,6 +50,15 @@ public final class FoundingMoveActions {
         })
         .build();
 
+    /**
+     * How far a founding queen may be from her hive centre and still try to walk to it.
+     * <p>
+     * 256 blocks. Far past a hive's own 19x19 footprint, and short enough that the pathfinder's preload box stays a few
+     * hundred chunks rather than tens of thousands.
+     * </p>
+     */
+    private static final double MAX_CENTER_PATH_DISTANCE_SQR = 256.0 * 256.0;
+
     private static Action.Signal performGoToCenter(Action.Context<? extends Xenomorph> context) {
         var actor = context.getActor();
         var location = FoundingMoveSensors.foundingLocationOrNull(actor);
@@ -59,8 +68,35 @@ public final class FoundingMoveActions {
             return Action.Signal.ABORT;
         }
 
-        var target = Vec3.atBottomCenterOf(location.centerPos());
-        var result = NeoMoveToPosAction.perform(context, target, MOVE_SPEED);
+        // \u2b50\u2b50\u2b50 REFUSE TO PATH ACROSS THE WORLD. THIS ACTION FROZE A LIVE SERVER FOR 40 SECONDS.
+        //
+        // \u26a0\u26a0 GO_TO_CENTER IS THE ONLY UNBOUNDED PATHER IN THE MOD, and deliberately so - it re-resolves the
+        // location every tick precisely to keep working when the queen has been displaced outside her claim. But
+        // BLibPathFinder.findPathAsync preloads the ENTIRE chunk box between actor and target with a blocking,
+        // generate-if-absent getChunk. A queen a few thousand blocks from her centre means tens of thousands of
+        // chunks generated synchronously on the server thread, and a watchdog dump caught exactly that: the server
+        // thread parked in performGoToCenter -> findPathAsync -> getChunk for over forty seconds.
+        //
+        // \u2b50 ABORTING IS ALREADY A HANDLED OUTCOME, which is what makes this safe. NO_PATH below aborts for the
+        // same reason and the comment there says why: the snap-to-centre commit backstop still guarantees a correct
+        // founding position when her tank fills. A displaced queen therefore stops trying to walk home and is simply
+        // placed correctly when she commits - which is what used to happen anyway, only without the freeze.
+        //
+        // \u26a0 The cap is generous. A hive's whole footprint is maxTerritoryRadiusChunks 9 - a 19x19 box, about
+        // 150 blocks corner to corner - so this only ever refuses a queen who is nowhere near the hive she is meant
+        // to be founding.
+        var center = location.centerPos();
+        if (actor.blockPosition().distSqr(center) > MAX_CENTER_PATH_DISTANCE_SQR) {
+            return Action.Signal.ABORT;
+        }
+
+        var target = Vec3.atBottomCenterOf(center);
+        // ⚠ target is reassigned above, so it cannot be captured by a lambda directly.
+        var targetFinal = target;
+        var result = com.alien.common.gameplay.hive.diag.DiagProfiler.timed(
+            "path/FoundingMoveActions",
+            () -> NeoMoveToPosAction.perform(context, targetFinal, MOVE_SPEED)
+        );
 
         return switch (result) {
             // FINISHED: arrived. IS_AT_CENTER flips true next tick and the goal is satisfied, so we just yield.

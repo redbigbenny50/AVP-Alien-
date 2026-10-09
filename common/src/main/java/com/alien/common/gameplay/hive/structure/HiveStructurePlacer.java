@@ -68,6 +68,12 @@ public final class HiveStructurePlacer {
      * instead; this stays for the never-wedge fallbacks and the carve-completion stamp itself.
      */
     public static boolean place(ServerLevel level, HiveLocation location, PieceMatch match, FrontierSocket connectedTo) {
+        // ⚠ Placing a structure piece replaces blocks; resin going to air during the stamp must not read as a
+        // breach. See HiveBuildSuppression - the repair crew looped on itself before this existed.
+        return HiveBuildSuppression.without(() -> placeUnsuppressed(level, location, match, connectedTo));
+    }
+
+    private static boolean placeUnsuppressed(ServerLevel level, HiveLocation location, PieceMatch match, FrontierSocket connectedTo) {
         if (!placeWorld(level, location, match)) {
             return false;
         }

@@ -22,7 +22,11 @@ public final class BiomassIncome {
     private BiomassIncome() {}
 
     public static double unloadedPerSecond(HiveLocation location, LineageFactionData lineage, HiveConfig config) {
-        var base = config.baseUnloadedBiomassPerChunkPerSec() * location.claimedChunks().size();
+        // ⭐ A FLAT FLOOR PLUS THE PER-CHUNK RATE. The floor is what makes a NEW hive viable - at 9 chunks it more
+        // than doubles her income - while the per-chunk part still rewards holding ground. Raising the per-chunk
+        // rate alone to achieve the same start would have made huge hives earn more unwatched than watched.
+        var base = config.unloadedBiomassFlatPerSec()
+            + config.baseUnloadedBiomassPerChunkPerSec() * location.claimedChunks().size();
         var bonus = lineage.empressId() != null ? config.unloadedEmpressBonusPerSec() : 0.0;
         return base + bonus;
     }
@@ -84,6 +88,37 @@ public final class BiomassIncome {
      * Maximum biomass the location can accumulate. Past this, additional income is discarded — the location can't
      * stockpile arbitrarily and then explode forward in growth (per the design's anti-runaway constraint in § 5).
      */
+    /**
+     * Oct 8 - the cap while the hive is UNLOADED. [stated] "the idea is that shes been bulking up and preparing for
+     * explosive growth": a founding hive no longer stops at the founding target while nobody is there - it banks up to
+     * the normal cap, and when it loads the queen commits her ovipositor from that pool and the rest goes straight into
+     * building. The founding target still applies while LOADED, where it is the queen's "tank full" signal.
+     *
+     * @param location the hive
+     * @param config   the hive config
+     * @return the biomass ceiling for unloaded income
+     */
+    public static int unloadedBiomassCap(HiveLocation location, HiveConfig config) {
+        return Math.max(claimCost(location, config) * config.biomassAccumulationCapMultiplier(), foundingBiomassTarget(config));
+    }
+
+    /**
+     * Oct 8 - adds income up to a ceiling WITHOUT EVER LOWERING what the hive already holds. A founding hive can now
+     * load holding more than its loaded founding target (banked while unloaded); the old min(cap, biomass + income)
+     * would have cut that pool down to the target on the first loaded tick.
+     *
+     * @param location the hive
+     * @param amount   the income
+     * @param cap      the ceiling for this income
+     */
+    public static void addUpToCap(HiveLocation location, int amount, int cap) {
+        if (amount <= 0 || location.biomass() >= cap) {
+            return;
+        }
+
+        location.setBiomass(Math.min(cap, location.biomass() + amount));
+    }
+
     public static int biomassCap(HiveLocation location, HiveConfig config) {
         // Founding mode: a queen-founded hive that has not yet established its egg sack has its cap pinned to the
         // founding target (resin floor + ovipositor cost) so the queen fills exactly that much and then commits it all

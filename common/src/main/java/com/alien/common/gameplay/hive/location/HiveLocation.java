@@ -61,6 +61,9 @@ public final class HiveLocation {
     /** Ceiling on reported breaches queued at once - a crater must not become an unbounded set. */
     private static final int MAX_FLAGGED_BREACH_CHUNKS = 64;
 
+    /** Hard bound on remembered breach cells - a nuke must never turn this into a memory leak. */
+    private static final int MAX_FLAGGED_BREACH_CELLS = 256;
+
     /** Round-robin cursor over the built pieces for the upkeep pass. Transient - order need not survive a reload. */
     private int upkeepCursor = 0;
 
@@ -148,6 +151,12 @@ public final class HiveLocation {
     private static final String NBT_REPRODUCTIVE_ESTABLISHED = "ReproductiveEstablished";
 
     private static final String NBT_INHIBITED = "Inhibited";
+
+    private static final String NBT_FORCED_EMPRESS = "ForcedEmpressFounding";
+
+    private static final String NBT_QUEEN_EVOLVING = "QueenEvolving";
+
+    private static final String NBT_SITTING_EMPRESS = "SittingEmpressId";
 
     private static final String NBT_CLAIMED_CHUNKS = "ClaimedChunks";
 
@@ -369,6 +378,30 @@ public final class HiveLocation {
      */
     private boolean inhibited;
 
+    /** See {@link #isForcedEmpressFounding()}. */
+    private boolean forcedEmpressFounding;
+
+    /** See {@link #isQueenEvolving()}. */
+    private boolean queenEvolving;
+
+    /**
+     * ⭐⭐⭐ WHICH EMPRESS SITS ON THIS HIVE'S EGGSACK, ACTING AS ITS QUEEN. Null when an ordinary queen holds it.
+     * <p>
+     * ⚠⚠ THE MOD HAS NEVER NEEDED THIS BEFORE AND NOW DOES. {@code lineage.empressId()} says the LINEAGE has an
+     * empress; nothing anywhere recorded WHICH HIVE she occupies. Those two facts used to coincide, because a natural
+     * empress is always a queen who founded her own hive and then emerged on it — so her seat was simply the hive she
+     * founded. They stop coinciding the moment an empress can take over a hive she did not found, which is exactly what
+     * the succession and schism paths do.
+     * </p>
+     * <p>
+     * ⚠⚠ AND {@code founderId} CANNOT ANSWER IT: it is a bare UUID with no entity type beside it, so telling an empress
+     * from a queen means loading her. An occupancy test that needs the chunk loaded reports "no empress" for every
+     * unloaded hive in the lineage — which would send a displaced empress to a throne that is already taken. Persisted
+     * here, the answer is correct whether anything is loaded or not.
+     * </p>
+     */
+    private @Nullable UUID sittingEmpressId;
+
     /** Refined resource produced by queens (1/min). Used by hive unit purchases to upgrade castes. */
     private int royalJelly;
 
@@ -528,6 +561,10 @@ public final class HiveLocation {
      * </p>
      */
     private final java.util.Set<ChunkPos> flaggedBreachChunks = new java.util.LinkedHashSet<>();
+
+    /** Exact broken hive blocks and what they were, so a corridor breach can be put back without a template. */
+    private final java.util.LinkedHashMap<BlockPos, net.minecraft.world.level.block.state.BlockState> flaggedBreachCells =
+        new java.util.LinkedHashMap<>();
 
     private final Set<FrontierSocket> frontierSockets;
 
@@ -710,6 +747,13 @@ public final class HiveLocation {
         if (endStyleHive) {
             return centerPos.getY() - com.alien.common.gameplay.hive.dimension.EndStyleHiveRules.VERTICAL_SLAB_HALF_HEIGHT;
         }
+        // \u2b50\u2b50 BUILD-FREE: the slab is CENTRED on the queen, not stacked above her. A mapmaker puts her where
+        // the fiction wants her - the reactor room, a mid-level corridor - and the hive has to extend DOWN as well as
+        // up or every floor beneath her is outside the hive entirely: no resin, no spawning, no vents. Same shape the
+        // End branch above uses, borrowed deliberately; nothing else End-related comes with it.
+        if (com.alien.common.gameplay.hive.config.BuildFreeMode.isEnabled()) {
+            return centerPos.getY() - com.alien.common.gameplay.hive.config.BuildFreeMode.slabHalfHeight();
+        }
         return centerPos.getY();
     }
 
@@ -720,7 +764,84 @@ public final class HiveLocation {
         if (endStyleHive) {
             return centerPos.getY() + com.alien.common.gameplay.hive.dimension.EndStyleHiveRules.VERTICAL_SLAB_HALF_HEIGHT;
         }
+        if (com.alien.common.gameplay.hive.config.BuildFreeMode.isEnabled()) {
+            return centerPos.getY() + com.alien.common.gameplay.hive.config.BuildFreeMode.slabHalfHeight();
+        }
         return centerPos.getY() + SLAB_HEIGHT;
+    }
+
+    /**
+     * Sentinel from {@link #standingFloorY}: no standable ground was found in that column (or its chunk is not loaded).
+     */
+    public static final int NO_GROUND = Integer.MIN_VALUE;
+
+    /**
+     * The Y of the FLOOR BLOCK a mob or egg would stand on in this column - the "hive floor" for anything that has to
+     * be placed, spawned, teleported or scanned on the ground. Standing height is this plus one.
+     * <p>
+     * 🚨🚨 WHY THIS EXISTS (Oct 1 build-free audit). In a normal hive {@link #hiveFloorY()} IS the ground: the hive is
+     * carved flat at its floor. In build-free mode it is only the BOTTOM OF THE BAND - the queen's Y minus
+     * {@code buildFreeSlabHalfHeight} (24 by default) - and nothing is carved, so nothing stands there. About fifteen
+     * callers used it as the ground anyway: the founding resin patch was stamped 24 blocks under the queen and she was
+     * teleported into the rock to stand on it; egg and jelly clusters wrote tendrils into solid stone at that depth;
+     * restocked eggs, successor queens and throne guards spawned inside rock.
+     * </p>
+     * <p>
+     * ⭐ NORMAL AND END HIVES ARE UNCHANGED: this returns {@code hiveFloorY()} exactly. Only build-free looks at the
+     * terrain - it searches the column outward from the queen's founding height, alternating down then up, for the
+     * nearest cell with a solid top below and two passable, dry blocks for feet and head.
+     * </p>
+     * <p>
+     * ⚠ Never loads a chunk: an unloaded column returns {@link #NO_GROUND}, as does a column with no standable cell in
+     * the band. Callers must handle it.
+     * </p>
+     */
+    public int standingFloorY(net.minecraft.world.level.Level level, int x, int z) {
+        if (!com.alien.common.gameplay.hive.config.BuildFreeMode.isEnabled() || endStyleHive) {
+            return hiveFloorY();
+        }
+        if (!level.hasChunk(x >> 4, z >> 4)) {
+            return NO_GROUND;
+        }
+        var reference = centerPos.getY();
+        var reach = com.alien.common.gameplay.hive.config.BuildFreeMode.slabHalfHeight();
+        var pos = new BlockPos.MutableBlockPos();
+        for (var dy = 0; dy <= reach; dy++) {
+            if (isStandingCell(level, pos, x, reference - dy, z)) {
+                return reference - dy - 1;
+            }
+            if (dy > 0 && isStandingCell(level, pos, x, reference + dy, z)) {
+                return reference + dy - 1;
+            }
+        }
+        return NO_GROUND;
+    }
+
+    /**
+     * The floor at the hive's centre - where the throne is, and where anything sent "home" lands. Never
+     * {@link #NO_GROUND}: if the centre column has no standable cell, the queen's own founding feet are used, because
+     * she demonstrably stood there.
+     */
+    public int throneFloorY(net.minecraft.world.level.Level level) {
+        var found = standingFloorY(level, centerPos.getX(), centerPos.getZ());
+        return found == NO_GROUND ? centerPos.getY() - 1 : found;
+    }
+
+    private static boolean isStandingCell(net.minecraft.world.level.Level level, BlockPos.MutableBlockPos pos, int x, int feetY, int z) {
+        if (feetY - 1 < level.getMinBuildHeight() || feetY + 1 >= level.getMaxBuildHeight()) {
+            return false;
+        }
+        pos.set(x, feetY - 1, z);
+        var below = level.getBlockState(pos);
+        if (below.getCollisionShape(level, pos).isEmpty() || !below.getFluidState().isEmpty()) {
+            return false;
+        }
+        return isPassable(level, pos.set(x, feetY, z)) && isPassable(level, pos.set(x, feetY + 1, z));
+    }
+
+    private static boolean isPassable(net.minecraft.world.level.Level level, BlockPos pos) {
+        var state = level.getBlockState(pos);
+        return state.getCollisionShape(level, pos).isEmpty() && state.getFluidState().isEmpty();
     }
 
     /**
@@ -977,6 +1098,73 @@ public final class HiveLocation {
     /** Whether this location is an inhibited (severed, contained-breeder) claim with all hive autonomy suppressed. */
     public boolean isInhibited() {
         return inhibited;
+    }
+
+    /**
+     * ⭐⭐ FOUNDED BY A FORCED EMPRESS — a player fed a royal jelly block to an empress rather than waiting for one to
+     * emerge naturally.
+     * <p>
+     * [stated] the whole point is impatience: "these idiots dont have paitence for it", so the mode is deliberately
+     * FASTER rather than merely allowed — the founding core digs at double speed and its royal chamber costs no carving
+     * biomass.
+     * </p>
+     * <p>
+     * ⚠ PERSISTED, because both concessions apply for the life of the founding dig, which easily spans a session. A
+     * flag that reset on reload would silently drop her back to natural pace halfway through and look like the feature
+     * had stopped working.
+     * </p>
+     */
+    public boolean isForcedEmpressFounding() {
+        return forcedEmpressFounding;
+    }
+
+    public void setForcedEmpressFounding(boolean value) {
+        this.forcedEmpressFounding = value;
+    }
+
+    /**
+     * ⭐⭐⭐ HER QUEEN IS BECOMING AN EMPRESS. NOT CAPTURED, NOT KILLED — CHANGING.
+     * <p>
+     * [stated] "this would probably be a new marker instead of captured or killed as evolving so the hive knows shes
+     * changing and not try to replace her."
+     * </p>
+     * <p>
+     * \u26a0 WHAT IT ACTUALLY GUARDS, HONESTLY. {@code QueenSuccessionTask} counts LOADED queens
+     * ({@code countCaste(location, QUEENS) > 0}) and the molting queen is still a live QUEENS-tagged entity right up to
+     * {@code queen.discard()} at completion \u2014 at which point the empress replaces her, and empresses are nested
+     * inside the QUEENS tag too. So succession does NOT currently misfire, and this flag is not load-bearing for it.
+     * </p>
+     * <p>
+     * \u2b50 IT IS AN EXPLICIT SIGNAL, WHICH IS WHY IT IS WORTH HAVING ANYWAY. [stated] "so the hive knows shes
+     * changing and not try to replace her." Today the hive is protected by an ACCIDENT of entity lifetime \u2014 that
+     * she happens to stay loaded and happens to be replaced in the same tick. Any future change to when the old entity
+     * is discarded would open exactly the window he is worried about, silently, and only for players who evolve a
+     * queen. A named flag is what lets that be checked rather than rediscovered.
+     * </p>
+     * <p>
+     * \u26a0 PERSISTED, because the molt easily spans a save.
+     * </p>
+     */
+    public boolean isQueenEvolving() {
+        return queenEvolving;
+    }
+
+    public void setQueenEvolving(boolean value) {
+        this.queenEvolving = value;
+    }
+
+    /** See {@link #sittingEmpressId}. */
+    public @Nullable UUID sittingEmpressId() {
+        return sittingEmpressId;
+    }
+
+    public void setSittingEmpressId(@Nullable UUID value) {
+        this.sittingEmpressId = value;
+    }
+
+    /** Whether an empress currently holds this hive's throne. Answerable with nothing loaded. */
+    public boolean hasSittingEmpress() {
+        return sittingEmpressId != null;
     }
 
     public void setInhibited(boolean value) {
@@ -1432,10 +1620,51 @@ public final class HiveLocation {
      * </p>
      */
     public void flagBreachAt(BlockPos pos) {
-        if (builtPlacements.isEmpty() || flaggedBreachChunks.size() >= MAX_FLAGGED_BREACH_CHUNKS) {
+        flagBreachAt(pos, null);
+    }
+
+    /**
+     * Records a broken hive block, remembering WHAT was there so it can simply be put back.
+     * <p>
+     * 🚨🚨 CORRIDOR RESIN COULD NOT BE REPAIRED AT ALL. Only the chunk was recorded, and upkeep repairs by re-stamping
+     * a STRUCTURE PIECE - so a chunk that resolved to no placement was flagged and then silently dropped. Rooms healed;
+     * the tunnels between them never did, and a hole punched into a corridor stayed open forever.
+     * </p>
+     * <p>
+     * ⭐ REMEMBERING THE BLOCK IS WHAT MAKES THIS CHEAP. There is no scan, no template diff and no volume search: the
+     * break already tells us the exact position and the exact state, so the repair is a map lookup and one setBlock.
+     * Cost is proportional to blocks actually broken, not to hive size - which is the opposite of how the old placement
+     * scan behaved.
+     * </p>
+     * <p>
+     * ⚠ BOUNDED at {@link #MAX_FLAGGED_BREACH_CELLS}, and oldest-first: one nuke can break a million blocks, and an
+     * unbounded map would be a memory leak with a detonator attached.
+     * </p>
+     */
+    public void flagBreachAt(BlockPos pos, @Nullable net.minecraft.world.level.block.state.BlockState brokenState) {
+        if (!builtPlacements.isEmpty() && flaggedBreachChunks.size() < MAX_FLAGGED_BREACH_CHUNKS) {
+            flaggedBreachChunks.add(new ChunkPos(pos));
+        }
+
+        if (brokenState == null) {
             return;
         }
-        flaggedBreachChunks.add(new ChunkPos(pos));
+
+        if (flaggedBreachCells.size() >= MAX_FLAGGED_BREACH_CELLS) {
+            var oldest = flaggedBreachCells.keySet().iterator();
+
+            if (oldest.hasNext()) {
+                oldest.next();
+                oldest.remove();
+            }
+        }
+
+        flaggedBreachCells.put(pos.immutable(), brokenState);
+    }
+
+    /** Broken hive blocks awaiting restoration, in break order. */
+    public java.util.Map<BlockPos, net.minecraft.world.level.block.state.BlockState> flaggedBreachCells() {
+        return flaggedBreachCells;
     }
 
     private void tickStructureUpkeep(MinecraftServer server) {
@@ -1492,6 +1721,19 @@ public final class HiveLocation {
     private void decayCombatRespite() {
         if (combatRespiteRemainingTicks > 0L) {
             combatRespiteRemainingTicks--;
+        }
+    }
+
+    /**
+     * Drops every player from this location's boss bar, without tearing the bar down.
+     * <p>
+     * ⚠ For a location that has DIED but not yet been unregistered: its age stops advancing, so the bar's own
+     * visibility re-evaluation never runs again and the viewers would otherwise be stuck watching a dead hive.
+     * </p>
+     */
+    public void dropBossBarViewers() {
+        if (bossBar != null) {
+            bossBar.onRemoved();
         }
     }
 
@@ -1585,6 +1827,11 @@ public final class HiveLocation {
         tag.putInt(NBT_BIOMASS, biomass);
         tag.putBoolean(NBT_REPRODUCTIVE_ESTABLISHED, reproductiveEstablished);
         tag.putBoolean(NBT_INHIBITED, inhibited);
+        tag.putBoolean(NBT_FORCED_EMPRESS, forcedEmpressFounding);
+        tag.putBoolean(NBT_QUEEN_EVOLVING, queenEvolving);
+        if (sittingEmpressId != null) {
+            tag.putUUID(NBT_SITTING_EMPRESS, sittingEmpressId);
+        }
         if (royalJelly > 0) {
             tag.putInt(NBT_ROYAL_JELLY, royalJelly);
         }
@@ -1862,6 +2109,9 @@ public final class HiveLocation {
         location.biomass = Math.max(0, tag.getInt(NBT_BIOMASS));
         location.reproductiveEstablished = tag.getBoolean(NBT_REPRODUCTIVE_ESTABLISHED);
         location.inhibited = tag.getBoolean(NBT_INHIBITED);
+        location.forcedEmpressFounding = tag.getBoolean(NBT_FORCED_EMPRESS);
+        location.queenEvolving = tag.getBoolean(NBT_QUEEN_EVOLVING);
+        location.sittingEmpressId = tag.hasUUID(NBT_SITTING_EMPRESS) ? tag.getUUID(NBT_SITTING_EMPRESS) : null;
         location.royalJelly = Math.max(0, tag.getInt(NBT_ROYAL_JELLY));
         location.scourgeJelly = Math.max(0, tag.getInt(NBT_SCOURGE_JELLY));
         if (tag.contains(NBT_PENDING_HARVEST_SPAWNERS)) {

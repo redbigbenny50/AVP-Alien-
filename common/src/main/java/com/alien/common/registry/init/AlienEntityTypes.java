@@ -705,6 +705,20 @@ public class AlienEntityTypes {
             .sized(ROYAL_COCOON_WIDTH, ROYAL_COCOON_HEIGHT)
     );
 
+    /**
+     * ⭐ The fourth strain, added Aug 21 alongside {@code irradiated_royal_cocoon.png}.
+     * <p>
+     * ⚠ Until this existed, an IRRADIATED xenomorph molting into a royal got NO COCOON AT ALL - CocoonManager returned
+     * null for that variant on purpose, so the molt worked but nothing was visible. The texture alone would not have
+     * fixed it: the renderer picks by ENTITY TYPE, so a strain with no type of its own can never reach its own texture.
+     * </p>
+     */
+    public static final BLibHolder<EntityType<RoyalCocoon>> IRRADIATED_ROYAL_COCOON = create(
+        "irradiated_royal_cocoon",
+        EntityType.Builder.of(RoyalCocoon::new, MobCategory.MONSTER)
+            .sized(ROYAL_COCOON_WIDTH, ROYAL_COCOON_HEIGHT)
+    );
+
     public static final BLibHolder<EntityType<Ovomorph>> OVOMORPH = create(
         "ovomorph",
         EntityType.Builder.of(Ovomorph::new, MobCategory.MISC)
@@ -953,6 +967,11 @@ public class AlienEntityTypes {
         ATTRIBUTE_REGISTRY.register(ROYAL_COCOON, RoyalCocoon::createRoyalCocoonAttributes);
         ATTRIBUTE_REGISTRY.register(ABERRANT_ROYAL_COCOON, RoyalCocoon::createRoyalCocoonAttributes);
         ATTRIBUTE_REGISTRY.register(NETHER_ROYAL_COCOON, RoyalCocoon::createRoyalCocoonAttributes);
+        // ⚠⚠ REGISTERING THE ENTITY TYPE IS NOT ENOUGH. A LivingEntity type with no attribute supplier fails hard
+        // the moment anything builds the attribute map - which datagen does during setup, BEFORE writing a single
+        // file. That is why runDatagen died without ever creating fabric/src/main/generated, and why NOTHING
+        // regenerated - not the tags, not the lang - rather than just the cocoon's own entries going missing.
+        ATTRIBUTE_REGISTRY.register(IRRADIATED_ROYAL_COCOON, RoyalCocoon::createRoyalCocoonAttributes);
         ATTRIBUTE_REGISTRY.register(OVOMORPH, Ovomorph::createOvomorphAttributes);
         ATTRIBUTE_REGISTRY.register(IRRADIATED_OVOMORPH, Ovomorph::createOvomorphAttributes);
         ATTRIBUTE_REGISTRY.register(PRAETORIAN, Praetorian::createPraetorianAttributes);

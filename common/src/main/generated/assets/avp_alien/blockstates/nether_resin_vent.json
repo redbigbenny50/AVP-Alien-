@@ -1,6 +1,9 @@
 {
   "variants": {
-    "": {
+    "dormant=false": {
+      "model": "avp_alien:block/nether_resin_vent"
+    },
+    "dormant=true": {
       "model": "avp_alien:block/nether_resin_vent"
     }
   }

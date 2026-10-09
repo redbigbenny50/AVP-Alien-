@@ -81,6 +81,10 @@ public class AlienClient {
     private static final BLibClientMod MOD = BLibClientMod.createFor(Alien.MOD);
 
     public static void initialize() {
+        // Lets /avp hive diag anim start the client-side track log as well as the server-side branch log.
+        com.alien.common.gameplay.hive.diag.AnimationDiag.clientWatchHook =
+            (uuid, ticks) -> com.alien.client.animation.ClientTrackDiag.watch(uuid, ticks);
+
         MOD.initialize(AlienClient::runInitialization);
     }
 
@@ -293,6 +297,7 @@ public class AlienClient {
         MOD.registries().registerEntityRenderer(AlienEntityTypes.ROYAL_COCOON, RoyalCocoonRenderer::new);
         MOD.registries().registerEntityRenderer(AlienEntityTypes.ABERRANT_ROYAL_COCOON, RoyalCocoonRenderer::new);
         MOD.registries().registerEntityRenderer(AlienEntityTypes.NETHER_ROYAL_COCOON, RoyalCocoonRenderer::new);
+        MOD.registries().registerEntityRenderer(AlienEntityTypes.IRRADIATED_ROYAL_COCOON, RoyalCocoonRenderer::new);
         MOD.registries().registerEntityRenderer(AlienEntityTypes.OVOMORPH, OvomorphRenderer::new);
         MOD.registries().registerEntityRenderer(AlienEntityTypes.PRAETORIAN, PraetorianRenderer::new);
         MOD.registries().registerEntityRenderer(AlienEntityTypes.PREDALIEN, PredalienRenderer::new);

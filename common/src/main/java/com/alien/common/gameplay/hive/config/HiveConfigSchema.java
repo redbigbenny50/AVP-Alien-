@@ -16,6 +16,35 @@ import java.util.Objects;
 public final class HiveConfigSchema {
 
     private static final List<GroupSpec> GROUP_SPECS = List.of(
+        group("Structure Upkeep", "noMaintenance"),
+        group(
+            "Structureless Mode (No Building)",
+            "buildFreeModeEnabled",
+            "buildFreeQueenFoundsWherePlaced",
+            "buildFreeTerritoryRadiusChunks",
+            "buildFreeEmpressTerritoryRadiusChunks",
+            "buildFreeSlabHalfHeight",
+            "buildFreeActiveXenomorphs",
+            "buildFreeDaughterSlots",
+            "buildFreeRaidsEnabled",
+            "buildFreeSurfacePartiesEnabled",
+            "buildFreeHostSurfacePartiesEnabled",
+            "buildFreeBiomassSurfacePartiesEnabled",
+            "buildFreeQueenEggClusterSize",
+            "buildFreeAdditionalEggClusters",
+            "buildFreeEggClusterSize",
+            "buildFreeEggClusterAmount",
+            "buildFreeJellyClusterAmount",
+            "buildFreeScourgeClusterAmount",
+            "buildFreeInvasionClaimBiomassCost",
+            "buildFreeInvasionReachChunks",
+            "buildFreeInvasionBeachheadChunks",
+            "buildFreeHarbingerRevealRadius",
+            "buildFreeVentVerticalGap",
+            "buildFreeVentsPerChunkPerTier",
+            "buildFreeVentChunkGap",
+            "buildFreeVentMaxPerHive"
+        ),
         group("Lineage Seeds", "protoHiveStageInterval"),
         group(
             "Location Lifecycle",
@@ -85,6 +114,7 @@ public final class HiveConfigSchema {
         group(
             "Abstract Spread",
             "maxLineageSpreadChunks",
+            "minLineageSpacingChunks",
             "lineageSpreadCooldownTicks",
             "maxLocationsPerLineage",
             "maxLocationsUnderEmpress",
@@ -101,7 +131,6 @@ public final class HiveConfigSchema {
             "maxChunksPerLocation",
             "maxTerritoryRadiusChunks",
             "maxChunksPerLineage",
-            "maxLineagesPerDimensionPerVariant",
             "maxClaimsPerScan",
             "resinFullDensityTicks",
             "maxPassiveClaimsPerUnloadedScan"
@@ -113,6 +142,7 @@ public final class HiveConfigSchema {
             "resinSpreadBiomassCost",
             "growthFactor",
             "baseUnloadedBiomassPerChunkPerSec",
+            "unloadedBiomassFlatPerSec",
             "unloadedEmpressBonusPerSec",
             "loadedBiomassPerLoadedXenomorphPerSec",
             "loadedBiomassPerNonAlienKill",
@@ -143,7 +173,7 @@ public final class HiveConfigSchema {
             "scourgeJellyTicksPerHarbingerProduction",
             "minRoyalJellyCap"
         ),
-        group("Queen Lifecycle", "queenFrontEndPhasesEnabled"),
+        group("Queen Lifecycle", "queenFrontEndPhasesEnabled", "queenFoundsWhereStanding"),
         group(
             "Parties",
             "surfacePartyBaseSize",
@@ -152,6 +182,7 @@ public final class HiveConfigSchema {
             "surfacePartyMaxSizeEmpress",
             "surfacePartyVentDropChance",
             "surfacePartyMaxVentsPerClaim",
+            "surfacePartyVentChunkGap",
             "surfacePartySurfaceBandBlocks",
             "biomassHuntingPartyBaseSize",
             "biomassHuntingPartySizePerClaimedChunk",

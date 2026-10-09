@@ -3,7 +3,6 @@ package com.alien.common.gameplay.hive.structure;
 import com.alien.common.gameplay.entity.living.alien.xenomorph.Xenomorph;
 import com.alien.common.gameplay.hive.location.HiveLocation;
 import com.alien.common.gameplay.hive.spawning.HiveLoadedSpawner;
-import com.alien.common.gameplay.hive.spawning.ReserveSpawnUtil;
 import com.alien.common.gameplay.hive.structure.carve.CarveWorker;
 import com.alien.common.gameplay.hive.vent.HiveVents;
 import com.alien.common.registry.tag.AlienEntityTypeTags;
@@ -39,6 +38,13 @@ public final class HiveBreachRepair {
 
     /** Repair crews are small - a wound is not a construction site. */
     private static final int CREW_SIZE = 2;
+
+    /** Most workers the whole hive may have out of the bank for breach repair at once. */
+    private static final int RESERVE_CALLED_CAP = 6;
+
+    /** Workers each hive has called up from its bank for repairs, until they die or leave the world. */
+    private static final Map<HiveLocation, java.util.Set<UUID>> RESERVE_CALLED =
+        java.util.Collections.synchronizedMap(new WeakHashMap<>());
 
     /** Visible work before the piece re-stamps: about 10 seconds of digging at the wound. */
     private static final int REPAIR_WORK_TICKS = 200;
@@ -355,6 +361,17 @@ public final class HiveBreachRepair {
             return;
         }
 
+        // 🚨 Oct 2 - HIVE-WIDE CEILING ON WORKERS CALLED UP FROM THE BANK. The crew cap was per breach, and a worker
+        // that
+        // picked up a target was dropped from its crew ("found a fight - replaced next beat") while staying alive in
+        // the world - so a player harassing the repair crew pulled a fresh worker out of the bank each beat, the same
+        // drain shape as the vent defenders. Called-up workers stay counted until they die or leave the world.
+        var called = RESERVE_CALLED.computeIfAbsent(location, $ -> java.util.Collections.synchronizedSet(new java.util.HashSet<>()));
+        called.removeIf(id -> !(level.getEntity(id) instanceof Xenomorph alive) || !alive.isAlive());
+        if (called.size() >= RESERVE_CALLED_CAP) {
+            return;
+        }
+
         var now = level.getGameTime();
         if (now - job.lastReserveCallAt < RESERVE_CALL_COOLDOWN_TICKS) {
             return;
@@ -367,7 +384,7 @@ public final class HiveBreachRepair {
         }
 
         for (var vent : vents) {
-            if (job.workers.size() >= CREW_SIZE) {
+            if (job.workers.size() >= CREW_SIZE || called.size() >= RESERVE_CALLED_CAP) {
                 return;
             }
 
@@ -381,14 +398,14 @@ public final class HiveBreachRepair {
                 return; // the bank holds no drones or runners
             }
 
-            var worker = HiveLoadedSpawner.trySpawnIdentityReserve(level, location, type, emergence);
+            var worker = HiveLoadedSpawner.trySpawnFromReserves(level, location, type, emergence);
             if (worker == null) {
                 continue;
             }
 
-            ReserveSpawnUtil.markSpawnedFromReserves(worker);
             job.lastReserveCallAt = now;
             job.workers.add(worker.getUUID());
+            called.add(worker.getUUID());
             com.alien.Alien.LOGGER.info(
                 "Hive at {}: called a worker up from reserves at {} to repair a breach.",
                 location.centerPos(),
@@ -409,7 +426,9 @@ public final class HiveBreachRepair {
         for (var caste : java.util.List.of(AlienEntityTypeTags.DRONES, AlienEntityTypeTags.RUNNERS)) {
             var type = com.alien.common.gameplay.hive.economy.CasteResolver.entityTypeForCaste(variant, caste);
 
-            if (type != null && location.localReserves().getCount(type) > 0) {
+            // getReliableCount, NOT getCount: getCount is the ABSTRACT bank only, so a hive whose whole population
+            // had unloaded into the IDENTITY list read as empty and picked nothing.
+            if (type != null && location.localReserves().getReliableCount(type) > 0) {
                 return type;
             }
         }

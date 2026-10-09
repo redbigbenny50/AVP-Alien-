@@ -23,6 +23,14 @@ public final class RescueCampaign {
 
     public static final int MAX_ATTEMPTS = 3;
 
+    /**
+     * \u2b50 Oct 3 - [stated] "if they cannot locate(load) the queen in that period of time she is counted as lost."
+     * One Minecraft day of the hive being loaded without its queen being found anywhere in its dimension. Counted only
+     * while the hive itself is loaded: a hive nobody is near is not looking for anyone, and must not lose its queen
+     * just because the server sat empty overnight.
+     */
+    public static final long LOST_AFTER_UNSEEN_TICKS = 24_000L;
+
     private final UUID queenUuid;
 
     private UUID captorPlayerId;
@@ -32,6 +40,12 @@ public final class RescueCampaign {
     private int attemptsFailed;
 
     private UUID currentRaidId;
+
+    /** Loaded-hive ticks since the queen was last found. Persisted, so a relog does not reset the search. */
+    private long unseenTicks;
+
+    /** Game time of the last search tick (transient: the first scan after a load just re-starts the clock). */
+    private long lastSearchGameTime = -1L;
 
     public RescueCampaign(UUID queenUuid) {
         this.queenUuid = queenUuid;
@@ -95,6 +109,38 @@ public final class RescueCampaign {
         return currentRaidId != null;
     }
 
+    /**
+     * The queen was found this scan.
+     *
+     * @param gameTime the current game time
+     */
+    public void markSeen(long gameTime) {
+        unseenTicks = 0L;
+        lastSearchGameTime = gameTime;
+    }
+
+    /**
+     * The queen was NOT found this scan. {@code hiveLoaded} says whether the time counts.
+     *
+     * @param gameTime      the current game time
+     * @param hiveLoaded    whether the hive itself is loaded (only then is anyone looking for her)
+     * @param maxCountedGap the longest gap between two scans that is counted; anything longer means the server was not
+     *                      simulating the hive (stopped, or the scan cadence was changed) and must not be charged to
+     *                      the search
+     * @return true once she has been unseen long enough to be counted as lost
+     */
+    public boolean markUnseen(long gameTime, boolean hiveLoaded, long maxCountedGap) {
+        if (lastSearchGameTime >= 0L && hiveLoaded) {
+            unseenTicks += Math.min(Math.max(0L, gameTime - lastSearchGameTime), maxCountedGap);
+        }
+        lastSearchGameTime = gameTime;
+        return unseenTicks >= LOST_AFTER_UNSEEN_TICKS;
+    }
+
+    public long unseenTicks() {
+        return unseenTicks;
+    }
+
     public CompoundTag save() {
         var tag = new CompoundTag();
         tag.putUUID("QueenUuid", queenUuid);
@@ -106,16 +152,19 @@ public final class RescueCampaign {
         if (currentRaidId != null) {
             tag.putUUID("CurrentRaidId", currentRaidId);
         }
+        tag.putLong("UnseenTicks", unseenTicks);
         return tag;
     }
 
     public static RescueCampaign load(CompoundTag tag) {
-        return new RescueCampaign(
+        var campaign = new RescueCampaign(
             tag.getUUID("QueenUuid"),
             tag.hasUUID("CaptorPlayerId") ? tag.getUUID("CaptorPlayerId") : null,
             tag.getBoolean("Active"),
             tag.getInt("AttemptsFailed"),
             tag.hasUUID("CurrentRaidId") ? tag.getUUID("CurrentRaidId") : null
         );
+        campaign.unseenTicks = tag.getLong("UnseenTicks");
+        return campaign;
     }
 }

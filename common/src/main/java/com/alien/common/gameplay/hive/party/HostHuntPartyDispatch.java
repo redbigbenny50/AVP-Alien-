@@ -3,7 +3,6 @@ package com.alien.common.gameplay.hive.party;
 import com.alien.Alien;
 import com.alien.common.gameplay.hive.config.HiveConfig;
 import com.alien.common.gameplay.hive.location.HiveLocation;
-import com.alien.common.gameplay.hive.spawning.ReserveSpawnUtil;
 import com.alien.common.registry.tag.AlienEntityTypeTags;
 import com.blib.api.common.entity.v1.EntityReserves;
 import net.minecraft.core.BlockPos;
@@ -11,7 +10,6 @@ import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.Mob;
-import net.minecraft.world.entity.MobSpawnType;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -27,6 +25,14 @@ public final class HostHuntPartyDispatch {
     private HostHuntPartyDispatch() {}
 
     public static void tryRun(MinecraftServer server, HiveLocation location, HiveConfig config) {
+        // ⚠ BUILD-FREE TOGGLE. Host hunts leave the hive by the surface door; with no real surface they walk onto a
+        // roof.
+        //
+        // Gated at the DISPATCH entry rather than deeper in, so a switched-off party type costs nothing at
+        // all - no scan, no vent lookup, no composition drain that has to be refunded.
+        if (com.alien.common.gameplay.hive.config.BuildFreeMode.isEnabled() && !config.buildFreeHostSurfacePartiesEnabled()) {
+            return;
+        }
         // Three-day cooldown: a party of this kind is an EVENT, not a conveyor belt. Back-to-back dispatches
         // drained the reserves as fast as the hive could breed them, so the population never settled and
         // never got promoted into warriors or prowlers.
@@ -65,6 +71,26 @@ public final class HostHuntPartyDispatch {
         // loaded hosts - and when every vent is a TIER away from them (the nether's stacked shelves; the tester
         // case was piglins one level below the whole vent network), the party digs its own door first: a fresh
         // SURFACE vent planted on the hosts' shelf, guaranteed, the same idiom as the bastion structure vent.
+        // ⚠ Oct 5 audit - THE PARTY IS DRAWN BEFORE ANY VENT IS DUG. This used to plant a vent on the prey's tier
+        // first and only then discover the reserve had no drones to send, leaving a new surface vent in the world for a
+        // party that never left. The cooldown is only set on a successful dispatch, so the next run could try again.
+        var hostCap = com.alien.common.gameplay.hive.empress.EmpressCaps.scale(location, config.hostHuntPartyMaxSize());
+        var desiredSize = Math.min(
+            hostCap,
+            Math.max(
+                1,
+                Math.round(
+                    config.hostHuntPartyBaseSize()
+                        + config.hostHuntPartySizePerClaimedChunk() * location.claimedChunks().size()
+                )
+            )
+        );
+
+        var composition = drainComposition(location, (int) desiredSize, 0);
+        if (composition.getCount() <= 0) {
+            return;
+        }
+
         var spawnPos = surfaceVents.get(serverLevel.random.nextInt(surfaceVents.size()));
         var hostAnchor = nearestLoadedHost(serverLevel, location);
         if (hostAnchor != null) {
@@ -89,23 +115,6 @@ public final class HostHuntPartyDispatch {
         }
 
         // Size scales with claims but is CAPPED (bonus spitters ride on top of this budget).
-        var hostCap = com.alien.common.gameplay.hive.empress.EmpressCaps.scale(location, config.hostHuntPartyMaxSize());
-        var desiredSize = Math.min(
-            hostCap,
-            Math.max(
-                1,
-                Math.round(
-                    config.hostHuntPartyBaseSize()
-                        + config.hostHuntPartySizePerClaimedChunk() * location.claimedChunks().size()
-                )
-            )
-        );
-
-        var composition = drainComposition(location, (int) desiredSize, 0);
-        if (composition.getCount() <= 0) {
-            return;
-        }
-
         var currentTick = serverLevel.getGameTime();
         var party = new HiveParty.HostHunt(
             HivePartyId.fresh(),
@@ -210,11 +219,11 @@ public final class HostHuntPartyDispatch {
                 var jitterZ = emergePos.getZ() + 0.5 + (level.random.nextDouble() - 0.5) * 2.0;
                 entity.moveTo(jitterX, emergePos.getY(), jitterZ, level.random.nextFloat() * 360.0F, 0.0F);
                 if (entity instanceof Mob mob) {
-                    mob.finalizeSpawn(level, level.getCurrentDifficultyAt(spawnPos), MobSpawnType.MOB_SUMMONED, null);
+                    com.alien.common.gameplay.hive.spawning.ReserveSpawnUtil
+                        .finalizePrepaidSpawn(level, mob, spawnPos);
                     mob.setPersistenceRequired();
                 }
                 level.addFreshEntityWithPassengers(entity);
-                ReserveSpawnUtil.markSpawnedFromReserves(entity);
                 if (entity instanceof com.alien.common.gameplay.entity.living.alien.Alien alien) {
                     alien.setPartyMembership(new PartyMembership(party.sourceLocationId(), party.id()));
                 }

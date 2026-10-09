@@ -62,6 +62,14 @@ public class LineageFactionData extends FactionData {
 
     private static final String NBT_EMPRESS_ID = "EmpressId";
 
+    private static final String NBT_PRETENDERS = "Pretenders";
+
+    private static final String NBT_SCHISM_GRACE_UNTIL = "SchismGraceUntilTick";
+
+    private static final String NBT_PRETENDER_ID = "Id";
+
+    private static final String NBT_PRETENDER_CROWNED = "CrownedAt";
+
     private static final String NBT_AGE_IN_TICKS = "AgeInTicks";
 
     private static final String NBT_PENDING_EMPRESS_EMERGENCE = "PendingEmpressEmergence";
@@ -110,6 +118,52 @@ public class LineageFactionData extends FactionData {
     private long separationTick;
 
     private @Nullable UUID empressId;
+
+    /**
+     * ⭐⭐⭐ EVERY OTHER EMPRESS IN THIS LINEAGE, OLDEST FIRST. {@link #empressId} REMAINS THE SOVEREIGN.
+     * <p>
+     * [stated] "yes the oldest is soverign when there is two and if something happens the second oldest takes over."
+     * </p>
+     * <p>
+     * ⚠⚠ THE SOVEREIGN IS DELIBERATELY STILL A SINGLE FIELD. {@code empressId()} has FORTY-EIGHT readers across the mod
+     * and every one of them is asking the same question — "who rules this lineage" — whose answer is still one UUID.
+     * Turning it into a collection would have touched all forty-eight and broken the invariant they rely on. A list
+     * BESIDE it means nothing outside this class needs to know a second empress can exist.
+     * </p>
+     * <p>
+     * ⚠ CROWNING TIME IS STORED, NOT DERIVED. "Oldest" cannot be read off the entity — she may be unloaded, or in
+     * another dimension — so without a persisted stamp the succession order would be arbitrary after a reload, which is
+     * exactly the kind of bug that only shows up in someone else's world a week later.
+     * </p>
+     */
+    private final java.util.List<Pretender> pretenders = new java.util.ArrayList<>();
+
+    /**
+     * ⭐⭐⭐ A BREAKAWAY LINEAGE'S HEAD START. Game time until which it cannot be absorbed and buys members without paying
+     * biomass.
+     * <p>
+     * [stated] "give a grace period because she will need to raise her troops and populate the hive ... the grace
+     * period should be a time of 3 minecraft days but member production has no biomass cost just a jelly cost."
+     * </p>
+     * <p>
+     * ⚠⚠ THE FREE PRODUCTION IS THE LOAD-BEARING HALF, NOT THE IMMUNITY. A schism founds ONE hive beside an empire of
+     * eight, and the absorption roll weighs network size and banked strength - her defence floors at ten percent.
+     * Protecting her without letting her BUILD would only postpone the same loss by three days; the player who spawned
+     * her would still see nothing happen. [stated] "a hive with a grace period has a period of member growth to make
+     * the war possible."
+     * </p>
+     * <p>
+     * ⚠ JELLY IS STILL CHARGED, so she cannot conjure an army from nothing - she spends what she has, faster. Same
+     * shape as the irradiated and forced-empress carve waivers: waive the DEBT, never the TIME.
+     * </p>
+     */
+    private long schismGraceUntilTick;
+
+    /** An empress of this lineage who is not its sovereign, with the game time she was crowned. */
+    private record Pretender(
+        UUID id,
+        long crownedAtGameTime
+    ) {}
 
     private long ageInTicks;
 
@@ -409,6 +463,72 @@ public class LineageFactionData extends FactionData {
         markDirty();
     }
 
+    /**
+     * Records an empress who is NOT the sovereign - situation 6, and any rival crowned while one already reigns.
+     * <p>
+     * ⚠ If the lineage has no sovereign she simply becomes it: a pretender with nobody to yield to is the ruler.
+     * </p>
+     */
+    public void addPretender(UUID id, long crownedAtGameTime) {
+        if (id.equals(empressId)) {
+            return;
+        }
+        if (empressId == null) {
+            setEmpressId(id);
+            return;
+        }
+        for (var pretender : pretenders) {
+            if (pretender.id().equals(id)) {
+                return;
+            }
+        }
+        pretenders.add(new Pretender(id, crownedAtGameTime));
+        pretenders.sort(java.util.Comparator.comparingLong(Pretender::crownedAtGameTime));
+        markDirty();
+    }
+
+    /** Whether this lineage is inside its breakaway grace period. */
+    public boolean isInSchismGrace(long gameTime) {
+        return gameTime < schismGraceUntilTick;
+    }
+
+    public void beginSchismGrace(long untilGameTime) {
+        this.schismGraceUntilTick = untilGameTime;
+        markDirty();
+    }
+
+    public void removePretender(UUID id) {
+        if (pretenders.removeIf(pretender -> pretender.id().equals(id))) {
+            markDirty();
+        }
+    }
+
+    /** Every empress of this lineage that is not the sovereign, oldest first. */
+    public java.util.List<UUID> pretenders() {
+        return pretenders.stream().map(Pretender::id).toList();
+    }
+
+    /**
+     * ⭐⭐ PROMOTES THE OLDEST PRETENDER INTO THE THRONE. Call when the sovereign dies.
+     * <p>
+     * [stated] "if something happens the second oldest takes over." The list is kept sorted by crowning time, so the
+     * next in line is simply the first entry.
+     * </p>
+     * <p>
+     * ⚠ RETURNS FALSE WHEN THERE IS NOBODY, which must leave the ordinary queenless path to run. A lineage whose only
+     * empress dies with no rival is exactly the case the crowning cooldown exists for, and skipping it would hand the
+     * players nothing for the fight.
+     * </p>
+     */
+    public boolean promoteNextEmpress() {
+        if (pretenders.isEmpty()) {
+            return false;
+        }
+        var heir = pretenders.remove(0);
+        setEmpressId(heir.id());
+        return true;
+    }
+
     public long ageInTicks() {
         return ageInTicks;
     }
@@ -446,7 +566,18 @@ public class LineageFactionData extends FactionData {
     public int activeLocationCount() {
         var count = 0;
         for (var location : locationsById().values()) {
-            if (!location.isExiled()) {
+            // !!! isAlive() WAS MISSING AND ONLY isExiled() WAS ASKED. A location keeps its entry in the map after it
+            // has been marked dead, so a hive that decayed, lost its queen, or never finished founding still counted
+            // as a hive of this lineage.
+            //
+            // [stated] "dead hives should not count towards making an empress. so if a location or hive dies before
+            // an empress is naturally made it should be removed from the counting towards making her."
+            //
+            // WARNING: THIS IS THE FOUR-HIVE EMPRESS GATE, AND THAT IS HOW AN EMPRESS ARRIVED AT TWO. Reported as
+            // "Got an empress from just 2 daughter queens" - two live hives plus leftovers reached the threshold.
+            // The same count also gates spread caps, migration, reinforcement, war projection and the schism, and
+            // counting corpses is wrong in every one of them, so the guard goes here rather than at the gate.
+            if (location.isAlive() && !location.isExiled()) {
                 count++;
             }
         }
@@ -596,6 +727,21 @@ public class LineageFactionData extends FactionData {
             }
         }
 
+        // \u26a0 Order is REBUILT FROM THE STORED STAMPS, not trusted from list order, so a hand-edited or
+        // partially-written save still yields a correct succession rather than a silently wrong one.
+        pretenders.clear();
+        var pretenderList = tag.getList(NBT_PRETENDERS, net.minecraft.nbt.Tag.TAG_COMPOUND);
+        for (var index = 0; index < pretenderList.size(); index++) {
+            var entry = pretenderList.getCompound(index);
+            if (entry.hasUUID(NBT_PRETENDER_ID)) {
+                pretenders.add(
+                    new Pretender(entry.getUUID(NBT_PRETENDER_ID), entry.getLong(NBT_PRETENDER_CROWNED))
+                );
+            }
+        }
+        pretenders.sort(java.util.Comparator.comparingLong(Pretender::crownedAtGameTime));
+        this.schismGraceUntilTick = tag.getLong(NBT_SCHISM_GRACE_UNTIL);
+
         if (tag.hasUUID(NBT_EMPRESS_ID)) {
             this.empressId = tag.getUUID(NBT_EMPRESS_ID);
         }
@@ -710,6 +856,19 @@ public class LineageFactionData extends FactionData {
 
         if (empressId != null) {
             tag.putUUID(NBT_EMPRESS_ID, empressId);
+        }
+        if (!pretenders.isEmpty()) {
+            var pretenderList = new net.minecraft.nbt.ListTag();
+            for (var pretender : pretenders) {
+                var entry = new net.minecraft.nbt.CompoundTag();
+                entry.putUUID(NBT_PRETENDER_ID, pretender.id());
+                entry.putLong(NBT_PRETENDER_CROWNED, pretender.crownedAtGameTime());
+                pretenderList.add(entry);
+            }
+            tag.put(NBT_PRETENDERS, pretenderList);
+        }
+        if (schismGraceUntilTick > 0L) {
+            tag.putLong(NBT_SCHISM_GRACE_UNTIL, schismGraceUntilTick);
         }
 
         tag.putLong(NBT_AGE_IN_TICKS, ageInTicks);

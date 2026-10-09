@@ -12,6 +12,7 @@ import net.fabricmc.fabric.api.datagen.v1.FabricDataOutput;
 import net.fabricmc.fabric.api.datagen.v1.provider.FabricTagProvider;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.tags.ItemTags;
 import net.minecraft.world.item.ArmorItem;
 import net.minecraft.world.item.AxeItem;
@@ -65,7 +66,32 @@ public class AlienItemTagProvider extends FabricTagProvider.ItemTagProvider {
                 AlienItems.PLATED_NETHER_CHITIN.get(),
                 AlienItems.PLATED_ABERRANT_CHITIN.get(),
                 AlienItems.PLATED_IRRADIATED_CHITIN.get()
-            );
+            )
+            // ⭐⭐ AVP: PREDATOR'S VERITANIUM SET. Veritanium is Yautja alloy — the species hunts inside hives, so
+            // gear that dissolves on the floor of one defeats the entire fantasy. Reported from play: a predator's
+            // boots wore through in seconds standing in acid.
+            //
+            // ⚠⚠ ONLY THE BOOTS ARE ACTUALLY READ — AcidEntityDamageUtil checks the FEET slot and nothing else. The
+            // whole set is listed because chitin is, and because a chest- or head-slot check added later would
+            // otherwise silently miss these.
+            //
+            // ⭐ Membership here means TOTAL immunity, not resistance: the check returns before `damageFootwear` AND
+            // before any entity damage, so the boots lose no durability and the wearer takes no harm. That is the
+            // stated intent — [stated] "pred boots should not lose durability in acid".
+            //
+            // ⚠⚠ NAMED BY STRING, NEVER BY IMPORT. `PredatorItemTags`/`PredatorArmorItems` are modCompileOnly, so
+            // they are on the COMPILE classpath and not the RUNTIME one — and datagen runs on the runtime classpath.
+            // An import compiles perfectly and then throws NoClassDefFoundError the moment datagen touches it,
+            // killing THIS ENTIRE PROVIDER and every item tag the mod ships. See siblingEntityTag in
+            // AlienEntityTypeTagProvider for the full account; an `isLoaded()` guard is no better, because it is
+            // always false at datagen and the entries simply vanish.
+            //
+            // ⚠ addOptional: an id that does not resolve is DROPPED at load, never a validation failure — so this is
+            // harmless when avp_predator is absent.
+            .addOptional(ResourceLocation.fromNamespaceAndPath("avp_predator", "jungle_predator_helmet"))
+            .addOptional(ResourceLocation.fromNamespaceAndPath("avp_predator", "jungle_predator_chestplate"))
+            .addOptional(ResourceLocation.fromNamespaceAndPath("avp_predator", "jungle_predator_leggings"))
+            .addOptional(ResourceLocation.fromNamespaceAndPath("avp_predator", "jungle_predator_boots"));
 
         // VANILLA tag, not BLib's deprecated DECORATIVE_POT_SHERDS. Nothing in BLib 419 reads that constant any
         // more, and `minecraft:decorated_pot_sherds` is the tag vanilla itself checks when crafting a decorated

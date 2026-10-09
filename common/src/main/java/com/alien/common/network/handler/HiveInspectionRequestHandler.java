@@ -91,6 +91,14 @@ public final class HiveInspectionRequestHandler {
             return null;
         }
 
+        // ⚠ AGE OUT STALE ENTRIES. This map is only a rate limiter, but it is keyed by FACTION ID and nothing ever
+        // removed from it - so a long-running pack accumulated one entry per lineage that ever failed a lookup,
+        // forever, including lineages long since dead. Anything older than the retry window can no longer affect a
+        // decision, so it is safe to drop.
+        LAST_LOCATION_REBUILD_TICK_BY_FACTION
+            .entrySet()
+            .removeIf(entry -> currentTick >= entry.getValue() + LOCATION_REBUILD_RETRY_TICKS);
+
         LAST_LOCATION_REBUILD_TICK_BY_FACTION.put(factionId, currentTick);
         Alien.LOGGER.warn(
             "Hive inspector could not resolve location {}; rebuilding hive indexes from loaded factions.",

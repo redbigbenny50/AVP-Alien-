@@ -50,7 +50,11 @@ public final class CatchUpEngine {
             var income = (int) Math.round(perSec * elapsed / 20.0);
 
             if (income > 0) {
-                addBiomassClamped(location, income, config);
+                // Oct 8: unloaded income banks past the founding target (see BiomassIncome.unloadedBiomassCap).
+                var cap = passiveClaims
+                    ? BiomassIncome.unloadedBiomassCap(location, config)
+                    : BiomassIncome.biomassCap(location, config);
+                BiomassIncome.addUpToCap(location, income, cap);
             }
 
             location.setLastGrowthTick(currentTick);
@@ -73,12 +77,6 @@ public final class CatchUpEngine {
         }
 
         runClaimLoop(level, location, lineage, currentTick, config, passiveClaims, claimLimit);
-    }
-
-    private static void addBiomassClamped(HiveLocation location, int income, com.alien.common.gameplay.hive.config.HiveConfig config) {
-        var cap = BiomassIncome.biomassCap(location, config);
-        var newBiomass = Math.min(cap, location.biomass() + income);
-        location.setBiomass(newBiomass);
     }
 
     private static void runClaimLoop(
@@ -112,13 +110,26 @@ public final class CatchUpEngine {
                 return;
             }
 
-            if (!hasEnoughPopulationToClaim(location, config)) {
-                return;
-            }
+            // \u2b50\u2b50 BUILD-FREE: TERRITORY IS FILLED BY PRESENCE, NOT BOUGHT.
+            //
+            // [stated] "allow any xeno to claim territory with no biomass cost ... if they enter a chunk and its in
+            // that 19x19 area it counts as claimed", narrowed to [stated] "let only hive members of the territory
+            // fill the claims free".
+            //
+            // \u26a0 BOTH the population ratio AND the cost go, and they have to go together: the ratio was tuned
+            // against an economy where claiming competed with caste purchases for the same biomass. With claiming
+            // free, a ratio gate is just an arbitrary delay on a hive filling a box it will fill anyway. The
+            // configured radius is the ONLY bound - the number in the file IS the territory.
+            var buildFree = com.alien.common.gameplay.hive.config.BuildFreeMode.isEnabled();
+            var cost = buildFree ? 0 : BiomassIncome.claimCost(location, config);
 
-            var cost = BiomassIncome.claimCost(location, config);
-            if (location.biomass() < cost) {
-                return;
+            if (!buildFree) {
+                if (!hasEnoughPopulationToClaim(location, config)) {
+                    return;
+                }
+                if (location.biomass() < cost) {
+                    return;
+                }
             }
 
             var nextChunk = passiveClaims

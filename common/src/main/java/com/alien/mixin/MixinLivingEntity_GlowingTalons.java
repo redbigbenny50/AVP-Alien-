@@ -40,6 +40,19 @@ public abstract class MixinLivingEntity_GlowingTalons {
             net.minecraft.resources.ResourceLocation.fromNamespaceAndPath("avp_human", "radiation_resistant_armors")
         );
 
+    /**
+     * AVPHuman's entity tag of things radiation never touches (undead, the invulnerable, yautja with the predator mod's
+     * contribution). By id, so it is an empty tag rather than a missing class when avp_human is absent - and tag files
+     * load whatever mod their namespace belongs to, so avp_predator's entry still counts in an alien-plus-predator
+     * pack. Sep 23: the touch rule checked the ARMOUR tag but never this one, so in a pack without avp_human a yautja
+     * took radiation sickness from an irradiated warrior's claws.
+     */
+    private static final net.minecraft.tags.TagKey<net.minecraft.world.entity.EntityType<?>> RADIATION_RESISTANT_ENTITIES =
+        net.minecraft.tags.TagKey.create(
+            net.minecraft.core.registries.Registries.ENTITY_TYPE,
+            net.minecraft.resources.ResourceLocation.fromNamespaceAndPath("avp_human", "radiation_resistant")
+        );
+
     /** The strain's own eligibility rule, so talons and claws agree on who can be dosed. */
     private static boolean avp_alien$canBeIrradiatedByTouch(LivingEntity victim) {
         // Aliens are radiation-immune AS A SPECIES - except the aberrant strain, which is not. Aberrants are the
@@ -47,6 +60,10 @@ public abstract class MixinLivingEntity_GlowingTalons {
         // burn instead. The avp_human:radiation_resistant tag we contribute lists every alien EXCEPT them, and this
         // mirrors it so claws and talons agree with the environment.
         if (victim instanceof Alien irradiatedAlien && irradiatedAlien.getVariant() != AlienVariant.ABERRANT) {
+            return false;
+        }
+
+        if (victim.getType().is(RADIATION_RESISTANT_ENTITIES)) {
             return false;
         }
 

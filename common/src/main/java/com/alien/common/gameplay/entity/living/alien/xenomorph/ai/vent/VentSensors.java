@@ -63,6 +63,17 @@ public class VentSensors {
             }
 
             // Enough frontier vents already for this footprint? Stop building so builders fall through to hauling.
+            // ⚠ Oct 1: build-free vents inside the claim are STRUCTURE, which the FRONTIER cap below never counted -
+            // there was no limit at all. That mode has its own spacing rule; the exact spot is checked again where it
+            // is chosen (CreateVentAction), this is only the cheap hive-wide ceiling.
+            if (com.alien.common.gameplay.hive.vent.BuildFreeVents.applies(owningLocation)) {
+                if (!com.alien.common.gameplay.hive.vent.BuildFreeVents.underHiveCap(owningLocation)) {
+                    return false;
+                }
+                var angryBar = owningLocation.bossBar();
+                return angryBar == null || !angryBar.isAngry();
+            }
+
             int ventCap = Math.max(
                 MIN_VENTS_PER_LOCATION,
                 owningLocation.claimedChunks().size() / VENT_CLAIMED_CHUNKS_PER_VENT

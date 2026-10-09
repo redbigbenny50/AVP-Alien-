@@ -43,6 +43,12 @@ public class GrowthManager implements NBTSerializable {
         set.add(com.alien.common.gameplay.entity.living.alien.xenomorph.CocoonManager.COCOON_SOURCE_TIME_TAG);
         set.add(com.alien.common.gameplay.entity.living.alien.xenomorph.CocoonManager.COCOON_DESTINATION_TIME_TAG);
         set.add(com.alien.common.gameplay.entity.living.alien.xenomorph.CocoonManager.COCOON_ELAPSED_TICKS_TAG);
+        // ⚠ MUST BE BLACKLISTED. The redirect flag belongs to THIS molt. Carried across, the emerged caste would
+        // arrive already marked as redirected and its NEXT molt could never be redirected at all.
+        set.add(com.alien.common.gameplay.entity.living.alien.xenomorph.CocoonManager.COCOON_REDIRECTED_TAG);
+        // The forced-id instruction is a property of THIS molt only. Carrying it into the emerged form would leave
+        // it holding an id it can never act on - and would hand a second molt the first molt's identity.
+        set.add(com.alien.common.gameplay.entity.living.alien.xenomorph.CocoonManager.COCOON_FORCED_ID_TAG);
         return set;
     });
 

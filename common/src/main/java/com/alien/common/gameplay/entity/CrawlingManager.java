@@ -44,6 +44,19 @@ public class CrawlingManager implements NBTSerializable {
     /** Allows a giant caste to keep its normal standing behavior but crawl after a leg is detached. */
     private final boolean canCrawlAfterLegLoss;
 
+    /** How long a tight-space answer stays valid for an entity that has not moved, in ticks. */
+    private static final int TIGHT_SPACE_CACHE_TICKS = 10;
+
+    private net.minecraft.core.@org.jetbrains.annotations.Nullable BlockPos cachedTightPos;
+
+    private net.minecraft.core.@org.jetbrains.annotations.Nullable BlockPos cachedTightPrevNode;
+
+    private net.minecraft.core.@org.jetbrains.annotations.Nullable BlockPos cachedTightNextNode;
+
+    private int cachedTightTick = Integer.MIN_VALUE;
+
+    private boolean cachedTightResult;
+
     public CrawlingManager(
         PathfinderMob entity,
         DataAccessor<Boolean> isCrawling,
@@ -179,50 +192,68 @@ public class CrawlingManager implements NBTSerializable {
         //
         // Now every sampled position must be low: the ceiling has to hold across the stretch it is standing in
         // and moving through, which is the difference between a short hallway and an arch it passes under.
-        var isTight = isTightSpace(blockPosition);
+        // ⭐⭐ CACHE THE GEOMETRIC PART ONLY. Three DIFFERENT positions are tested per tick - the entity's own
+        // block, the previous path node and the next - so a cache keyed on a single position would evict itself on
+        // every call and cost more than it saved. Keyed on all three together it holds while the mob stays put on the
+        // same path, which for a stationary or slow xenomorph is nearly always.
+        //
+        // ⚠ WHY IT IS WORTH CACHING: each isTightSpace walks the entity's full standing height plus four horizontal
+        // neighbours, so a 3.98-block caste paid roughly fifteen getBlockState calls EVERY TICK to re-answer an
+        // identical question. Bounded per entity rather than per pathfinding node, so never as severe as the terrain
+        // classifier was - but it scales with mob count and a hive has hundreds.
+        //
+        // ⚠⚠ ONLY THE BLOCK SCAN IS CACHED. Everything below still runs every tick, because it depends on live state
+        // - a lost leg, a charge in progress, the path asking for a crawl - and must not be frozen for ten ticks.
+        var previousNode = path != null && path.getNextNodeIndex() < path.getNodeCount()
+            ? path.getPreviousNode()
+            : null;
+        var previousNodePos = previousNode == null ? null : previousNode.asBlockPos();
+        var nextNodePos = path != null && path.getNextNodeIndex() < path.getNodeCount()
+            ? path.getNextNode().asBlockPos()
+            : null;
+        var now = entity.tickCount;
 
-        if (isTight) {
-            if (path != null && path.getNextNodeIndex() < path.getNodeCount()) {
-                var previousNode = path.getPreviousNode();
-                if (previousNode != null) {
-                    isTight = isTightSpace(previousNode.asBlockPos());
+        boolean isTight;
+
+        if (
+            blockPosition.equals(cachedTightPos)
+                && java.util.Objects.equals(previousNodePos, cachedTightPrevNode)
+                && java.util.Objects.equals(nextNodePos, cachedTightNextNode)
+                && now >= cachedTightTick
+                && now - cachedTightTick < TIGHT_SPACE_CACHE_TICKS
+        ) {
+            isTight = cachedTightResult;
+        } else {
+            isTight = isTightSpace(blockPosition);
+
+            if (isTight) {
+                if (nextNodePos != null) {
+                    if (previousNodePos != null) {
+                        isTight = isTightSpace(previousNodePos);
+                    }
+                    isTight = isTight && isTightSpace(nextNodePos);
+                } else {
+                    isTight = neighboursAreAlsoLow(blockPosition);
                 }
-                isTight = isTight && isTightSpace(path.getNextNode().asBlockPos());
-            } else {
-                // ⚠ STANDING STILL HAS NO PATH TO SAMPLE, so without this a praetorian parked in a doorway
-                // would still read tight from its own tile alone and drop - the exact case he ruled out.
-                isTight = neighboursAreAlsoLow(blockPosition);
             }
+
+            cachedTightPos = blockPosition.immutable();
+            cachedTightPrevNode = previousNodePos == null ? null : previousNodePos.immutable();
+            cachedTightNextNode = nextNodePos == null ? null : nextNodePos.immutable();
+            cachedTightTick = now;
+            cachedTightResult = isTight;
         }
 
         isTight = isTight || pathRequestsCrawl;
 
-        // A dismembered leg forces the stance into crawling regardless of overhead clearance - the mob lost a leg, it
-        // can't stand back up.
         var hasLegOff = canCrawlAfterLegLoss
             && entity instanceof Dismemberable dismemberable
             && hasDetachedLegLimb(dismemberable);
 
-        // A CHARGE DOES NOT DUCK. [stated] "if its a small doorway they will crawl 'duck' under it. if its say a
-        // hallway and they are pursueing something or if its just a few floating blocks in their way they will
-        // smash through it."
-        //
-        // Without this, a running queen would drop to a crawl at the first arch or ceiling rib, and crawling puts
-        // her under Xenomorph's 3.0 shoulder-break height gate - so she could neither fit nor break, and a charge
-        // down a decorated corridor would stall. Standing tall keeps her above that gate, which is what lets her
-        // take the arch out on the way through.
-        //
-        // "Running" is judged against the caste's OWN walk speed, the same way shoulderThroughObstructions judges
-        // it, so a queen and a runner are each measured by their own gait. A lost leg still overrides everything -
-        // she cannot stand up to charge on a missing limb.
         var wasCrawling = isCrawling.get();
         var nowCrawling = (canCrawl && isTight && !isChargingATarget()) || hasLegOff;
         isCrawling.set(nowCrawling);
 
-        // ⚠⚠ THE HITBOX HAS TO FOLLOW THE POSTURE. Alien.getDimensions returns a shorter box while crawling, but
-        // vanilla caches the bounding box - without refreshDimensions the entity keeps its old size until
-        // something else happens to invalidate it, which is precisely how a "crawling" harbinger kept a 5.5-tall
-        // box and wedged itself on one-block steps.
         if (wasCrawling != nowCrawling) {
             entity.refreshDimensions();
         }
@@ -374,6 +405,18 @@ public class CrawlingManager implements NBTSerializable {
         for (var offset = 1; offset <= standingHeight - 1; offset++) {
             var pos = blockPos.above(offset);
             var state = level.getBlockState(pos);
+
+            // !!! LEAVES ARE NOT A CEILING. [stated] "xenomorphs should not have to crawl or duck under leaves
+            // especially the big ones." A canopy answers entityCanStandOn, so every xenomorph tall enough to reach
+            // one was forced into a crawl for walking under a tree - and a 3.98 caste checks four blocks up, so the
+            // big ones were permanently ducking in any forest.
+            //
+            // * Paired with the collision mixin that lets them walk THROUGH leaves: without this they would stop
+            // colliding with the canopy and still crouch under it.
+            if (state.is(net.minecraft.tags.BlockTags.LEAVES)) {
+                continue;
+            }
+
             if (!state.isAir() && state.entityCanStandOn(level, pos, entity)) {
                 return true;
             }

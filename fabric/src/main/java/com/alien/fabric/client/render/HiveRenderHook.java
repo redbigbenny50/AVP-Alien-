@@ -36,6 +36,12 @@ public final class HiveRenderHook {
                 buffers,
                 context.camera().getPosition()
             );
+            // ⚠ Same pass as the others: camera-relative coordinates, and each renderer handles its own offset.
+            com.alien.client.render.rescue.RescueChannelBarRenderer.render(
+                context.matrixStack(),
+                buffers,
+                context.camera().getPosition()
+            );
         });
     }
 }

@@ -94,7 +94,8 @@ public class HiveManager implements NBTSerializable {
         // chained-queen freeze never runs) - hence the gate lives here on the settlement path. forget() also cancels
         // any
         // in-progress settlement timer so a queen captured mid-ritual doesn't instantly found the moment she's freed.
-        if (queen.isInhibited() || queen.getBindManager().hasAnyChain() || queen.isIncapacitated()) {
+        // Oct 3: also during her release/arrival grace outside a hive's slab - see QueenCaptivity.
+        if (!com.alien.common.gameplay.hive.lifecycle.QueenCaptivity.mayFound(queen)) {
             QueenSettlementDetector.forget(queen.getUUID());
             return;
         }
@@ -119,6 +120,26 @@ public class HiveManager implements NBTSerializable {
             return;
         }
 
+        // ⭐⭐ A QUEEN WHO WAS REFUSED IN PLACE STANDS DOWN - SHE DOES NOT RE-RUN THE RITUAL EVERY SETTLEMENT CYCLE.
+        //
+        // [stated, relayed] "i keep getting 'this hive still lives... the brood returns to its search.' every 5
+        // seconds in my freebuild hive and the queen is only making black particles and no eggsack." The halt below
+        // was set, but nothing on this path ever read it, so the timer banked, the refusal fired, the chat line went
+        // out and the black founding dust kept trailing her - indefinitely.
+        //
+        // ⚠ The ONE thing still worth checking while she waits is whether the hive she stands in has an empty throne
+        // she may take (build-free only) - so a hive that loses its queen mid-wait is picked up without a re-try.
+        if (queen.getLifecyclePhaseManager().isHoldingHaltedFounding()) {
+            QueenSettlementDetector.forget(queen.getUUID());
+            if (queen.tickCount % HALTED_THRONE_CHECK_TICKS == 0) {
+                com.alien.common.gameplay.hive.lifecycle.BuildFreeVacantThrone.tryTake(
+                    queen,
+                    HiveLocationRegistry.INSTANCE.getByChunk(queen.level().dimension(), new ChunkPos(queen.blockPosition()))
+                );
+            }
+            return;
+        }
+
         // One queen per location. If she is standing in a location that already has a DIFFERENT living queen (a
         // hand-summoned second queen, or a daughter/adopted queen lingering in the parent's core), she must not
         // settle and found HERE. forget() every tick keeps her from banking a founding on the occupied claim; her
@@ -140,16 +161,158 @@ public class HiveManager implements NBTSerializable {
             return;
         }
 
-        var result = SpreadZoneCheck.evaluate(queen, settlementPos);
-        if (result instanceof SpreadZoneResult.Blocked) {
+        // ⚠⚠ THE GROUND UNDER HER FEET, CHECKED AT LAST. The settle path founded wherever she stopped: nothing looked
+        // at liquid, nothing looked at footing, and the depth rule that would have caught an ocean surface is waived
+        // by queenFoundsWhereStanding and on flat worlds. [stated] "she shouldnt found on the waters surface but if
+        // she does found in an ocean have her go down until she is under the surface if possible."
+        var resolvedPos = com.alien.common.gameplay.hive.lifecycle.SettlementSite.resolve(queen, settlementPos);
+
+        if (resolvedPos == null) {
+            // Deep water with no reachable seabed. Forget the banked time and let her keep walking.
+            QueenSettlementDetector.forget(queen.getUUID());
+            queen.getLifecyclePhaseManager().restartLocationPhase();
+
+            return;
+        }
+
+        if (!resolvedPos.equals(settlementPos)) {
+            // She was on or over water: put her on the seabed she is about to found on, so she is not left treading
+            // water above her own hive. The pocket carve below dams and drains the rest.
+            queen.asMob().teleportTo(resolvedPos.getX() + 0.5, resolvedPos.getY(), resolvedPos.getZ() + 0.5);
+        }
+
+        var settlementPosResolved = resolvedPos;
+        var result = SpreadZoneCheck.evaluate(queen, settlementPosResolved);
+        if (result instanceof SpreadZoneResult.Blocked blocked) {
+            // ⭐⭐⭐ SAY WHY. THE REASON WAS BEING THROWN AWAY ON THE ONE LINE THAT NEEDED IT.
+            //
+            // ⚠⚠ THIS IS THE "QUEEN WON'T SETTLE" LOOP, and from the outside it is invisible: the log says she woke
+            // and is "handing off to founding", then says she is entering LOCATION again, and nothing in between
+            // explains the bounce. A live superflat log showed her cycling four times, drifting further from spawn
+            // each pass (z 664 -> 936 -> 1096, x -88 -> -360 -> -616) with no clue as to the cause.
+            //
+            // SpreadZoneResult.Blocked has carried a human-readable reason the whole time - foundFromResult even
+            // says "caller already knows why" - and nobody ever printed it. One line turns an inference problem into
+            // a read-the-log problem.
+            //
+            // ⚠ Logged once per BOUNCE, not per tick: this path runs only when she actually wakes and is refused, so
+            // it cannot become the sort of per-tick spam the irradiated-queen founding check had to be demoted for.
+            // ⭐⭐ TELL ANYONE WATCHING WHY SHE WALKED OFF.
+            //
+            // [stated] "someone trying to found a new one without waking/knowing an exsiting legacy hive is there
+            // knows why its moving or at least something is making it move."
+            //
+            // ⚠ ONLY for the sleeping-legacy case, and only to players close enough to have been watching her. Every
+            // other refusal reason is diagnostic noise a player cannot act on; this one is a puzzle they CAN solve -
+            // kill the old queen, wake her with a command, or inhibit her.
+            if (
+                // ⭐⭐ AND THE OCCUPIED CASE, WHICH IS THE ONE PLAYERS ACTUALLY HIT.
+                //
+                // [stated] "Have a message when they try to found in an existing hive. Like this hive isnt dead."
+                //
+                // ⚠⚠ A PLAYER CANNOT SEE THAT A HIVE IS STILL ALIVE. One burned a hive down, killed everything
+                // inside, and reasonably concluded it was dead - but its surface parties and haulers were out in the
+                // field, came home, repaired the breaches and carried on. He then spawned a queen into that claim
+                // and she was culled as a rival-strain intruder, which from his side was "she died from literally
+                // nothing". Nothing in the world told him the hive was still there.
+                (com.alien.common.gameplay.hive.lifecycle.SpreadZoneCheck.LEGACY_SLEEPER_REASON.equals(blocked.reason())
+                    || blocked.reason().contains("already claimed by location"))
+                    // ⚠ ONCE, not every re-try: a halted queen has already told everyone nearby why she stopped.
+                    && !queen.getLifecyclePhaseManager().isFoundingInPlaceHalted()
+                    // ⚠ And not at all when she is about to take this hive's empty throne instead - see below.
+                    && !wouldTakeVacantThrone(queen, settlementPosResolved)
+                    && queen.level() instanceof net.minecraft.server.level.ServerLevel announceLevel
+            ) {
+                for (
+                    var nearby : announceLevel.getPlayers(
+                        p -> p.distanceToSqr(queen) <= LEGACY_ECHO_ANNOUNCE_RADIUS * LEGACY_ECHO_ANNOUNCE_RADIUS
+                    )
+                ) {
+                    nearby.displayClientMessage(
+                        net.minecraft.network.chat.Component
+                            .literal(
+                                com.alien.common.gameplay.hive.lifecycle.SpreadZoneCheck.LEGACY_SLEEPER_REASON
+                                    .equals(blocked.reason())
+                                        ? com.alien.common.gameplay.hive.lifecycle.SpreadZoneCheck.LEGACY_SLEEPER_REASON
+                                        // ⚠ A DIFFERENT MESSAGE, because it is a different fact. "Old echoes" describes
+                                        // a
+                                        // sleeper; this hive is awake, fed and defended, and the player needs to know
+                                        // that specifically - it is the belief that it was dead that got his queen
+                                        // killed.
+                                        : "This hive still lives - the brood returns to its search"
+                            )
+                            .withStyle(net.minecraft.ChatFormatting.DARK_PURPLE),
+                        true
+                    );
+                }
+            }
+
+            Alien.LOGGER.info(
+                "Queen lifecycle: {} was refused founding at {} - {} - re-picking an anchor",
+                queen.getUUID(),
+                settlementPosResolved,
+                blocked.reason()
+            );
             // The committed anchor is no longer foundable — a hive is too close, typically a neighbour that founded
             // during her hibernation. Re-pick a fresh anchor away from current claims and run her back through
             // LOCATION -> HIBERNATION rather than leaving her stuck on a stale spot forever.
+            // 🚨🚨 DO NOT RE-PICK WHEN SHE HAS NOWHERE ELSE TO GO. THIS WAS AN INFINITE LOOP.
+            //
+            // In build-free "founds where placed" mode enterLocation COMMITS TO HER CURRENT POSITION, so
+            // restartLocationPhase hands her straight back to the same refused spot - 128 rounds of it in one live
+            // log, about once a second. She never completes the handoff, so she never establishes and NEVER LAYS AN
+            // EGG. Reported as "ayo why my queen aint laying eggs".
+            //
+            // ⭐ Re-picking is right for an ordinary queen - she has a world to search. It is wrong when the mode has
+            // already decided the answer is "here": there is no second candidate, so the retry can only repeat.
+            // ⭐⭐ BUILD-FREE: IF THE HIVE SHE IS STANDING IN IS HER OWN STRAIN AND ITS THRONE IS EMPTY, SHE RULES IT.
+            // She cannot found on top of it, cannot dig elsewhere and cannot be a daughter in this mode, so without
+            // this the only outcome was the halt below - a queen standing in a queenless hive forever, no sack.
+            if (
+                com.alien.common.gameplay.hive.lifecycle.BuildFreeVacantThrone.tryTake(
+                    queen,
+                    HiveLocationRegistry.INSTANCE.getByChunk(queen.level().dimension(), new ChunkPos(settlementPosResolved))
+                )
+            ) {
+                return;
+            }
+
+            if (com.alien.common.gameplay.hive.config.BuildFreeMode.queenFoundsWherePlaced()) {
+                queen.getLifecyclePhaseManager().haltFoundingInPlace(blocked.reason());
+                return;
+            }
+
             queen.getLifecyclePhaseManager().restartLocationPhase();
             return;
         }
 
-        HiveLocationFoundingService.foundFromResult(queen, settlementPos, result);
+        // ⚠ She got somewhere. Reset her surface-refusal patience so a LATER relocation - a migration, an eviction
+        // by an empress - searches properly again instead of inheriting a spent counter and surface-founding on its
+        // first refusal.
+        queen.clearSurfaceFoundingAttempts();
+
+        // ⚠ Dig her out BEFORE the hive exists. This is the same carve a dug hive gets on arrival at its anchor; the
+        // settle path never called it, which is why a queen could found sealed in terrain. It also seals liquid at
+        // the rim, so a seabed hive does not immediately re-flood.
+        com.alien.common.gameplay.entity.living.alien.xenomorph.queen.QueenLifecyclePhaseManager
+            .clearArrivalPocket(queen, settlementPosResolved);
+
+        var foundedId = HiveLocationFoundingService.foundFromResult(queen, settlementPosResolved, result);
+
+        // ⭐⭐ IF SHE WAS FED A JELLY BLOCK, THIS IS WHERE SHE BECOMES AN EMPRESS.
+        //
+        // ⚠⚠ THE HOOK MUST BE HERE, at the moment a hive actually exists. The forced path SENDS her digging and the
+        // location is not created until she arrives, so crowning her at the moment she was fed would have produced an
+        // empress standing on the surface beside a hive she had not dug yet - which is precisely the half-built shape
+        // this pass exists to remove.
+        if (foundedId != null && queen.level() instanceof ServerLevel foundedLevel) {
+            var foundedLocation = com.alien.common.gameplay.hive.location.HiveLocationRegistry.INSTANCE
+                .get(foundedId);
+            if (foundedLocation != null) {
+                com.alien.common.gameplay.hive.empress.ForcedEmpressFounding
+                    .onFounded(foundedLevel, queen, foundedLocation);
+            }
+        }
     }
 
     /**
@@ -159,6 +322,24 @@ public class HiveManager implements NBTSerializable {
      * and a daughter queen must still be allowed to settle and found her own location. If her hive was destroyed and
      * unregistered she may found again, which is the hive-loss/recovery arc working as designed.
      */
+    /** How close a player must be to be told about the echo - she has to have been visible for it to make sense. */
+    private static final double LEGACY_ECHO_ANNOUNCE_RADIUS = 48.0;
+
+    /** How often a halted queen glances at whether the hive she waits in has lost its queen. Five seconds. */
+    private static final int HALTED_THRONE_CHECK_TICKS = 100;
+
+    /**
+     * Cheap pre-check for the announcement only: would {@code BuildFreeVacantThrone} plausibly seat her here? Kept
+     * deliberately loose (empty seat + build-free) - a false "yes" merely skips one chat line.
+     */
+    private static boolean wouldTakeVacantThrone(Queen queen, net.minecraft.core.BlockPos pos) {
+        if (!com.alien.common.gameplay.hive.config.BuildFreeMode.isEnabled()) {
+            return false;
+        }
+        var here = HiveLocationRegistry.INSTANCE.getByChunk(queen.level().dimension(), new ChunkPos(pos));
+        return here != null && here.founderId() == null;
+    }
+
     private static boolean hasFoundedLocation(Queen queen) {
         var uuid = queen.getUUID();
         for (var location : HiveLocationRegistry.INSTANCE.all()) {

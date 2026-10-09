@@ -78,6 +78,16 @@ public final class LegacyHiveRecovery {
         var repairedAnything = new boolean[1];
         LegacyHiveRecoveryData.getOrCreate(server)
             .ifSome(data -> {
+                // 🚨🚨 A PURGED WORLD STAYS PURGED. This must come before anything else touches legacyDetected.
+                //
+                // ⚠⚠ THE LINE BELOW SETS IT UNCONDITIONALLY whenever the old hive_data.dat is on disk - which it
+                // always is, because recovery never deletes it. So a player who wiped his world got eighteen dormant
+                // queens re-minted on the very next load, reserving ground on a world he had just emptied, and the
+                // "old echoes" refusal came straight back with nothing left to own it.
+                if (data.legacyPurged()) {
+                    return;
+                }
+
                 var snapshots = readLegacyHiveSnapshots(server);
                 if (!snapshots.isEmpty() || hasLegacyHiveDataFiles(server)) {
                     data.setLegacyDetected(true);

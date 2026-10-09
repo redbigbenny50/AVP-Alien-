@@ -5,7 +5,6 @@ import com.alien.common.gameplay.hive.id.HiveLocationIds;
 import com.alien.common.gameplay.hive.location.HiveLocation;
 import com.alien.common.gameplay.hive.location.HiveLocationRegistry;
 import com.alien.common.gameplay.hive.spawning.HiveLoadedSpawner;
-import com.alien.common.gameplay.hive.spawning.ReserveSpawnUtil;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.MobSpawnType;
@@ -43,7 +42,7 @@ public final class EndRegent {
         var pos = royal.blockPosition();
 
         // Bank first: the exact praetorian the player supplied walks out of the ducts to take the throne room.
-        var regent = HiveLoadedSpawner.trySpawnIdentityReserve(level, location, praetorianType, pos);
+        var regent = HiveLoadedSpawner.trySpawnFromReserves(level, location, praetorianType, pos);
         if (regent == null) {
             // None stocked - the hive PRODUCES its regent. MOB_SUMMONED runs finalizeSpawn, which auto-joins her to
             // the location the death happened in, exactly like every other arrival route.
@@ -57,8 +56,6 @@ public final class EndRegent {
             }
             level.addFreshEntity(fresh);
             regent = fresh;
-        } else {
-            ReserveSpawnUtil.markSpawnedFromReserves(regent);
         }
 
         if (regent instanceof com.alien.common.gameplay.entity.living.alien.Alien alienRegent) {

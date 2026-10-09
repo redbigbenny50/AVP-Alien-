@@ -57,7 +57,11 @@ public final class QueenPromotionService {
         if (!location.isAlive() || location.isExiled()) {
             return false;
         }
-        if (location.daughterHivesFounded() >= config.maxDaughterHivesPerLocation()) {
+        if (
+            location.daughterHivesFounded() >= com.alien.common.gameplay.hive.config.BuildFreeMode.daughterSlots(
+                config.maxDaughterHivesPerLocation()
+            )
+        ) {
             return false;
         }
         if (lineage.activeLocationCount() >= config.maxLocationsPerLineage()) {
@@ -120,8 +124,10 @@ public final class QueenPromotionService {
             candidate.getType().getDescriptionId(),
             candidate.blockPosition(),
             location.daughterHivesFounded(),
-            config.maxDaughterHivesPerLocation()
+            com.alien.common.gameplay.hive.config.BuildFreeMode.daughterSlots(config.maxDaughterHivesPerLocation())
         );
+
+        DaughterQueenAnnouncements.announceRaised(level, candidate);
 
         return true;
     }

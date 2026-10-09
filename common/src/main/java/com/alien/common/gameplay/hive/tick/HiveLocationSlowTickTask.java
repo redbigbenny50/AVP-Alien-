@@ -83,6 +83,10 @@ public final class HiveLocationSlowTickTask {
         var currentTick = level != null ? level.getGameTime() : server.overworld().getGameTime();
         if (level != null) {
             CatchUpEngine.catchUpUnloadedTo(level, location, lineage, currentTick);
+            // Oct 8 - FIX: unloaded income and passive claims were never marked for saving. BLib only writes faction
+            // data marked dirty, and the loaded tick (which marks every tick) does not run here - so with the whole
+            // lineage unloaded, this progress was dropped at the next save.
+            lineage.markDirty();
         }
 
         AbstractSpreadAttempt.tryRun(server, location.lineageFactionId(), lineage, location, currentTick);

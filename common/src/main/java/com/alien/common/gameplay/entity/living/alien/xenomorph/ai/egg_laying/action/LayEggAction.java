@@ -37,37 +37,25 @@ public class LayEggAction {
         // so she lays a physical egg ONLY when the zone is clear of any egg (rooted or not), and while it is
         // blocked she banks up to CAPTIVE_RESERVE_EGG_CAP and then stops. This keeps her from stacking eggs
         // endlessly without touching the founding-hive economy below.
-        if (eggLayer.isInhibited()) {
-            var captiveCanPlace = location != null
-                && ovomorphType != null
-                && EggLayingSensors.layZoneClearForCaptive(eggLayer);
-            if (!captiveCanPlace) {
-                if (
-                    location != null && ovomorphType != null
-                        && EggLayingSensors.hasCaptiveReserveCapacity(eggLayer, location)
-                        && location.localReserves().addReturningMember(ovomorphType, 1)
-                ) {
-                    level.playSound(
-                        null,
-                        eggLayer.asEntity(),
-                        AlienSoundEvents.ENTITY_OVOMORPH_LAID.get(),
-                        SoundSource.HOSTILE,
-                        1.0F,
-                        1.0F
-                    );
-                    return Action.Signal.CONTINUE;
-                }
+        // \u2b50 Oct 3 - A CAPTIVE LAYS WITH NO HIVE AT ALL. [stated] captives hold no claim and are kept apart from
+        // hives,
+        // so the location under her is ignored entirely: she lays a physical egg into her one slot when it is clear,
+        // and otherwise does nothing. \u26a0 This used to require a location for the physical lay too - with the
+        // inhibitor's personal claim gone she would have sat on her sack producing nothing. Her small reserve bank
+        // went with that claim; she never pays eggs into a hive she happens to be standing in.
+        var captiveBreeder = EggLayingSensors.isCaptiveBreeder(eggLayer);
+        if (captiveBreeder) {
+            location = null;
+            if (ovomorphType == null || !EggLayingSensors.layZoneClearForCaptive(eggLayer)) {
                 return Action.Signal.ABORT;
             }
-            // else: fall through to the physical-lay path below (zone is clear).
         }
 
-        var canPlacePhysical = location != null
-            && ovomorphType != null
-            && (eggLayer.isInhibited()
-                ? EggLayingSensors.layZoneClearForCaptive(eggLayer)
-                : (EggLayingSensors.hasPhysicalOvomorphCapacity(eggLayer, location)
-                    && EggLayingSensors.noEggsNearby(eggLayer)));
+        var canPlacePhysical = captiveBreeder
+            || (location != null
+                && ovomorphType != null
+                && EggLayingSensors.hasPhysicalOvomorphCapacity(eggLayer, location)
+                && EggLayingSensors.noEggsNearby(eggLayer));
 
         if (!canPlacePhysical) {
             // Non-captive divert to reserve (captive already handled + returned above).
@@ -98,7 +86,7 @@ public class LayEggAction {
             level.dimension(),
             eggLayer.asEntity().chunkPosition()
         );
-        if (endLocation != null && endLocation.isEndStyleHive()) {
+        if (!captiveBreeder && endLocation != null && endLocation.isEndStyleHive()) {
             var resinSpot = findFreeResinSpotNear(level, eggLayer.asEntity().blockPosition(), eggLayer.getVariant());
             if (resinSpot != null) {
                 layPosition = new net.minecraft.world.phys.Vec3(
@@ -108,9 +96,25 @@ public class LayEggAction {
                 );
             }
         }
+        // 🚨🚨 THE EGG GOES ON THE GROUND, NOT AT HER HEIGHT. getEggLayingPosition uses an UP-OFFSET OF ZERO, so the
+        // Y it returns is the ROYAL'S OWN Y - and a seated royal is sitting on her ovipositor, well above the floor.
+        // Her eggs were therefore laid in mid-air beside her.
+        //
+        // ⚠⚠ THIS IS THE SAME FLAW ALREADY FIXED IN EggRestockTask, which I wrongly assumed did not apply here on the
+        // grounds that a laid egg is loose and would simply fall. Reported repeatedly as floating eggs BY THE QUEEN -
+        // not in a chamber, where there is no egg bed to blame.
+        //
+        // ⭐ Dropped to the first solid footing beneath the lay point, so it lands where a drone can reach it.
+        var groundedY = groundedLayY(level, layPosition);
+
+        // ⭐ THE EGG TAKES THE VEIN'S SPACE. Resin veins are MultifaceBlock - a face decoration like glow lichen, with
+        // no collision - so one sitting in the same block as an egg is not holding it up, it is just clipping through
+        // it. [stated] the veins should be replaced by the egg rather than left inside it.
+        clearResinVeinAt(level, net.minecraft.core.BlockPos.containing(layPosition.x, groundedY, layPosition.z));
+
         ovomorph.setPos(
             Math.floor(layPosition.x) + 0.5,
-            layPosition.y,
+            groundedY,
             Math.floor(layPosition.z) + 0.5
         );
         ovomorph.setPersistenceRequired();
@@ -128,10 +132,8 @@ public class LayEggAction {
         // the visible eggs from the very first lay (the first drone has to come from somewhere). Once the
         // physical spots are full, the divert branch above takes over and lays go reserve-only.
         // Parallel banking respects the captive cap for a captive breeder, the full reserve cap otherwise.
-        var reserveHasRoom = eggLayer.isInhibited()
-            ? EggLayingSensors.hasCaptiveReserveCapacity(eggLayer, location)
-            : EggLayingSensors.hasReserveOvomorphCapacity(eggLayer, location);
-        if (location != null && reserveHasRoom) {
+        // A captive banks nothing (location is null for her - see the top of this method).
+        if (location != null && EggLayingSensors.hasReserveOvomorphCapacity(eggLayer, location)) {
             location.localReserves().addReturningMember(ovomorphType, 1);
         }
 
@@ -162,6 +164,55 @@ public class LayEggAction {
     }
 
     /** Nearest open, standable cell whose floor is the hive's own resin, spiralling out to radius 8. */
+    /**
+     * Removes a resin vein occupying the cell an egg is about to fill.
+     * <p>
+     * ⚠ Veins are non-collidng face decorations, so this is cosmetic rather than physical - but an egg rendered with
+     * resin strands through it looks wrong, and the vein is the hive's own block to reclaim.
+     * </p>
+     * <p>
+     * ⚠ UPDATE_CLIENTS only, like every other hive placement: neighbour updates on hive blocks are what once filled a
+     * server's scheduled-tick queue.
+     * </p>
+     */
+    private static void clearResinVeinAt(net.minecraft.world.level.Level level, net.minecraft.core.BlockPos pos) {
+        if (!level.getBlockState(pos).is(com.alien.common.registry.tag.AlienBlockTags.RESIN_VEINS)) {
+            return;
+        }
+
+        level.setBlock(
+            pos,
+            net.minecraft.world.level.block.Blocks.AIR.defaultBlockState(),
+            net.minecraft.world.level.block.Block.UPDATE_CLIENTS
+        );
+    }
+
+    /**
+     * Drops a lay position to the first solid footing beneath it.
+     * <p>
+     * ⚠ Walks down at most GROUND_SEARCH_DEPTH and gives up rather than dropping an egg into a shaft or the void -
+     * laying at the original height is still better than teleporting it somewhere unrelated.
+     * </p>
+     */
+    private static double groundedLayY(net.minecraft.world.level.Level level, net.minecraft.world.phys.Vec3 layPosition) {
+        var cursor = net.minecraft.core.BlockPos.containing(layPosition);
+
+        for (var drop = 0; drop < GROUND_SEARCH_DEPTH; drop++) {
+            var below = cursor.below();
+
+            if (!level.getBlockState(below).getCollisionShape(level, below).isEmpty()) {
+                return cursor.getY();
+            }
+
+            cursor = below;
+        }
+
+        return layPosition.y;
+    }
+
+    /** How far below the lay point to look for a floor. */
+    private static final int GROUND_SEARCH_DEPTH = 8;
+
     private static net.minecraft.core.BlockPos findFreeResinSpotNear(
         net.minecraft.world.level.Level level,
         net.minecraft.core.BlockPos center,

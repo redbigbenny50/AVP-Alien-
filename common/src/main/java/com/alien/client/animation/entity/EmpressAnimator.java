@@ -122,6 +122,81 @@ public class EmpressAnimator extends AzEntityAnimator<Empress> {
             }
         }
 
+        // ⭐⭐⭐ INCAPACITATED OUTRANKS EVERYTHING BELOW IT. She is on the floor; nothing else may animate over that.
+        //
+        // ⚠ Edge-triggered like the queen's: the DROP fires once as she goes down, the LOOP holds while she is there,
+        // and the RISE fires once when she gets up. A looping sprawl dispatched every tick would restart forever.
+        var downNow = empress.isIncapacitated();
+        if (downNow && !previousIncapacitated) {
+            previousIncapacitated = true;
+            dispatcher.incapacitatedDrop();
+            incapacitatedHoldTicks = INCAPACITATED_DROP_TICKS;
+            return;
+        }
+        if (!downNow && previousIncapacitated) {
+            previousIncapacitated = false;
+            dispatcher.incapacitatedRise();
+            incapacitatedHoldTicks = INCAPACITATED_RISE_TICKS;
+            return;
+        }
+        if (incapacitatedHoldTicks > 0) {
+            incapacitatedHoldTicks--;
+            return;
+        }
+        if (downNow) {
+            dispatcher.incapacitated();
+            return;
+        }
+
+        // ⭐⭐ DIGGING. Same shape and the same synced flag as the queen - one-shots on the edges, loop in between.
+        //
+        // ⚠ Driven off isDiggingSynced because the digging state itself is server-only; the animator sees the flag,
+        // never the descent.
+        var diggingNow = empress.isDiggingSynced.get();
+        if (diggingNow && !previousDigging) {
+            previousDigging = true;
+            dispatcher.digDown();
+            digOneShotHoldTicks = DIG_DOWN_TICKS;
+            return;
+        }
+        if (!diggingNow && previousDigging) {
+            previousDigging = false;
+            dispatcher.digUp();
+            digOneShotHoldTicks = DIG_UP_TICKS;
+            return;
+        }
+        if (digOneShotHoldTicks > 0) {
+            digOneShotHoldTicks--;
+            return;
+        }
+        if (diggingNow) {
+            dispatcher.digging();
+            return;
+        }
+
+        // ⭐⭐⭐ THE CARVE. [stated] "the empress now carves too if shes forced in early. that was the entire point."
+        //
+        // ⚠ Same edge-driven triptych as the vertical dig, off its own synced flag: a one-shot plant on the rising
+        // edge, the stand-dig loop while the carve runs, a one-shot pull-out on the falling edge. Set by
+        // CarveSiteWork, which had to be widened from Queen to reach her at all.
+        var standDiggingNow = empress.isStandDigging();
+        if (standDiggingNow && !previousStandDigging) {
+            previousStandDigging = true;
+            dispatcher.digStandStart();
+            digOneShotHoldTicks = DIG_STAND_START_TICKS;
+            return;
+        }
+        if (!standDiggingNow && previousStandDigging) {
+            previousStandDigging = false;
+            dispatcher.digStandStop();
+            digOneShotHoldTicks = DIG_STAND_STOP_TICKS;
+            return;
+        }
+        if (standDiggingNow) {
+            dispatcher.standDigging();
+            return;
+        }
+
         if (screamHoldTicks > 0) {
             screamHoldTicks--;
             return;
@@ -272,4 +347,27 @@ public class EmpressAnimator extends AzEntityAnimator<Empress> {
 
         return (float) (animation.length() / durationInTicks);
     }
+
+    /** Queen's numbers, shared so the two royals cannot drift apart. */
+    private static final int DIG_DOWN_TICKS = 7;
+
+    private static final int DIG_UP_TICKS = 15;
+
+    private static final int DIG_STAND_START_TICKS = 5;
+
+    private static final int DIG_STAND_STOP_TICKS = 5;
+
+    private static final int INCAPACITATED_DROP_TICKS = 15;
+
+    private static final int INCAPACITATED_RISE_TICKS = 53;
+
+    private boolean previousDigging;
+
+    private boolean previousStandDigging;
+
+    private boolean previousIncapacitated;
+
+    private int digOneShotHoldTicks;
+
+    private int incapacitatedHoldTicks;
 }

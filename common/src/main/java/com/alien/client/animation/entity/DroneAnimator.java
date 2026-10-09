@@ -5,7 +5,6 @@ import com.alien.client.animation.entity.cocoon.CocoonAnimationStateTracker;
 import com.alien.common.gameplay.entity.living.alien.xenomorph.AttackType;
 import com.alien.common.gameplay.entity.living.alien.xenomorph.drone.Drone;
 import com.alien.common.gameplay.entity.living.alien.xenomorph.drone.DroneAnimationRefs;
-import com.alien.common.registry.tag.AlienEntityTypeTags;
 import com.alien.common.util.AzAlienAnimationUtil;
 import com.alien.common.util.AzAlienHeadAnimationUtil;
 import com.blib.api.client.animation.v1.animator.AzAnimatorConfig;
@@ -221,7 +220,7 @@ public class DroneAnimator extends AzEntityAnimator<Drone> {
         } else if (isMoving) {
             if (isCrawling) {
                 animFunction = () -> dispatcher.crawl(AzAlienAnimationUtil.crawlAnimationSpeed(drone));
-            } else if (isCarrying(drone)) {
+            } else if (AzAlienAnimationUtil.isHauling(drone)) {
                 // Laden. Takes precedence over run: there is no "run carry" animation, and a drone hauling an egg or a
                 // thrashing villager should not be sprinting anyway.
                 animFunction = dispatcher::walkCarry;
@@ -232,25 +231,19 @@ public class DroneAnimator extends AzEntityAnimator<Drone> {
             }
         } else {
             // TODO: idle crawl
-            animFunction = isCrawling ? dispatcher::crawlHold : dispatcher::idle;
+            if (isCrawling) {
+                animFunction = dispatcher::crawlHold;
+            } else if (AzAlienAnimationUtil.isHauling(drone)) {
+                // \u2b50 Oct 3 - [stated] carriers "dont use the carry animation when holding hosts ... All their arms
+                // are at their sides." A drone that STOPPED with a load - queued at a vent to hand its host in - fell
+                // through to idle, whose clip has no arm keys at all. Hold the carry pose instead.
+                animFunction = dispatcher::walkCarryHold;
+            } else {
+                animFunction = dispatcher::idle;
+            }
         }
 
         animFunction.run();
-    }
-
-    /**
-     * Is this drone hauling something? An egg on its back, or a host clutched to its chest.
-     * <p>
-     * Passengers are synced to the client already, so this needs no new network state - the animator can simply look.
-     */
-    private static boolean isCarrying(Drone drone) {
-        for (var passenger : drone.getPassengers()) {
-            var type = passenger.getType();
-            if (type.is(AlienEntityTypeTags.HOSTS) || type.is(AlienEntityTypeTags.OVOMORPHS)) {
-                return true;
-            }
-        }
-        return false;
     }
 
     private float calculateAttackSpeed(Drone drone, AttackType attackType) {

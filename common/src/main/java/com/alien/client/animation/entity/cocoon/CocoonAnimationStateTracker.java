@@ -3,6 +3,7 @@ package com.alien.client.animation.entity.cocoon;
 import com.alien.common.gameplay.entity.living.alien.xenomorph.CocoonState;
 import com.alien.common.gameplay.entity.living.alien.xenomorph.Xenomorph;
 import com.alien.common.util.AzAlienAnimationUtil;
+import com.alien.compatibility.avp_predator.PredatorNetProxy;
 import com.blib.api.client.animation.v1.command.AzCommand;
 import com.blib.api.client.animation.v1.command.play_behavior.AzPlayBehaviors;
 
@@ -78,6 +79,12 @@ public class CocoonAnimationStateTracker<T extends Xenomorph> {
     /** Whether the in-cocoon loop has already been started for the current cocooning, so it isn't re-sent per frame. */
     private boolean loopStarted = false;
 
+    /** Whether the last run saw the entity in a capture net. */
+    private boolean nettedPrevious = false;
+
+    /** Tick until which the post-net emerge owns the body track. */
+    private int emergeOwnsBodyUntil = Integer.MIN_VALUE;
+
     /** Default: the shared {@code molt.enter} / {@code molting} pair, authored enter-first. */
     public CocoonAnimationStateTracker() {
         this(xenomorph -> COCOON_LOOP_ANIMATION_NAME, xenomorph -> MOLT_ANIMATION_NAME, true);
@@ -126,6 +133,46 @@ public class CocoonAnimationStateTracker<T extends Xenomorph> {
     public boolean run(T xenomorph) {
         var state = xenomorph.getCocoonManager().getState();
         var animationId = xenomorph.getCocoonManager().getAnimationId();
+
+        // ⚠⚠ THE CAPTURE NET BORROWS THE COCOON CLIPS. [stated] "all aliens should go to the molt emerge/enter pose
+        // when netted if they have one and then play the emerge animation thats wired in cocoon when they escape
+        // the net." A netted xenomorph that is not otherwise cocooning runs the same enter → loop → emerge sequence
+        // this tracker already owns, on the same selectors (reversed enters included), keyed on avp_predator's
+        // client net state instead of the cocoon manager. Real cocooning always wins: if the manager says
+        // anything but NONE/PENDING the switch below runs exactly as before.
+        if (state == CocoonState.NONE || state == CocoonState.PENDING) {
+            var netted = PredatorNetProxy.isNetted(xenomorph);
+
+            if (netted) {
+                if (!nettedPrevious) {
+                    playEnter(xenomorph);
+                    transitionAnimationStartTick = xenomorph.tickCount;
+                    loopStarted = false;
+                    nettedPrevious = true;
+                } else if (!loopStarted && hasTransitionAnimationFinished(xenomorph)) {
+                    playLoop(xenomorph);
+                    loopStarted = true;
+                }
+
+                previousState = state;
+
+                return true;
+            }
+
+            if (nettedPrevious) {
+                // Freed: the escape is the cocoon's emerge, and it keeps the track until it has had time to play.
+                nettedPrevious = false;
+                loopStarted = false;
+                playEmerge(xenomorph);
+                emergeOwnsBodyUntil = xenomorph.tickCount + TRANSITION_ANIMATION_TICKS;
+            }
+
+            if (xenomorph.tickCount < emergeOwnsBodyUntil) {
+                previousState = state;
+
+                return true;
+            }
+        }
 
         return switch (state) {
             case NONE, PENDING -> {

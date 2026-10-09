@@ -21,8 +21,17 @@ public final class PartyMemberDeath {
 
     /** Called when an alien dies: if it was out with a party, remove it from that party's roster. */
     public static void onDeath(Alien alien) {
+        untrack(alien);
+    }
+
+    /**
+     * Removes {@code alien} from its party's member list, if it is in one. Oct 5 audit: also called when a party member
+     * is virtualised on chunk unload, which banks it - left listed, the party's resolution banked it a second time.
+     */
+    public static void untrack(Alien alien) {
         var membership = alien.partyMembership();
         if (membership == null) {
+            untrackUnmarked(alien);
             return;
         }
         var location = HiveLocationRegistry.INSTANCE.get(membership.sourceLocationId());
@@ -36,5 +45,39 @@ public final class PartyMemberDeath {
             party.untrackMaterializedMember(alien.getUUID());
             return;
         }
+    }
+
+    /**
+     * ⚠ Oct 5 audit - TWO DISPATCHERS NEVER STAMP A MEMBERSHIP. The surface party and the internal host party track
+     * their members by id but do not call setPartyMembership (the internal one on purpose: its drone works as an
+     * interior sweeper, and a membership would switch it to open-field host hunting). With no membership the lookup
+     * above had nothing to go on, so a member that DIED stayed listed - and when the party resolved, the missing entity
+     * read as "unloaded" and was banked: dead party members came back. The parties are searched by id instead - its own
+     * hive first, then every hive.
+     */
+    private static void untrackUnmarked(Alien alien) {
+        var home = com.alien.common.gameplay.hive.faction.HiveMemberLocationResolver.reserveReturnLocation(alien);
+
+        if (home != null && untrackFrom(home, alien)) {
+            return;
+        }
+
+        // Its home could not be resolved (its faction ties may already be gone by the time this runs) - every hive's
+        // party list is short, and this only happens on a death or an unload.
+        for (var location : HiveLocationRegistry.INSTANCE.all()) {
+            if (location != home && untrackFrom(location, alien)) {
+                return;
+            }
+        }
+    }
+
+    private static boolean untrackFrom(com.alien.common.gameplay.hive.location.HiveLocation location, Alien alien) {
+        for (var party : location.parties()) {
+            if (party.untrackMaterializedMember(alien.getUUID()) != null) {
+                return true;
+            }
+        }
+
+        return false;
     }
 }

@@ -139,7 +139,11 @@ public class Runner extends Xenomorph implements EggCarrier, GOAPUser<Runner>, V
     @Override
     public void tick() {
         super.tick();
+
+        // Oct 6 - profiler v3 lap; free while no session runs.
+        var perfLap = com.blib.api.common.perf.v1.BLibPerf.start();
         eggPickupManager.tick();
+        com.blib.api.common.perf.v1.BLibPerf.lap(this, "runner.eggPickup", perfLap);
     }
 
     @Override

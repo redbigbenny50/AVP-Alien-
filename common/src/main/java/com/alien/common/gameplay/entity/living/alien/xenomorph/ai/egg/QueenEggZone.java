@@ -1,7 +1,6 @@
 package com.alien.common.gameplay.entity.living.alien.xenomorph.ai.egg;
 
 import com.alien.common.gameplay.entity.living.alien.ovomorph.Ovomorph;
-import com.alien.common.gameplay.entity.living.alien.xenomorph.queen.Queen;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.world.level.Level;
@@ -52,7 +51,8 @@ public final class QueenEggZone {
      * Candidate egg cells in front of {@code queen}, nearest to her first. Empty when the queen is gone or the zone has
      * no standable ground.
      */
-    public static List<BlockPos> candidates(Level level, @Nullable Queen queen) {
+    // Oct 9 - takes any royal (a queen OR an empress): it only uses the royal's position, facing and box.
+    public static List<BlockPos> candidates(Level level, @Nullable net.minecraft.world.entity.LivingEntity queen) {
         var out = new ArrayList<BlockPos>();
         if (queen == null || !queen.isAlive()) {
             return out;
@@ -68,7 +68,10 @@ public final class QueenEggZone {
                     .relative(facing, ZONE_FRONT_OFFSET + depth)
                     .relative(right, lateral);
                 var spot = firstStandable(level, base);
-                if (spot != null) {
+
+                // [stated] Oct 5: drones were rooting eggs INTO her - the nearest cells (picked first) overlapped her
+                // body, since nothing checked them against it. A cell an egg would share with her is never offered.
+                if (spot != null && !overlapsRoyal(spot, queen)) {
                     out.add(spot);
                 }
             }
@@ -78,7 +81,7 @@ public final class QueenEggZone {
     }
 
     /** True if {@code pos} lies inside the queen's clutch zone (bounds check for placement guards). */
-    public static boolean contains(@Nullable Queen queen, BlockPos pos) {
+    public static boolean contains(@Nullable net.minecraft.world.entity.LivingEntity queen, BlockPos pos) {
         if (queen == null) {
             return false;
         }
@@ -147,5 +150,13 @@ public final class QueenEggZone {
     private static boolean hasEggSpacing(Level level, BlockPos pos) {
         var box = new AABB(pos).inflate(EGG_SPACING);
         return level.getEntitiesOfClass(Ovomorph.class, box).isEmpty();
+    }
+
+    /** How far an egg's cell must clear the royal's hitbox, in blocks. */
+    private static final double ROYAL_CLEARANCE = 0.25;
+
+    /** Whether an egg standing in this cell would touch her body (a whole-block box, so the egg always fits). */
+    private static boolean overlapsRoyal(BlockPos spot, net.minecraft.world.entity.LivingEntity queen) {
+        return queen.getBoundingBox().inflate(ROYAL_CLEARANCE).intersects(new net.minecraft.world.phys.AABB(spot));
     }
 }

@@ -94,6 +94,7 @@ public class EnUsEntityProvider {
         addEntity(builder, AlienEntityTypes.ROYAL_COCOON, "Royal Cocoon");
         addEntity(builder, AlienEntityTypes.ABERRANT_ROYAL_COCOON, "Aberrant Royal Cocoon");
         addEntity(builder, AlienEntityTypes.NETHER_ROYAL_COCOON, "Nether Royal Cocoon");
+        addEntity(builder, AlienEntityTypes.IRRADIATED_ROYAL_COCOON, "Irradiated Royal Cocoon");
         addEntity(builder, AlienEntityTypes.PRAETORIAN, "Praetorian");
         addEntity(builder, AlienEntityTypes.PREDALIEN, "Predalien");
         addEntity(builder, AlienEntityTypes.PREDALIEN_ADOLESCENT, "Predalien Adolescent");

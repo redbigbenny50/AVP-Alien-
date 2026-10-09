@@ -17,8 +17,8 @@ import org.jetbrains.annotations.NotNull;
 
 /**
  * The inhibitor device - right-click a queen to clamp it to her crest. An inhibited queen becomes a contained breeder:
- * her hive autonomy is suppressed and her claim is capped at one chunk, though she can still fight and defend. Chaining
- * an inhibited queen later gives her the ridable chained eggsack to lay from.
+ * she is severed from her hive and holds no claim at all (Oct 3 - see {@code QueenCaptivity}), though she can still
+ * fight and defend. Chaining an inhibited queen later gives her the ridable chained eggsack to lay from.
  * <p>
  * Application is gated to a queen who cannot resist - see {@link Queen#canBeInhibited()}. A refusal is NOT silent: she
  * hisses and the player gets an action-bar line naming the reason, because a quiet no-op is indistinguishable from a

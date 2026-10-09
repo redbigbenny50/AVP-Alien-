@@ -33,7 +33,7 @@ import net.minecraft.world.entity.LivingEntity;
  * Every number here is a per-strain knob in the design. They are constants for now; when strain config lands, these
  * become its defaults.
  */
-public final class QueenIncapacitationManager {
+public final class QueenIncapacitationManager<T extends com.alien.common.gameplay.entity.living.alien.Alien & com.alien.common.gameplay.entity.living.alien.xenomorph.IncapacitatableRoyal> {
 
     /** Full incapacitation bar. Abstract points, not hearts. */
     public static final int BAR_MAX = 100;
@@ -59,7 +59,17 @@ public final class QueenIncapacitationManager {
      * <p>
      * Three seconds, matching the 60-tick claw the chained-queen rescue already uses, so the two read as the same act.
      */
-    public static final int RESCUE_CHANNEL_TICKS = 60;
+    /**
+     * ⭐⭐ TEN SECONDS TO DRAG HER BACK UP, AND A PLAYER CAN STOP IT.
+     * <p>
+     * [stated] "have the kin rescue take 10 seconds and a player can interupt it."
+     * </p>
+     * <p>
+     * ⚠ It was THREE seconds, which is why the reports read as instant: a player hitting a downed queen in her own hive
+     * could not out-damage a channel that finished before they landed a second blow.
+     * </p>
+     */
+    public static final int RESCUE_CHANNEL_TICKS = 200;
 
     /** A rescuing xenomorph restores this fraction of her max health, and she wakes immediately. */
     public static final float XENO_HEAL_FRACTION = 0.5F;
@@ -85,13 +95,22 @@ public final class QueenIncapacitationManager {
 
     private static final String NBT_LAST_BAR_TICK = "QueenIncapLastBarTick";
 
-    private final Queen queen;
+    private final T queen;
 
     private float bar;
 
     private int downCount;
 
     private long lastDownGameTime = Long.MIN_VALUE;
+
+    /**
+     * Game-time she last stood back up, and the point the forgiveness window is measured from.
+     * <p>
+     * ⚠ Deliberately NOT persisted: a reload is a clean slate for the down count anyway, and a stale value across a
+     * restart would be worse than starting the window fresh.
+     * </p>
+     */
+    private long lastWakeGameTime = Long.MIN_VALUE;
 
     /** The rescuer currently standing over her, and how long it has held. Transient: a reload restarts the channel. */
     private java.util.UUID rescuerId = null;
@@ -107,7 +126,7 @@ public final class QueenIncapacitationManager {
     /** Shown only while she is down. Server-side, so it syncs itself - no custom payload needed. */
     private @org.jetbrains.annotations.Nullable ServerBossEvent bossEvent;
 
-    public QueenIncapacitationManager(Queen queen) {
+    public QueenIncapacitationManager(T queen) {
         this.queen = queen;
     }
 
@@ -124,14 +143,62 @@ public final class QueenIncapacitationManager {
         if (!canBeIncapacitated() || queen.isIncapacitated()) {
             return false;
         }
+
+        // ⭐⭐⭐ NO HEAD IS INSTANT DEATH. NEVER A FINISHER OPPORTUNITY.
+        //
+        // [stated] "she shouldnt be alive is the first issue with no head she should not go incapacitated it should
+        // be instant death."
+        //
+        // ⚠⚠ THE ORDER IS WHAT PRODUCED THE SCREENSHOT. A ravager tears her head off, the damage is lethal, this
+        // method puts her in the downed state at 1 HP - and only THEN does Alien's per-tick head check fire and try
+        // to kill her with a SOURCELESS damage source, which a downed queen shrugs off because nothing was there to
+        // work her bar. She ended up sprawled and headless and alive, indefinitely.
+        //
+        // ⚠ Refusing to go down here is the correct fix rather than fixing the death that follows: she should never
+        // have entered a state she cannot recover from. A queen without a head has nothing to be rescued into.
+        if (queen.isHeadDetached()) {
+            return false;
+        }
         if (!(queen.level() instanceof ServerLevel serverLevel)) {
             return false;
         }
 
         var now = serverLevel.getGameTime();
-        if (lastDownGameTime == Long.MIN_VALUE || now - lastDownGameTime > DOWN_WINDOW_TICKS) {
-            // Window expired (or first ever down) - the count starts over from here.
+
+        // 🚨🚨 THE WINDOW IS MEASURED FROM WHEN SHE WOKE, NOT FROM WHEN SHE FELL - AND THAT MADE THE EMPRESS IMMORTAL.
+        //
+        // ⚠⚠ THE ARITHMETIC: self-recovery is maxHealth / regen, so a QUEEN takes 9.7 minutes (350 hp, 0.6/s) and an
+        // EMPRESS takes 10.4 (500 hp, 0.8/s). Against a fixed 10-minute DOWN_WINDOW_TICKS stamped at the moment she
+        // FELL, the queen's count survived her recovery and the cap fired on her third down - but the empress always
+        // woke 24 SECONDS AFTER HER OWN WINDOW EXPIRED, so downCount reset to 0 every single time and MAX_DOWNS could
+        // NEVER be reached. She could be knocked down forever and never finished.
+        //
+        // ⚠⚠ THAT IS WHY EVERY PREVIOUS FIX "WORKED": all of them were verified on a queen, which sits 18 seconds on
+        // the safe side of the same line. Reported as "she didnt die whatsoever ... i shot her during the duration of
+        // her dig and she still did not die, the incapacitated bar remained on my screen the whole time" - she was
+        // cycling down, recovering, standing, and being knocked down again with the count reset each round.
+        //
+        // ⭐ Measuring from the WAKE is what the window was always meant to express: she has to spend that long UP and
+        // unmolested to earn a clean slate. Time spent unconscious no longer counts toward forgiveness, so the cap is
+        // reachable for every royal regardless of how long her own recovery takes.
+        var sinceClearSlate = lastWakeGameTime == Long.MIN_VALUE ? lastDownGameTime : lastWakeGameTime;
+
+        if (sinceClearSlate == Long.MIN_VALUE || now - sinceClearSlate > DOWN_WINDOW_TICKS) {
             downCount = 0;
+        }
+
+        // ⚠ A LOUD WARNING RATHER THAN A SILENT IMMORTAL. If anyone ever retunes health or regen so that a royal's own
+        // recovery outlasts the forgiveness window again, the wake-based measurement above still saves us - but the
+        // combination means she is effectively never worn down, and that should be visible rather than discovered in
+        // a bug report months later.
+        if (downCount == 0 && selfRecoveryTicks() > DOWN_WINDOW_TICKS) {
+            com.alien.Alien.LOGGER.warn(
+                "Royal {} recovers in {}t but the down window is {}t - she can only ever be finished outright, never"
+                    + " worn down. Check her maxHealth/healthRegenPerSecond against DOWN_WINDOW_TICKS.",
+                queen.getUUID(),
+                (long) selfRecoveryTicks(),
+                DOWN_WINDOW_TICKS
+            );
         }
 
         // The down cap takes PRECEDENCE over every other exit: worn down too many times, she simply dies.
@@ -146,6 +213,18 @@ public final class QueenIncapacitationManager {
     }
 
     private void goDown() {
+        // ⭐⭐ SHE DROPS THE SACK WHEN SHE GOES DOWN.
+        //
+        // [stated] "the sack should disappear or at least unattach from it while incapacited." A queen sprawled in
+        // the incapacitated pose while still wearing an ovipositor reads as a bug even when everything else is
+        // working - and mechanically it is one: she is pacified, she cannot lay, and the sack is a large entity
+        // riding a body that is no longer holding it up.
+        //
+        // ⚠ ABANDON, NOT DESTROY. abandonOvipositor detaches it and lets the ordinary despawn timer run, so a queen
+        // who is RESCUED off the floor has not silently lost her hive's egg production - the timer is the same one
+        // that already governs a sack whose queen walked away.
+        queen.abandonOvipositorForIncapacitation();
+
         bar = BAR_START;
         clearRescueChannel();
         lastBarGameTime = queen.level().getGameTime();
@@ -155,6 +234,19 @@ public final class QueenIncapacitationManager {
         queen.setNoAi(true);
         queen.getNavigation().stop();
         queen.setTarget(null);
+
+        // !!! A ROYAL WHO GOES DOWN MID-DESCENT MUST STOP DIGGING. setNoAi and stopping the navigation do not touch
+        // the dig state, which owns noPhysics and no-gravity as well as the animation - so an empress shot while
+        // tunnelling stayed "digging" at 0 HP, kept playing the dig animation, and could drift through blocks while
+        // incapacitated.
+        //
+        // ⚠ REPORTED: "she stood up and started doing the dig animation again even tho she was at 0 hp ... now shes
+        // just stuck like this". Introduced with the lone-empress founding, which is what put a royal underground
+        // and mid-dig in the first place - before that a downed royal was never digging.
+        if (queen instanceof com.alien.common.gameplay.entity.living.alien.xenomorph.empress.Empress empress) {
+            empress.clearDescent();
+            empress.setDigging(false);
+        }
     }
 
     /**
@@ -170,6 +262,14 @@ public final class QueenIncapacitationManager {
             bar = 0.0F;
             return true; // finished off
         }
+        // ⭐⭐ HITTING HER BREAKS THE RESCUE. Without this a kin channel completes THROUGH a player standing over
+        // her, which is the same "she healed through me" complaint arriving by a slower route - and it makes the
+        // ten-second channel meaningless, because nothing could ever spend those ten seconds usefully.
+        clearRescueChannel();
+
+        // ⚠ The blow takes health as well as bar, so the two never disagree - a player watching her health bar sees
+        // the same fight the incapacitation bar is showing.
+        applyBarHealth();
         return false;
     }
 
@@ -181,7 +281,17 @@ public final class QueenIncapacitationManager {
         wake(queen.getMaxHealth() * XENO_HEAL_FRACTION);
     }
 
+    /**
+     * ⚠ SELF-RECOVERY IS NOT A JUMP ANY MORE: her health has been climbing with the bar the whole time, so by the time
+     * this is reached she is already at the value being passed. A RESCUE still snaps - [stated] "if aliens rescue her
+     * then like you said she snaps awake with half health" - and that is the point of being rescued.
+     */
     private void wake(float health) {
+        // ⚠ THE CLOCK FOR "HAS SHE BEEN LEFT ALONE" STARTS HERE, not when she fell - see the window check in tick().
+        if (queen.level() instanceof ServerLevel wakeLevel) {
+            lastWakeGameTime = wakeLevel.getGameTime();
+        }
+
         bar = 0.0F;
         clearRescueChannel();
         lastBarGameTime = Long.MIN_VALUE;
@@ -189,6 +299,40 @@ public final class QueenIncapacitationManager {
         queen.setIncapacitated(false);
         queen.setHealth(Math.max(1.0F, health));
         queen.setNoAi(false);
+    }
+
+    /**
+     * How long a full self-recovery takes, in ticks, derived from HER OWN pool and HER OWN regeneration.
+     * <p>
+     * ⚠ A buffed royal takes longer, a weakened one less, and an empress takes twice a queen's time for twice the
+     * health - all without a table of per-caste numbers to keep in step.
+     * </p>
+     * <p>
+     * ⚠ Falls back to the old fixed window if regen is zero or negative, so a caste that does not regenerate cannot
+     * divide by zero and sit down forever.
+     * </p>
+     */
+    private float selfRecoveryTicks() {
+        var regenPerSecond = queen.healthRegenPerSecondForRecovery();
+        if (regenPerSecond <= 0.0F) {
+            return SELF_RECOVERY_TICKS;
+        }
+        return Math.max(20.0F, queen.getMaxHealth() / regenPerSecond * 20.0F);
+    }
+
+    /**
+     * Puts her health where the bar says it should be.
+     * <p>
+     * ⚠ Never below 1: the bar reaching zero is what KILLS her, and that is decided in
+     * {@link #onDamageWhileDown(float)}, not here. If this were allowed to set 0 she would die of arithmetic on the way
+     * down instead of by the finisher.
+     * </p>
+     */
+    private void applyBarHealth() {
+        var target = Math.max(1.0F, queen.getMaxHealth() * (bar / BAR_MAX));
+        if (Math.abs(queen.getHealth() - target) > 0.01F) {
+            queen.setHealth(Math.min(target, queen.getMaxHealth()));
+        }
     }
 
     public void tick() {
@@ -203,7 +347,24 @@ public final class QueenIncapacitationManager {
         var now = serverLevel.getGameTime();
         var elapsed = lastBarGameTime == Long.MIN_VALUE ? 1L : Math.max(0L, now - lastBarGameTime);
         lastBarGameTime = now;
-        bar += (float) BAR_MAX / SELF_RECOVERY_TICKS * elapsed;
+        // ⭐⭐⭐ THE BAR IS HER HEALING, AND IT IS PACED BY HER OWN REGEN - NOT BY A FIXED CLOCK.
+        //
+        // [stated] "the bar is supposed to fill gradually and go down if a player or anything attacks her so its
+        // like a tug of war ... the bar needs to reflect her regen time to full to wake up on her own and it needs
+        // to match her health because buffs can give her more or less health so a set time wont really work."
+        //
+        // ⚠⚠ A FIXED DURATION IS WRONG AND I SHIPPED ONE. Ten seconds for everyone meant an empress with twice a
+        // queen's health recovered twice as fast per point, and any buff that raised her maximum made her recover
+        // faster still - the opposite of what more health should mean. Deriving the fill from maxHealth / regen ties
+        // it to the creature: a bigger pool takes proportionally longer, and a buff that grants more health
+        // lengthens the climb by exactly as much as it added.
+        bar += (float) BAR_MAX / selfRecoveryTicks() * elapsed;
+
+        // ⭐⭐ HER HEALTH RIDES THE BAR. This is what makes it a tug of war rather than two separate systems: every
+        // point the bar gains is health she visibly regains, and every blow that knocks the bar down takes that
+        // health straight back off. At a full bar she is already at full health, so waking is not a jump.
+        applyBarHealth();
+
         if (bar >= BAR_MAX) {
             wake(queen.getMaxHealth());
             return;
@@ -258,6 +419,7 @@ public final class QueenIncapacitationManager {
         }
 
         rescueChannelTicks += HEAL_SCAN_INTERVAL_TICKS;
+        publishRescueProgress(Math.min(1.0F, (float) rescueChannelTicks / RESCUE_CHANNEL_TICKS));
 
         if (rescueChannelTicks >= RESCUE_CHANNEL_TICKS) {
             clearRescueChannel();
@@ -266,8 +428,21 @@ public final class QueenIncapacitationManager {
     }
 
     private void clearRescueChannel() {
+        // ⚠ Clear the RESCUER's visible progress too, or an interrupted attempt leaves a frozen bar over a
+        // xenomorph that has stopped trying.
+        publishRescueProgress(0.0F);
         rescuerId = null;
         rescueChannelTicks = 0;
+    }
+
+    /** Shows the attempt over the rescuer's head, so a player can see it and decide to stop it. */
+    private void publishRescueProgress(float progress) {
+        if (rescuerId == null || !(queen.level() instanceof ServerLevel serverLevel)) {
+            return;
+        }
+        if (serverLevel.getEntity(rescuerId) instanceof com.alien.common.gameplay.entity.living.alien.Alien rescuer) {
+            rescuer.setRescueChannelProgress(progress);
+        }
     }
 
     /**
@@ -320,7 +495,13 @@ public final class QueenIncapacitationManager {
 
     private Component title() {
         var downsLeft = Math.max(0, MAX_DOWNS - downCount);
-        return Component.translatable("boss.avp_alien.queen_incapacitated")
+        // ⭐⭐ NAME WHOEVER IS ACTUALLY DOWN. This manager is generic over IncapacitatableRoyal - an EMPRESS uses it
+        // too - and the title was hardcoded to the queen's string, so a downed Nether Empress announced itself as
+        // "Queen — Incapacitated". [stated] "the name on the bar is queen really why isnt it empress."
+        //
+        // ⚠ Taken from the entity's OWN type description, so every strain reads correctly and any royal added later
+        // names itself without touching this again.
+        return Component.translatable("boss.avp_alien.royal_incapacitated", queen.getType().getDescription())
             .append(Component.literal(" (" + downsLeft + ")").withStyle(ChatFormatting.DARK_RED));
     }
 

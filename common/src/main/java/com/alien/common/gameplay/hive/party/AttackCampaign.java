@@ -79,7 +79,10 @@ public final class AttackCampaign {
      * noticing. Freeing a captive is theft, and the hive treats it as a blow.
      */
     public static void recordHostileAct(ServerLevel level, HiveLocation location, ServerPlayer player) {
-        if (!location.isAlive()) {
+        // ⚠ Oct 2 - creative and spectator players are never recorded as hostile. Breaking a host's web in creative
+        // used
+        // to open a campaign against the builder; that entry then also named them as a nuke culprit later.
+        if (!location.isAlive() || com.alien.common.util.AlienPredicates.isIgnoredByHive(player)) {
             return;
         }
         location.attackCampaigns()

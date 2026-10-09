@@ -205,6 +205,7 @@ public class BlockLootTableProvider extends FabricBlockLootTableProvider {
         // SCOURGE_JELLY_BLOCK had no loot table at all - breaking one dropped nothing. Pre-existing, fixed here
         // while adding its irradiated sibling.
         dropSelf(AlienBlocks.SCOURGE_JELLY_BLOCK);
+        dropSelf(AlienBlocks.POISON_JELLY_BLOCK);
         dropSelf(AlienBlocks.IRRADIATED_JELLY_BLOCK);
     }
 

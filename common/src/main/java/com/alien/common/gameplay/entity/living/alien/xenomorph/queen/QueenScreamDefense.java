@@ -65,7 +65,19 @@ public final class QueenScreamDefense {
     public static final int SCREAM_COOLDOWN_TICKS = 180 * 20;
 
     /** The authored clip is 1.75s; the stun lasts exactly as long as the animation. */
-    public static final int SCREAM_DURATION_TICKS = 35;
+    /**
+     * How long the scream holds - the stun, and the animation pose with it.
+     * <p>
+     * ⚠⚠ THIS IS THE LENGTH OF THE SOUND FILE, and all three must agree. scream.ogg is 2.45s (49 ticks) but the clip
+     * and this constant were both 1.75s (35 ticks), so she finished the animation and returned to idle while still
+     * audibly screaming - which is why the animation was easy to miss even when the sound played.
+     * </p>
+     * <p>
+     * ⚠ If the audio is ever re-cut, special.attack.scream in BOTH queen.animation.json and empress.animation.json must
+     * be restretched to match, and this constant with them.
+     * </p>
+     */
+    public static final int SCREAM_DURATION_TICKS = 49;
 
     /** [stated] "spawn about 12 blocks near the player". */
     private static final int SUMMON_DISTANCE = 12;

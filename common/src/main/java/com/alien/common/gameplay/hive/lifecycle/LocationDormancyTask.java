@@ -6,6 +6,7 @@ import com.alien.common.gameplay.hive.faction.LineageFactionData;
 import com.alien.common.gameplay.hive.id.LineageIds;
 import com.alien.common.gameplay.hive.location.HiveLocation;
 import com.alien.common.gameplay.hive.location.HiveLocationRegistry;
+import com.alien.common.registry.tag.AlienEntityTypeTags;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 
@@ -31,6 +32,15 @@ import java.util.ArrayList;
 public final class LocationDormancyTask {
 
     /** Rule 2 kills only after the zero-population state has PERSISTED this many ticks (30s). */
+    /**
+     * How long a hive may fail to field ANY defender, with nothing loaded, before its bank stops keeping it alive.
+     * <p>
+     * ⚠ Deliberately long - five minutes. A hive whose vents are momentarily buried, or whose only mouth a player
+     * happens to be standing on, must recover; this is for the hive that has genuinely lost every route out.
+     * </p>
+     */
+    private static final long STRANDED_BANK_TICKS = 20L * 60L * 5L;
+
     private static final int ZERO_POP_KILL_TICKS = 600;
 
     /**
@@ -114,16 +124,6 @@ public final class LocationDormancyTask {
         }
     }
 
-    /** Whether the location's reserves still bank any of its lineage's eggs - banked eggs are future adults. */
-    private static boolean hasBankedEggs(HiveLocation location) {
-        var variant = location.lineageVariantOrNull();
-        if (variant == null) {
-            return false;
-        }
-        var eggType = com.alien.common.gameplay.entity.living.alien.ovomorph.Ovomorph.getType(variant, false);
-        return eggType != null && location.localReserves().getCount(eggType) > 0;
-    }
-
     /** Returns true if the location was killed this tick. */
     private static boolean evaluateLocation(
         ServerLevel level,
@@ -163,8 +163,44 @@ public final class LocationDormancyTask {
             return false;
         }
 
-        boolean zeroNow = CastePopulation.totalReliableXenomorphPopulation(location) == 0
-            && !hasBankedEggs(location)
+        // ⭐⭐⭐ EGGS DO NOT KEEP A HIVE ALIVE. [stated] "eggs loaded or banked should not keep a hive alive at all."
+        //
+        // ⚠⚠ THIS IS WHY A CLEARED HIVE CAME BACK. A player killed every member and watched the claim marker go, and
+        // the location survived anyway on its banked eggs - then spent the bank rebuilding, with a CRUSHER taking
+        // leadership because the queen was dead. From his side the hive was destroyed; from the game's side it was a
+        // hive with savings having a quiet moment. Reported as "I killed every member" and "why's it pretending it's
+        // still there".
+        //
+        // ⭐ A hive is its LIVING MEMBERS. Eggs are stock, not population - nothing in a clutch of eggs decides
+        // anything, claims anything or defends anything, and a hive that is nothing but eggs has already lost.
+        //
+        // ⚠ LOADED eggs never counted anyway: ovomorphs are deliberately NOT in the XENOMORPHS tag, so
+        // totalReliableXenomorphPopulation has always ignored them. Only the banked clause propped it up, so
+        // removing it makes the two consistent rather than changing one and leaving the other.
+        // 🚨🚨 A HIVE THAT CANNOT DEPLOY ITS BANK IS NOT ALIVE, IT IS STUCK.
+        //
+        // ⚠⚠ REPORTED AS AN UNKILLABLE HIVE: the boss bar read "1/280", the player hunted for that last member and
+        // could not find it - because IT IS NOT IN THE WORLD. The bar counts loaded members PLUS the bank, so the 1
+        // was a banked reserve, and the hive's own log said it could not spawn it: "wanted 14 defender(s) ... could
+        // field NONE (bank 1, no reachable vent, or every mouth blocked)".
+        //
+        // ⚠⚠ THAT IS A DEADLOCK, NOT A STATE. Decay needs the count to reach zero; the count cannot fall because the
+        // member is banked; the bank cannot empty because every vent is blocked. The hive sits forever, undefended,
+        // showing a member nobody can reach.
+        //
+        // ⭐ SO A BANK THAT HAS FAILED TO DEPLOY FOR LONG ENOUGH COUNTS AS NOTHING. Not immediately - a hive whose
+        // vents are briefly buried should recover - but a hive with NO LOADED MEMBERS that has been unable to field
+        // a single defender for STRANDED_BANK_TICKS has no way back on its own.
+        var loadedNow = CastePopulation.countLoadedCaste(location, AlienEntityTypeTags.XENOMORPHS);
+        // ⭐ Oct 2 - A STRANDED BANK NO LONGER COUNTS AS AN EMPTY HIVE. [stated] ruling: rescue it instead of killing it
+        // -
+        // a fresh vent mouth so it can deploy again, or, inside an empress network, its members adopted into the
+        // network's smallest hive. That now happens in VentDefenseTask the moment the stall is detected. (This rule
+        // had never fired anyway: the "failed to field" flag it read was never set anywhere.) A hive whose bank WAS
+        // handed to a sibling is genuinely empty afterwards and decays through the ordinary zero-population rule.
+        var strandedBank = false;
+
+        boolean zeroNow = (CastePopulation.totalReliableXenomorphPopulation(location) == 0 || strandedBank)
             && location.ageInTicks() >= HiveLocationRegistry.INSTANCE.config().locationBootstrapGraceTicks();
         if (zeroNow) {
             var since = ZERO_POP_SINCE_TICK.putIfAbsent(location, currentTick);

@@ -112,6 +112,12 @@ public abstract class Xenomorph extends Alien implements ResinProducer, EntitySe
 
     private static final int RAID_EGG_MAX_ATTACKERS = 2;
 
+    /** Path searches one raider may spend choosing an egg per pass (nearest first). */
+    private static final int RAID_EGG_PATH_PROBES = 3;
+
+    /** How often the "give up on this egg" path re-check may run. A multiple of the 10-tick breakout cadence. */
+    private static final int RAID_EGG_ABANDON_RECHECK_TICKS = 40;
+
     private static final double RAID_EGG_PROGRESS_EPSILON_SQR = 0.35D * 0.35D;
 
     private static final ResourceLocation LOST_LIMB_MAX_HEALTH_MODIFIER = AlienResources.location("lost_limb_max_health");
@@ -187,6 +193,8 @@ public abstract class Xenomorph extends Alien implements ResinProducer, EntitySe
 
     private double raidEggLastDistanceSqr = Double.MAX_VALUE;
 
+    private final com.alien.common.gameplay.entity.living.alien.xenomorph.ascension.IsolatedRoyalAscension isolatedRoyalAscension;
+
     private final AttackCooldownTracker cooldownTracker;
 
     private @Nullable AttackType activeAttack;
@@ -201,6 +209,17 @@ public abstract class Xenomorph extends Alien implements ResinProducer, EntitySe
 
     public Xenomorph(EntityType<? extends Xenomorph> entityType, Level level, XenomorphConfig config) {
         super(entityType, level);
+
+        // ⭐⭐⭐ BLIB'S SWIM STEERING, WHICH NOTHING HAS EVER INSTALLED.
+        //
+        // ⚠⚠ WaterMoveControl HAS BEEN IN BLIB THE WHOLE TIME and XenomorphPathConfig NAMES IT IN A COMMENT - as
+        // something the future aquatic caste would use. Every caste that actually exists was left on vanilla's
+        // MoveControl, which does not swim, so the navigator produced perfectly good water paths that nothing could
+        // execute. That is the spin, and it is why fixing individual swim ACTIONS never held.
+        //
+        // ⭐ IT IS AMPHIBIOUS, so this is safe on every caste: it steers by yaw and delta while isUnderWater(), and
+        // calls MoveControl.tick() otherwise, which is ordinary land movement unchanged.
+        this.moveControl = new com.blib.api.common.entity.v1.ai.goal.WaterMoveControl(this);
 
         this.config = config;
 
@@ -239,6 +258,8 @@ public abstract class Xenomorph extends Alien implements ResinProducer, EntitySe
         this.pathNavigator = createPathNavigator(level, config.pathConfig());
         this.hiveIntruderPathNavigator = createPathNavigator(level, config.pathConfig(), createHiveIntruderSearchConfig());
         this.cooldownTracker = new AttackCooldownTracker();
+        this.isolatedRoyalAscension =
+            new com.alien.common.gameplay.entity.living.alien.xenomorph.ascension.IsolatedRoyalAscension(this);
         this.wasUnderwaterLastTick = false;
 
         xenomorphData.setParallelDigCount(config.parallelDigCount());
@@ -267,11 +288,11 @@ public abstract class Xenomorph extends Alien implements ResinProducer, EntitySe
         var evaluatorConfig = TerrainEvaluatorConfig.builder()
             .addTerrain(TerrainType.GROUND, 1.0f)
             .addTerrain(TerrainType.WATER, 1.5f)
-            .withTerrainClassifier((reader, pos) -> classifyGroundWaterAvoidingHumanRazorWire(reader, pos, pathConfig))
+            .withTerrainClassifier(terrainClassifierFor(pathConfig))
             .withEntitySize(pathConfig.entityWidth(), pathConfig.entityHeight())
             .withCrawlConfig(crawlConfig)
             .withWaterConfig(waterConfig)
-            .withBlockBreakingConfig(PATH_BLOCK_BREAKING_CONFIG)
+            .withBlockBreakingConfig(ownHiveSafeBreakingConfig())
             .withMaxFallDistance(14)
             .withCanOpenDoors(pathConfig.canOpenDoors())
             .build();
@@ -286,11 +307,121 @@ public abstract class Xenomorph extends Alien implements ResinProducer, EntitySe
         return new PathNavigator(level, navigatorConfig, classificationCache);
     }
 
+    // 🚨🚨 CLASSIFY FIRST, THEN CHECK RAZOR WIRE - THE ORDER IS THE WHOLE FIX.
+    //
+    // ⚠⚠ THIS FROZE DEDICATED SERVERS. hasBlockInPathVolume ran FIRST and scans a 3x3xheight volume - about 27
+    // getBlockState calls and 27 tag lookups - for EVERY node. BLib's TerrainCacheSection.populate fills a whole 16^3
+    // SECTION (4096 nodes) per call and prePopulateArea fills several per path request, per xenomorph: over 100,000
+    // block lookups per section. The watchdog killed a server with a tick over 60,000 seconds. Two crash logs, both
+    // stacks identical: BlockStateBase.is -> classifyGroundWaterAvoidingHumanRazorWire -> TerrainCacheSection.populate
+    //
+    // ⭐ MOST NODES IN A SECTION ARE NOT WALKABLE AT ALL - solid rock, open air - and their razor-wire status is
+    // irrelevant because they are already unusable. Classifying first costs a couple of lookups and prunes nearly
+    // everything, so the volume scan now runs only on genuine walkable surfaces. Semantics are unchanged: a walkable
+    // node containing razor wire still returns null.
+    /**
+     * One shared classifier per path config, rather than a fresh lambda per entity.
+     * <p>
+     * 🚨🚨 THE TERRAIN CACHE IS KEYED ON THE CLASSIFIER INSTANCE - see TerrainCacheRegistry.getOrCreate - so a new
+     * lambda per xenomorph meant A PRIVATE TERRAIN CACHE PER XENOMORPH. Eighty-seven mobs classified the same sections
+     * eighty-seven times over, each populating its own 4096-node sections and holding its own copy in memory, with zero
+     * sharing between mobs that classify terrain identically.
+     * </p>
+     * <p>
+     * ⭐ THERE ARE ONLY EIGHT PATH CONFIGS - SMALL_DOOR through HUGE - and they are shared record constants, so every
+     * warrior genuinely wants the same answers. Sharing the classifier collapses the caches from one-per-entity to
+     * one-per-config: a section any warrior has walked is already classified for every other warrior.
+     * </p>
+     * <p>
+     * ⚠ THE CLASSIFIER MUST STAY PURE for this to be correct - it may read only the level and the position, never the
+     * entity. It does: the only other input is pathConfig, which is the key.
+     * </p>
+     */
+    private static final java.util.Map<XenomorphPathConfig, com.blib.api.common.pathfinding.v1.terrain.TerrainClassifier> TERRAIN_CLASSIFIERS =
+        new java.util.concurrent.ConcurrentHashMap<>();
+
+    private static com.blib.api.common.pathfinding.v1.terrain.TerrainClassifier terrainClassifierFor(XenomorphPathConfig pathConfig) {
+        return TERRAIN_CLASSIFIERS.computeIfAbsent(
+            pathConfig,
+            config -> (reader, pos) -> classifyGroundWaterAvoidingHumanRazorWire(reader, pos, config)
+        );
+    }
+
     private static @Nullable TerrainType classifyGroundWaterAvoidingHumanRazorWire(
         LevelReader level,
         BlockPos pos,
         XenomorphPathConfig pathConfig
     ) {
+        // !!! LEAVES ARE WALKABLE GROUND TO A XENOMORPH, AND THE ROUTER HAS TO AGREE WITH THE COLLISION.
+        // BLib's classifyAsGround requires the FEET block to be non-solid, and leaves report solid - so a canopy
+        // classified as impassable and the router steered around whole forests. Making leaves non-colliding without
+        // this would let them walk through leaves they still refuse to path into.
+        //
+        // * SAFE FOR OTHER MOBS. TerrainCacheRegistry.getOrCreate keys its cache on the CLASSIFIER INSTANCE, and this
+        // one is xenomorph-only, so nothing else can inherit the answer.
+        //
+        // ⚠ Standing ON leaves keeps working either way - that path tests the block BELOW, which is unchanged.
+        var feet = level.getBlockState(pos);
+
+        // 🚨 RESIN WEBS ARE THE HIVE'S OWN FURNITURE - WALK THROUGH THEM.
+        //
+        // ⚠⚠ ResinWebBlock.entityInside ALREADY lets aliens pass: it only calls makeStuckInBlock on things NOT in the
+        // ALIENS tag. But the block is SOLID, so GROUND_AND_WATER classified the column as impassable and the
+        // navigator refused to route through it - and because resin webs are XENOMORPH_IMMUNE she could not break
+        // one either. A queen whose route crossed her own hive's webbing was walled in by it.
+        //
+        // ⚠ REPORTED with a log of the exact loop: "stopped digging at ... avp_alien:resin_web is undiggable", then
+        // hibernate, wake, retry, forever. [stated] "resin web should let them walk through it without getting stuck
+        // so weird it wasnt letting her pass it."
+        //
+        // ⭐ Same shape as the leaves rule directly below, and safe for the same reason: TerrainCacheRegistry keys its
+        // cache on the CLASSIFIER INSTANCE, and this one is xenomorph-only, so nothing else inherits the answer.
+        if (feet.is(AlienBlockTags.RESIN_WEBS)) {
+            var belowWeb = level.getBlockState(pos.below());
+            if (belowWeb.isSolid() && !belowWeb.liquid()) {
+                return avoidRazorWire(level, pos, pathConfig, TerrainType.GROUND);
+            }
+        }
+
+        if (feet.is(net.minecraft.tags.BlockTags.LEAVES)) {
+            var below = level.getBlockState(pos.below());
+            if (below.isSolid() && !below.liquid()) {
+                return avoidRazorWire(level, pos, pathConfig, TerrainType.GROUND);
+            }
+        }
+
+        return avoidRazorWire(level, pos, pathConfig, TerrainClassifiers.GROUND_AND_WATER.classify(level, pos));
+    }
+
+    /**
+     * Whether any block is registered in the razor-wire tag at all.
+     * <p>
+     * ⚠ Cached per tag-reload rather than per call: BuiltInRegistries tag membership only changes on a datapack reload,
+     * and this is consulted on every walkable pathfinding node.
+     * </p>
+     */
+    private static boolean hasAnyRazorWire() {
+        var tags = net.minecraft.core.registries.BuiltInRegistries.BLOCK.getTag(AlienBlockTags.HUMAN_RAZOR_WIRE);
+        return tags.isPresent() && tags.get().size() > 0;
+    }
+
+    /** Rejects an otherwise-walkable node if the entity's body would intersect human razor wire. */
+    private static @Nullable TerrainType avoidRazorWire(
+        LevelReader level,
+        BlockPos pos,
+        XenomorphPathConfig pathConfig,
+        @Nullable TerrainType classified
+    ) {
+        if (classified == null) {
+            return null;
+        }
+
+        // ⭐ NO RAZOR WIRE REGISTERED, NO SCAN. Without avp_human the HUMAN_RAZOR_WIRE tag is empty, so the volume
+        // scan could never return true - and every server without that mod was paying for it on every walkable node.
+        if (!hasAnyRazorWire()) {
+            return classified;
+        }
+
         if (
             hasBlockInPathVolume(
                 level,
@@ -303,7 +434,7 @@ public abstract class Xenomorph extends Alien implements ResinProducer, EntitySe
             return null;
         }
 
-        return TerrainClassifiers.GROUND_AND_WATER.classify(level, pos);
+        return classified;
     }
 
     private static boolean hasBlockInPathVolume(
@@ -327,6 +458,73 @@ public abstract class Xenomorph extends Alien implements ResinProducer, EntitySe
 
         return false;
     }
+
+    /**
+     * ⭐⭐ Oct 2 - A XENOMORPH NEVER DIGS THROUGH ITS OWN HIVE'S WALLS.
+     * <p>
+     * [stated] "they shouldnt dig through their own hives walls an attack on a rival should be allowed", and "they
+     * should use the vents whenever possible". The shared rule below protected vents and webs but not resin, so a drone
+     * whose walk was blocked inside its own hive could path straight through a wall - which breach repair then rebuilt,
+     * every time. Inside its own hive a blocked xeno now has to go round, or take a duct.
+     * </p>
+     * <p>
+     * ⚠ "Own" means the same LINEAGE, not the same strain - a same-strain rival hive in a war is still a rival, and its
+     * walls stay breakable, as do any resin outside every claim. Raid and frenzy breakouts use their own rules and are
+     * untouched. The check is per-entity, so each mob carries its own policy instead of the old shared static one.
+     * </p>
+     */
+    private PathBlockBreakingConfig ownHiveSafeBreakingConfig() {
+        return new PathBlockBreakingConfig(
+            PATH_BLOCK_BREAKING_CONFIG.enabled(),
+            PATH_BLOCK_BREAKING_CONFIG.maxBlocksPerEdge(),
+            PATH_BLOCK_BREAKING_CONFIG.maxHardness(),
+            PATH_BLOCK_BREAKING_CONFIG.flatCostPerBlock(),
+            PATH_BLOCK_BREAKING_CONFIG.costPerHardness(),
+            PATH_BLOCK_BREAKING_CONFIG.damagePerTick(),
+            (level, pos, state) -> canPathBreakBlock(level, pos, state) && !isOwnHiveResin(pos, state)
+        );
+    }
+
+    /** Resin standing inside a claim of this xenomorph's own lineage. O(1) per call: one chunk lookup. */
+    private boolean isOwnHiveResin(BlockPos pos, BlockState state) {
+        if (!state.is(AlienBlockTags.RESIN)) {
+            return false;
+        }
+        var own = ownLineageId();
+        if (own == null) {
+            return false;
+        }
+        var location = com.alien.common.gameplay.hive.location.HiveLocationRegistry.INSTANCE.getByChunk(
+            level().dimension(),
+            new net.minecraft.world.level.ChunkPos(pos)
+        );
+        return location != null && own.equals(location.lineageFactionId());
+    }
+
+    /**
+     * The lineage this xenomorph belongs to, or null if none. Looked up from hive membership and cached for
+     * {@link #OWN_LINEAGE_REFRESH_TICKS} - the dig policy is consulted per path node, so it must not walk the registry.
+     */
+    private net.minecraft.resources.@org.jetbrains.annotations.Nullable ResourceLocation ownLineageId() {
+        if (ownLineageCheckedAt == Integer.MIN_VALUE || tickCount - ownLineageCheckedAt >= OWN_LINEAGE_REFRESH_TICKS) {
+            ownLineageCheckedAt = tickCount;
+            ownLineageId = null;
+            for (var location : com.alien.common.gameplay.hive.location.HiveLocationRegistry.INSTANCE.all()) {
+                var members = location.knownMembersByType().get(getType());
+                if (members != null && members.contains(getUUID())) {
+                    ownLineageId = location.lineageFactionId();
+                    break;
+                }
+            }
+        }
+        return ownLineageId;
+    }
+
+    private net.minecraft.resources.@org.jetbrains.annotations.Nullable ResourceLocation ownLineageId;
+
+    private int ownLineageCheckedAt = Integer.MIN_VALUE;
+
+    private static final int OWN_LINEAGE_REFRESH_TICKS = 100;
 
     private static boolean canPathBreakBlock(LevelReader level, BlockPos pos, BlockState state) {
         if (
@@ -369,6 +567,15 @@ public abstract class Xenomorph extends Alien implements ResinProducer, EntitySe
     @Override
     public @Nullable EntityType<? extends Alien> getTypeForVariant(AlienVariant alienVariant) {
         return config.variantResolver().apply(alienVariant);
+    }
+
+    /**
+     * ⚠ Bridges the protected regen out to {@code IncapacitatableRoyal}, so the incapacitation bar can be paced by the
+     * same rate she would heal at normally. Implemented once here rather than on each royal, since every royal is a
+     * Xenomorph and none of them override the meaning.
+     */
+    public float healthRegenPerSecondForRecovery() {
+        return getHealthRegenPerSecond();
     }
 
     @Override
@@ -609,7 +816,15 @@ public abstract class Xenomorph extends Alien implements ResinProducer, EntitySe
             return;
         }
 
-        var nearestPlayer = level().getNearestPlayer(this, 128.0);
+        // Creative and spectator are not something to run from - a retreating xenomorph should behave as though
+        // the chamber is empty when the only person in it cannot be touched.
+        var nearestPlayer = level().getNearestPlayer(
+            this,
+            128.0
+        );
+        if (com.alien.common.util.AlienPredicates.isIgnoredByHive(nearestPlayer)) {
+            nearestPlayer = null;
+        }
         if (nearestPlayer != null) {
             var away = net.minecraft.world.entity.ai.util.DefaultRandomPos.getPosAway(
                 this,
@@ -628,6 +843,9 @@ public abstract class Xenomorph extends Alien implements ResinProducer, EntitySe
     public void tick() {
         super.tick();
 
+        // Oct 5 - profiler v3 laps; free while no session runs.
+        var perfLap = com.blib.api.common.perf.v1.BLibPerf.start();
+
         if (!level().isClientSide) {
             applyLostLimbMaxHealthPenalty();
             breakIntersectingCobwebs();
@@ -638,20 +856,42 @@ public abstract class Xenomorph extends Alien implements ResinProducer, EntitySe
             jumpShortWallTowardTarget();
         }
 
+        perfLap = com.blib.api.common.perf.v1.BLibPerf.lap(this, "xeno.obstacles", perfLap);
         crawlingManager.tick();
         cocoonManager.maintainLockedState();
+        perfLap = com.blib.api.common.perf.v1.BLibPerf.lap(this, "xeno.crawl+cocoon", perfLap);
 
         growthManager.tick();
+        perfLap = com.blib.api.common.perf.v1.BLibPerf.lap(this, "xeno.growthManager", perfLap);
         resinManager.tick();
+        perfLap = com.blib.api.common.perf.v1.BLibPerf.lap(this, "xeno.resinManager", perfLap);
         xenomorphData.tick();
+        perfLap = com.blib.api.common.perf.v1.BLibPerf.lap(this, "xeno.data", perfLap);
+
+        // Animation diagnostic: inert unless this exact entity is being watched.
+
+        if (!level().isClientSide) {
+
+            com.alien.common.gameplay.hive.diag.AnimationDiag.record(this);
+
+        }
+
+        // A dig gait can outlive the site that set it - see clearStaleDigGait.
+        if (!level().isClientSide && tickCount % 40 == 0) {
+            com.alien.common.gameplay.hive.structure.carve.CarveWorkers.clearStaleDigGait(this);
+        }
 
         updateDimensionsBasedOnWaterState();
+        perfLap = com.blib.api.common.perf.v1.BLibPerf.lap(this, "xeno.diag+dims", perfLap);
 
         if (!level().isClientSide) {
             cooldownTracker.tick();
             clearExpiredHiveIntruderTarget();
             tickCrawlRetreat();
+            isolatedRoyalAscension.tick();
         }
+
+        perfLap = com.blib.api.common.perf.v1.BLibPerf.lap(this, "xeno.cooldowns+ascension", perfLap);
 
         if (!level().isClientSide && isLunging.get() && onGround()) {
             isLunging.set(false);
@@ -676,9 +916,13 @@ public abstract class Xenomorph extends Alien implements ResinProducer, EntitySe
                 setTarget(null);
             }
 
+            perfLap = com.blib.api.common.perf.v1.BLibPerf.lap(this, "xeno.attack+targetCheck", perfLap);
+
             if (this instanceof GOAPUser<?>) {
                 tryAlertNearbyXenomorphs();
             }
+
+            com.blib.api.common.perf.v1.BLibPerf.lap(this, "xeno.alertNearby", perfLap);
         }
     }
 
@@ -775,6 +1019,16 @@ public abstract class Xenomorph extends Alien implements ResinProducer, EntitySe
     }
 
     private void escapeHumanRazorWire() {
+        // 🚨 UNTHROTTLED, ON EVERY XENOMORPH, EVERY TICK - AND averageIntersectingBlockCenter IS A TRIPLE-NESTED BLOCK
+        // SCAN over the entity's bounding box. That is roughly 8-27 getBlockState calls plus a tag test each, twenty
+        // times a second, per xenomorph, hunting for a block that most worlds do not contain at all.
+        //
+        // ⭐ The same short-circuit the pathfinding classifier uses: if nothing is registered in the tag, the scan can
+        // never find anything, so do not run it. Costs one cached registry lookup instead of a volume scan.
+        if (!hasAnyRazorWire()) {
+            return;
+        }
+
         var center = averageIntersectingBlockCenter(AlienBlockTags.HUMAN_RAZOR_WIRE);
 
         if (center == null) {
@@ -1151,7 +1405,7 @@ public abstract class Xenomorph extends Alien implements ResinProducer, EntitySe
             queen -> queen != this
                 && queen.isAlive()
                 && !queen.isRemoved()
-                && (queen.isContained() || queen.isInhibited())
+                && com.alien.common.gameplay.hive.lifecycle.QueenCaptivity.isCaptive(queen)
                 && queen.getVariant() == getVariant()
         );
 
@@ -1183,6 +1437,14 @@ public abstract class Xenomorph extends Alien implements ResinProducer, EntitySe
             breakOrMoveToContainment(containment);
             return true;
         }
+        // \u2b50 Oct 3 - [stated] "they should break the inhibitor if they reach her." No chains and no cage left: if
+        // she
+        // still wears the inhibitor and this raider has reached her, it comes off.
+        if (nearest.isInhibited() && com.alien.common.gameplay.hive.lifecycle.QueenCaptivity.canReach(this, nearest)) {
+            getNavigation().stop();
+            com.alien.common.gameplay.hive.lifecycle.QueenCaptivity.tearOffInhibitor(this, nearest);
+            return true;
+        }
         moveToward(nearest.position());
         return true;
     }
@@ -1193,9 +1455,20 @@ public abstract class Xenomorph extends Alien implements ResinProducer, EntitySe
             return true;
         }
 
-        if (level().getBlockEntity(anchorPos) instanceof AnchorBlockEntity anchor) {
-            if (damageRaidBreakoutBlock(anchorPos) == BlockBreakProgressManager.Result.DESTROYED) {
-                anchor.release();
+        // \u2b50 Oct 3 - [stated] "the rescueers would be trying to break the chain not the anchors ... without it
+        // actually
+        // breaking the anchor so it can still be used for another attempt." A rescue raider strikes the CHAIN once a
+        // second - the same cadence and roll as a kin rescuer (this method runs every 10 ticks, so every other call).
+        // Striking every call doubled the chain-hit sounds for a whole raid crowding one anchor. The anchor block is
+        // never damaged.
+        if (level().getBlockEntity(anchorPos) instanceof AnchorBlockEntity anchor && anchor.hasChain()) {
+            getNavigation().stop();
+            if (tickCount % 20 == 0) {
+                com.alien.common.gameplay.hive.lifecycle.QueenCaptivity.strikeChain(
+                    this,
+                    anchorPos,
+                    com.alien.common.gameplay.hive.lifecycle.QueenCaptivity.RESCUE_CHAIN_BREAK_CHANCE
+                );
             }
             return true;
         }
@@ -1218,17 +1491,26 @@ public abstract class Xenomorph extends Alien implements ResinProducer, EntitySe
                 && !isRaidEggFailureCoolingDown(egg.getUUID())
         );
 
+        // ⭐ Oct 2 - NEAREST FIRST, AND AT MOST RAID_EGG_PATH_PROBES PATH SEARCHES. Every egg in 24 blocks used to get
+        // its
+        // own full path search every 10 ticks, per frenzied raider - dozens of searches a second in a raid on a full
+        // nursery. Sorted, the first egg that qualifies IS the nearest, so the answer is unchanged.
+        var sorted = new java.util.ArrayList<>(eggs);
+        sorted.sort(java.util.Comparator.comparingDouble(this::distanceToSqr));
         Ovomorph nearest = null;
         var nearestDistance = Double.MAX_VALUE;
-        for (var egg : eggs) {
+        var probes = 0;
+        for (var egg : sorted) {
+            if (probes >= RAID_EGG_PATH_PROBES) {
+                break;
+            }
+            probes++;
             if (!canAttemptRaidEgg(egg)) {
                 continue;
             }
-            var distance = distanceToSqr(egg);
-            if (distance < nearestDistance) {
-                nearest = egg;
-                nearestDistance = distance;
-            }
+            nearest = egg;
+            nearestDistance = distanceToSqr(egg);
+            break;
         }
         if (nearest == null) {
             return false;
@@ -1323,6 +1605,11 @@ public abstract class Xenomorph extends Alien implements ResinProducer, EntitySe
             return true;
         }
         if (distanceSqr <= RAID_CONTAINMENT_BREAK_RANGE_BLOCKS * RAID_CONTAINMENT_BREAK_RANGE_BLOCKS) {
+            return false;
+        }
+        // Oct 2: the no-progress timer above already catches a raider that cannot close in; the path re-check only
+        // needs to run now and then, not on every 10-tick pass.
+        if (tickCount % RAID_EGG_ABANDON_RECHECK_TICKS != 0) {
             return false;
         }
 
@@ -1472,6 +1759,18 @@ public abstract class Xenomorph extends Alien implements ResinProducer, EntitySe
         this.wasUnderwaterLastTick = isUnderWater();
     }
 
+    /**
+     * Propulsion applied per tick while in water. See the arithmetic in {@link #travel(Vec3)}.
+     * <p>
+     * ⚠ CHANGE THIS AND {@link #SWIM_DRAG} TOGETHER - terminal speed is a*d/(1-d), so the two only mean anything as a
+     * pair. Raising acceleration alone makes them accelerate faster to the same speed.
+     * </p>
+     */
+    private static final float SWIM_ACCELERATION = 0.025F;
+
+    /** Water drag. Unchanged from the original 0.9; it is the acceleration that was wrong. */
+    private static final double SWIM_DRAG = 0.9;
+
     @Override
     public void travel(@NotNull Vec3 vec3) {
         if (cocoonManager.isLocked()) {
@@ -1479,10 +1778,31 @@ public abstract class Xenomorph extends Alien implements ResinProducer, EntitySe
             return;
         }
 
-        if (isControlledByLocalInstance() && isUnderWater()) {
-            moveRelative(0.01F, vec3);
+        // 🚨🚨🚨 THIS IS THE WATER BUG, AND IT HAS BEEN HERE THE WHOLE TIME.
+        //
+        // ⚠⚠ TWO FAULTS IN THREE LINES, AND EVERY PREVIOUS "WATER FIX" PATCHED A SWIM *ACTION* INSTEAD.
+        //
+        // 1. `isUnderWater()` MEANS EYES SUBMERGED. A xenomorph swimming at the SURFACE - which is what players
+        // actually see and photograph - never entered this branch at all. It fell through to super.travel, i.e.
+        // vanilla's land-mob-in-water handling, which propels at 0.02 and goes nowhere.
+        //
+        // 2. THE PROPULSION WAS 0.01, HALF of vanilla's already-negligible figure. With the 0.9 drag below, terminal
+        // speed works out at 0.09 blocks/tick - about 1.8 blocks a second, against a player's 4.3 walking. The
+        // navigator steers, the body turns to follow, and almost nothing translates. That is the spin, and it is
+        // also the alien "stuck on a one block ridge" at the water's edge: it could not build enough speed to
+        // climb out.
+        //
+        // ⭐ isInWater() covers surface and submerged alike. SWIM_ACCELERATION is set from the arithmetic rather than
+        // by feel: with drag d, terminal speed is roughly a*d/(1-d), so a = 0.025 gives ~0.225 blocks/tick ≈ 4.5
+        // blocks/sec - a shade quicker than walking, which is what a creature built for hunting through water should
+        // manage, and slow enough that it still reads as swimming.
+        // ⚠ isInWater(), NOT isUnderWater(). The original tested eyes-submerged, so a xenomorph swimming at the
+        // SURFACE - what players actually see - fell through to vanilla's land-mob-in-water handling and crawled.
+        // WaterMoveControl above does the steering; this only has to not fight it.
+        if (isControlledByLocalInstance() && isInWater()) {
+            moveRelative(SWIM_ACCELERATION, vec3);
             move(MoverType.SELF, getDeltaMovement());
-            setDeltaMovement(getDeltaMovement().scale(0.9));
+            setDeltaMovement(getDeltaMovement().scale(SWIM_DRAG));
         } else {
             super.travel(vec3);
         }
@@ -1603,6 +1923,16 @@ public abstract class Xenomorph extends Alien implements ResinProducer, EntitySe
         }
     }
 
+    /**
+     * Oct 7 - the tick this xenomorph last rallied its kin. /blib perf showed the rally costing runners 49 us, the
+     * queen 62 us and praetorians 33 us per tick under steady gunfire: every new hit re-scanned every nearby xenomorph
+     * with a line-of-sight raycast each. A rally at most every {@link #RALLY_INTERVAL_TICKS} ticks answers the same:
+     * the hits in between are left pending (their timestamp not consumed), so the next rally still happens.
+     */
+    private int lastRallyTick = Integer.MIN_VALUE / 2;
+
+    private static final int RALLY_INTERVAL_TICKS = 10;
+
     private void tryAlertNearbyXenomorphs() {
         var attacker = getLastHurtByMob();
         var hurtTimestamp = getLastHurtByMobTimestamp();
@@ -1611,6 +1941,11 @@ public abstract class Xenomorph extends Alien implements ResinProducer, EntitySe
             return;
         }
 
+        if (tickCount - lastRallyTick < RALLY_INTERVAL_TICKS) {
+            return;
+        }
+
+        lastRallyTick = tickCount;
         xenomorphData.setLastAlertedHurtTimestamp(hurtTimestamp);
 
         var nearbyXenomorphs = entitySenseCache.getByTag(AlienEntityTypeTags.XENOMORPHS);
@@ -1688,6 +2023,7 @@ public abstract class Xenomorph extends Alien implements ResinProducer, EntitySe
         resinManager.load(compoundTag);
         xenomorphData.load(compoundTag);
         cooldownTracker.load(compoundTag);
+        isolatedRoyalAscension.load(compoundTag);
     }
 
     @Override
@@ -1699,6 +2035,7 @@ public abstract class Xenomorph extends Alien implements ResinProducer, EntitySe
         resinManager.save(compoundTag);
         xenomorphData.save(compoundTag);
         cooldownTracker.save(compoundTag);
+        isolatedRoyalAscension.save(compoundTag);
     }
 
     public GrowthManager getGrowthManager() {
@@ -1725,5 +2062,33 @@ public abstract class Xenomorph extends Alien implements ResinProducer, EntitySe
 
     public CrawlingManager getCrawlingManager() {
         return crawlingManager;
+    }
+
+    /**
+     * ⭐⭐ HOW MANY TIMES THIS ROYAL HAS BEEN REFUSED FOR BEING ON THE SURFACE.
+     * <p>
+     * ⚠ Counted so a world with no cover anywhere cannot make her wander forever - see {@code SpreadZoneCheck}. A live
+     * superflat log showed her refused, re-anchored and re-slept in a loop, drifting further from spawn every pass,
+     * because there was no rock overhead ANYWHERE to find.
+     * </p>
+     * <p>
+     * ⚠ NOT PERSISTED, deliberately. It is a within-attempt patience counter, not a fact about her - and if a reload
+     * resets it she simply searches a little longer, which fails toward the ORIGINAL behaviour rather than toward a
+     * surface hive somebody did not ask for.
+     * </p>
+     */
+    private int surfaceFoundingAttempts;
+
+    public int getSurfaceFoundingAttempts() {
+        return surfaceFoundingAttempts;
+    }
+
+    public void recordSurfaceFoundingRefusal() {
+        surfaceFoundingAttempts++;
+    }
+
+    /** Cleared once she actually founds, so a later relocation starts its own count. */
+    public void clearSurfaceFoundingAttempts() {
+        surfaceFoundingAttempts = 0;
     }
 }

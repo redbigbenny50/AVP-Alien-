@@ -81,7 +81,7 @@ public final class FoundingMoveSensors {
         // A bound OR inhibited queen does not found — her front-end is frozen while she is chained or carries an
         // inhibitor. This is what keeps a captured queen whose chains have been broken from re-founding: she stays
         // inhibited and waits to be freed (inhibitor pried off) instead of relocating.
-        if (xenomorph instanceof Queen queen && (queen.getBindManager().hasAnyChain() || queen.isInhibited())) {
+        if (xenomorph instanceof Queen queen && com.alien.common.gameplay.hive.lifecycle.QueenCaptivity.isCaptive(queen)) {
             return null;
         }
 
@@ -92,13 +92,32 @@ public final class FoundingMoveSensors {
             if (
                 location.isAlive()
                     && founderId.equals(location.founderId())
-                    && !location.reproductiveEstablished()
+                    && (!location.reproductiveEstablished() || isSacklessBuildFreeRuler(xenomorph))
                     && location.dimension().equals(dimension)
             ) {
                 return location;
             }
         }
         return null;
+    }
+
+    /**
+     * ⭐ BUILD-FREE: A SEATED QUEEN WITH NO EGGSACK WALKS HOME TO HER THRONE.
+     * <p>
+     * The ovipositor only forms within one chunk of the hive centre. In ordinary play a queen only ever holds an
+     * established seat because she founded it there or was spawned at the throne by succession, so this pull was only
+     * needed while founding. In build-free a queen can take an EMPTY throne from wherever she was standing in the claim
+     * (see {@code BuildFreeVacantThrone}) - and without this she would hold the seat from three chunks away and never
+     * grow a sack. It also brings a build-free queen whose sack was killed back to where she can regrow it.
+     * </p>
+     * <p>
+     * ⚠ The goal that reads this still stands down whenever she has a target, so it never pulls her out of a fight.
+     * </p>
+     */
+    private static boolean isSacklessBuildFreeRuler(Xenomorph xenomorph) {
+        return com.alien.common.gameplay.hive.config.BuildFreeMode.isEnabled()
+            && xenomorph instanceof Queen queen
+            && !queen.hasOvipositor();
     }
 
     private static boolean isAtFoundingCenter(Xenomorph xenomorph) {

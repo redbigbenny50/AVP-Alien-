@@ -40,6 +40,10 @@ public class QueenAnimator extends AzEntityAnimator<Queen> {
 
     private int previousAttackId = Integer.MIN_VALUE;
 
+    private int previousScreamId;
+
+    private int screamHoldTicks;
+
     /**
      * Crawl-edge tracker for the posture transitions. Null until first observed so a mid-crawl load doesn't replay a
      * drop.
@@ -184,6 +188,32 @@ public class QueenAnimator extends AzEntityAnimator<Queen> {
 
     private void runPassiveAnimations(Queen queen) {
         var dispatcher = queen.getAnimationDispatcher();
+
+        // 🚨 THE SCREAM OUTRANKS EVERYTHING - mirrors EmpressAnimator exactly. It is a scripted panic, and the stun it
+        // applies lasts as long as the clip, so nothing she was doing may animate over it.
+        //
+        // ⚠⚠ THE QUEEN HAD NO TRIGGER AT ALL. Her dispatcher has screamAttack(), her animation file has
+        // special.attack.scream, and her entity has a synced QUEEN_SCREAM_ID - but the animator never watched it, and
+        // Queen.tick never called QueenScreamDefense.tick either. Both halves were missing, so her scream existed only
+        // on paper.
+        var screamId = queen.screamId.get();
+
+        if (screamId != previousScreamId) {
+            previousScreamId = screamId;
+
+            if (screamId > 0) {
+                dispatcher.screamAttack();
+                screamHoldTicks = com.alien.common.gameplay.entity.living.alien.xenomorph.queen.QueenScreamDefense.SCREAM_DURATION_TICKS;
+                return;
+            }
+        }
+
+        // ⚠ THE HOLD IS WHAT KEEPS THE CLIP AND THE SOUND IN STEP. SCREAM_DURATION_TICKS is the same value the stun
+        // uses, so the pose is held for exactly as long as she is screaming and nothing overrides it midway.
+        if (screamHoldTicks > 0) {
+            screamHoldTicks--;
+            return;
+        }
 
         // Front-end Stage 3: while hibernating she holds the curled sleep pose, overriding idle/walk/run. Driven off
         // the

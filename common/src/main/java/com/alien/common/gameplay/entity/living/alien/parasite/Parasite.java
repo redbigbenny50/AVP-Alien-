@@ -73,7 +73,11 @@ public abstract class Parasite extends Alien {
     @Override
     public void tick() {
         super.tick();
+
+        // Oct 6 - profiler v3 laps; free while no session runs.
+        var perfLap = com.blib.api.common.perf.v1.BLibPerf.start();
         attachmentManager.tick();
+        perfLap = com.blib.api.common.perf.v1.BLibPerf.lap(this, "parasite.attachment", perfLap);
 
         // CLIENT SELF-HEAL: the client's passenger list can go stale in both directions (a dismount the cling gate
         // refused, or a lost packet), leaving a ghost hugger glued to a host the server no longer rides - which
@@ -117,6 +121,8 @@ public abstract class Parasite extends Alien {
             if (tickCount % POUNCE_INTERVAL_TICKS == 0) {
                 tryPounce();
             }
+
+            com.blib.api.common.perf.v1.BLibPerf.lap(this, "parasite.targetCheck+pounce", perfLap);
         }
     }
 

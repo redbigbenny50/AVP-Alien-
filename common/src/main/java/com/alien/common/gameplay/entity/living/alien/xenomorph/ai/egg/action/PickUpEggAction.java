@@ -67,7 +67,10 @@ public class PickUpEggAction {
             // so the worker can never reach the vent center. emergencePosNear finds the floor spot the exit side uses.
             var ventApproach = HiveVents.emergencePosNear(xenomorph.level(), ventEntry);
             var ventTarget = ventApproach != null ? Vec3.atBottomCenterOf(ventApproach) : Vec3.atCenterOf(ventEntry);
-            var ventResult = NeoMoveToPosAction.perform(context, ventTarget, 0.5);
+            var ventResult = com.alien.common.gameplay.hive.diag.DiagProfiler.timed(
+                "path/PickUpEggAction",
+                () -> NeoMoveToPosAction.perform(context, ventTarget, 0.5)
+            );
             if (xenomorph.distanceToSqr(ventTarget) <= VENT_REACH_SQUARED) {
                 var ventExit = blackboard.getOrDefault(KEY_VENT_EXIT, (BlockPos) null);
                 blackboard.set(KEY_VENT_ENTRY, (BlockPos) null);
@@ -90,7 +93,12 @@ public class PickUpEggAction {
             }
         }
 
-        var result = NeoMoveToPosAction.perform(context, targetOvomorph.position(), 0.5);
+        // ⚠ targetOvomorph is reassigned above, so it cannot be captured by a lambda directly.
+        var targetOvomorphFinal = targetOvomorph;
+        var result = com.alien.common.gameplay.hive.diag.DiagProfiler.timed(
+            "path/PickUpEggAction",
+            () -> NeoMoveToPosAction.perform(context, targetOvomorphFinal.position(), 0.5)
+        );
 
         var arrived = xenomorph.distanceToSqr(targetOvomorph) <= PICKUP_RANGE_SQUARED;
 
@@ -114,9 +122,14 @@ public class PickUpEggAction {
                 }
                 // Finished navigating but still short of the egg (blocked/truncated) - abort so the planner re-plans
                 // instead of freezing the drone next to an egg it can't quite reach.
+                // Oct 6 - arrived nowhere near it: remember the egg so the next call is not answered at once.
+                eggCarrier.getEggPickupManager().noteUnreachable(targetOvomorph);
                 yield Action.Signal.ABORT;
             }
-            case NO_PATH -> Action.Signal.ABORT;
+            case NO_PATH -> {
+                eggCarrier.getEggPickupManager().noteUnreachable(targetOvomorph);
+                yield Action.Signal.ABORT;
+            }
             default -> Action.Signal.ABORT;
         };
     }

@@ -70,12 +70,18 @@ public class Acid extends Entity implements DataUser {
 
         var level = level();
 
-        if (!level.isClientSide && !horizontalCollision) {
+        // Oct 6 - profiler v3 laps; free while no session runs.
+        var perfLap = com.blib.api.common.perf.v1.BLibPerf.start();
+
+        if (!level.isClientSide && !horizontalCollision && !isRestingOnSupport(level)) {
             GravityUtil.apply(this);
         }
 
+        perfLap = com.blib.api.common.perf.v1.BLibPerf.lap(this, "acid.gravity", perfLap);
         AcidBlockDamageUtil.damageBlocks(this);
+        perfLap = com.blib.api.common.perf.v1.BLibPerf.lap(this, "acid.blocks", perfLap);
         AcidEntityDamageUtil.damageEntities(this);
+        com.blib.api.common.perf.v1.BLibPerf.lap(this, "acid.entities+merge", perfLap);
 
         particleTickCounter += getMultiplier();
 
@@ -95,6 +101,24 @@ public class Acid extends Entity implements DataUser {
                 kill();
             }
         }
+    }
+
+    /**
+     * ⭐ Oct 6 - A POOL LYING ON THE GROUND DOES NOT RE-RUN ITS FALL. GravityUtil moves the entity down every tick and
+     * lets collision put it back - a full collision sweep each tick for a pool that has not moved since it landed. That
+     * was 7.4 us per pool per tick by /blib perf (0.2 ms with 147 pools in a fight). Resting means: on the ground, no
+     * upward motion, and something non-air directly under its centre - checked every tick with one block read, so when
+     * the acid eats through the block it sits on (or anything else removes it) the next tick finds air and it falls.
+     */
+    private boolean isRestingOnSupport(Level level) {
+        if (!onGround() || getDeltaMovement().y > 0.0) {
+            return false;
+        }
+
+        var below = net.minecraft.core.BlockPos.containing(getX(), getY() - 0.05, getZ());
+
+        // Collision, not "not air": grass, flowers and fluids are not air but hold nothing up.
+        return !isInWater() && !level.getBlockState(below).getCollisionShape(level, below).isEmpty();
     }
 
     public boolean isNetherAfflicted() {
@@ -140,25 +164,38 @@ public class Acid extends Entity implements DataUser {
 
         particleTickCounter = 0;
 
-        var alienVariantTypeOption = AlienVariantTypes.getFor(this);
+        var alienVariantType = getVariantType();
 
         for (int i = 0; i < getMultiplier(); i++) {
             if (isInWater()) {
                 level.addAlwaysVisibleParticle(ParticleTypes.BUBBLE_COLUMN_UP, getRandomX(0.5), getRandomY(), getRandomZ(0.5), 0, 0, 0);
             }
 
-            alienVariantTypeOption.ifSome(
-                alienVariantType -> level.addAlwaysVisibleParticle(
-                    alienVariantType.acidParticleType().get(),
-                    getRandomX(0.5),
-                    getRandomY(),
-                    getRandomZ(0.5),
-                    0,
-                    0,
-                    0
-                )
+            level.addAlwaysVisibleParticle(
+                alienVariantType.acidParticleType().get(),
+                getRandomX(0.5),
+                getRandomY(),
+                getRandomZ(0.5),
+                0,
+                0,
+                0
             );
         }
+    }
+
+    /**
+     * The strain this acid came from, for its particles. Irradiated and nether acid carry their own flags; anything
+     * else (including aberrant blood, which has no acid particle of its own) is drawn as normal acid. This was the
+     * deprecated {@code AlienVariantTypes.getFor(Acid)} - moved here, its only caller, and the overload removed.
+     */
+    public com.alien.common.model.alien.variant.AlienVariantType getVariantType() {
+        if (isIrradiated()) {
+            return AlienVariantTypes.IRRADIATED;
+        } else if (isNetherAfflicted()) {
+            return AlienVariantTypes.NETHER;
+        }
+
+        return AlienVariantTypes.NORMAL;
     }
 
     public int getMultiplier() {

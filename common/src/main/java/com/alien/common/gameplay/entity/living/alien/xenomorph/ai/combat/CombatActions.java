@@ -62,6 +62,8 @@ public class CombatActions {
     }
 
     public static void finishMoveToTarget(Action.Context<? extends Xenomorph> context) {
+        ChaseTarget.clear(context.getActor());
+
         if (context.getActor() instanceof PathNavigatorUser) {
             NeoMoveToPosAction.onFinish(context);
         } else {
@@ -77,12 +79,22 @@ public class CombatActions {
     ) {
         var xenomorph = context.getActor();
 
-        var interceptPos = computeInterceptPoint(xenomorph, attackTarget);
-        var result = NeoMoveToPosAction.perform(context, interceptPos, 1.1, true);
+        // Oct 8: a steady aim point - see ChaseTarget (the wobbling intercept re-ran the search every few ticks).
+        var interceptPos = ChaseTarget.steady(xenomorph, attackTarget, computeInterceptPoint(xenomorph, attackTarget));
+        // ⚠ interceptPos is reassigned above, so it cannot be captured by a lambda directly.
+        var interceptPosFinal = interceptPos;
+        var result = com.alien.common.gameplay.hive.diag.DiagProfiler.timed(
+            "path/CombatActions",
+            () -> NeoMoveToPosAction.perform(context, interceptPosFinal, 1.1, true)
+        );
 
         return switch (result) {
             case FINISHED, MOVING -> Action.Signal.CONTINUE;
-            case NO_PATH -> Action.Signal.ABORT;
+            case NO_PATH -> {
+                // Oct 7: repeated failures to reach the same target give it up for a while - see ChaseGiveUp.
+                ChaseGiveUp.noteNoPath(xenomorph, attackTarget);
+                yield Action.Signal.ABORT;
+            }
             default -> Action.Signal.ABORT;
         };
     }
@@ -140,7 +152,10 @@ public class CombatActions {
 
         return switch (MoveToPosAction.perform(context, attackTarget.position(), 1.1)) {
             case FINISHED, MOVING -> Action.Signal.CONTINUE;
-            case NO_PATH -> Action.Signal.ABORT;
+            case NO_PATH -> {
+                ChaseGiveUp.noteNoPath(xenomorph, attackTarget);
+                yield Action.Signal.ABORT;
+            }
         };
     }
 

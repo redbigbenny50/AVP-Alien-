@@ -1,0 +1,11 @@
+{
+  "values": [
+    "#avp_alien:drones",
+    "#avp_alien:warriors",
+    "#avp_alien:runners",
+    "#avp_alien:prowlers",
+    "#avp_alien:spitters",
+    "#avp_alien:razor_claws",
+    "#avp_alien:carriers"
+  ]
+}

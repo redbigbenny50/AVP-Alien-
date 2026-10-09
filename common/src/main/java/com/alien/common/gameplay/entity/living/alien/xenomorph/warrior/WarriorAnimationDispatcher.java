@@ -177,10 +177,18 @@ public class WarriorAnimationDispatcher {
             .dispatchForEntity(warrior);
     }
 
-    /** Laden gait - the warrior had no carry clip wired before. */
+    /** Laden gait. Oct 3: now actually called - the dispatcher existed, but {@code WarriorAnimator} never used it. */
     public void walkCarry() {
         AzCommand.<Warrior>idempotent()
             .play(AzAlienAnimationUtil.BODY, WarriorAnimationRefs.WALK_CARRY_ANIMATION_NAME, AzPlayBehaviors.LOOP)
+            .build()
+            .dispatchForEntity(warrior);
+    }
+
+    /** Laden and standing still: the carry clip held on its last frame (the idle clip has no arm keys). */
+    public void walkCarryHold() {
+        AzCommand.<Warrior>idempotent()
+            .play(AzAlienAnimationUtil.BODY, WarriorAnimationRefs.WALK_CARRY_ANIMATION_NAME, AzPlayBehaviors.HOLD_ON_LAST_FRAME)
             .build()
             .dispatchForEntity(warrior);
     }

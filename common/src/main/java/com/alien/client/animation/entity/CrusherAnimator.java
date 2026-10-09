@@ -196,6 +196,14 @@ public class CrusherAnimator extends AzEntityAnimator<Crusher> {
         }
 
         animFunction.run();
+
+        // Client-side track diagnostic: inert unless this exact entity is being watched.
+        com.alien.client.animation.ClientTrackDiag.record(
+            crusher,
+            this,
+            AzAlienAnimationUtil.BODY.name(),
+            isMovingOnGround ? (isCrawling ? "CRAWL" : "WALK/RUN") : (isCrawling ? "CRAWL_IDLE" : "IDLE")
+        );
     }
 
     private float calculateAttackSpeed(Crusher crusher, AttackType attackType) {

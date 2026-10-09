@@ -35,6 +35,27 @@ import java.util.function.Predicate;
  */
 public final class HiveRouter {
 
+    /**
+     * Update flags for bulk hive placement: clients only, NO neighbour updates.
+     * <p>
+     * 🚨🚨 NEIGHBOUR UPDATES ARE WHAT KILLED A DEDICATED SERVER. Flag 3 includes UPDATE_NEIGHBORS, so every block the
+     * hive carved or stamped told its neighbours to re-evaluate - and vanilla blocks respond by SCHEDULING A TICK:
+     * leaves check decay, sand checks support, water checks flow. A hive spreading through terrain therefore queued a
+     * scheduled tick per disturbed neighbour, and a crash report showed block_ticks: 498,053 pending with the server
+     * stuck in LevelTicks.sortContainersToTick.
+     * </p>
+     * <p>
+     * ⭐ This is what VANILLA STRUCTURE GENERATION uses for the same reason. The hive is placing terrain in bulk, not
+     * operating a redstone contraption - it does not need the cascade.
+     * </p>
+     * <p>
+     * ⚠ TRADE-OFF, AND IT IS THE ONE WE WANT: water and lava no longer flow into freshly carved space and sand no
+     * longer falls into it. Interactive single placements - jelly vats, spawners, harvest capture - keep flag 3 and are
+     * untouched.
+     * </p>
+     */
+    private static final int BULK_HIVE_BLOCK_FLAGS = net.minecraft.world.level.block.Block.UPDATE_CLIENTS;
+
     /** Runtime toggle (flip with {@code /hive router}). Off = greedy planner; on = this router. */
     public static volatile boolean ENABLED = true;
 
@@ -1008,11 +1029,23 @@ public final class HiveRouter {
         // JellyProduction and JellyVatDisplay - the ECONOMY - but nothing in the STRUCTURE path ever asked. So a
         // converted hive was being charged full price to rebuild its own crater.
         // </p>
+        // ⭐⭐ A FORCED EMPRESS'S ROYAL CHAMBER IS FREE TO CARVE — [stated] "the carving biomass for royal chamber is
+        // free for empress just to make them not be as impaitent."
+        //
+        // ⚠ THE FOUNDING CORE ONLY, not every piece she ever builds. She was conjured by a player feeding a jelly
+        // block rather than earned through a lineage that grew to four hives, so she starts with no economy at all -
+        // charging her for the one chamber she cannot exist without would stall the feature at its first step. Every
+        // hallway and chamber after it is priced normally, so the concession buys her a start, not an exemption.
+        //
+        // ⚠ Same shape as the irradiated waiver beside it: FREE, NOT INSTANT. Only the DEBT is waived - the site is
+        // still commissioned, still dug, still filled at the ordinary crew pace.
+        var forcedCoreFree = location.isForcedEmpressFounding() && site.isFoundingCore();
         var resinCost = com.alien.common.gameplay.hive.economy.IrradiatedHiveRules.isIrradiated(location)
-            ? 0
-            : (int) Math.ceil(
-                RESIN_COST_FACTOR * BiomassIncome.claimCost(location, config) * match.occupiedChunks().size()
-            );
+            || forcedCoreFree
+                ? 0
+                : (int) Math.ceil(
+                    RESIN_COST_FACTOR * BiomassIncome.claimCost(location, config) * match.occupiedChunks().size()
+                );
         site.setResinBiomassOwed(resinCost);
         // Consume the socket NOW: the ground is committed, and a mid-build piece must expose no routable doorway in
         // either direction. finalizePlacement re-removes it at completion (a no-op) and registers the new ones.
@@ -1836,6 +1869,15 @@ public final class HiveRouter {
                 skips.merge("doors unreadable (dead face not open in world)", 1, Integer::sum);
                 continue; // can't read this piece's doors reliably - leave it alone
             }
+            // ⭐ Oct 6 - CRASH FIX (player report, 0.2.7: NoSuchElementException in restampHallway). When the dead door
+            // is the ONLY face that reads as open - the far end blocked by a player's block, a mob's block or an
+            // earlier seal - turning it leaves a one-door hallway, and no one-door hallway piece exists. Skip it here:
+            // finalizeHive sends every leftover socket on to the egg-chamber conversion or capDoorway right after this
+            // pass, so this dead end is sealed the normal way.
+            if (faces.size() < 2) {
+                skips.merge("only open face is the dead door", 1, Integer::sum);
+                continue;
+            }
 
             Direction best = null;
             int bestMode = Integer.MAX_VALUE; // 0 = already open toward us, 1 = upgradeable 1x1, 2 = splittable 2x1
@@ -2040,6 +2082,13 @@ public final class HiveRouter {
         ChunkPos chunk,
         EnumSet<Direction> desired
     ) {
+        // ⭐ Oct 6 - CRASH FIX: there is no hallway piece with fewer than two doors, and the straight/corner choice
+        // below reads two directions out of the set - one door threw NoSuchElementException and took the server
+        // down, on every load of that hive. Every caller already handles false.
+        if (desired.size() < 2) {
+            return false;
+        }
+
         String want;
         if (desired.size() == 4) {
             want = "hallway_cross";
@@ -2123,7 +2172,7 @@ public final class HiveRouter {
                 for (int y = floorY; y < floorY + DOOR_SIZE; y++) {
                     pos.set(x, y, z);
                     if (!level.getBlockState(pos).isAir()) {
-                        level.setBlock(pos, air, 3);
+                        level.setBlock(pos, air, BULK_HIVE_BLOCK_FLAGS);
                     }
                 }
             }
@@ -2134,7 +2183,7 @@ public final class HiveRouter {
                 for (int y = floorY; y < floorY + DOOR_SIZE; y++) {
                     pos.set(x, y, z);
                     if (!level.getBlockState(pos).isAir()) {
-                        level.setBlock(pos, air, 3);
+                        level.setBlock(pos, air, BULK_HIVE_BLOCK_FLAGS);
                     }
                 }
             }
@@ -2156,7 +2205,7 @@ public final class HiveRouter {
                 for (int y = floorY; y < floorY + DOOR_SIZE; y++) {
                     pos.set(x, y, z);
                     if (level.getBlockState(pos).isAir()) {
-                        level.setBlock(pos, resin, 3);
+                        level.setBlock(pos, resin, BULK_HIVE_BLOCK_FLAGS);
                     }
                 }
             }
@@ -2167,7 +2216,7 @@ public final class HiveRouter {
                 for (int y = floorY; y < floorY + DOOR_SIZE; y++) {
                     pos.set(x, y, z);
                     if (level.getBlockState(pos).isAir()) {
-                        level.setBlock(pos, resin, 3);
+                        level.setBlock(pos, resin, BULK_HIVE_BLOCK_FLAGS);
                     }
                 }
             }

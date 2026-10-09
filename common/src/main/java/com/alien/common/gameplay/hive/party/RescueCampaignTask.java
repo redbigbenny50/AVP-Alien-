@@ -17,14 +17,16 @@ import java.util.ArrayList;
  * Drives the Part 4 recovery pipeline for captured queens. Runs on the slow lifecycle scan (see
  * {@code LineageInvariantTask}). For every hive location:
  * <ol>
- * <li><b>Promote</b> — a pending {@link RescueCampaign} (recorded at inhibition) becomes active once the lost queen is
- * detected {@link Queen#isContained() contained} AND physically outside this location's claimed chunks (per design:
- * capture-in-place is frenzy, not rescue).</li>
+ * <li><b>Promote</b> — a pending {@link RescueCampaign} (recorded when she was captured - first chain or inhibitor)
+ * becomes active once the lost queen is CAPTIVE and outside this hive's slab. Oct 3, [stated]: "the hive will try to
+ * free her if shes still in the slab otherwise it would be like a kidnapped queen." Inside the slab her kin claw at her
+ * chains directly ({@code QueenRescueManager}).</li>
  * <li><b>Dispatch / track</b> — while active with attempts remaining and no raid in flight, dispatch a rescue raid at
  * the captor. A raid that ends (returns home / disappears) without freeing her counts as a failed attempt; a failure to
  * even form a party also counts.</li>
- * <li><b>Success</b> — if the queen is freed (no longer contained, or gone/reunited), the campaign clears; the raid, if
- * any, is left to return home on its own.</li>
+ * <li><b>Success</b> — once the queen is free (no chain, no inhibitor) and her release grace is over: if she is
+ * standing in this hive's slab and her seat is still empty she is put back on the throne; either way the campaign
+ * clears. The raid, if any, is left to return home on its own.</li>
  * <li><b>Exhaustion</b> — at {@link RescueCampaign#MAX_ATTEMPTS} failures, the campaign clears and stops blocking the
  * firewall, which then crowns a replacement.</li>
  * </ol>
@@ -70,11 +72,55 @@ public final class RescueCampaignTask {
     ) {
         var queen = serverLevel.getEntity(campaign.queenUuid()) instanceof Queen q ? q : null;
 
-        // Success: the queen is freed (no longer contained) or gone entirely (killed handled separately in die()).
-        // A freed queen re-founds on her own; the campaign's job is done.
-        if (queen != null && !queen.isContained()) {
-            Alien.LOGGER.info("Hive: rescue succeeded — queen {} is free; clearing campaign at {}", campaign.queenUuid(), location.id());
-            location.setRescueCampaign(null);
+        // \u2b50 Oct 3 - THE LOST-QUEEN CLOCK. Without it a campaign whose queen was carried somewhere unloaded (a far
+        // base,
+        // another dimension) never armed and never failed, and every succession path waits on an open campaign - so
+        // the hive would never get a new queen. See RescueCampaign.LOST_AFTER_UNSEEN_TICKS.
+        var now = serverLevel.getGameTime();
+        if (queen != null) {
+            campaign.markSeen(now);
+        } else if (
+            campaign.markUnseen(
+                now,
+                serverLevel.isLoaded(location.centerPos()),
+                // \u26a0 This task runs once per lineage scan (default every 5 minutes). The cap on one counted gap
+                // MUST follow that interval - a fixed 1200 here charged 1 minute per 5-minute scan and made the
+                // one-day limit take five days.
+                2L * Math.max(
+                    1L,
+                    com.alien.common.gameplay.hive.location.HiveLocationRegistry.INSTANCE.config()
+                        .lineageScanIntervalTicks()
+                )
+            )
+        ) {
+            declareLost(server, lineage, factionId, location, campaign);
+            return;
+        }
+
+        // Success: the queen is free - no chain AND no inhibitor (Oct 3: one chain used to read as "free" because only
+        // four counted as contained). Killed is handled separately in die().
+        if (queen != null && !com.alien.common.gameplay.hive.lifecycle.QueenCaptivity.isCaptive(queen)) {
+            // \u2b50 Oct 3 - WAIT OUT HER GRACE, THEN BRING HER HOME IF SHE IS HOME. A queen freed inside her own slab
+            // (by a player, or by kin the rescue manager did not recruit) gets her seat back once she may join again;
+            // the campaign is what remembers which seat. Freed anywhere else she is her own queen and it simply clears.
+            // Only a grace that is actually BLOCKING her: the 30s kin grace (anywhere), or the 5-minute one while she
+            // is
+            // outside every slab. Released inside her own slab, the 5-minute grace does not apply ([stated] "any new
+            // queens ... in a hive slab follow the same rules currently") and she goes straight back on her throne.
+            if (com.alien.common.gameplay.hive.lifecycle.QueenCaptivity.isGraceBlocking(queen)) {
+                return;
+            }
+            var restored = location.withinSlab(queen.blockPosition().getY())
+                && location.claimedChunks().contains(new ChunkPos(queen.blockPosition()))
+                && com.alien.common.gameplay.hive.lifecycle.QueenCaptivity.tryRestoreToOriginalHive(queen, location);
+            if (!restored) {
+                Alien.LOGGER.info(
+                    "Hive: rescue succeeded — queen {} is free; clearing campaign at {}",
+                    campaign.queenUuid(),
+                    location.id()
+                );
+                location.setRescueCampaign(null);
+            }
             lineage.markDirty();
             return;
         }
@@ -131,14 +177,49 @@ public final class RescueCampaignTask {
         lineage.markDirty();
     }
 
-    /** Promotes a pending campaign to active once the queen is contained AND outside this location's claim. */
+    /**
+     * [stated] "she is counted as lost. revenge party would then take over and a new queen is crowned either with the
+     * royal bank backup an available praetorian if the bank isnt available or other means built into the mod."
+     * <p>
+     * The same conversion her death runs: the captor (if one was ever named) becomes the hive's grudge, a revenge raid
+     * goes after them if they are online, and the campaign closes - which is all the succession paths were waiting for.
+     * They then crown in their usual order (the royal bank, then a maturing praetorian, then the rest).
+     * </p>
+     */
+    private static void declareLost(
+        MinecraftServer server,
+        LineageFactionData lineage,
+        net.minecraft.resources.ResourceLocation factionId,
+        HiveLocation location,
+        RescueCampaign campaign
+    ) {
+        var captorId = campaign.captorPlayerId();
+        if (captorId != null) {
+            location.setGrudgePlayerId(captorId);
+        }
+        location.setRescueCampaign(null);
+        lineage.markDirty();
+        var captor = captorId == null ? null : server.getPlayerList().getPlayer(captorId);
+        if (captor != null) {
+            RaidDispatch.onQueenKilled(server, lineage, factionId, captor);
+        }
+        Alien.LOGGER.info(
+            "Hive: queen {} counted as LOST by {} - unseen for {} ticks; {} - succession may now crown a replacement",
+            campaign.queenUuid(),
+            location.id(),
+            campaign.unseenTicks(),
+            captor != null ? "revenge raid sent at captor " + captorId : "no captor online, grudge stamped only"
+        );
+    }
+
+    /** Promotes a pending campaign to active once the queen is captive AND outside this location's slab. */
     private static void tryPromote(HiveLocation location, RescueCampaign campaign, Queen queen, LineageFactionData lineage) {
-        if (queen == null || !queen.isContained()) {
-            return; // not yet contained (or not loaded) — capture-in-place would be frenzy, handled elsewhere
+        if (queen == null || !com.alien.common.gameplay.hive.lifecycle.QueenCaptivity.isCaptive(queen)) {
+            return; // not captive (or not loaded)
         }
         var queenChunk = new ChunkPos(queen.blockPosition());
-        if (location.claimedChunks().contains(queenChunk)) {
-            return; // still inside her original claim — capture-in-place, not a rescue
+        if (location.claimedChunks().contains(queenChunk) && location.withinSlab(queen.blockPosition().getY())) {
+            return; // still in her hive's slab - her kin are working on her chains there, this is not a kidnapping
         }
 
         // Contained + carried outside her claim = lost. Captor = the nearest player to her right now (the one holding

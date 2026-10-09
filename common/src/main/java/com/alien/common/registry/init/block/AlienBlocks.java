@@ -80,6 +80,18 @@ public class AlienBlocks {
         () -> new JellyBlock(AlienBlockProperties.JELLY.build().speedFactor(0.4F).jumpFactor(0.5F))
     );
 
+    /**
+     * Storage for poison jelly, and the survival lever on where a queen founds.
+     * <p>
+     * [stated] "people were asking for a poison jelly block for storage and this gives it a use." Mechanically an
+     * ordinary jelly block - the founding behaviour lives on the ITEM's use-on-entity path, not here.
+     * </p>
+     */
+    public static final BLibHolder<Block> POISON_JELLY_BLOCK = create(
+        "poison_jelly_block",
+        () -> new JellyBlock(AlienBlockProperties.JELLY.build().speedFactor(0.4F).jumpFactor(0.5F))
+    );
+
     /** The irradiated strain's jelly. Gated at the tab and the recipe, not the registry - see AlienModGates. */
     public static final BLibHolder<Block> IRRADIATED_JELLY_BLOCK = create(
         "irradiated_jelly_block",

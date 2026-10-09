@@ -162,7 +162,7 @@ public final class LocationMoveActions {
         );
         if (!QueenLifecyclePhaseManager.isDiggable(actor.level(), lead)) {
             actor.setDeltaMovement(Vec3.ZERO);
-            queen.getLifecyclePhaseManager().onDigBlocked();
+            queen.getLifecyclePhaseManager().onDigBlocked(lead);
             return Action.Signal.CONTINUE;
         }
 

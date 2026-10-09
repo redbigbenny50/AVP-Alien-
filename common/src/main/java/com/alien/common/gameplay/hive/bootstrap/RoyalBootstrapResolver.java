@@ -170,6 +170,13 @@ public final class RoyalBootstrapResolver {
 
         var spreadResult = SpreadZoneCheck.evaluate(spawnedQueen, position);
         if (!(spreadResult instanceof SpreadZoneResult.NewLineage)) {
+            // ⚠ A bootstrap that silently discards its queen looks exactly like "world generation is broken". Naming
+            // the refusal costs one line and is the difference between a report we can act on and a shrug.
+            com.alien.Alien.LOGGER.debug(
+                "Royal bootstrap: refused a natural hive at {} - {}",
+                position,
+                spreadResult instanceof SpreadZoneResult.Blocked blocked ? blocked.reason() : spreadResult
+            );
             spawnedQueen.discard();
             return false;
         }

@@ -23,6 +23,14 @@ public final class HiveConfigUpdateHandler {
             var current = HiveLocationRegistry.INSTANCE.config();
             var updated = HiveConfigSchema.withParsedValue(current, payload.fieldName(), payload.value());
             HiveLocationRegistry.INSTANCE.setConfig(updated);
+
+            // \u2b50\u2b50 PERSIST IT. This handler was the ONLY writer of the live config in the entire mod, and
+            // nothing wrote a file \u2014 so every edit made through the in-game inspector was lost on restart. That is
+            // the whole bug the config file exists to fix; the GUI was never the problem, the missing save was.
+            var server = player.getServer();
+            if (server != null) {
+                com.alien.common.gameplay.hive.config.HiveConfigFile.save(server);
+            }
         } catch (IllegalArgumentException exception) {
             sp.sendSystemMessage(Component.literal(exception.getMessage()));
         }

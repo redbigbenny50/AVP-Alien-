@@ -4,7 +4,6 @@ import com.alien.Alien;
 import com.alien.common.gameplay.hive.economy.CasteResolver;
 import com.alien.common.gameplay.hive.location.HiveLocation;
 import com.alien.common.gameplay.hive.spawning.HiveLoadedSpawner;
-import com.alien.common.gameplay.hive.spawning.ReserveSpawnUtil;
 import com.alien.common.registry.tag.AlienEntityTypeTags;
 import net.minecraft.core.BlockPos;
 import net.minecraft.resources.ResourceLocation;
@@ -111,11 +110,10 @@ public final class WarMobilization {
                 if (location.localReserves().getReliableCount(type) <= 0) {
                     break;
                 }
-                var spawned = HiveLoadedSpawner.trySpawnIdentityReserve(level, location, type, musterPos(location));
+                var spawned = HiveLoadedSpawner.trySpawnFromReserves(level, location, type, musterPos(level, location));
                 if (!(spawned instanceof Mob fighter)) {
                     break;
                 }
-                ReserveSpawnUtil.markSpawnedFromReserves(fighter);
                 if (lastStand) {
                     applyLastStand(fighter);
                 }
@@ -197,9 +195,10 @@ public final class WarMobilization {
     }
 
     /** Where a wave forms up: the hive floor at its centre, the same anchor the rest of the hive spawns against. */
-    private static BlockPos musterPos(HiveLocation location) {
+    private static BlockPos musterPos(net.minecraft.world.level.Level level, HiveLocation location) {
         var centre = location.centerPos();
-        return new BlockPos(centre.getX(), location.hiveFloorY() + 1, centre.getZ());
+        // Oct 1: throneFloorY, not hiveFloorY - in build-free the latter is 24 blocks under the queen, inside rock.
+        return new BlockPos(centre.getX(), location.throneFloorY(level) + 1, centre.getZ());
     }
 
     /** Registry-reachable mutation: mark it or an unloaded hive's spend is never written. */

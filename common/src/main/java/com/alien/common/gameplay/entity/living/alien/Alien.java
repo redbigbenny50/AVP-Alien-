@@ -111,12 +111,33 @@ public abstract class Alien extends Monster implements DataUser {
 
     public final DataAccessor<Boolean> isWithered;
 
+    /** See {@link #getRescueChannelProgress()}. */
+    public final DataAccessor<Float> rescueChannelProgress;
+
     /** Born of an irradiated host - see {@code AlienDataSyncKeys.ALIEN_IS_BOILER_DESTINED}. */
     public final DataAccessor<Boolean> isBoilerDestined;
 
     public final DataAccessor<Float> moltAlpha;
 
     public final DataAccessor<Boolean> isMovingHorizontally;
+
+    /**
+     * How long the movement flag is held after the last tick that actually covered ground.
+     * <p>
+     * Four ticks - a fifth of a second. The measured flip-flop was every one to two ticks, so three was cutting it
+     * fine; this leaves margin without a real stop reading as late.
+     * </p>
+     * <p>
+     * ⚠ ANIMATION ONLY. The single behavioural reader is the spitter's posture choice, which was being flipped by the
+     * same stalled ticks and is steadied by this rather than harmed.
+     * </p>
+     */
+    private static final int MOVEMENT_ANIMATION_GRACE_TICKS = 4;
+
+    private int ticksSinceHorizontalMovement = MOVEMENT_ANIMATION_GRACE_TICKS;
+
+    /** The nether-affliction state the pathfinding maluses were last applied for. Null until first applied. */
+    private Boolean appliedNetherAfflictionMalus;
 
     public final DataAccessor<Boolean> isMovingQuickly;
 
@@ -154,6 +175,7 @@ public abstract class Alien extends Monster implements DataUser {
         this.hasTarget = new DataAccessor<>(this, BLibDataSyncKeys.ENTITY_HAS_TARGET.get());
         this.isPoisoned = new DataAccessor<>(this, AlienDataSyncKeys.ALIEN_IS_POISONED.get());
         this.isWithered = new DataAccessor<>(this, AlienDataSyncKeys.ALIEN_IS_WITHERED.get());
+        this.rescueChannelProgress = new DataAccessor<>(this, AlienDataSyncKeys.RESCUE_CHANNEL_PROGRESS.get());
         this.isBoilerDestined = new DataAccessor<>(this, AlienDataSyncKeys.ALIEN_IS_BOILER_DESTINED.get());
         this.moltAlpha = new DataAccessor<>(this, AlienDataSyncKeys.ALIEN_MOLT_ALPHA.get());
         this.isMovingHorizontally = new DataAccessor<>(this, BLibDataSyncKeys.ENTITY_IS_MOVING_HORIZONTALLY.get());
@@ -249,7 +271,38 @@ public abstract class Alien extends Monster implements DataUser {
         return true;
     }
 
+    /**
+     * ⭐⭐ The visible progress of this xenomorph's attempt to revive a downed royal.
+     * <p>
+     * [stated] "better yet have a bar above their head when they do it that fills. so you can see them attempting."
+     * Driven by {@code QueenIncapacitationManager}; drawn by the entity renderer.
+     * </p>
+     */
+    public float getRescueChannelProgress() {
+        return rescueChannelProgress.get();
+    }
+
+    public void setRescueChannelProgress(float value) {
+        if (Math.abs(rescueChannelProgress.get() - value) > 0.001F) {
+            rescueChannelProgress.set(value);
+        }
+    }
+
     protected boolean canHeal() {
+        // ⭐⭐⭐ A DOWNED ROYAL DOES NOT HEAL. Reported as "incapacitated empress cant be killed - its actually just..
+        // healing", and that is exactly what was happening.
+        //
+        // ⚠⚠ THE TWO CONDITIONS BELOW ARE BOTH SATISFIED BY BEING DOWN. goDown() sets the target to null and takes
+        // her AI, so ten seconds after the last blow she starts regenerating from 1 HP - and because damage while
+        // down was being absorbed by the incapacitation bar rather than her health, nothing ever interrupted it. She
+        // healed faster than she could be finished, which reads as invincible because it is.
+        if (
+            this instanceof com.alien.common.gameplay.entity.living.alien.xenomorph.IncapacitatableRoyal royal
+                && royal.isIncapacitated()
+        ) {
+            return false;
+        }
+
         var requiredTicksAfterHurtToHeal = 10 * 20;
         return this.getTarget() == null && tickCount > getLastHurtByMobTimestamp() + requiredTicksAfterHurtToHeal;
     }
@@ -264,7 +317,10 @@ public abstract class Alien extends Monster implements DataUser {
         if (
             livingEntity != null
                 && (AlienPredicates.isHelplessKinQueen(this, livingEntity)
-                    || AlienPredicates.isHelplessQueenStrikingKin(this, livingEntity))
+                    || AlienPredicates.isHelplessQueenStrikingKin(this, livingEntity)
+                    // ⚠ Her own lineage never aims at her, helpless or not - see isOwnLineageQueen. A queen from
+                    // ANOTHER lineage is untouched by this and remains fair game.
+                    || AlienPredicates.isOwnLineageQueen(this, livingEntity))
         ) {
             return;
         }
@@ -311,7 +367,36 @@ public abstract class Alien extends Monster implements DataUser {
     }
 
     private void applyMalusBasedOnVariant() {
-        if (isNetherAfflicted()) {
+        // ⭐ ONLY WHEN THE ANSWER CHANGES. This ran every tick on every alien and rewrote up to SEVEN malus entries
+        // each time, for a value that changes only when the alien becomes (or stops being) nether-afflicted - which
+        // is rare and event-driven. On a populated server that was tens of thousands of pointless map writes a
+        // second. Nothing else in the mod writes these maluses, so the cached answer cannot go stale behind us.
+        //
+        // ⚠ Nullable on purpose, so the FIRST call always applies - including after a reload.
+        var afflicted = isNetherAfflicted();
+
+        if (appliedNetherAfflictionMalus != null && appliedNetherAfflictionMalus == afflicted) {
+            return;
+        }
+
+        appliedNetherAfflictionMalus = afflicted;
+
+        // ⭐⭐⭐ NEVER ROUTE ONTO POINTED DRIPSTONE. Applies to EVERY variant, so it sits above the nether split.
+        //
+        // ⚠⚠ A KNOWN PROBLEM THAT WAS ONLY EVER FIXED FOR OUR OWN BLOCK. AnchorBlock overrides isPathfindable to
+        // false with the comment "so mobs route around it instead of climbing onto the partial block and getting
+        // stuck oscillating on top (THE WAY THEY DO ON STALAGMITES)". The stalagmites themselves were never
+        // addressed - and we cannot override isPathfindable on a vanilla block, so the malus is the equivalent lever.
+        //
+        // ⭐ DAMAGE_CAUTIOUS is vanilla's path type for pointed dripstone. NEGATIVE means the node is never offered
+        // as a neighbour at all (see the sign explanation below) - not merely expensive, which for a hazard they can
+        // climb onto would be no protection.
+        //
+        // ⚠ THIS ONLY COVERS ROUTING. A runner that CLIMBS a wall or falls onto a tip is not pathing there, so this
+        // reduces the problem rather than ending it. Worth watching whether they still perch after this.
+        setPathfindingMalus(PathType.DAMAGE_CAUTIOUS, -1.0F);
+
+        if (afflicted) {
             setPathfindingMalus(PathType.LAVA, 0.0F);
             setPathfindingMalus(PathType.DANGER_FIRE, 0.0F);
             setPathfindingMalus(PathType.DAMAGE_FIRE, 0.0F);
@@ -488,12 +573,50 @@ public abstract class Alien extends Monster implements DataUser {
             return;
         }
 
-        for (var definition : LimbDefinitionRegistry.getDefinitions(getType())) {
-            if (definition.category().equals(LimbCategories.HEAD) && manager.isDetached(definition)) {
-                hurt(damageSources().genericKill(), Float.MAX_VALUE);
-                return;
+        if (isHeadDetached()) {
+            hurt(damageSources().genericKill(), com.alien.common.util.LethalDamage.AMOUNT);
+        }
+    }
+
+    /**
+     * ⭐⭐ WHETHER THIS ALIEN HAS LOST ITS HEAD.
+     * <p>
+     * ⚠ Shared with {@code QueenIncapacitationManager}, which must refuse to put a BEHEADED queen into the downed state
+     * — a ravager taking her head was lethal damage, the down happened first, and the sourceless kill that follows was
+     * then shrugged off by the very state it had just created. She stayed sprawled, headless and alive. One accessor so
+     * the two places cannot disagree about what "beheaded" means.
+     * </p>
+     */
+    public boolean isHeadDetached() {
+        if (!(this instanceof Dismemberable dismemberable)) {
+            return false;
+        }
+        var manager = dismemberable.getDismembermentManager();
+        if (manager == null || !manager.hasAnyDetached()) {
+            return false;
+        }
+        // ⭐⭐⭐ READ THE DETACHED IDS DIRECTLY. NO HEAD MEANS DEAD, FOR EVERY CASTE, WITH NO EXCEPTIONS.
+        //
+        // ⚠⚠ THE CATEGORY WALK ALONE WAS NOT ENOUGH. Limb definitions are DATAPACK-DRIVEN
+        // (data/avp_alien/blib_limbs/*.json, loaded through LimbDefinitionRegistry.replaceTier2) and only a couple
+        // of castes are built in Java - the praetorian's Java set has arms, legs and a tail but NO head. Matching on
+        // the detached id is the one test that holds however a caste's limbs were registered.
+        //
+        // ⚠ THE QUEEN GUARD IS BUILT ON THIS METHOD, so a wrong answer here silently disables "a beheaded queen
+        // never goes down" as well - which is why that report kept coming back after it was called fixed.
+        for (var limbId : manager.getDetachedLimbIds()) {
+            if (limbId.getPath().endsWith("_head")) {
+                return true;
             }
         }
+
+        // Second route for castes that DO register a categorised head definition (boiler, burster).
+        for (var definition : LimbDefinitionRegistry.getDefinitions(getType())) {
+            if (definition.category().equals(LimbCategories.HEAD) && manager.isDetached(definition)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     @Override
@@ -505,7 +628,15 @@ public abstract class Alien extends Monster implements DataUser {
 
         super.tick();
 
+        // Oct 5 - profiler v3 laps (/blib perf "inside the tick"); free while no session runs.
+        var perfLap = com.blib.api.common.perf.v1.BLibPerf.start();
+
         if (!level().isClientSide) {
+            // ⚠ Runs before the AI does: a grudge that lapsed this tick would let the alien turn away from something
+            // still hitting it. AlienRetaliation.refreshGrudge only re-stamps while the attacker is alive and close,
+            // so "it hit me and ran" still times out exactly as before.
+            AlienRetaliation.refreshGrudge(this);
+
             dieIfHeadless();
         }
 
@@ -537,12 +668,17 @@ public abstract class Alien extends Monster implements DataUser {
                 );
         }
 
+        perfLap = com.blib.api.common.perf.v1.BLibPerf.lap(this, "alien.grudge+headless", perfLap);
+
         if (!level().isClientSide) {
             movementAnalyzer.tick();
         }
 
+        perfLap = com.blib.api.common.perf.v1.BLibPerf.lap(this, "alien.movementAnalyzer", perfLap);
         hiveManager.tick();
+        perfLap = com.blib.api.common.perf.v1.BLibPerf.lap(this, "alien.hiveManager", perfLap);
         moltingManager.tick();
+        perfLap = com.blib.api.common.perf.v1.BLibPerf.lap(this, "alien.moltingManager", perfLap);
         if (!level().isClientSide) {
             // Capture/delivery itself is a GOAP action (HostActions) - only the stun timer ticks here.
             com.alien.common.gameplay.hive.party.HostGrabImmunity.tickStun(this);
@@ -550,7 +686,26 @@ public abstract class Alien extends Monster implements DataUser {
 
         if (!level().isClientSide) {
             hasTarget.set(getTarget() != null);
-            isMovingHorizontally.set(movementAnalyzer.isMovingHorizontally());
+            // 🚨🚨 DEBOUNCED - AND THE LOG PROVES WHY. MovementAnalyzer.isMovingHorizontally() is an EXACT-ZERO test
+            // on last tick's delta, so any tick without progress flips it false for that tick alone.
+            //
+            // ⚠⚠ MEASURED, NOT GUESSED. /avp hive diag anim on a "stiff" nether crusher:
+            // chose=IDLE moving=false
+            // chose=WALK moving=true ... same for 1 more ticks
+            // chose=IDLE moving=false
+            // - alternating every one to two ticks, forever. The animator swaps WALK <-> IDLE each time, and
+            // although both commands are idempotent, ALTERNATING between two different ones re-dispatches each, so
+            // both restart at frame 0. The mob looks frozen and walk only ever shows its opening frames.
+            //
+            // ⚠ Worst on slow, wide castes - a crusher is 1.8 blocks across and stalls constantly - which is why it
+            // looked caste-specific when the mechanism is shared by everything.
+            if (movementAnalyzer.isMovingHorizontally()) {
+                ticksSinceHorizontalMovement = 0;
+            } else if (ticksSinceHorizontalMovement < MOVEMENT_ANIMATION_GRACE_TICKS) {
+                ticksSinceHorizontalMovement++;
+            }
+
+            isMovingHorizontally.set(ticksSinceHorizontalMovement < MOVEMENT_ANIMATION_GRACE_TICKS);
             isMovingQuickly.set(updateMovingQuicklyForAnimation());
 
             if (getVehicle() != null && !canRide(getVehicle())) {
@@ -565,10 +720,12 @@ public abstract class Alien extends Monster implements DataUser {
                 passengersToRemove.forEach(Entity::stopRiding);
             }
 
+            perfLap = com.blib.api.common.perf.v1.BLibPerf.lap(this, "alien.flags+riding", perfLap);
             healPassively();
             applyMalusBasedOnVariant();
             applyDynamicAttributes();
             becomeIrradiated();
+            com.blib.api.common.perf.v1.BLibPerf.lap(this, "alien.upkeep", perfLap);
         }
     }
 
@@ -737,6 +894,18 @@ public abstract class Alien extends Monster implements DataUser {
 
     @Override
     public boolean hurt(@NotNull DamageSource damageSource, float damage) {
+        // ⭐ CHITIN VS THIRD-PARTY GUNFIRE (TACZ + Point Blank). Applied to the incoming amount before anything else
+        // reads it, so every downstream consequence - death, dismemberment thresholds, aggro - sees the reduced figure
+        // and stays consistent.
+        //
+        // ⚠⚠ THIS CANNOT BE DONE WITH ARMOUR ATTRIBUTES. Two of TACZ's four bullet damage types sit in
+        // minecraft:bypasses_armor, and Point Blank uses plain player_attack, so a multiplier is the only lever that
+        // reaches all of them. One shared budget per xenomorph, with a floor so every hit still visibly lands. See
+        // GunDamageParity.
+        //
+        // ⚠ No-op without either mod installed: the multiplier is 1.
+        damage *= com.alien.compatibility.guns.GunDamageParity.damageMultiplier(this, damageSource, damage);
+
         // Rescue: hurting a xenomorph that is carrying a captured host makes it drop the host and be stunned.
         //
         // The captive itself is excluded: a carried player can look down and hit the drone under them (see
@@ -772,7 +941,17 @@ public abstract class Alien extends Monster implements DataUser {
                 gameEvent(alienVariantType.cryForHelpEvent());
             }
 
-            if (getType().is(AlienEntityTypeTags.XENOMORPHS) && damageSource.getEntity() instanceof ServerPlayer player) {
+            // ⚠⚠ CREATIVE AND SPECTATOR STAMP NOTHING. This hook is the FIRST link in the retribution chain:
+            // it creates the AttackCampaign entry that HiveTerritoryAggroTask then accrues dwell against, and once
+            // the dwell threshold is crossed the hive sends two raid waves at whoever it names. An admin testing a
+            // sword in creative was earning himself a raid. AttackPartyDispatch refuses to LAUNCH one at a creative
+            // player, which is why this never showed as a raid - the entry, the dwell and the campaign were all
+            // still being built, they just died at the last gate.
+            if (
+                getType().is(AlienEntityTypeTags.XENOMORPHS)
+                    && damageSource.getEntity() instanceof ServerPlayer player
+                    && !AlienPredicates.isIgnoredByHive(player)
+            ) {
                 recordAttackByPlayer(player);
             }
 
@@ -788,6 +967,12 @@ public abstract class Alien extends Monster implements DataUser {
                     && damageSource.getEntity() instanceof LivingEntity attackerEntity
             ) {
                 recordSiegeDamage(attackerEntity);
+
+                // ⭐ CRY FOR HELP. One drone flailing alone while its sisters haul eggs past the fight is what made
+                // the hive look passive against another mod's hostiles. Nearby kin adopt the same attacker, through
+                // the very field the retaliation override already reads - so no new target path, and every ally and
+                // captive rule still applies. See AlienRetaliation.
+                AlienRetaliation.shareGrudge(this, attackerEntity);
             }
 
             if (canBleedAcid() && damageSource != damageSources().genericKill()) {
@@ -984,6 +1169,19 @@ public abstract class Alien extends Monster implements DataUser {
         );
 
     /**
+     * AVPHuman's entity tag of things radiation never touches (undead, the invulnerable, yautja with the predator mod's
+     * contribution). By id, so it is an empty tag rather than a missing class when avp_human is absent - and tag files
+     * load whatever mod their namespace belongs to, so avp_predator's entry still counts in an alien-plus-predator
+     * pack. Sep 23: the touch rule checked the ARMOUR tag but never this one, so in a pack without avp_human a yautja
+     * took radiation sickness from an irradiated warrior's claws.
+     */
+    private static final net.minecraft.tags.TagKey<net.minecraft.world.entity.EntityType<?>> RADIATION_RESISTANT_ENTITIES =
+        net.minecraft.tags.TagKey.create(
+            net.minecraft.core.registries.Registries.ENTITY_TYPE,
+            net.minecraft.resources.ResourceLocation.fromNamespaceAndPath("avp_human", "radiation_resistant")
+        );
+
+    /**
      * AVPHuman's radiation effect, resolved lazily by id - a SOFT dependency: empty when avp_human is absent and the
      * irradiated touch simply does nothing. Cached after the first lookup (registries are frozen by then).
      */
@@ -1046,6 +1244,9 @@ public abstract class Alien extends Monster implements DataUser {
         // burn instead. The avp_human:radiation_resistant tag we contribute lists every alien EXCEPT them, and this
         // mirrors it so claws and talons agree with the environment.
         if (victim instanceof Alien irradiatedAlien && irradiatedAlien.getVariant() != AlienVariant.ABERRANT) {
+            return false;
+        }
+        if (victim.getType().is(RADIATION_RESISTANT_ENTITIES)) {
             return false;
         }
         // NOTE: deliberately NOT refused for an already-irradiated victim any more. Under AVPHuman's exposure
@@ -1322,8 +1523,13 @@ public abstract class Alien extends Monster implements DataUser {
                     && killer instanceof ServerPlayer player
                     && level() instanceof ServerLevel serverLevel
             ) {
-                attributeKillToLineages(player.getUUID(), serverLevel.getGameTime());
-                recordHiveCombatKill(player);
+                // A kill by someone the hive cannot see is not a kill it can hold a grudge over. Both books are
+                // skipped together: the lineage's raid-aggro kill ledger, and the location's combat-respite counter
+                // that silences its ambient spawning after 40 deaths.
+                if (!AlienPredicates.isIgnoredByHive(player)) {
+                    attributeKillToLineages(player.getUUID(), serverLevel.getGameTime());
+                    recordHiveCombatKill(player);
+                }
             }
             ConvoyMemberTracker.unregisterKilled(this);
             // ANY royal death (queen or empress, any cause, killer or not) surrenders the founder pointer on the
@@ -1332,6 +1538,16 @@ public abstract class Alien extends Monster implements DataUser {
             // "founderId != null" read as "once had a queen" rather than "has a living queen", which stalled the
             // post-replacement grudge (it waits for a successor that the queenless path never crowned) and let the
             // empress election seat a hive with no queen in it at all.
+            // ⚠⚠ THE FAILED-DAUGHTER LINE MUST GO ABOVE onRoyalDiedClearFounder(). That call surrenders the founder
+            // pointer on every hive she was seated at, so one line later a reigning queen reads as LANDLESS and
+            // would announce as a daughter who never made it. The ordering IS the correctness of the check.
+            if (
+                level() instanceof ServerLevel daughterDeathLevel
+                    && com.alien.common.gameplay.hive.growth.DaughterQueenAnnouncements.isLandlessDaughter(this)
+            ) {
+                com.alien.common.gameplay.hive.growth.DaughterQueenAnnouncements
+                    .announceFailed(daughterDeathLevel, this);
+            }
             if (getType().is(AlienEntityTypeTags.QUEENS)) {
                 onRoyalDiedClearFounder();
             }
@@ -1500,6 +1716,17 @@ public abstract class Alien extends Monster implements DataUser {
         com.alien.common.gameplay.hive.party.PartyMemberDeath.onDeath(this);
         ConvoyMemberTracker.unregisterKilled(this);
 
+        // A daughter POCKETED en route counts as failed just as much as one killed en route - the hive spent the
+        // same jelly and the same lifetime slot either way, and she is equally never going to found. Above the
+        // founder-clear for the same ordering reason as the death path.
+        if (
+            level() instanceof ServerLevel abductedDaughterLevel
+                && com.alien.common.gameplay.hive.growth.DaughterQueenAnnouncements.isLandlessDaughter(this)
+        ) {
+            com.alien.common.gameplay.hive.growth.DaughterQueenAnnouncements
+                .announceFailed(abductedDaughterLevel, this);
+        }
+
         if (getType().is(AlienEntityTypeTags.QUEENS)) {
             onRoyalDiedClearFounder();
         }
@@ -1609,6 +1836,56 @@ public abstract class Alien extends Monster implements DataUser {
             if (faction == null || !(faction.data() instanceof LineageFactionData lineage)) {
                 continue;
             }
+            // \u2b50\u2b50 A RIVAL EMPRESS INHERITS BEFORE THE THRONE IS EVER VACANT.
+            //
+            // [stated] "yes the oldest is soverign when there is two and if something happens the second oldest takes
+            // over." The lineage keeps every non-sovereign empress in a list ordered by crowning time, so succession
+            // is simply the next entry.
+            //
+            // \u26a0 THE COOLDOWN BELOW MUST NOT RUN WHEN AN HEIR EXISTS. That cooldown is there so killing an empress
+            // BUYS something - without it the lineage still holds four hives and the next scan crowns a replacement
+            // immediately. But when a rival is already standing there, the crown has not been vacated at all and
+            // there is nothing to wait for; punishing the players with a cooldown for a throne that never emptied
+            // would be the opposite of what it is for.
+            // ⚠⚠ THIS RUNS BEFORE THE SUCCESSION BRANCH, AND THAT ORDERING IS THE WHOLE POINT.
+            //
+            // 🚨 IT USED TO SIT BELOW, AFTER A `continue`. So when a sovereign empress died AND an heir inherited -
+            // the one path that skips ahead - her seat was NEVER vacated, and the throne stayed recorded to a dead
+            // empress permanently. The comment right here warned about exactly that outcome while the code above it
+            // caused it.
+            //
+            // 🚨🚨 THE CONSEQUENCE IS THE EMPRESS EGGSACK LOOP. ForcedEmpressFounding asks "is this throne occupied by
+            // SOMEBODY ELSE" by comparing location.sittingEmpressId() against her own id. Against a dead empress's
+            // stale id that test is true forever, so the rightful heir is treated as an intruder every tick, sent
+            // away by EmpressSchism.relocate - WHICH STRIPS HER OVIPOSITOR ON THE WAY OUT - fails to found anywhere,
+            // and does it again a second later. Reported as an empress who "keeps making a sack then getting up then
+            // making a sack again", with the log filling up with "the lineage has room, so she leaves to found for
+            // it" / "could not find anywhere to found - she remains displaced" once a second.
+            //
+            // ⭐ Vacating first is safe: promoteNextEmpress works off the pretender list and never reads the seat.
+            // Independent of the crown, exactly as the original note said - a pretender holds a hive without holding
+            // the lineage.
+            for (var location : com.alien.common.gameplay.hive.location.HiveLocationRegistry.INSTANCE.all()) {
+                if (getUUID().equals(location.sittingEmpressId())) {
+                    location.setSittingEmpressId(null);
+                }
+            }
+
+            if (getUUID().equals(lineage.empressId()) && lineage.promoteNextEmpress()) {
+                com.alien.Alien.LOGGER.info(
+                    "Hive: sovereign empress {} died - the next-oldest empress of {} inherits",
+                    getUUID(),
+                    factionId
+                );
+                continue;
+            }
+
+            // She was a rival, not the ruler: drop her from the line of succession and leave the throne alone.
+            if (!getUUID().equals(lineage.empressId())) {
+                lineage.removePretender(getUUID());
+                continue;
+            }
+
             if (getUUID().equals(lineage.empressId())) {
                 lineage.setEmpressId(null);
                 lineage.setPendingEmpressSeatId(null);

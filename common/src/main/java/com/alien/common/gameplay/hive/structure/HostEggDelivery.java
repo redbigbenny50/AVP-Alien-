@@ -73,20 +73,21 @@ public final class HostEggDelivery {
      */
     private static Optional<BlockPos> findHostDrop(ServerLevel level, HiveLocation location, @Nullable Ovomorph ignoreEgg) {
         long now = level.getGameTime();
-        for (var origin : HostChamberSlots.hostChamberGroups(location)) {
-            for (var spot : HostChamberSlots.hostSpots(level, location, origin)) {
-                var host = freeHostAt(level, spot.pos());
-                if (host == null) {
-                    continue;
-                }
-                var eggDrop = HostChamberSlots.eggDropFor(spot);
-                if (hasOvomorphAt(level, eggDrop) || hasInboundEgg(level, eggDrop, ignoreEgg)) {
-                    continue; // already has its egg, or a DIFFERENT egg is loose and on the way
-                }
-                long embedTime = ((Host) host).getEmbedGameTime();
-                if (embedTime != Long.MIN_VALUE && now - embedTime >= SETTLE_TICKS) {
-                    return Optional.of(eggDrop);
-                }
+        // ⚠ Oct 1: allHostSpots, not hostChamberGroups. The chamber walk is EMPTY in build-free mode (no pieces), so a
+        // host webbed there was never offered an egg and waited forever. allHostSpots returns the same chamber spots
+        // for a normal hive, in the same order.
+        for (var spot : HostChamberSlots.allHostSpots(level, location)) {
+            var host = freeHostAt(level, spot.pos());
+            if (host == null) {
+                continue;
+            }
+            var eggDrop = HostChamberSlots.eggDropFor(spot);
+            if (hasOvomorphAt(level, eggDrop) || hasInboundEgg(level, eggDrop, ignoreEgg)) {
+                continue; // already has its egg, or a DIFFERENT egg is loose and on the way
+            }
+            long embedTime = ((Host) host).getEmbedGameTime();
+            if (embedTime != Long.MIN_VALUE && now - embedTime >= SETTLE_TICKS) {
+                return Optional.of(eggDrop);
             }
         }
         return Optional.empty();
@@ -148,13 +149,11 @@ public final class HostEggDelivery {
      * back to ordinary nursery routing.
      */
     public static boolean isHostDropStillValid(ServerLevel level, HiveLocation location, BlockPos dropCell) {
-        for (var origin : HostChamberSlots.hostChamberGroups(location)) {
-            for (var spot : HostChamberSlots.hostSpots(level, location, origin)) {
-                if (!HostChamberSlots.eggDropFor(spot).equals(dropCell)) {
-                    continue;
-                }
-                return freeHostAt(level, spot.pos()) != null && !hasOvomorphAt(level, dropCell);
+        for (var spot : HostChamberSlots.allHostSpots(level, location)) {
+            if (!HostChamberSlots.eggDropFor(spot).equals(dropCell)) {
+                continue;
             }
+            return freeHostAt(level, spot.pos()) != null && !hasOvomorphAt(level, dropCell);
         }
         return false;
     }

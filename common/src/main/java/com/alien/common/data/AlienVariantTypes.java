@@ -1,6 +1,5 @@
 package com.alien.common.data;
 
-import com.alien.common.gameplay.entity.acid.Acid;
 import com.alien.common.gameplay.entity.living.alien.Alien;
 import com.alien.common.gameplay.hive.location.HiveLocation;
 import com.alien.common.model.alien.variant.AlienVariant;
@@ -256,21 +255,6 @@ public class AlienVariantTypes {
      */
     public static @Nullable AlienVariantType getForOrNull(Entity entity) {
         return getForOrNull(entity.getType());
-    }
-
-    /**
-     * Usage of this function is discouraged since it can return Option#none. Consider using getFor(AlienVariant) where
-     * possible.
-     */
-    @Deprecated(forRemoval = true)
-    public static Option<AlienVariantType> getFor(Acid entity) {
-        if (entity.isIrradiated()) {
-            return Option.some(IRRADIATED);
-        } else if (entity.isNetherAfflicted()) {
-            return Option.some(NETHER);
-        }
-
-        return Option.some(NORMAL);
     }
 
     /**

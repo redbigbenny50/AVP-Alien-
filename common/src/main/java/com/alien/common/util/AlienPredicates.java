@@ -33,6 +33,57 @@ public class AlienPredicates {
 
     private static final float LOW_BIOMASS_TARGET_THRESHOLD = 0.25F;
 
+    /**
+     * ⭐⭐ THE HIVE DOES NOT SEE THIS ENTITY AT ALL.
+     * <p>
+     * [stated] "creative and spectator shouldnt build up anything or threat level. hive should treat these players as
+     * if they arent even there."
+     * </p>
+     * <p>
+     * The stance already existed in about a dozen places, each written out by hand as
+     * {@code player.isCreative() || player.isSpectator()} - and the ones that had been MISSED were the expensive kind:
+     * an admin swinging a sword in creative was stamping attack campaigns, feeding the siege clock, arming combat
+     * respites and earning himself a retribution raid. One named predicate, so a new hive system asks the question
+     * instead of remembering to write the check.
+     * </p>
+     * <p>
+     * ⚠ THIS IS A GAMEMODE TEST, NOT A HOSTILITY TEST. It says nothing about whether a mob is a valid target - that is
+     * {@link #isTargetThreatAllowed}. It answers only "should this player's presence and actions register on the hive's
+     * books at all", and for creative and spectator the answer is no.
+     * </p>
+     */
+    public static boolean isIgnoredByHive(@org.jetbrains.annotations.Nullable Entity entity) {
+        return entity instanceof Player player && (player.isCreative() || player.isSpectator());
+    }
+
+    /**
+     * Vanilla's {@code Level.hasNearbyAlivePlayer} with creative players removed as well as spectators.
+     * <p>
+     * ⚠⚠ EVERY "is a player too close for the hive to do this" GATE MUST USE THIS. Vanilla's version drops spectators
+     * and keeps creative, so a builder flying around in creative silently suppressed surface parties, vent planting and
+     * reserve materialisation for 32 blocks in every direction - the hive going quiet for exactly the person most
+     * likely to be watching it.
+     * </p>
+     */
+    public static boolean hasNearbyRealPlayer(
+        net.minecraft.world.level.Level level,
+        double x,
+        double y,
+        double z,
+        double radius
+    ) {
+        var radiusSqr = radius * radius;
+        for (var player : level.players()) {
+            if (!player.isAlive() || isIgnoredByHive(player)) {
+                continue;
+            }
+            if (player.distanceToSqr(x, y, z) < radiusSqr) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     /** How long an alien holds a retaliation grudge against something that hurt it (10s). */
     private static final int RETALIATION_GRUDGE_TICKS = 200;
 
@@ -62,7 +113,11 @@ public class AlienPredicates {
     }
 
     public static boolean canAcquireTarget(@NotNull Alien alien, @NotNull LivingEntity potentialTarget) {
-        return canTarget(alien, potentialTarget) && alien.getSensing().hasLineOfSight(potentialTarget);
+        // Oct 7: a target this alien just proved it cannot reach is left alone for a while (ChaseGiveUp) - checked
+        // before the line-of-sight raycast, which is the expensive part.
+        return canTarget(alien, potentialTarget)
+            && !com.alien.common.gameplay.entity.living.alien.xenomorph.ai.combat.ChaseGiveUp.isGivenUp(alien, potentialTarget)
+            && alien.getSensing().hasLineOfSight(potentialTarget);
     }
 
     public static boolean canContinueTargeting(@NotNull Alien alien, @NotNull LivingEntity potentialTarget) {
@@ -338,17 +393,67 @@ public class AlienPredicates {
      * open them up for it while they work. This lapses the moment she is free, and rival STRAINS are untouched by it -
      * they were never coming to help.
      */
+    /**
+     * ⚠⚠ THE EMPRESS WAS NOT COVERED BY ANY OF THE THREE MERCY RULES. She extends Xenomorph and NOT Queen, so every
+     * {@code instanceof Queen} here fell straight through for her: a downed empress could strike the kin coming to free
+     * her, her own kin would attack her while she lay there, and her own lineage was free to target her.
+     * XenomorphTargetSensors.applyHiveWorkerLeash already learned this exact lesson - the QUEENS tag CONTAINS
+     * #avp_alien:empresses - and the fix never reached this file.
+     */
+    private static boolean isHelplessRoyal(@NotNull LivingEntity entity) {
+        if (!entity.getType().is(AlienEntityTypeTags.QUEENS)) {
+            return false;
+        }
+
+        // ⚠ CHAINS ARE THE QUEEN'S ALONE - only she has a BindManager - but incapacitation is shared through
+        // IncapacitatableRoyal, which the empress DOES implement.
+        if (entity instanceof Queen chained && chained.getBindManager().hasAnyChain()) {
+            return true;
+        }
+
+        return entity instanceof com.alien.common.gameplay.entity.living.alien.xenomorph.IncapacitatableRoyal royal
+            && royal.isIncapacitated();
+    }
+
     public static boolean isHelplessQueenStrikingKin(@NotNull Alien alien, @NotNull LivingEntity potentialTarget) {
-        return alien instanceof Queen helplessQueen
-            && (helplessQueen.getBindManager().hasAnyChain() || helplessQueen.isIncapacitated())
+        return isHelplessRoyal(alien)
             && potentialTarget instanceof Alien kin
-            && !areAliensDifferentStrains(helplessQueen, kin);
+            && !areAliensDifferentStrains(alien, kin);
     }
 
     public static boolean isHelplessKinQueen(@NotNull Alien alien, @NotNull LivingEntity potentialTarget) {
-        return potentialTarget instanceof Queen helplessQueen
-            && (helplessQueen.getBindManager().hasAnyChain() || helplessQueen.isIncapacitated())
-            && !areAliensDifferentStrains(alien, helplessQueen);
+        return isHelplessRoyal(potentialTarget)
+            && potentialTarget instanceof Alien helplessRoyal
+            && !areAliensDifferentStrains(alien, helplessRoyal);
+    }
+
+    /**
+     * ⭐⭐⭐ A HIVE NEVER ATTACKS ITS OWN QUEEN. NOT WHEN SHE IS HELPLESS - EVER.
+     * <p>
+     * [stated] "got a hive killing it's own queen again" and "saw the queen off her sack killing her xenos", both on a
+     * LEGACY queen.
+     * </p>
+     * <p>
+     * ⚠⚠ THE EXISTING MERCY ONLY COVERS A HELPLESS QUEEN - chained or incapacitated - and everything else relies on
+     * variant and lineage bookkeeping agreeing. A legacy queen is exactly the case where that bookkeeping is least
+     * trustworthy: she predates the lineage system, and if her recorded variant or lineage does not line up with the
+     * hive around her, {@code areAliensDifferentStrains} reads her as a rival strain and the whole hive turns on her.
+     * </p>
+     * <p>
+     * ⭐ SHARING A LINEAGE IS THE TEST, and it is a safety net rather than a replacement: a queen who invades somebody
+     * else's territory has a DIFFERENT lineage, so she is still fair game. This only says that members of her own
+     * lineage may never aim at her, whatever the strain bookkeeping thinks.
+     * </p>
+     */
+    public static boolean isOwnLineageQueen(@NotNull Alien alien, @NotNull LivingEntity potentialTarget) {
+        // ⚠ THE QUEENS TAG, NOT instanceof - it contains #avp_alien:empresses, and "a hive never attacks its own
+        // queen" was never meant to exclude the royal who outranks her.
+        if (!potentialTarget.getType().is(AlienEntityTypeTags.QUEENS)) {
+            return false;
+        }
+        var alienLineage = AlienTerritoryWarSystem.lineageOf(alien.getUUID());
+        var queenLineage = AlienTerritoryWarSystem.lineageOf(potentialTarget.getUUID());
+        return alienLineage != null && alienLineage.equals(queenLineage);
     }
 
     private static boolean areAliensDifferentStrains(Alien first, Alien second) {
@@ -433,7 +538,12 @@ public class AlienPredicates {
             // A host that has just torn a hugger off its face gets 30 seconds before the next one may try. This is the
             // one choke point every route onto a face passes through - GOAP targeting, an ovomorph's hatch desire, and
             // Parasite's attach-on-touch / attach-on-hit - so gating it here covers all of them at once.
-            && !HuggerImmunity.isImmune(hostTarget);
+            && !HuggerImmunity.isImmune(hostTarget)
+            // ⚠ Oct 2 - AND NEVER A CREATIVE OR SPECTATOR PLAYER. [stated] "in all modes creative and spectator players
+            // are never seen as an intruder or anything like that." Nothing here checked game mode, so a hugger could
+            // latch onto a creative player by touch, and an egg would open for one standing next to it. This is the
+            // single choke point for every route onto a face, so one line covers them all.
+            && !isIgnoredByHive(hostTarget);
     }
 
     public static boolean isHost(Entity target) {

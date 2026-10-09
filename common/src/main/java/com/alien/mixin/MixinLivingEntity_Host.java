@@ -113,10 +113,16 @@ public abstract class MixinLivingEntity_Host extends Entity implements Host {
         // grab, or an AI that deals damage outside the suspended tick ([stated] "i just watched a piglin kill a
         // drone while being carried"). getEntity() is the CAUSING entity (the shooter for a projectile), so ranged
         // and melee both resolve to the carried host.
+        // ⭐ Oct 2 - AND A PARKED (WEBBED) HOST CANNOT HARM ANYONE EITHER. [stated] marines and predators grabbed as
+        // hosts must not attack. The carry leg was covered; the webbed leg relied only on setNoAi(true), which stops
+        // vanilla goals and brains but not an attack a mod drives from its own entity tick - a marine's gun logic or a
+        // predator's shoulder caster. Voiding by the CAUSING entity covers melee, projectiles and hitscan alike, from
+        // any mod, without needing to know how each one fires. Same victim-side rule as the carry case.
         if (
             source.getEntity() instanceof LivingEntity attacker
                 && attacker != self
-                && com.alien.common.gameplay.hive.party.HostCaptureTask.isBeingCarriedHome(attacker)
+                && (com.alien.common.gameplay.hive.party.HostCaptureTask.isBeingCarriedHome(attacker)
+                    || HostParking.isParked(attacker))
         ) {
             callbackInfo.setReturnValue(false); // no damage dealt
             return;

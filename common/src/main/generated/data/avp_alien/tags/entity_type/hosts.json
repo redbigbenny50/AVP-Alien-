@@ -180,6 +180,54 @@
     {
       "id": "stellaris:pygro_brute",
       "required": false
+    },
+    {
+      "id": "ad_astra:lunarian",
+      "required": false
+    },
+    {
+      "id": "ad_astra:lunarian_wandering_trader",
+      "required": false
+    },
+    {
+      "id": "ad_astra:corrupted_lunarian",
+      "required": false
+    },
+    {
+      "id": "ad_astra:pygro",
+      "required": false
+    },
+    {
+      "id": "ad_astra:pygro_brute",
+      "required": false
+    },
+    {
+      "id": "slimpatch:evoker",
+      "required": false
+    },
+    {
+      "id": "slimpatch:female_villager",
+      "required": false
+    },
+    {
+      "id": "slimpatch:human_trader",
+      "required": false
+    },
+    {
+      "id": "slimpatch:male_villager",
+      "required": false
+    },
+    {
+      "id": "slimpatch:pillager",
+      "required": false
+    },
+    {
+      "id": "slimpatch:vindicator",
+      "required": false
+    },
+    {
+      "id": "slimpatch:wandering_trader",
+      "required": false
     }
   ]
 }

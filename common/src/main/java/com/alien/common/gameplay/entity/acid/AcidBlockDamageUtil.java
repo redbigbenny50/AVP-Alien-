@@ -11,8 +11,34 @@ import net.minecraft.world.level.block.Blocks;
 
 public class AcidBlockDamageUtil {
 
+    /**
+     * [stated] Oct 3: blocks that stand up to acid THREE TIMES longer - avp_human's composite (steel and plastic).
+     * Named by id, not imported, so avp_alien needs nothing from avp_human: without it the tag is simply empty.
+     */
+    private static final net.minecraft.tags.TagKey<net.minecraft.world.level.block.Block> ACID_RESISTANT_3X =
+        net.minecraft.tags.TagKey.create(
+            net.minecraft.core.registries.Registries.BLOCK,
+            net.minecraft.resources.ResourceLocation.fromNamespaceAndPath("avp_human", "acid_resistant_3x")
+        );
+
+    /** How much slower acid eats an {@link #ACID_RESISTANT_3X} block. */
+    private static final float ACID_RESISTANT_3X_FACTOR = 3.0F;
+
+    /**
+     * Oct 6 - performance. Acid eats blocks every {@value} ticks on the server, with each bite {@value} times as large
+     * and aging the acid {@value} times as much, so a block melts at exactly the same speed and the acid lasts exactly
+     * as long. Each bite also sends the crack-progress update to nearby players, so this cuts that traffic by the same
+     * factor. 160 acid pools in a fight were costing 0.3 ms of every tick. The client keeps its every-tick smoke.
+     */
+    static final int SERVER_BITE_INTERVAL_TICKS = 4;
+
     public static void damageBlocks(Acid acid) {
         var level = acid.level();
+
+        // Offset by id so a splash of pools does not all bite on the same tick.
+        if (!level.isClientSide && (acid.tickCount + acid.getId()) % SERVER_BITE_INTERVAL_TICKS != 0) {
+            return;
+        }
 
         BlockPos.betweenClosedStream(acid.getBoundingBox().inflate(0, 0.1, 0))
             .filter(blockPos -> canAcidDestroyBlock(acid, blockPos, level))
@@ -33,7 +59,14 @@ public class AcidBlockDamageUtil {
 
     private static void damageBlock(Acid acid, BlockPos blockPos, Level level) {
         var blockStateBeforeDamage = level.getBlockState(blockPos);
-        var result = BlockBreakProgressManager.damage(level, blockPos, 0.2F * acid.getMultiplier());
+        var amount = 0.2F * acid.getMultiplier() * SERVER_BITE_INTERVAL_TICKS;
+
+        // Acid-resistant blocks take a third of the damage per tick, so they last exactly three times as long.
+        if (blockStateBeforeDamage.is(ACID_RESISTANT_3X)) {
+            amount /= ACID_RESISTANT_3X_FACTOR;
+        }
+
+        var result = BlockBreakProgressManager.damage(level, blockPos, amount);
 
         switch (result) {
             case DAMAGED -> {
@@ -67,11 +100,15 @@ public class AcidBlockDamageUtil {
         }
 
         if (result != BlockBreakProgressManager.Result.NOT_DAMAGED) {
-            if (acid.tickCount % (acid.getRandom().nextInt(100) + 10) == 0) {
+            // Was "tickCount % (10..109) == 0" checked every tick - about a 1-in-42 chance per tick. A bite now covers
+            // four ticks, so the same rate is about 1 in 10 per bite.
+            if (acid.getRandom().nextInt(10) == 0) {
                 level.playSound(null, acid, AlienSoundEvents.BLOCK_ACID_BURN.get(), SoundSource.NEUTRAL, 1F, 1F);
             }
 
-            acid.age();
+            for (var i = 0; i < SERVER_BITE_INTERVAL_TICKS; i++) {
+                acid.age();
+            }
         }
     }
 

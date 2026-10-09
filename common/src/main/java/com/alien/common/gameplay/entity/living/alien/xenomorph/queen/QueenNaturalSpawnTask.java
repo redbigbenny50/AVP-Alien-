@@ -107,6 +107,11 @@ public class QueenNaturalSpawnTask {
         if (serverLevel.getGameTime() % RUN_INTERVAL_TICKS != 0 || serverLevel.players().isEmpty()) {
             return;
         }
+        // ⭐ Oct 1 - blockNaturalQueenSpawns (off by default). Returns BEFORE the first-queen guarantee and before any
+        // chunk is sampled, so nothing is consumed or recorded while it is on.
+        if (serverLevel.getGameRules().getBoolean(com.alien.common.registry.init.AlienGameRules.BLOCK_NATURAL_QUEEN_SPAWNS)) {
+            return;
+        }
 
         var data = QueenSpawnChunkData.getOrCreate(serverLevel).unwrap();
 

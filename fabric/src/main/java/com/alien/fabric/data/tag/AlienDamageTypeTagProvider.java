@@ -7,6 +7,7 @@ import net.fabricmc.fabric.api.datagen.v1.FabricDataOutput;
 import net.fabricmc.fabric.api.datagen.v1.provider.FabricTagProvider;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.core.registries.Registries;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.tags.DamageTypeTags;
 import net.minecraft.world.damagesource.DamageType;
 import net.minecraft.world.damagesource.DamageTypes;
@@ -72,12 +73,40 @@ public class AlienDamageTypeTagProvider extends FabricTagProvider<DamageType> {
                 AlienDamageTypeKeys.ACID_SPIT
             );
 
+        // ⚠ FREEZE IS NO LONGER HERE. It was blanket-refused for every alien, which made the nether strain immune to
+        // cold too. Sep 22 ruling: "irradiated, normal, and aberrant should be immune to cold and the nether would
+        // take the damage." Freeze now goes through EXTREME_COLD and StrainHazardImmunity, per strain.
         getOrCreateTagBuilder(AlienDamageTypesTags.DOES_NOT_HURT_ALIENS)
             .addTag(AlienDamageTypesTags.ACID)
             .add(
                 DamageTypes.DROWN,
-                DamageTypes.FREEZE,
                 DamageTypes.IN_WALL
             );
+
+        addSpaceHazardDamageTypes();
+    }
+
+    /**
+     * The space mods' hazards as damage-type tags, so StrainHazardImmunity can answer them per strain. Names read from
+     * the 1.16.26 Ad Astra and 1.4.25 Stellaris jars; optional, because neither mod is on the datagen classpath and a
+     * missing damage type must not break the tag. Ad Astra's heat is vanilla fire and its cold is vanilla freeze, which
+     * is why those two are vanilla keys here.
+     */
+    private void addSpaceHazardDamageTypes() {
+        getOrCreateTagBuilder(AlienDamageTypesTags.SUFFOCATION)
+            .addOptional(ResourceLocation.fromNamespaceAndPath("ad_astra", "oxygen"))
+            .addOptional(ResourceLocation.fromNamespaceAndPath("stellaris", "oxygen"));
+
+        getOrCreateTagBuilder(AlienDamageTypesTags.EXTREME_COLD)
+            .add(DamageTypes.FREEZE);
+
+        getOrCreateTagBuilder(AlienDamageTypesTags.ACID_RAIN)
+            .addOptional(ResourceLocation.fromNamespaceAndPath("ad_astra", "acid_rain"));
+
+        getOrCreateTagBuilder(AlienDamageTypesTags.CRYO_FUEL)
+            .addOptional(ResourceLocation.fromNamespaceAndPath("ad_astra", "cryo_fuel"));
+
+        getOrCreateTagBuilder(AlienDamageTypesTags.ROCKET_FLAMES)
+            .addOptional(ResourceLocation.fromNamespaceAndPath("ad_astra", "rocket_flames"));
     }
 }

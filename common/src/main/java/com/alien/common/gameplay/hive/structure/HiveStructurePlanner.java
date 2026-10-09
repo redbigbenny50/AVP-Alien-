@@ -37,6 +37,27 @@ import java.util.Set;
  */
 public final class HiveStructurePlanner {
 
+    /**
+     * Update flags for bulk hive placement: clients only, NO neighbour updates.
+     * <p>
+     * 🚨🚨 NEIGHBOUR UPDATES ARE WHAT KILLED A DEDICATED SERVER. Flag 3 includes UPDATE_NEIGHBORS, so every block the
+     * hive carved or stamped told its neighbours to re-evaluate - and vanilla blocks respond by SCHEDULING A TICK:
+     * leaves check decay, sand checks support, water checks flow. A hive spreading through terrain therefore queued a
+     * scheduled tick per disturbed neighbour, and a crash report showed block_ticks: 498,053 pending with the server
+     * stuck in LevelTicks.sortContainersToTick.
+     * </p>
+     * <p>
+     * ⭐ This is what VANILLA STRUCTURE GENERATION uses for the same reason. The hive is placing terrain in bulk, not
+     * operating a redstone contraption - it does not need the cascade.
+     * </p>
+     * <p>
+     * ⚠ TRADE-OFF, AND IT IS THE ONE WE WANT: water and lava no longer flow into freshly carved space and sand no
+     * longer falls into it. Interactive single placements - jelly vats, spawners, harvest capture - keep flag 3 and are
+     * untouched.
+     * </p>
+     */
+    private static final int BULK_HIVE_BLOCK_FLAGS = net.minecraft.world.level.block.Block.UPDATE_CLIENTS;
+
     // Corridor selection weights (balanced feel): corners + straights carry the snaking, tees are the occasional
     // branch, and 4-way pieces (cross, hub) are present but uncommon so the hive doesn't read as a grid.
     private static final int WEIGHT_CORNER = 6;
@@ -358,7 +379,7 @@ public final class HiveStructurePlanner {
                 for (int y = floorY; y < floorY + DOOR_SIZE; y++) {
                     pos.set(x, y, z);
                     if (level.getBlockState(pos).isAir()) {
-                        level.setBlock(pos, resin, 3);
+                        level.setBlock(pos, resin, BULK_HIVE_BLOCK_FLAGS);
                     }
                 }
             }
@@ -369,7 +390,7 @@ public final class HiveStructurePlanner {
                 for (int y = floorY; y < floorY + DOOR_SIZE; y++) {
                     pos.set(x, y, z);
                     if (level.getBlockState(pos).isAir()) {
-                        level.setBlock(pos, resin, 3);
+                        level.setBlock(pos, resin, BULK_HIVE_BLOCK_FLAGS);
                     }
                 }
             }

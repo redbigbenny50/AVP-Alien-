@@ -38,7 +38,12 @@ public final class LegacyHiveRecoveryData extends SavedData {
 
     private static final String NBT_KILL_ALL_LEGACY_QUEENS = "KillAllLegacyQueens";
 
+    private static final String NBT_LEGACY_PURGED = "LegacyPurged";
+
     private boolean legacyDetected;
+
+    /** See {@link #legacyPurged()}. */
+    private boolean legacyPurged;
 
     private boolean recoveryApplied;
 
@@ -55,6 +60,29 @@ public final class LegacyHiveRecoveryData extends SavedData {
     private final Set<UUID> messagedPlayers = new HashSet<>();
 
     private LegacyHiveRecoveryData() {}
+
+    /**
+     * ⭐⭐⭐ THE PLAYER HAS DELIBERATELY WIPED THIS WORLD'S HIVES. NEVER RECOVER LEGACY DATA AGAIN.
+     * <p>
+     * ⚠⚠ WITHOUT THIS, A WIPE CANNOT STICK. {@code detectAndRecover} calls {@code setLegacyDetected(true)}
+     * UNCONDITIONALLY at the top of every world load whenever the old {@code hive_data.dat} is still on disk - before
+     * the recoveryApplied gate is reached. So clearing the flag during a wipe was undone by the very next load, and
+     * eighteen dormant queens were re-minted to reserve ground on a world the player had just emptied. He wiped,
+     * restarted, and got "old echoes" again with nothing left to own it.
+     * </p>
+     * <p>
+     * ⚠ PERSISTED, and deliberately one-way. The save file is not deleted - it stays untouched on disk - so this flag
+     * is the only thing standing between an emptied world and a full re-import.
+     * </p>
+     */
+    public boolean legacyPurged() {
+        return legacyPurged;
+    }
+
+    public void setLegacyPurged(boolean legacyPurged) {
+        this.legacyPurged = legacyPurged;
+        setDirty();
+    }
 
     public boolean legacyDetected() {
         return legacyDetected;
@@ -114,6 +142,34 @@ public final class LegacyHiveRecoveryData extends SavedData {
         return awakenedLegacyQueens.contains(queenId);
     }
 
+    /**
+     * Drops every legacy record for an id, because the thing wearing it is no longer legacy.
+     * <h2>⚠⚠ WHY THIS IS NEEDED AT ALL: A MOLT KEEPS THE UUID</h2> [stated] Sep 28, on a praetorian promoted to queen:
+     * "the royal cocoon vanishes which should be signs she changed but she stands in place and doesnt move ... shes in
+     * the molt pose loop again with no cocoon", and "something about her being classified as legacy even though shes a
+     * new queen made after the legacy cutoff".
+     * <p>
+     * ⭐ {@code CocoonManager} deliberately carries the old body's UUID onto the new one - the forced-id transition
+     * exists so the hive remembers who she was. But the legacy tables here are keyed by UUID, so a praetorian whose id
+     * was ever recorded as legacy hands that record to the QUEEN she becomes: she matches {@link #isLegacyQueen}, gets
+     * parked legacy-dormant, and legacy-dormant means STANDS STILL AND DOES NOTHING. The cocoon is gone because the
+     * molt genuinely finished; nothing then advances her, so a relog drops her back into the molt pose.
+     * </p>
+     * <p>
+     * ⚠ A queen that has just emerged from a cocoon was made under the current lifecycle by definition. Any legacy
+     * record for her id is stale the moment she is created, whatever it meant for the body she grew out of.
+     * </p>
+     */
+    public void forgetLegacyQueen(UUID queenId) {
+        var changed = legacyQueens.remove(queenId);
+
+        changed |= awakenedLegacyQueens.remove(queenId);
+
+        if (changed) {
+            setDirty();
+        }
+    }
+
     public boolean markPlayerMessaged(UUID playerId) {
         var added = messagedPlayers.add(playerId);
         if (added) {
@@ -152,6 +208,7 @@ public final class LegacyHiveRecoveryData extends SavedData {
         tag.putBoolean(NBT_RECOVERY_APPLIED, recoveryApplied);
         tag.putBoolean(NBT_WAKE_ALL_LEGACY_QUEENS, wakeAllLegacyQueens);
         tag.putBoolean(NBT_KILL_ALL_LEGACY_QUEENS, killAllLegacyQueens);
+        tag.putBoolean(NBT_LEGACY_PURGED, legacyPurged);
 
         var memberList = new ListTag();
         for (var entry : memberLocations.entrySet()) {
@@ -195,6 +252,7 @@ public final class LegacyHiveRecoveryData extends SavedData {
         data.recoveryApplied = tag.getBoolean(NBT_RECOVERY_APPLIED);
         data.wakeAllLegacyQueens = tag.getBoolean(NBT_WAKE_ALL_LEGACY_QUEENS);
         data.killAllLegacyQueens = tag.getBoolean(NBT_KILL_ALL_LEGACY_QUEENS);
+        data.legacyPurged = tag.getBoolean(NBT_LEGACY_PURGED);
 
         if (tag.contains(NBT_MEMBER_LOCATIONS, Tag.TAG_LIST)) {
             var list = tag.getList(NBT_MEMBER_LOCATIONS, Tag.TAG_COMPOUND);

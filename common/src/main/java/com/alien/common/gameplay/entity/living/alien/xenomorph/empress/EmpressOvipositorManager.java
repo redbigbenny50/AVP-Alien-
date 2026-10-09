@@ -115,11 +115,29 @@ public class EmpressOvipositorManager implements NBTSerializable {
      * So this is a measured correction, not a derived one, and it is only as good as the two markers. Naming the exit
      * bone would settle it exactly, the way queenattachcube settled the ride offset in a single pass.
      */
-    private static final double EGG_LAY_LATERAL = 8.9253;
+    /**
+     * ⚠ SECOND MEASURED CORRECTION (28 Aug). Eggs were landing one block off in world X with the empress at yaw
+     * 231.48611 - gold marker at [-12535, 39, -2410], the sack's exit at [-12536, 39, -2410].
+     * <p>
+     * Decomposed against the REAL parameter meaning rather than the names: EntityUtil.getRelativePosition takes (LEFT,
+     * UP, BACKWARD) and NEGATES the third, so "forward" here is really a backward offset. At that yaw the one-block -X
+     * error resolves to LEFT +0.6227 and BACKWARD +0.7825.
+     * </p>
+     * <p>
+     * ⚠⚠ STILL A MEASURED PATCH, NOT A DERIVED ONE - the same caveat the previous correction carried, and it drifted.
+     * The permanent fix is a marker cube in empress_ovipositor.geo at the exit, the way queenattachcube settled the
+     * ride offset in one pass. Until that exists this will keep needing re-measuring.
+     * </p>
+     */
+    private static final double EGG_LAY_LATERAL = 9.5480;
 
     private static final double EGG_LAY_VERTICAL = 0.0;
 
-    private static final double EGG_LAY_FORWARD = 3.026;
+    /**
+     * See EGG_LAY_LATERAL. 3.026 + 0.7825, from the same measurement. This is the BACKWARD param, negated inside
+     * getRelativePosition.
+     */
+    private static final double EGG_LAY_FORWARD = 3.8085;
 
     public Vec3 getEggLayingPosition() {
         return EntityUtil.getRelativePosition(empress, EGG_LAY_LATERAL, EGG_LAY_VERTICAL, EGG_LAY_FORWARD);

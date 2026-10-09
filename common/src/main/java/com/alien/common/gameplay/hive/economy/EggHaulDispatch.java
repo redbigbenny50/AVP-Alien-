@@ -50,8 +50,33 @@ public final class EggHaulDispatch {
         throw new UnsupportedOperationException();
     }
 
+    /**
+     * Where waiting eggs are looked for. Normal hives: the built structure.
+     * <p>
+     * ⚠ Oct 1 - BUILD-FREE HAS NO STRUCTURE, SO THIS RELAY NEVER RAN THERE. Eggs were only collected when a drone
+     * happened to wander within the 16-block pickup bubble - the exact bug this class was written to fix. In build-free
+     * the eggs live in two places: the queen's ring (her chunk and its neighbours, since the ring reaches 10 blocks
+     * out) and the outlying clusters. Only claimed chunks are kept, so it never reaches outside the hive.
+     * </p>
+     */
+    private static java.util.Set<ChunkPos> haulSourceChunks(HiveLocation location) {
+        if (!com.alien.common.gameplay.hive.config.BuildFreeMode.isEnabled() || location.isEndStyleHive()) {
+            return location.structurePieceByChunk().keySet();
+        }
+        var center = new ChunkPos(location.centerPos());
+        var chunks = new java.util.HashSet<ChunkPos>();
+        for (var dx = -1; dx <= 1; dx++) {
+            for (var dz = -1; dz <= 1; dz++) {
+                chunks.add(new ChunkPos(center.x + dx, center.z + dz));
+            }
+        }
+        chunks.addAll(com.alien.common.gameplay.hive.config.BuildFreeClusters.eggClusterChunks(location, center));
+        chunks.retainAll(location.claimedChunks());
+        return chunks;
+    }
+
     public static void run(ServerLevel level, HiveLocation location) {
-        var structureChunks = location.structurePieceByChunk().keySet();
+        var structureChunks = haulSourceChunks(location);
 
         if (structureChunks.isEmpty()) {
             return;
@@ -71,7 +96,10 @@ public final class EggHaulDispatch {
 
         // Bounded by the STRUCTURE, not the claim. A claim can be hundreds of blocks across and is mostly open
         // terrain; the eggs and the workers are both inside the built hive, so that is all this needs to sweep.
-        var floorY = location.hiveFloorY();
+        // Build-free: the band is centred on the queen, so reach it from her height rather than from the band floor.
+        var floorY = com.alien.common.gameplay.hive.config.BuildFreeMode.isEnabled() && !location.isEndStyleHive()
+            ? location.centerPos().getY()
+            : location.hiveFloorY();
         var box = new AABB(
             minChunkX << 4,
             floorY - VERTICAL_REACH,
@@ -169,7 +197,8 @@ public final class EggHaulDispatch {
                     break;
                 }
                 probes++;
-                if (worker.getNavigation().createPath(egg, 0) != null) {
+                // Oct 2 - through a duct OR on foot. Walking-only left eggs across a hallway unassigned forever.
+                if (com.alien.common.gameplay.hive.vent.DuctRouting.canReach(worker, egg.blockPosition(), false)) {
                     best = worker;
                     break;
                 }

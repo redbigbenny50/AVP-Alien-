@@ -14,8 +14,6 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.level.ChunkPos;
 
-import java.util.ArrayList;
-
 /**
  * Per-tick (piggybacking {@code HiveLocationLoadedTickTask}'s 20-tick cadence) resolution for
  * {@link HiveParty.SurfaceSpawn} parties on a location:
@@ -29,6 +27,27 @@ import java.util.ArrayList;
  * </ul>
  */
 public final class SurfacePartyLifecycleTask {
+
+    /**
+     * Update flags for bulk hive placement: clients only, NO neighbour updates.
+     * <p>
+     * 🚨🚨 NEIGHBOUR UPDATES ARE WHAT KILLED A DEDICATED SERVER. Flag 3 includes UPDATE_NEIGHBORS, so every block the
+     * hive carved or stamped told its neighbours to re-evaluate - and vanilla blocks respond by SCHEDULING A TICK:
+     * leaves check decay, sand checks support, water checks flow. A hive spreading through terrain therefore queued a
+     * scheduled tick per disturbed neighbour, and a crash report showed block_ticks: 498,053 pending with the server
+     * stuck in LevelTicks.sortContainersToTick.
+     * </p>
+     * <p>
+     * ⭐ This is what VANILLA STRUCTURE GENERATION uses for the same reason. The hive is placing terrain in bulk, not
+     * operating a redstone contraption - it does not need the cascade.
+     * </p>
+     * <p>
+     * ⚠ TRADE-OFF, AND IT IS THE ONE WE WANT: water and lava no longer flow into freshly carved space and sand no
+     * longer falls into it. Interactive single placements - jelly vats, spawners, harvest capture - keep flag 3 and are
+     * untouched.
+     * </p>
+     */
+    private static final int BULK_HIVE_BLOCK_FLAGS = net.minecraft.world.level.block.Block.UPDATE_CLIENTS;
 
     private static final long ECONOMY_RECHECK_INTERVAL_TICKS = 200L; // 10s
 
@@ -154,6 +173,37 @@ public final class SurfacePartyLifecycleTask {
         return false;
     }
 
+    /**
+     * Whether a chunk within {@code gap} (Manhattan) of this one already holds a surface vent.
+     * <p>
+     * ⚠ Scans the location's own vent records rather than the world, so it costs nothing in block lookups and cannot
+     * disagree with the count the cap uses.
+     * </p>
+     */
+    private static boolean hasSurfaceVentWithinGap(HiveLocation location, ChunkPos candidate, int gap) {
+        if (gap <= 0) {
+            return false;
+        }
+
+        for (var pos : location.ventManager().allVents()) {
+            if (!location.ventManager().isKind(pos, com.alien.common.gameplay.hive.vent.VentKind.SURFACE)) {
+                continue;
+            }
+
+            var ventChunk = new ChunkPos(pos);
+
+            if (ventChunk.equals(candidate)) {
+                continue; // the per-chunk cap owns this case
+            }
+
+            if (Math.abs(ventChunk.x - candidate.x) + Math.abs(ventChunk.z - candidate.z) <= gap) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     private static int chebyshev(ChunkPos a, ChunkPos b) {
         return Math.max(Math.abs(a.x - b.x), Math.abs(a.z - b.z));
     }
@@ -164,44 +214,9 @@ public final class SurfacePartyLifecycleTask {
         HiveParty.SurfaceSpawn party,
         HiveConfig config
     ) {
-        ChunkPos lastKnownChunk = null;
-        BlockPos lastKnownPos = null;
-
-        for (var entry : new ArrayList<>(party.materializedMembers().entrySet())) {
-            var entity = serverLevel.getEntity(entry.getKey());
-            party.untrackMaterializedMember(entry.getKey());
-            if (entity == null) {
-                // NOT loaded - and not dead: real deaths are untracked at the moment of death (PartyMemberDeath).
-                // Writing off every out-of-range member is what quietly drained the hive on each dispatch.
-                location.localReserves().addReturningMember(entry.getValue(), 1);
-                continue;
-            }
-            if (!entity.isAlive()) {
-                continue; // died this tick, before its death hook untracked it
-            }
-            lastKnownChunk = new ChunkPos(entity.blockPosition());
-            // The member is STANDING here, so this spot is by definition reachable-and-standable ground - the vent
-            // should anchor to it, not to the chunk's heightmap crest (which in spiky terrain is the top of an ice
-            // spire the party ran along the base of but could never climb).
-            lastKnownPos = entity.blockPosition();
-            location.localReserves().addReturningMember(entry.getValue(), 1);
-            // EGG DUTY: a carrier is refunded but NEVER discarded - discarding it mid-haul vanished the
-            // worker and dropped its egg. It stays alive to finish the delivery.
-            if (EggDutyGuard.isOnEggDuty(entity)) {
-                continue;
-            }
-            entity.discard();
-        }
-
-        // Any never-materialized remainder in composition also refunds.
-        for (var type : new ArrayList<>(party.composition().getAvailableEntityTypes())) {
-            var count = party.composition().getCount(type);
-            if (count <= 0) {
-                continue;
-            }
-            location.localReserves().addReturningMember(type, count);
-            party.composition().add(type, -count);
-        }
+        // Oct 5 audit: one shared return - see PartyReturn. Surface members were never moved home, so no vent.
+        var lastKnownPos = PartyReturn.returnHome(serverLevel, location, party, null);
+        var lastKnownChunk = lastKnownPos == null ? null : new ChunkPos(lastKnownPos);
 
         if (lastKnownChunk != null) {
             maybeDropVentAndResin(serverLevel, location, config, lastKnownChunk, lastKnownPos);
@@ -226,6 +241,23 @@ public final class SurfacePartyLifecycleTask {
                 surfaceVentCount++;
             }
         }
+        // 🚨 THE CHECKERBOARD GAP. The per-chunk cap below limits how many vents share ONE chunk; this limits which
+        // chunks may hold any at all, so surface vents never form a solid carpet.
+        //
+        // ⚠⚠ MANHATTAN, NOT CHEBYSHEV, AND THAT IS THE WHOLE POINT. A checkerboard means vented chunks touch at the
+        // CORNERS but never edge to edge: a diagonal neighbour is Manhattan distance 2 and allowed, an orthogonal one
+        // is distance 1 and refused. Chebyshev would refuse the diagonals too and give a much sparser grid than
+        // intended.
+        if (hasSurfaceVentWithinGap(location, chunk, config.surfacePartyVentChunkGap())) {
+            Alien.LOGGER.info(
+                "Hive: surface party made NO vent at {} for {} - an adjacent chunk already has one (gap {}).",
+                chunk,
+                location.id(),
+                config.surfacePartyVentChunkGap()
+            );
+            return;
+        }
+
         if (surfaceVentCount >= config.surfacePartyMaxVentsPerClaim()) {
             Alien.LOGGER.info(
                 "Hive: surface party made NO vent at {} for {} - already {} surface vents there (cap {}).",
@@ -477,7 +509,12 @@ public final class SurfacePartyLifecycleTask {
                     if (serverLevel.getBrightness(net.minecraft.world.level.LightLayer.BLOCK, candidate) > MAX_VENT_BLOCK_LIGHT) {
                         continue;
                     }
-                    if (serverLevel.hasNearbyAlivePlayer(x + 0.5, y, z + 0.5, VENT_PROTECTED_PLAYER_RADIUS)) {
+                    // Creative-aware: vanilla's hasNearbyAlivePlayer keeps creative players, so an admin standing
+                    // near a scout stopped it planting the vent it was sent out to plant.
+                    if (
+                        com.alien.common.util.AlienPredicates
+                            .hasNearbyRealPlayer(serverLevel, x + 0.5, y, z + 0.5, VENT_PROTECTED_PLAYER_RADIUS)
+                    ) {
                         continue;
                     }
                     // Lava safety: a non-fireproof strain's DOORWAY never opens beside lava.
@@ -548,7 +585,7 @@ public final class SurfacePartyLifecycleTask {
                 && serverLevel.getBlockState(nodeGround).isFaceSturdy(serverLevel, nodeGround, Direction.UP)
                 && !(lavaSafety && !com.alien.common.gameplay.hive.dimension.DimensionHiveProfiles.isLavaSafe(serverLevel, nodePos, 2))
         ) {
-            serverLevel.setBlock(nodePos, variantType.resinNode().get().defaultBlockState(), 3);
+            serverLevel.setBlock(nodePos, variantType.resinNode().get().defaultBlockState(), BULK_HIVE_BLOCK_FLAGS);
         }
 
         int placed = 0;
@@ -570,7 +607,7 @@ public final class SurfacePartyLifecycleTask {
             ) {
                 continue;
             }
-            serverLevel.setBlock(pos, variantType.resin().get().defaultBlockState(), 3);
+            serverLevel.setBlock(pos, variantType.resin().get().defaultBlockState(), BULK_HIVE_BLOCK_FLAGS);
             placed++;
         }
         if (placed > 0) {

@@ -89,9 +89,37 @@ public final class HostCaptureTask {
             && carriedHost(captor) == host;
     }
 
-    /** Grab a host: it rides the captor and (if a mob) stops fighting back. */
-    public static void capture(com.alien.common.gameplay.entity.living.alien.Alien captor, LivingEntity host) {
-        host.startRiding(captor, true);
+    /**
+     * Entity types that have refused to be mounted, so the warning below fires once per type rather than once per grab
+     * attempt.
+     */
+    private static final java.util.Set<net.minecraft.world.entity.EntityType<?>> REFUSED_MOUNT_TYPES =
+        java.util.concurrent.ConcurrentHashMap.newKeySet();
+
+    /**
+     * Grab a host: it rides the captor and (if a mob) stops fighting back. Returns whether the grab actually TOOK.
+     * <p>
+     * ⚠⚠ {@code startRiding(captor, true)} CAN STILL REFUSE, AND USED TO BE IGNORED. Force bypasses vanilla's
+     * {@code canRide}/{@code canAddPassenger} pair, but not the two gates ahead of it: {@code couldAcceptPassenger} and
+     * the loader's mount event ({@code EntityMountEvent} on NeoForge, which any mod may cancel), nor a host that
+     * overrides {@code startRiding} itself. The old code played the grab sound and returned regardless, so a host that
+     * could not be mounted produced exactly the field report of Sep 22 (MineColonies citizens): the grab sound every
+     * tick, the drone standing over its quarry, and nothing ever carried. The caller now writes such a host off, and
+     * the refusal is logged once per entity type so the next report names the culprit.
+     */
+    public static boolean capture(com.alien.common.gameplay.entity.living.alien.Alien captor, LivingEntity host) {
+        if ((!host.startRiding(captor, true) || host.getVehicle() != captor) && !forceMount(captor, host)) {
+            if (REFUSED_MOUNT_TYPES.add(host.getType())) {
+                Alien.LOGGER.warn(
+                    "[hostdbg] {} could not be carried even by force (a mount event or the vehicle refused it). It "
+                        + "cannot be captured as a host; drones will write it off and hunt something else.",
+                    host.getType().getDescriptionId()
+                );
+            }
+
+            return false;
+        }
+
         if (host instanceof Mob mob && mob instanceof FreeMob freeMob) {
             freeMob.removeFreedom();
         }
@@ -107,6 +135,37 @@ public final class HostCaptureTask {
                 1.0F,
                 1.0F
             );
+
+        return true;
+    }
+
+    /**
+     * The mount vanilla's {@code startRiding(captor, true)} would have performed, done directly, for a host whose own
+     * {@code startRiding} override refuses every vehicle it does not recognise. MineColonies citizens are the known
+     * case (their override ignores {@code force} entirely - see {@code MixinEntity_ForceMountAccessor}), and this is
+     * exactly the Sep 22 report: grab sound on loop, drone standing over the citizen, nothing ever carried.
+     * <p>
+     * Same sequence as {@code Entity.startRiding} after its gates: dismount anything current, stand, set the vehicle,
+     * register on it. The vehicle's own {@code canAddPassenger} is still honoured - {@code Alien.tick} evicts any
+     * passenger that fails {@code canEntityRideAlien} a tick later, so this cannot put a host on an alien that does not
+     * carry hosts. Only used after the normal path has been refused.
+     */
+    private static boolean forceMount(com.alien.common.gameplay.entity.living.alien.Alien captor, LivingEntity host) {
+        var vehicle = (com.alien.mixin.MixinEntity_ForceMountAccessor) captor;
+
+        if (!vehicle.avp_alien$couldAcceptPassenger() || !vehicle.avp_alien$canAddPassenger(host)) {
+            return false;
+        }
+
+        if (host.isPassenger()) {
+            host.stopRiding();
+        }
+
+        host.setPose(net.minecraft.world.entity.Pose.STANDING);
+        ((com.alien.mixin.MixinEntity_ForceMountAccessor) host).avp_alien$setVehicle(captor);
+        ((com.alien.mixin.MixinEntity_ForceMountAccessor) captor).avp_alien$addPassenger(host);
+
+        return host.getVehicle() == captor;
     }
 
     /**
@@ -131,6 +190,18 @@ public final class HostCaptureTask {
         }
         carried.stopRiding();
         HostParking.embed(level, carried, spot.pos(), spot.facing());
+
+        // ⭐ Oct 1 - BUILD-FREE WEBS THE HOST IN PLACE. [stated] "webbing hosts inplace instead of sticking them to
+        // already existing walls". A chamber spot is already a web cell; a build-free spot is open ground, so the web
+        // is laid around the host's feet here, in the hive's own strain. Only into open air - never over a block.
+        if (com.alien.common.gameplay.hive.config.BuildFreeMode.isEnabled() && !location.isEndStyleHive()) {
+            var web = com.alien.common.gameplay.hive.config.BuildFreeClusters.strainWeb(location).defaultBlockState();
+            for (var cell : new net.minecraft.core.BlockPos[] { spot.pos(), spot.pos().above() }) {
+                if (level.getBlockState(cell).isAir()) {
+                    level.setBlock(cell, web, 3);
+                }
+            }
+        }
         level.playSound(
             null,
             spot.pos().getX() + 0.5,

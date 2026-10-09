@@ -186,6 +186,109 @@ public final class ConvoyMemberTracker {
         return returned;
     }
 
+    /**
+     * How long a hunting raider may go without moving, hurting anything or being hurt before it is written off. 90s.
+     */
+    private static final long STALLED_TICKS = 1800L;
+
+    /** Movement below this is navigation jitter, not progress. */
+    private static final double STALL_MOVE_EPSILON_SQUARED = 4.0;
+
+    private static final int STALL_CHECK_INTERVAL_TICKS = 40;
+
+    /**
+     * Transient - a restart forgets the watch, so the next stall is measured from scratch rather than punished early.
+     */
+    private static final java.util.Map<java.util.UUID, StallWatch> STALL_WATCH = new java.util.HashMap<>();
+
+    private record StallWatch(
+        net.minecraft.world.phys.Vec3 position,
+        float health,
+        int lastHurtByStamp,
+        int lastHurtMobStamp,
+        long sinceTick
+    ) {}
+
+    /**
+     * ⭐ THE STUCK-ATTACKER GATE (fix 2 of [[raid-stall]]). {@code ConvoyArrival.arriveRaid} will not throw the next
+     * wave until {@code materializedMembers()} is EMPTY, so one raider wedged in terrain - alive, in range, hunting
+     * nobody - paused the whole campaign until RAID_SPENT or TARGET_ABSENT eventually retired it. Mirrors
+     * {@code StrandedMemberRecovery} (same 90s, same "did anything change" test) but keyed on stalled-while-HUNTING: a
+     * raider that has neither moved, dealt damage nor taken damage for 90 seconds is banked back into the convoy
+     * composition and removed, and the next wave fires. A raider that is fighting, chasing or being shot at never
+     * qualifies, because every one of those changes a value we watch.
+     *
+     * @return how many raiders were banked
+     */
+    public static int returnStalledRaiders(MinecraftServer server, Convoy.Raid raid, long now) {
+        if (raid.materializedMembers().isEmpty() || now % STALL_CHECK_INTERVAL_TICKS != 0) {
+            return 0;
+        }
+
+        var level = server.getLevel(raid.dimension());
+        if (level == null) {
+            return 0;
+        }
+
+        var returned = 0;
+        for (var entry : new ArrayList<>(raid.materializedMembers().entrySet())) {
+            var id = entry.getKey();
+            if (!(level.getEntity(id) instanceof net.minecraft.world.entity.LivingEntity living) || !living.isAlive()) {
+                STALL_WATCH.remove(id);
+                continue; // missing/dead members are the missing-member sweep's business, not ours
+            }
+
+            var watch = STALL_WATCH.get(id);
+            var moved = watch == null || living.position().distanceToSqr(watch.position()) > STALL_MOVE_EPSILON_SQUARED;
+            var changed = watch == null
+                || moved
+                || living.getHealth() != watch.health()
+                || living.getLastHurtByMobTimestamp() != watch.lastHurtByStamp()
+                || living.getLastHurtMobTimestamp() != watch.lastHurtMobStamp();
+
+            if (changed) {
+                STALL_WATCH.put(
+                    id,
+                    new StallWatch(
+                        living.position(),
+                        living.getHealth(),
+                        living.getLastHurtByMobTimestamp(),
+                        living.getLastHurtMobTimestamp(),
+                        now
+                    )
+                );
+                continue;
+            }
+
+            if (now - watch.sinceTick() < STALLED_TICKS) {
+                continue;
+            }
+
+            if (living instanceof com.alien.common.gameplay.entity.living.alien.xenomorph.carrier.Carrier carrier) {
+                carrier.releaseAllFacehuggers();
+            }
+            if (living instanceof com.alien.common.gameplay.entity.living.alien.Alien alien) {
+                alien.clearConvoyMembership();
+            }
+            living.discard();
+            raid.composition().add(entry.getValue(), 1);
+            raid.untrackMaterializedMember(id);
+            STALL_WATCH.remove(id);
+            returned++;
+            Alien.LOGGER.info(
+                "Hive: raid {} raider {} stalled for {}s while hunting (no movement, no damage dealt or taken) - banked back into the raid so the next wave can go",
+                raid.id(),
+                entry.getValue(),
+                STALLED_TICKS / 20L
+            );
+        }
+
+        if (returned > 0) {
+            markDirty(new ConvoyMembership(raid.lineageFactionId(), raid.id()));
+        }
+        return returned;
+    }
+
     public static int returnDistantMaterializedMembers(MinecraftServer server, Convoy convoy, double maxDistanceSqr) {
         if (convoy.materializedMembers().isEmpty()) {
             return 0;

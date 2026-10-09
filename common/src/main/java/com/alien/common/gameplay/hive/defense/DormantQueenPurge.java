@@ -6,7 +6,6 @@ import com.alien.common.gameplay.hive.economy.CasteResolver;
 import com.alien.common.gameplay.hive.location.HiveLocation;
 import com.alien.common.gameplay.hive.party.EggDutyGuard;
 import com.alien.common.gameplay.hive.spawning.HiveLoadedSpawner;
-import com.alien.common.gameplay.hive.spawning.ReserveSpawnUtil;
 import com.alien.common.registry.init.AlienSoundEvents;
 import com.alien.common.registry.tag.AlienEntityTypeTags;
 import net.minecraft.core.BlockPos;
@@ -225,11 +224,10 @@ public final class DormantQueenPurge {
                 break; // the bank is empty of anything that can fight
             }
             var arrival = arrivalPos(level, quarry, squad.size());
-            var killer = HiveLoadedSpawner.trySpawnIdentityReserve(level, location, type, arrival);
+            var killer = HiveLoadedSpawner.trySpawnFromReserves(level, location, type, arrival);
             if (!(killer instanceof Mob mob)) {
                 break;
             }
-            ReserveSpawnUtil.markSpawnedFromReserves(mob);
             mob.setTarget(quarry);
             squad.add(mob.getUUID());
         }
@@ -278,7 +276,9 @@ public final class DormantQueenPurge {
     /** The return leg: back to the hive floor at its centre, the "dig back to the hive/vent" half of the order. */
     private static void ductHome(ServerLevel level, HiveLocation location, LivingEntity member) {
         var home = location.centerPos();
-        member.teleportTo(home.getX() + 0.5, location.hiveFloorY() + 1, home.getZ() + 0.5);
+        member.teleportTo(home.getX() + 0.5, location.throneFloorY(level) + 1, home.getZ() + 0.5); // Oct 1: was
+                                                                                                   // hiveFloorY - rock
+                                                                                                   // in build-free
         level.playSound(null, home, AlienSoundEvents.BLOCK_RESIN_SPREAD.get(), SoundSource.HOSTILE, 0.8F, 0.9F);
     }
 
@@ -291,7 +291,9 @@ public final class DormantQueenPurge {
         }
         for (var caste : DRAW_ORDER) {
             var type = CasteResolver.entityTypeForCaste(variant, caste);
-            if (type != null && location.localReserves().getCount(type) > 0) {
+            // getReliableCount, NOT getCount: getCount is the ABSTRACT bank only, so a hive whose whole population
+            // had unloaded into the IDENTITY list read as empty and picked nothing.
+            if (type != null && location.localReserves().getReliableCount(type) > 0) {
                 return type;
             }
         }

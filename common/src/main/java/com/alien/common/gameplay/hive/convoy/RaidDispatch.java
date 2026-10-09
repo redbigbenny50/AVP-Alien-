@@ -62,6 +62,23 @@ public final class RaidDispatch {
     }
 
     public static void scanAndDispatch(MinecraftServer server) {
+        // ⭐ BUILD-FREE RAID TOGGLE. [stated] "raids exist - yes/no".
+        //
+        // ⚠ GATED HERE, AT THE SCAN, NOT AT THE LAUNCH. Everything downstream - grudge accrual, lineage
+        // scanning, composition drain - is work done in service of a raid that would then be refused, and a
+        // drained composition has to be given back. Refusing before the scan means a switched-off raid system
+        // costs exactly nothing and can leave nothing half-spent.
+        //
+        // ⚠ forceRaid and onQueenKilled are DELIBERATELY NOT gated: the first is an operator command and the
+        // second is a scripted consequence a mapmaker may well want. This switch is about the AMBIENT raid
+        // pressure a hive builds against a player on its own.
+        if (
+            com.alien.common.gameplay.hive.config.BuildFreeMode.isEnabled()
+                && !com.alien.common.gameplay.hive.location.HiveLocationRegistry.INSTANCE.config()
+                    .buildFreeRaidsEnabled()
+        ) {
+            return;
+        }
         var currentTick = server.overworld().getGameTime();
         var config = HiveLocationRegistry.INSTANCE.config();
 

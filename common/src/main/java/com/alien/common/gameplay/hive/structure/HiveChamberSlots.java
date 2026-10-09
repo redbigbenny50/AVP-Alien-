@@ -40,6 +40,12 @@ public final class HiveChamberSlots {
 
     /** The egg-bed standing positions for an egg-chamber chunk. */
     public static List<BlockPos> eggBedSlots(ServerLevel level, HiveLocation location, ChunkPos chamber) {
+        // ⭐ Build-free honours buildFreeEggClusterSize (max 6, the same as a chamber). It was read only by the laying
+        // cap, so a cluster size below 6 let the queen stop laying while every cluster still offered six beds.
+        if (com.alien.common.gameplay.hive.config.BuildFreeMode.isEnabled() && !location.isEndStyleHive()) {
+            var size = com.alien.common.gameplay.hive.location.HiveLocationRegistry.INSTANCE.config().buildFreeEggClusterSize();
+            return slots(level, location, chamber, Math.max(1, Math.min(EGG_BEDS_PER_CHAMBER, size)), EGG_FLOOR_SPACING);
+        }
         return slots(level, location, chamber, EGG_BEDS_PER_CHAMBER, EGG_FLOOR_SPACING);
     }
 
@@ -61,7 +67,15 @@ public final class HiveChamberSlots {
     }
 
     private static List<BlockPos> slots(ServerLevel level, HiveLocation location, ChunkPos chamber, int count, int floorSpacing) {
-        int floorY = location.hiveFloorY();
+        // 🚨 Oct 1: in build-free hiveFloorY() is the bottom of the band, 24 blocks under the queen, so every cluster
+        // slot was read inside solid rock and came back empty. A cluster's floor is measured where it really is.
+        boolean buildFree = com.alien.common.gameplay.hive.config.BuildFreeMode.isEnabled() && !location.isEndStyleHive();
+        int floorY = buildFree
+            ? com.alien.common.gameplay.hive.config.BuildFreeClusters.clusterFloorY(level, location, chamber)
+            : location.hiveFloorY();
+        if (floorY == HiveLocation.NO_GROUND) {
+            return List.of();
+        }
         var candidates = new ArrayList<BlockPos>();
         var pos = new BlockPos.MutableBlockPos();
         for (int x = chamber.getMinBlockX() + WALL_MARGIN; x <= chamber.getMaxBlockX() - WALL_MARGIN; x++) {
@@ -77,6 +91,13 @@ public final class HiveChamberSlots {
                 // (no air above), the "deterministic" pick shifted each pass, and regrows multiplied the vats.
                 var above = level.getBlockState(pos.move(0, 1, 0));
                 boolean occupiedByVat = above.is(AlienBlocks.JELLY_VAT.get());
+                if (buildFree) {
+                    // [stated] room for tall aliens and tall hosts - see BuildFreeClusters.CLUSTER_HEADROOM.
+                    if (occupiedByVat || com.alien.common.gameplay.hive.config.BuildFreeClusters.hasHeadroom(level, x, floorY + 1, z)) {
+                        candidates.add(new BlockPos(x, floorY + 1, z));
+                    }
+                    continue;
+                }
                 // Resin GROWTH (veins/webs) is the hive's own decoration and spreads over its floors constantly.
                 // It must NOT disqualify a slot: a vein growing on a tendril used to delete that egg bed from the
                 // chamber entirely, so haulers found "no free bed", stood holding their eggs forever, and only

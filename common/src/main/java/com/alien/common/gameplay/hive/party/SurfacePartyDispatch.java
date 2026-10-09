@@ -3,7 +3,6 @@ package com.alien.common.gameplay.hive.party;
 import com.alien.Alien;
 import com.alien.common.gameplay.hive.config.HiveConfig;
 import com.alien.common.gameplay.hive.location.HiveLocation;
-import com.alien.common.gameplay.hive.spawning.ReserveSpawnUtil;
 import com.alien.common.registry.tag.AlienEntityTypeTags;
 import com.blib.api.common.entity.v1.EntityReserves;
 import net.minecraft.core.BlockPos;
@@ -12,7 +11,6 @@ import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.Mob;
-import net.minecraft.world.entity.MobSpawnType;
 
 import java.util.ArrayList;
 
@@ -30,6 +28,14 @@ public final class SurfacePartyDispatch {
     private SurfacePartyDispatch() {}
 
     public static void tryRun(MinecraftServer server, HiveLocation location, HiveConfig config) {
+        // ⚠ BUILD-FREE TOGGLE. A prebuilt interior has no meaningful surface - the heightmap reports the ROOF - so an
+        // indoor map wants this off.
+        //
+        // Gated at the DISPATCH entry rather than deeper in, so a switched-off party type costs nothing at
+        // all - no scan, no vent lookup, no composition drain that has to be refunded.
+        if (com.alien.common.gameplay.hive.config.BuildFreeMode.isEnabled() && !config.buildFreeSurfacePartiesEnabled()) {
+            return;
+        }
         // Three-day cooldown: a party of this kind is an EVENT, not a conveyor belt. Back-to-back dispatches
         // drained the reserves as fast as the hive could breed them, so the population never settled and
         // never got promoted into warriors or prowlers.
@@ -224,8 +230,12 @@ public final class SurfacePartyDispatch {
         ) {
             return false;
         }
+        // ⚠ AlienPredicates.hasNearbyRealPlayer, NOT level.hasNearbyAlivePlayer: vanilla's version drops
+        // spectators but KEEPS creative, so a builder flying over the surface suppressed every scout party within 32
+        // blocks of himself.
         if (
-            level.hasNearbyAlivePlayer(
+            com.alien.common.util.AlienPredicates.hasNearbyRealPlayer(
+                level,
                 pos.getX() + 0.5,
                 pos.getY(),
                 pos.getZ() + 0.5,
@@ -258,11 +268,11 @@ public final class SurfacePartyDispatch {
                 var jitterZ = spawnPos.getZ() + 0.5 + (level.random.nextDouble() - 0.5) * 4.0;
                 entity.moveTo(jitterX, spawnPos.getY(), jitterZ, level.random.nextFloat() * 360.0F, 0.0F);
                 if (entity instanceof Mob mob) {
-                    mob.finalizeSpawn(level, level.getCurrentDifficultyAt(spawnPos), MobSpawnType.MOB_SUMMONED, null);
+                    com.alien.common.gameplay.hive.spawning.ReserveSpawnUtil
+                        .finalizePrepaidSpawn(level, mob, spawnPos);
                     mob.setPersistenceRequired();
                 }
                 level.addFreshEntityWithPassengers(entity);
-                ReserveSpawnUtil.markSpawnedFromReserves(entity);
                 party.trackMaterializedMember(entity.getUUID(), type);
                 party.composition().add(type, -1);
                 spawnedCount++;

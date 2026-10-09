@@ -30,6 +30,27 @@ public class SwimToLandAction {
             return Action.Signal.CONTINUE;
         }
 
+        // ⭐⭐⭐ THIS IS THE SPIN. A xenomorph a few blocks off shore has no ADJACENT land, so the step-out above
+        // fails - and the fallback then asked a GROUND navigator to path, from inside water, to a target standing on
+        // dry land. It cannot, so it produced nothing, and the whole decision re-ran next tick. She paddled on the
+        // spot forever, in full view of the player watching her try.
+        //
+        // ⭐ Head for the nearest shore instead, using the SAME search SWIM_TO_SHORE uses. Getting out of the water
+        // is progress toward the target in every case that matters - once she is on land the ordinary combat pathing
+        // takes over and can actually reach him.
+        var shore = SwimToShoreAction.findNearestDrySurface(
+            xenomorph,
+            SwimToShoreAction.SHORE_SEARCH_RADIUS,
+            SwimToShoreAction.SHORE_SEARCH_STEP
+        );
+
+        if (shore != null) {
+            xenomorph.getLookControl().setLookAt(shore.getX() + 0.5, shore.getY(), shore.getZ() + 0.5);
+            xenomorph.getNavigation().moveTo(shore.getX() + 0.5, shore.getY(), shore.getZ() + 0.5, NAVIGATION_SPEED);
+            return Action.Signal.CONTINUE;
+        }
+
+        // No shore anywhere in range - open ocean. Swimming at the target is genuinely the best move available.
         xenomorph.getLookControl().setLookAt(target);
         xenomorph.getNavigation().moveTo(target, NAVIGATION_SPEED);
 

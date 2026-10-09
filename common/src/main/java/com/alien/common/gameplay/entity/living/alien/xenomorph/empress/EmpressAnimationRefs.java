@@ -86,4 +86,23 @@ public class EmpressAnimationRefs {
 
     /** Emerge-oriented: the empress is a molt DESTINATION only, so there is no enter clip and none is needed. */
     public static final String MOLT_EMERGE_ANIMATION_NAME = "molt.emerge";
+
+    /** ⭐ The nine clips added Aug 20. Names match the queen's exactly, so the two dispatchers stay comparable. */
+    public static final String DIG_DOWN_ANIMATION_NAME = "digging.drop";
+
+    public static final String DIGGING_ANIMATION_NAME = "digging";
+
+    public static final String DIG_UP_ANIMATION_NAME = "digging.rise";
+
+    public static final String DIG_STAND_START_ANIMATION_NAME = "digging.standing.start";
+
+    public static final String STAND_DIGGING_ANIMATION_NAME = "digging.standing";
+
+    public static final String DIG_STAND_STOP_ANIMATION_NAME = "digging.standing.stop";
+
+    public static final String INCAPACITATED_ANIMATION_NAME = "incapacitated.loop";
+
+    public static final String INCAPACITATED_DROP_ANIMATION_NAME = "incapacitated.drop";
+
+    public static final String INCAPACITATED_RISE_ANIMATION_NAME = "incapacitated.rise";
 }

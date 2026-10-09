@@ -112,7 +112,13 @@ public final class CaptureHostAction {
             CHASE_PROGRESS.remove(xenomorph);
             FAILED_PATH_TICKS.remove(xenomorph);
             DUCTED_FOR_QUARRY.remove(xenomorph);
-            HostCaptureTask.capture(xenomorph, target);
+            if (!HostCaptureTask.capture(xenomorph, target)) {
+                // It would not mount (see HostCaptureTask.capture). Treat it exactly like unreachable quarry: written
+                // off for this drone, and the sensor hands it something else next tick - instead of standing over it
+                // re-grabbing every tick with the grab sound on loop, which is what MineColonies citizens produced.
+                giveUpOnQuarry(context, xenomorph, target);
+                return Action.Signal.ABORT;
+            }
             // Action.Signal has no FINISHED: the IS_CARRYING_HOST effect flips and the planner moves on.
             return Action.Signal.CONTINUE;
         }
@@ -122,14 +128,24 @@ public final class CaptureHostAction {
         // RUN it down. Hosts flee, and a hauler ambling after a bolting villager at walking pace never closes the
         // gap - it trails it forever. Chase at combat speed, and lead the target the way the combat AI does:
         // path to where it is GOING, not where it currently is, or every step is aimed at empty ground.
-        var result = NeoMoveToPosAction.perform(
-            context,
-            interceptPoint(xenomorph, target),
-            chaseSpeedFor(xenomorph, target)
+        var result = com.alien.common.gameplay.hive.diag.DiagProfiler.timed(
+            "path/CaptureHostAction",
+            () -> NeoMoveToPosAction.perform(
+                context,
+                // Oct 2 - a quarry loose deep inside the hive is reached through the ducts when that is shorter.
+                // Oct 8: a steady aim point - see ChaseTarget.
+                com.alien.common.gameplay.hive.vent.DuctRouting.stepToward(
+                    xenomorph,
+                    com.alien.common.gameplay.entity.living.alien.xenomorph.ai.combat.ChaseTarget
+                        .steady(xenomorph, target, interceptPoint(xenomorph, target))
+                ),
+                chaseSpeedFor(xenomorph, target)
+            )
         );
 
         if (xenomorph.tickCount % 60 == 0) {
-            com.alien.Alien.LOGGER.info(
+            // Oct 2: DEBUG, not INFO - every hunting drone wrote this line to latest.log every 3 seconds.
+            com.alien.Alien.LOGGER.debug(
                 "[hostdbg] CAPTURE: me={} quarry={} at {} distSq={} move={} navDone={} onGround={}",
                 xenomorph.blockPosition(),
                 target.getType().getDescriptionId(),

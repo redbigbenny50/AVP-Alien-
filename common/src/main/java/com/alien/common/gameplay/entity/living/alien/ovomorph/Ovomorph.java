@@ -123,10 +123,90 @@ public class Ovomorph extends Alien implements GOAPUser<Ovomorph>, Shearable {
         vibrationSystemManager.updateDynamicGameEventListener(biConsumer);
     }
 
+    /**
+     * An egg only runs GOAP when it has something to decide.
+     * <p>
+     * 🚨🚨 A NULL GRAPH SKIPS THE AGENT ENTIRELY - see MixinLivingEntity_GOAPUser, which returns before touching the
+     * agent when this is null. That makes it the cheapest gate available: not a throttle, not a smaller graph, but no
+     * GOAP at all.
+     * </p>
+     * <p>
+     * ⚠⚠ EGGS ARE THE MOST NUMEROUS THING IN A HIVE AND THE LEAST DECISIVE. A live server profile showed Ovomorph.tick
+     * at 9.10% of the entire server thread - more than any single caste - for entities that sit still and hold one
+     * boolean. The graph is two sensors, one goal and one action, so that cost was the GOAP MACHINERY running a full
+     * plan cycle every tick for an answer that changes once in an egg's life.
+     * </p>
+     * <p>
+     * ⚠ WANTING TO HATCH IS THE ONLY DECISION AN EGG MAKES. Until then it needs no plan; once hatched it needs none
+     * again. Both ends return null, so an ordinary egg sitting in a chamber costs nothing at all.
+     * </p>
+     * <p>
+     * ⚠ The desire itself is still evaluated - HatchDesireManager.tick runs on its own 20-tick cadence from the entity
+     * tick and is unaffected by this. An egg still notices a host walking up to it.
+     * </p>
+     */
     @Override
     public @Nullable Graph<Ovomorph> blib$getGOAPGraphOrNull() {
+        if (hatchManager.isHatched() || !hatchManager.getHatchDesireManager().wantsToHatch()) {
+            return null;
+        }
+
         return OvomorphGOAP.GRAPH;
     }
+
+    /**
+     * A settled egg does no movement work at all.
+     * <p>
+     * 🚨🚨 AN OVOMORPH IS A MOB THAT NEVER MOVES, AND IT WAS PAYING FULL PRICE FOR MOVEMENT ANYWAY. Every tick it ran
+     * the whole vanilla pipeline - travel -> handleRelativeFrictionAndCalculateMovement -> move -> collide ->
+     * collideBoundingBox -> collectColliders -> BlockCollisions -> getBlockState - for a delta of zero.
+     * </p>
+     * <p>
+     * ⚠⚠ AND THEY ARE THE BIGGEST POPULATION IN A HIVE. A live server profile showed 53 ovomorphs against 24 warriors,
+     * with that collision chain the heaviest branch under Xenomorph.tick. Eggs outnumber everything, so the waste
+     * scales faster than any other caste.
+     * </p>
+     * <p>
+     * ⚠ ONLY WHEN GENUINELY AT REST: on the ground with no residual motion. An egg that has just been laid, is falling,
+     * or has been pushed still travels normally, so nothing floats and nothing lands wrong.
+     * </p>
+     */
+    @Override
+    public void travel(net.minecraft.world.phys.Vec3 travelVector) {
+        // 🚨🚨 onGround() IS ONLY UPDATED BY Entity.move(), WHICH THIS SKIP BYPASSES. Once settled, the flag
+        // froze true - so when the block underneath was later mined the entity never re-evaluated and simply
+        // HUNG IN THE AIR. Reported as eggs floating.
+        //
+        // ⭐ So the support is verified directly instead of trusted. One block read per tick against the entire
+        // collision sweep it replaces - still overwhelmingly the cheaper path, and now it cannot go stale.
+        if (
+            onGround()
+                && getDeltaMovement().lengthSqr() < RESTING_MOTION_EPSILON
+                && hasSolidSupportBelow()
+        ) {
+            // Match what travel() would have left behind for a stationary entity, without the collision sweep.
+            setDeltaMovement(net.minecraft.world.phys.Vec3.ZERO);
+            calculateEntityAnimation(false);
+            return;
+        }
+
+        super.travel(travelVector);
+    }
+
+    /**
+     * Whether the block underneath can actually hold this entity up.
+     * <p>
+     * ⚠ Checked every tick rather than cached: the whole point is to notice the moment the floor is removed.
+     * </p>
+     */
+    private boolean hasSolidSupportBelow() {
+        var below = blockPosition().below();
+
+        return level().getBlockState(below).entityCanStandOn(level(), below, this);
+    }
+
+    /** Below this squared speed an egg is treated as settled. Well under a single tick of gravity. */
+    private static final double RESTING_MOTION_EPSILON = 1.0E-7D;
 
     @Override
     public @Nullable EntityType<? extends Alien> getTypeForVariant(AlienVariant alienVariant) {
@@ -159,13 +239,32 @@ public class Ovomorph extends Alien implements GOAPUser<Ovomorph>, Shearable {
             return;
         }
 
-        var royals = level().getEntitiesOfClass(Queen.class, getBoundingBox().inflate(0.05));
-
-        if (royals.isEmpty()) {
+        // [stated] Oct 5: "this egg keeps jumping ... its rooted by resin so it shouldnt be moving at all". The rescue
+        // exists for LOOSE eggs a hauler cannot reach under her. A ROOTED egg is never collected - it hatches where it
+        // is - so being under her costs nothing, and moving it dragged chamber eggs into her front clutch (why a rooted
+        // egg sat right beside her). Rooted eggs stay put.
+        if (isRooted.get()) {
             return;
         }
 
-        var queen = royals.get(0);
+        // Oct 9 - a queen OR an empress: an empress-led hive now rings her with eggs too, so one can end up under her.
+        net.minecraft.world.entity.LivingEntity queen = null;
+        var royals = level().getEntitiesOfClass(Queen.class, getBoundingBox().inflate(0.05));
+
+        if (!royals.isEmpty()) {
+            queen = royals.get(0);
+        } else {
+            var empresses = level().getEntitiesOfClass(
+                com.alien.common.gameplay.entity.living.alien.xenomorph.empress.Empress.class,
+                getBoundingBox().inflate(0.05)
+            );
+
+            if (empresses.isEmpty()) {
+                return;
+            }
+
+            queen = empresses.get(0);
+        }
 
         for (var candidate : QueenEggZone.candidates(level(), queen)) {
             // ⚠ The candidate must not be under her either, or the egg is simply re-buried next second and the
@@ -176,7 +275,17 @@ public class Ovomorph extends Alien implements GOAPUser<Ovomorph>, Shearable {
                 candidate.getZ() + 0.5
             );
 
-            if (queen.getBoundingBox().inflate(0.05).contains(target)) {
+            // [stated] Oct 5: the WHOLE egg must clear her, not just its centre point. A spot that kept only the centre
+            // outside her box left the egg still overlapping her, so it was "rescued" again next second - and her
+            // clutch zone is laid out from her FACING, so each time she turned it went somewhere new: the jumping.
+            // Clear by a margin, and never on top of another egg.
+            var eggBox = getDimensions(getPose()).makeBoundingBox(target);
+
+            if (queen.getBoundingBox().inflate(RESCUE_CLEARANCE).intersects(eggBox)) {
+                continue;
+            }
+
+            if (!level().getEntitiesOfClass(Ovomorph.class, eggBox, other -> other != this).isEmpty()) {
                 continue;
             }
 
@@ -200,15 +309,24 @@ public class Ovomorph extends Alien implements GOAPUser<Ovomorph>, Shearable {
         discard();
     }
 
+    /** How far a rescued egg must clear the royal's hitbox, in blocks - so it is not under her again next second. */
+    private static final double RESCUE_CLEARANCE = 0.25D;
+
     /** How often a buried egg checks whether it is inside a royal. One second - this is a rescue, not a hot path. */
     private static final int ROYAL_RESCUE_INTERVAL_TICKS = 20;
 
     @Override
     public void tick() {
         super.tick();
+
+        // Oct 6 - profiler v3 laps; free while no session runs.
+        var perfLap = com.blib.api.common.perf.v1.BLibPerf.start();
         growthManager.tick();
+        perfLap = com.blib.api.common.perf.v1.BLibPerf.lap(this, "ovomorph.growth", perfLap);
         hatchManager.tick();
+        perfLap = com.blib.api.common.perf.v1.BLibPerf.lap(this, "ovomorph.hatch", perfLap);
         vibrationSystemManager.tick();
+        perfLap = com.blib.api.common.perf.v1.BLibPerf.lap(this, "ovomorph.vibration", perfLap);
         // Spent shell (already hatched): despawn after a Minecraft day if nothing eats it.
         com.alien.common.gameplay.entity.living.alien.MoltFeeding.tickRemainsLifetime(this);
 
@@ -241,6 +359,8 @@ public class Ovomorph extends Alien implements GOAPUser<Ovomorph>, Shearable {
             if (isPassenger()) {
                 this.pickupRequestAcknowledged = false;
             }
+
+            com.blib.api.common.perf.v1.BLibPerf.lap(this, "ovomorph.remains+raid+pickup", perfLap);
         }
     }
 

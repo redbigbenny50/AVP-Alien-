@@ -6,7 +6,6 @@ import com.alien.common.gameplay.hive.faction.LineageFactionData;
 import com.alien.common.gameplay.hive.lifecycle.LocationDeathHandler;
 import com.alien.common.gameplay.hive.location.HiveLocation;
 import com.alien.common.gameplay.hive.spawning.HiveLoadedSpawner;
-import com.alien.common.gameplay.hive.spawning.ReserveSpawnUtil;
 import com.alien.common.gameplay.hive.vent.VentKind;
 import com.alien.common.gameplay.hive.vent.VentPlacement;
 import com.alien.common.registry.tag.AlienEntityTypeTags;
@@ -141,9 +140,8 @@ public final class EndHiveTickTask {
         }
 
         // One per chore pass - the crew assembles over half a minute rather than materializing as a crowd.
-        var worker = HiveLoadedSpawner.trySpawnIdentityReserve(level, location, workerType, emergence);
+        var worker = HiveLoadedSpawner.trySpawnFromReserves(level, location, workerType, emergence);
         if (worker != null) {
-            ReserveSpawnUtil.markSpawnedFromReserves(worker);
             if (worker instanceof com.alien.common.gameplay.entity.living.alien.Alien alienWorker) {
                 alienWorker.setPersistenceRequired();
             }
@@ -178,6 +176,10 @@ public final class EndHiveTickTask {
             }
             var spot = findVentSpot(level, member.blockPosition());
             if (spot == null) {
+                continue;
+            }
+            // Oct 6 - never a vent inside the hive's own built rooms or tunnels (VentPlacement.isInsideBuiltStructure).
+            if (VentPlacement.isInsideBuiltStructure(location, spot)) {
                 continue;
             }
             VentPlacement.place(

@@ -50,7 +50,8 @@ public final class LocationMoveSensors {
 
         // A bound OR inhibited queen does not locate or dig — her front-end is frozen while she is chained or carries
         // an inhibitor, so a captured queen whose chains are broken waits (to be freed) instead of re-locating.
-        if (queen.getBindManager().hasAnyChain() || queen.isInhibited()) {
+        // Oct 3: and during her release/arrival grace outside a hive's slab ([stated] no digging for 5 minutes).
+        if (com.alien.common.gameplay.hive.lifecycle.QueenCaptivity.blocksFrontEnd(queen)) {
             return null;
         }
 

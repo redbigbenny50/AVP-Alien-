@@ -1,12 +1,12 @@
 package com.alien.common.gameplay.entity.living.alien.xenomorph.queen;
 
 import com.alien.common.gameplay.entity.living.alien.xenomorph.Xenomorph;
+import com.alien.common.gameplay.hive.lifecycle.QueenCaptivity;
 import com.alien.common.gameplay.hive.lifecycle.QueenInhibitionService;
 import com.alien.common.registry.init.item.AlienItems;
 import com.alien.common.util.AlienPredicates;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
-import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.phys.AABB;
 
@@ -29,10 +29,15 @@ import java.util.UUID;
  * capturing a queen is safe exactly as far as her family is away.</li>
  * <li><b>Recruits:</b> up to {@value #MAX_RESCUERS} same-strain adult xenomorphs within {@value #RECRUIT_RADIUS}
  * blocks. Queens and empresses do not leave their thrones for it; rival strains do not care.</li>
- * <li><b>The work:</b> rescuers are steered to the OLDEST anchor; standing beside it they claw it for
- * {@value #ANCHOR_BREAK_TICKS} ticks, then the anchor block is destroyed (dropping its item - the captor can recover
- * the hardware). {@code AnchorBlockEntity}'s removal path releases the chain, the bind count falls, and the crew moves
- * to the next anchor until she is free.</li>
+ * <li><b>The work (Oct 3):</b> [stated] "the rescueers would be trying to break the chain not the anchors. so when they
+ * attack the anchor ... they are doing a roll against the chain." Each rescuer goes to the anchor nearest to IT and
+ * strikes about once a second, every strike a {@link QueenCaptivity#RESCUE_CHAIN_BREAK_CHANCE} roll against that chain.
+ * A broken chain leaves the anchor standing, empty, so the captor can use it again. Spreading over the nearest anchors
+ * also means one anchor out of reach (a ceiling rig) no longer stalls the whole crew.</li>
+ * <li><b>Only inside her hive's slab (Oct 3):</b> [stated] "the hive will try to free her if shes still in the slab
+ * otherwise it would be like a kidnapped queen." Outside it, the rescue campaign on her old hive takes over.</li>
+ * <li><b>Rejoining waits 30 seconds (Oct 3):</b> [stated] "shorten it to 30seconds so its not a constant back and forth
+ * while actively fighting." The reconciliation below runs once her kin-rescue grace has passed.</li>
  * </ul>
  */
 public final class QueenRescueManager {
@@ -43,10 +48,11 @@ public final class QueenRescueManager {
 
     private static final int MAX_RESCUERS = 3;
 
-    /** Claw time per anchor (all rescuers pool onto one anchor; presence, not head-count, sets the pace). */
-    private static final int ANCHOR_BREAK_TICKS = 60;
+    /** A rescuer strikes once per this many ticks (the manager itself runs every {@value #RUN_INTERVAL_TICKS}). */
+    private static final int STRIKE_INTERVAL_TICKS = 20;
 
-    private static final double BREAK_REACH = 2.6;
+    /** Close enough to the anchor to be hitting it - measured to the block centre, so a wall anchor counts. */
+    private static final double BREAK_REACH = 3.0;
 
     private final Queen queen;
 
@@ -74,9 +80,14 @@ public final class QueenRescueManager {
 
     private boolean wasChained;
 
-    private int breakProgressTicks;
+    /**
+     * The crew that freed her, waiting out her kin-rescue grace before the reconciliation runs. Transient: after a
+     * reload she is simply a free queen, and the rescue campaign on her old hive can still bring her home.
+     */
+    private final List<UUID> pendingReconcile = new ArrayList<>();
 
-    private BlockPos breakingAnchor;
+    /** Where each rescuer was last sent (see {@link #steer}). Transient. */
+    private final java.util.Map<UUID, BlockPos> steering = new java.util.HashMap<>();
 
     public QueenRescueManager(Queen queen) {
         this.queen = queen;
@@ -92,18 +103,51 @@ public final class QueenRescueManager {
 
         var bindManager = queen.getBindManager();
         var chained = bindManager.hasAnyChain() && !bindManager.anchors().isEmpty();
-        var helpless = chained || queen.isIncapacitated();
+        // \u2b50 Oct 3 - [stated] "they should break the inhibitor if they reach her." An inhibited queen with no
+        // chains
+        // on her and standing in her kin's slab is rescued too: they come to her and tear the device off.
+        var looseInhibited = !chained
+            && !queen.isIncapacitated()
+            && queen.isInhibited()
+            && QueenCaptivity.kinSlabLocation(queen) != null;
+        var helpless = chained || queen.isIncapacitated() || looseInhibited;
         if (!helpless) {
             if (wasChained) {
                 // She just stood free (chains broken, or she recovered from the down) with a crew standing by:
-                // settle who belongs to whom.
+                // settle who belongs to whom - once her kin-rescue grace is over.
                 wasChained = false;
-                resolveFreedom(serverLevel);
+                beginFreedom(serverLevel);
             }
+            tickPendingReconcile(serverLevel);
             tickRetinue(serverLevel);
+            steering.clear();
             return;
         }
         wasChained = true;
+        pendingReconcile.clear(); // taken again before the crew could settle anything
+        // Drop path memory for rescuers that have left the crew (killed, despawned, aged out) - otherwise it grows by
+        // one entry per lost rescuer for as long as she stays captive.
+        if (!steering.isEmpty()) {
+            steering.keySet().retainAll(rescuers);
+        }
+
+        if (looseInhibited) {
+            recruit(serverLevel);
+            for (var iterator = rescuers.iterator(); iterator.hasNext();) {
+                var rescuer = resolve(serverLevel, iterator, iterator.next());
+                if (rescuer == null) {
+                    continue;
+                }
+                if (!QueenCaptivity.canReach(rescuer, queen)) {
+                    steer(rescuer, queen.blockPosition());
+                    continue;
+                }
+                rescuer.getNavigation().stop();
+                QueenCaptivity.tearOffInhibitor(rescuer, queen);
+                break; // it is off - the freedom branch takes over next run
+            }
+            return;
+        }
 
         if (!chained) {
             // DOWNED, not chained: there is no anchor to claw, so kin stand GUARD instead - they converge on her
@@ -116,7 +160,7 @@ public final class QueenRescueManager {
                     continue;
                 }
                 if (guard.distanceToSqr(queen) > 36) {
-                    guard.getNavigation().moveTo(queen, 1.15);
+                    steer(guard, queen.blockPosition());
                 } else {
                     guard.getNavigation().stop();
                 }
@@ -124,57 +168,106 @@ public final class QueenRescueManager {
             return;
         }
 
-        var targetAnchor = bindManager.anchors().get(0);
-        if (!targetAnchor.equals(breakingAnchor)) {
-            breakingAnchor = targetAnchor;
-            breakProgressTicks = 0;
+        // [stated] "the hive will try to free her if shes still in the slab otherwise it would be like a kidnapped
+        // queen."
+        if (QueenCaptivity.kinSlabLocation(queen) == null) {
+            rescuers.clear();
+            return;
         }
 
         recruit(serverLevel);
 
-        var anyAdjacent = false;
+        var strikeNow = queen.tickCount % STRIKE_INTERVAL_TICKS == 0;
         for (var iterator = rescuers.iterator(); iterator.hasNext();) {
             var rescuer = resolve(serverLevel, iterator, iterator.next());
             if (rescuer == null) {
                 continue;
             }
 
-            if (rescuer.blockPosition().distSqr(targetAnchor) > BREAK_REACH * BREAK_REACH) {
-                rescuer.getNavigation()
-                    .moveTo(
-                        targetAnchor.getX() + 0.5,
-                        targetAnchor.getY(),
-                        targetAnchor.getZ() + 0.5,
-                        1.15
-                    );
+            var targetAnchor = nearestAnchorTo(rescuer, bindManager.anchors());
+            if (targetAnchor == null) {
+                continue;
+            }
+
+            if (rescuer.distanceToSqr(targetAnchor.getCenter()) > BREAK_REACH * BREAK_REACH) {
+                steer(rescuer, targetAnchor);
                 continue;
             }
 
             rescuer.getNavigation().stop();
-            rescuer.swing(InteractionHand.MAIN_HAND);
-            anyAdjacent = true;
+            if (strikeNow && QueenCaptivity.strikeChain(rescuer, targetAnchor, QueenCaptivity.RESCUE_CHAIN_BREAK_CHANCE)) {
+                com.alien.Alien.LOGGER.info(
+                    "Queen rescue: kin broke a capture chain at {} on queen {} ({} chains remain)",
+                    targetAnchor,
+                    queen.getId(),
+                    queen.getBindManager().chainCount()
+                );
+            }
         }
+    }
 
-        if (!anyAdjacent) {
+    /**
+     * \u26a0 TPS - PATH ONLY WHEN SOMETHING CHANGED. {@code moveTo} runs a fresh path search every call, and this
+     * manager runs every {@value #RUN_INTERVAL_TICKS} ticks for each of up to {@value #MAX_RESCUERS} rescuers - the
+     * same shape as the IdleActions re-pathing lag. A rescuer is re-pathed only when its navigation has finished
+     * (arrived, gave up, or was stopped) or its target has moved more than two blocks.
+     */
+    private void steer(Xenomorph rescuer, BlockPos target) {
+        var previous = steering.get(rescuer.getUUID());
+        var navigation = rescuer.getNavigation();
+        if (previous != null && !navigation.isDone() && previous.distSqr(target) <= 4) {
             return;
         }
+        if (navigation.moveTo(target.getX() + 0.5, target.getY(), target.getZ() + 0.5, 1.15)) {
+            steering.put(rescuer.getUUID(), target.immutable());
+        } else {
+            steering.remove(rescuer.getUUID());
+        }
+    }
 
-        breakProgressTicks += RUN_INTERVAL_TICKS;
-        if (breakProgressTicks < ANCHOR_BREAK_TICKS) {
+    /** The anchor in {@code anchors} closest to {@code rescuer}, or null if there are none. */
+    private static BlockPos nearestAnchorTo(Xenomorph rescuer, List<BlockPos> anchors) {
+        BlockPos best = null;
+        var bestDistance = Double.MAX_VALUE;
+        for (var anchor : anchors) {
+            var distance = rescuer.distanceToSqr(anchor.getCenter());
+            if (distance < bestDistance) {
+                bestDistance = distance;
+                best = anchor;
+            }
+        }
+        return best;
+    }
+
+    /**
+     * She is free. Strip the inhibitor off her now (so her grace starts), and hold the crew until the grace is over.
+     */
+    private void beginFreedom(ServerLevel serverLevel) {
+        // Freedom means ALL of it. Breaking her chains or waking her while she still wore the inhibitor left her
+        // standing, autonomous in name only - the device was only ever removed by a player prying it off with a
+        // blade. Her kin tear it off the same way they broke the chains, and it drops where she stood so it stays
+        // recoverable, exactly as the pry-off does.
+        // \u26a0 Oct 3: ONLY WHEN HER KIN ARE HERE. This used to strip it whenever her chains came off - so a player
+        // who
+        // unchained an inhibited queen outside any slab (to re-rig her, or move her) lost the inhibitor with no
+        // xenomorph anywhere near. [stated] "they should break the inhibitor if they reach her" - they, not the chains.
+        if (queen.isInhibited() && !rescuers.isEmpty()) {
+            queen.markFreedByKin();
+            queen.setInhibited(false);
+            QueenInhibitionService.onReleased(serverLevel, queen);
+            queen.spawnAtLocation(AlienItems.INHIBITOR.get());
+        }
+        pendingReconcile.clear();
+        pendingReconcile.addAll(rescuers);
+        rescuers.clear();
+    }
+
+    /** Runs the reconciliation once her grace has passed. A queen who just stood up from a down has no grace. */
+    private void tickPendingReconcile(ServerLevel serverLevel) {
+        if (pendingReconcile.isEmpty() || QueenCaptivity.isGraceActive(queen)) {
             return;
         }
-
-        // Chain comes off: drop the anchor hardware for the captor to recover, and let the block-entity removal
-        // path fire release() - the single choke point every chain detach flows through.
-        serverLevel.destroyBlock(targetAnchor, true);
-        breakingAnchor = null;
-        breakProgressTicks = 0;
-        com.alien.Alien.LOGGER.info(
-            "Queen rescue: kin broke a capture anchor at {} freeing queen {} ({} chains remain)",
-            targetAnchor,
-            queen.getId(),
-            queen.getBindManager().chainCount()
-        );
+        resolveFreedom(serverLevel);
     }
 
     /**
@@ -188,26 +281,29 @@ public final class QueenRescueManager {
      * </ul>
      */
     private void resolveFreedom(ServerLevel serverLevel) {
-        // Freedom means ALL of it. Breaking her chains or waking her while she still wore the inhibitor left her
-        // standing, autonomous in name only - the device was only ever removed by a player prying it off with a
-        // blade. Her kin tear it off the same way they tore the anchors out, and it drops where she stood so it stays
-        // recoverable, exactly as the pry-off does.
-        if (queen.isInhibited()) {
-            queen.setInhibited(false);
-            QueenInhibitionService.onReleased(serverLevel, queen);
-            queen.spawnAtLocation(AlienItems.INHIBITOR.get());
-        }
-
         var survivors = new ArrayList<Xenomorph>();
-        for (var id : rescuers) {
+        for (var id : pendingReconcile) {
             if (serverLevel.getEntity(id) instanceof Xenomorph xenomorph && xenomorph.isAlive()) {
                 survivors.add(xenomorph);
             }
         }
-        rescuers.clear();
-        breakingAnchor = null;
-        breakProgressTicks = 0;
+        pendingReconcile.clear();
         if (survivors.isEmpty()) {
+            return;
+        }
+
+        // \u2b50 Oct 3 - [stated] "if she is being freed by the hive then she should rejoin it". Capture severed her,
+        // so the "already holds a hive" path below no longer catches her own hive. If the slab she stands in belongs to
+        // the hive she was taken from and her seat is still empty, she goes straight back onto its throne.
+        if (QueenCaptivity.tryRestoreToOriginalHive(queen, QueenCaptivity.kinSlabLocation(queen))) {
+            var home = locationOf(queen);
+            if (home != null) {
+                for (var rescuer : survivors) {
+                    if (locationOf(rescuer) == null) {
+                        com.alien.common.gameplay.hive.faction.LocationMembership.join(home, rescuer);
+                    }
+                }
+            }
             return;
         }
 

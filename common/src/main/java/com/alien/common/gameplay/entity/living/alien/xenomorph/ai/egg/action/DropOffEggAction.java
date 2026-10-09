@@ -260,7 +260,17 @@ public class DropOffEggAction {
 
             // Ours now - other haulers will look elsewhere. The claim expires by itself if we never arrive.
             claimSpot(xenomorph, freeSpot.get());
-            targetPos = freeSpot.get().getCenter();
+            // 🚨🚨 BLOCK CENTRE IS HALF A BLOCK TOO HIGH. BlockPos.getCenter() returns x+0.5, y+0.5, z+0.5 - and this
+            // Vec3 is fed straight into setPos as the egg's FEET, so every egg a drone delivered to a chamber bed sat
+            // exactly half a block above the floor. Reported as "placed exactly 1 slab height above the ground".
+            //
+            // ⚠⚠ DRONES ONLY, WHICH IS THE TELL. Runners drop eggs through findShelfSpot, which already uses
+            // atBottomCenterOf and puts them down correctly - so the bug tracked the CASTE doing the hauling rather
+            // than anything about the egg, and that is what pointed here.
+            //
+            // ⭐ atBottomCenterOf is the same x/z centring with the floor of the block for Y, which is what a
+            // feet position means.
+            targetPos = Vec3.atBottomCenterOf(freeSpot.get());
             blackboard.set(KEY_TARGET_POS, targetPos);
             blackboard.set(KEY_TARGET_SET_TICK, xenomorph.tickCount);
             if (isChamberBed || isHostDrop) {
@@ -284,7 +294,10 @@ public class DropOffEggAction {
             var ventTarget = ventApproach != null
                 ? Vec3.atBottomCenterOf(ventApproach)
                 : Vec3.atCenterOf(ventEntry);
-            var ventResult = NeoMoveToPosAction.perform(context, ventTarget, 0.5);
+            var ventResult = com.alien.common.gameplay.hive.diag.DiagProfiler.timed(
+                "path/DropOffEggAction",
+                () -> NeoMoveToPosAction.perform(context, ventTarget, 0.5)
+            );
             if (xenomorph.distanceToSqr(ventTarget) <= VENT_REACH_SQUARED) {
                 var ventExit = blackboard.getOrDefault(KEY_VENT_EXIT, (BlockPos) null);
                 blackboard.set(KEY_VENT_ENTRY, (BlockPos) null);
@@ -325,7 +338,12 @@ public class DropOffEggAction {
             return Action.Signal.CONTINUE;
         }
 
-        var result = NeoMoveToPosAction.perform(context, targetPos, 0.5);
+        // ⚠ targetPos is reassigned above, so it cannot be captured by a lambda directly.
+        var dropTarget = targetPos;
+        var result = com.alien.common.gameplay.hive.diag.DiagProfiler.timed(
+            "path/DropOffEggAction",
+            () -> NeoMoveToPosAction.perform(context, dropTarget, 0.5)
+        );
         var arrived = xenomorph.distanceToSqr(targetPos) <= DROP_OFF_RANGE_SQUARED;
 
         return switch (result) {
@@ -474,10 +492,37 @@ public class DropOffEggAction {
         getPassengerOvomorphs(xenomorph).forEach(ovomorph -> {
             xenomorph.level()
                 .playSound(null, ovomorph, AlienSoundEvents.ENTITY_OVOMORPH_ROOT.get(), SoundSource.HOSTILE, 1.0F, 1.0F);
-            ovomorph.setHostDropTarget(null); // rooted = no longer in transit, wherever it landed
-            ovomorph.isRooted.set(true);
+            ovomorph.setHostDropTarget(null); // no longer in transit, wherever it landed
             ovomorph.stopRiding();
             ovomorph.setPos(center.x, center.y, center.z);
+
+            // 🚨🚨 ONLY ROOT AN EGG THAT HAS A FLOOR UNDER IT. Rooting freezes an egg where it is put, and this used
+            // to root unconditionally - so an egg placed in mid-air stayed in mid-air. A xenomorph CLIMBS, and
+            // findShelfSpot's last resort is the carrier's OWN position, so a drone that ran out of options while on a
+            // wall or ceiling rooted its egg there.
+            //
+            // ⚠⚠ Reported as rooted eggs floating with nothing but air beneath them.
+            //
+            // ⭐ Left LOOSE instead when there is no support: gravity settles it on the floor, and a loose egg is
+            // eligible to be hauled again, so nothing is lost - the hive simply retries from where it lands.
+            var restingOn = BlockPos.containing(center).below();
+            var supported = ovomorph.level()
+                .getBlockState(restingOn)
+                .entityCanStandOn(ovomorph.level(), restingOn, ovomorph);
+
+            ovomorph.isRooted.set(supported);
+
+            // ⭐ Same as the lay path: an egg takes the vein's cell rather than sitting inside it.
+            var veinCell = BlockPos.containing(center);
+
+            if (ovomorph.level().getBlockState(veinCell).is(com.alien.common.registry.tag.AlienBlockTags.RESIN_VEINS)) {
+                ovomorph.level()
+                    .setBlock(
+                        veinCell,
+                        net.minecraft.world.level.block.Blocks.AIR.defaultBlockState(),
+                        net.minecraft.world.level.block.Block.UPDATE_CLIENTS
+                    );
+            }
 
             var randomYaw = xenomorph.getRandom().nextFloat() * 360.0F;
 
@@ -507,6 +552,16 @@ public class DropOffEggAction {
      * eggs only adults in the end" - so an End hive genuinely cannot bank one.
      * </p>
      */
+    /**
+     * Hard ceiling on a hive's banked eggs of one type.
+     * <p>
+     * ⚠ Above this an egg handed in is ACCEPTED AND DESTROYED rather than refused, so a hauler is never left holding
+     * something it cannot put down. Laying stops at EggLayingSensors.RESERVE_EGG_CAP (100); the gap is headroom for
+     * eggs already laid or in transit when that ceiling was hit.
+     * </p>
+     */
+    public static final int EGG_BANK_KILL_CAP = 150;
+
     private static boolean bankOverflowEgg(Xenomorph xenomorph) {
         if (!(xenomorph.level() instanceof ServerLevel serverLevel)) {
             return false;
@@ -531,6 +586,32 @@ public class DropOffEggAction {
         var banked = 0;
 
         for (var ovomorph : carried) {
+            // 🚨🚨 THE KILL CAP. The bank must NEVER refuse a carried egg - a hauler with nowhere to put one would
+            // hold it forever, and a stuck hauler blocks carve sites and nurseries behind it. So the egg is always
+            // taken off its back; past the cap it is simply not stored.
+            //
+            // ⚠⚠ [stated] "Once it hits 150 it still accepts eggs but deletes them. And triggers the log. This way we
+            // get the alert. The hive doesnt overkill forever, the carriers can still empty."
+            //
+            // ⚠ THE HEADROOM IS DELIBERATE: laying stops at RESERVE_EGG_CAP (100), and the extra 50 absorbs eggs that
+            // were already laid or in transit when the ceiling was reached. Reaching 150 therefore means something is
+            // producing eggs in a loop, which is why it warns rather than passing quietly.
+            if (location.localReserves().getCount(ovomorph.getType()) >= EGG_BANK_KILL_CAP) {
+                com.alien.Alien.LOGGER.warn(
+                    "Hive {}: egg bank is at or past the kill cap of {} - discarding a carried {} instead of banking"
+                        + " it. Laying should have stopped at {}, so something is producing eggs in a loop.",
+                    location.id(),
+                    EGG_BANK_KILL_CAP,
+                    net.minecraft.core.registries.BuiltInRegistries.ENTITY_TYPE.getKey(ovomorph.getType()),
+                    com.alien.common.gameplay.entity.living.alien.xenomorph.ai.egg_laying.EggLayingSensors.RESERVE_EGG_CAP
+                );
+
+                ovomorph.stopRiding();
+                ovomorph.discard();
+                banked++;
+                continue;
+            }
+
             if (!location.localReserves().tryAdd(ovomorph.getType(), 1)) {
                 continue;
             }
@@ -633,15 +714,46 @@ public class DropOffEggAction {
      * to the around-the-queen spiral.
      */
     /** A free cell in the queen's clutch zone (bounded patch in front of her), nearest to her first. */
+    /**
+     * Oct 9 - THE ROYAL EGGS GO AROUND: the hive's founding queen, or - when there is none - the empress sitting in it.
+     * [tester] with an empress-led hive "drones instead of placing the eggs around her merely delete them": this looked
+     * for a QUEEN only, found none ("queen clutch zone has -1 free cell(s) (queen MISSING)"), had no egg chamber
+     * either, and banked every egg. An empress lays like a queen, so her eggs ring her like a queen's.
+     */
+    private static @org.jetbrains.annotations.Nullable net.minecraft.world.entity.LivingEntity eggRoyal(
+        ServerLevel serverLevel,
+        com.alien.common.gameplay.hive.location.HiveLocation location
+    ) {
+        var founderId = location.founderId();
+
+        if (founderId != null && serverLevel.getEntity(founderId) instanceof Queen queen && queen.isAlive()) {
+            return queen;
+        }
+
+        var empressId = location.sittingEmpressId();
+
+        if (
+            empressId != null
+                && serverLevel.getEntity(
+                    empressId
+                ) instanceof com.alien.common.gameplay.entity.living.alien.xenomorph.empress.Empress empress
+                && empress.isAlive()
+        ) {
+            return empress;
+        }
+
+        return null;
+    }
+
     private static Optional<BlockPos> findQueenZoneSpot(Xenomorph xenomorph, Set<BlockPos> failedSpots) {
         if (!(xenomorph.level() instanceof ServerLevel serverLevel)) {
             return Optional.empty();
         }
         var location = resolveLocation(serverLevel, xenomorph);
-        if (location == null || location.founderId() == null) {
+        if (location == null) {
             return Optional.empty();
         }
-        var queen = serverLevel.getEntity(location.founderId()) instanceof Queen q ? q : null;
+        var queen = eggRoyal(serverLevel, location);
         if (queen == null) {
             return Optional.empty();
         }
@@ -697,12 +809,8 @@ public class DropOffEggAction {
         int freeBeds = 0;
         int occupiedBeds = 0;
         int unloadedChambers = 0;
-        for (var entry : location.structurePieceByChunk().entrySet()) {
-            if (!entry.getValue().contains("chamber_egg")) {
-                continue;
-            }
+        for (var chamber : eggDestinationChunks(serverLevel, location, xenomorph.chunkPosition())) {
             eggChambers++;
-            var chamber = entry.getKey();
             if (!serverLevel.isLoaded(chamber.getWorldPosition())) {
                 unloadedChambers++;
                 continue;
@@ -717,10 +825,7 @@ public class DropOffEggAction {
         }
 
         var failedSpots = getFailedSpots(blackboard);
-        Queen queen = null;
-        if (location.founderId() != null && serverLevel.getEntity(location.founderId()) instanceof Queen q) {
-            queen = q;
-        }
+        var queen = eggRoyal(serverLevel, location);
         int queenZoneFree = queen == null ? -1 : QueenEggZone.candidates(serverLevel, queen).size();
 
         com.alien.Alien.LOGGER.info(
@@ -764,17 +869,11 @@ public class DropOffEggAction {
         if (location == null) {
             return Optional.empty();
         }
-        var chambers = new ArrayList<ChunkPos>();
-        for (var entry : location.structurePieceByChunk().entrySet()) {
-            if (entry.getValue().contains("chamber_egg")) {
-                chambers.add(entry.getKey());
-            }
-        }
+        var here = xenomorph.chunkPosition();
+        var chambers = eggDestinationChunks(serverLevel, location, here);
         if (chambers.isEmpty()) {
             return Optional.empty();
         }
-        var here = xenomorph.chunkPosition();
-        chambers.sort(Comparator.comparingInt(c -> Math.max(Math.abs(c.x - here.x), Math.abs(c.z - here.z))));
 
         for (var chamber : chambers) {
             if (!serverLevel.isLoaded(chamber.getWorldPosition())) {
@@ -802,6 +901,48 @@ public class DropOffEggAction {
     }
 
     /** A bed is occupied while a rooted ovomorph sits within a block of it. */
+    /**
+     * \u2b50\u2b50 WHERE EGGS GO. Egg chambers normally; in build-free mode, the cluster chunks.
+     * <p>
+     * \u26a0\u26a0 BOTH CALL SITES MUST USE THIS. The action picks a bed and the diagnostic counts free beds, and they
+     * enumerate independently - if the two ever disagreed about which chunks are nurseries, the action would target a
+     * bed the diagnostic says does not exist. A one-list-two-readers split is what produced the "25 free beds and 0
+     * spots on the failed list" livelock in the chamber code, and it is not a mistake worth making twice.
+     * </p>
+     * <p>
+     * \u2b50 The cluster is STAMPED HERE, on demand, rather than by a build step. The disc write is idempotent and only
+     * touches cells that are not already tendril, so a hauler arriving at an unstamped cluster lays the floor it is
+     * about to use and every later visit costs a scan. No "is this cluster built yet" flag exists, so none can drift
+     * out of sync with the blocks actually on the ground.
+     * </p>
+     */
+    private static List<ChunkPos> eggDestinationChunks(
+        ServerLevel serverLevel,
+        com.alien.common.gameplay.hive.location.HiveLocation location,
+        ChunkPos from
+    ) {
+        if (com.alien.common.gameplay.hive.config.BuildFreeMode.isEnabled()) {
+            var clusters = com.alien.common.gameplay.hive.config.BuildFreeClusters
+                .eggClusterChunks(location, from);
+            for (var cluster : clusters) {
+                if (serverLevel.isLoaded(cluster.getWorldPosition())) {
+                    com.alien.common.gameplay.hive.config.BuildFreeClusters
+                        .stampCluster(serverLevel, location, cluster);
+                }
+            }
+            return clusters;
+        }
+
+        var chambers = new ArrayList<ChunkPos>();
+        for (var entry : location.structurePieceByChunk().entrySet()) {
+            if (entry.getValue().contains("chamber_egg")) {
+                chambers.add(entry.getKey());
+            }
+        }
+        chambers.sort(Comparator.comparingInt(c -> Math.max(Math.abs(c.x - from.x), Math.abs(c.z - from.z))));
+        return chambers;
+    }
+
     private static boolean isBedOccupied(ServerLevel level, BlockPos bed) {
         var center = bed.getCenter();
         var box = new AABB(center.x - 1.0, bed.getY() - 1.0, center.z - 1.0, center.x + 1.0, bed.getY() + 2.0, center.z + 1.0);
@@ -859,9 +1000,9 @@ public class DropOffEggAction {
 
         for (var i = 0; i < Math.min(viable.size(), MAX_PATH_VALIDATION_ATTEMPTS); i++) {
             var pos = viable.get(i);
-            var path = xenomorph.getNavigation().createPath(pos, 0);
-
-            if (path != null && path.canReach()) {
+            // Oct 2 - a bed the hauler can reach through a duct is as good as one it can walk to: the drop-off plans
+            // the duct leg itself once the bed is chosen. Walking-only rejected every bed across a hallway.
+            if (com.alien.common.gameplay.hive.vent.DuctRouting.canReach(xenomorph, pos, true)) {
                 return Optional.of(pos);
             } else {
                 failedSpots.add(pos);

@@ -36,6 +36,22 @@
     "minecraft:zoglin",
     "minecraft:zombie",
     "minecraft:zombie_villager",
-    "minecraft:zombified_piglin"
+    "minecraft:zombified_piglin",
+    {
+      "id": "slimpatch:pillager",
+      "required": false
+    },
+    {
+      "id": "slimpatch:vindicator",
+      "required": false
+    },
+    {
+      "id": "slimpatch:evoker",
+      "required": false
+    },
+    {
+      "id": "slimpatch:human_zombie_villager",
+      "required": false
+    }
   ]
 }

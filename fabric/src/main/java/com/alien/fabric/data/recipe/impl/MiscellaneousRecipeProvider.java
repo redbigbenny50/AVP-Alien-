@@ -55,6 +55,25 @@ public class MiscellaneousRecipeProvider {
             .requires(1, AlienBlocks.SCOURGE_JELLY_BLOCK)
             .into(9, AlienItems.RAW_SCOURGE_JELLY);
 
+        // Storage both ways, same as the other jellies. [stated] "it is a storage block too like the others."
+        builder.shaped()
+            .withCategory(RecipeCategory.MISC)
+            .define('I', AlienItems.POISON_JELLY)
+            .pattern("III")
+            .pattern("III")
+            .pattern("III")
+            .into(1, AlienBlocks.POISON_JELLY_BLOCK);
+
+        // !! THE UNCRAFT NEEDS ITS OWN ID. A shapeless recipe is named after its OUTPUT, and poison jelly ALREADY
+        // owns "avp_alien:poison_jelly" - it is crafted from a poisonous potato and raw royal jelly further down this
+        // file. Datagen died on "Duplicate recipe avp_alien:poison_jelly". The other jelly blocks never hit this
+        // because they uncraft into RAW_* items that nothing else produces.
+        builder.shapeless()
+            .withCategory(RecipeCategory.MISC)
+            .withCustomName(name -> name + "_from_block")
+            .requires(1, AlienBlocks.POISON_JELLY_BLOCK)
+            .into(9, AlienItems.POISON_JELLY);
+
         builder.shaped()
             .withCategory(RecipeCategory.MISC)
             .define('I', AlienItems.RAW_IRRADIATED_JELLY)

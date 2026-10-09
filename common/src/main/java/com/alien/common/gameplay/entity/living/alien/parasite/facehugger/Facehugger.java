@@ -83,6 +83,9 @@ public class Facehugger extends Parasite implements EntitySenseCacheUser, GOAPUs
     public void tick() {
         super.tick();
 
+        // Oct 6 - profiler v3 laps; free while no session runs.
+        var perfLap = com.blib.api.common.perf.v1.BLibPerf.start();
+
         // Spent hugger (embryo implanted): despawn after a Minecraft day if nothing eats it.
         com.alien.common.gameplay.entity.living.alien.MoltFeeding.tickRemainsLifetime(this);
 
@@ -92,6 +95,8 @@ public class Facehugger extends Parasite implements EntitySenseCacheUser, GOAPUs
             if (isLunging.get() && onGround()) {
                 isLunging.set(false);
             }
+
+            com.blib.api.common.perf.v1.BLibPerf.lap(this, "facehugger.remains+data", perfLap);
         }
     }
 

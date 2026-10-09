@@ -64,7 +64,13 @@ public final class BroodBankTask {
         // vertically). No vent standing means nothing banks - the End absorb below requires vent contact and never
         // uses the bank-in-place fallback, so a player who wants all their xenomorphs visible just keeps no vents.
         var endStyle = com.alien.common.gameplay.hive.dimension.EndStyleHiveRules.isEndStyle(level);
-        var chunks = endStyle ? location.claimedChunks() : location.structurePieceByChunk().keySet();
+        // \u26a0\u26a0 BUILD-FREE SCANS THE CLAIM, LIKE THE END DOES. structurePieceByChunk is EMPTY in this mode, so
+        // the ordinary box would be empty and this task would silently never run at all - no banking, and therefore
+        // no worker retreat either.
+        var buildFree = com.alien.common.gameplay.hive.config.BuildFreeMode.isEnabled();
+        var chunks = endStyle || buildFree
+            ? location.claimedChunks()
+            : location.structurePieceByChunk().keySet();
         if (chunks.isEmpty()) {
             return;
         }
@@ -80,7 +86,23 @@ public final class BroodBankTask {
             ? new AABB(minX, level.getMinBuildHeight(), minZ, maxX + 1, level.getMaxBuildHeight(), maxZ + 1)
             : new AABB(minX, location.hiveFloorY(), minZ, maxX + 1, location.hiveCeilingY() + 1, maxZ + 1);
 
-        for (var alien : level.getEntitiesOfClass(Alien.class, box, candidate -> isAbsorbable(location, candidate))) {
+        // \u2b50\u2b50 WORKER RETREAT. While a player is in the territory and soldiers remain to answer, drones and
+        // runners go to ground - they are not fighters, and a crowd of them milling through a firefight is both a
+        // performance cost and a pile of wasted deaths.
+        //
+        // \u26a0 THE TRIGGER IS IMMEDIATE but the WALK IS NOT: they still prefer a vent, and only bank in place once
+        // the grace expires or nobody is watching. A drone blinking out three blocks from a player reads as a
+        // despawn bug, which is why the vent walk exists in the first place.
+        var retreating = isSuppressingWorkers(level, location);
+
+        for (
+            var alien : level.getEntitiesOfClass(
+                Alien.class,
+                box,
+                candidate -> isAbsorbable(location, candidate)
+                    || (retreating && isWorkerType(candidate.getType()) && isRetreatable(candidate))
+            )
+        ) {
             var vent = nearestVent(location, alien.blockPosition());
 
             if (vent != null && alien.distanceToSqr(vent.getX() + 0.5, vent.getY() + 0.5, vent.getZ() + 0.5) <= VENT_ABSORB_RANGE_SQUARED) {
@@ -109,6 +131,81 @@ public final class BroodBankTask {
                 alien.getNavigation().moveTo(vent.getX() + 0.5, vent.getY(), vent.getZ() + 0.5, 1.0);
             }
         }
+    }
+
+    /**
+     * Whether workers should be kept in the bank right now.
+     * <p>
+     * \u26a0 SHARED WITH THE AMBIENT SPAWNER ON PURPOSE. The retreat banks them and the spawner must not immediately
+     * un-bank them; one condition read from two places is the only way those two stay in agreement.
+     * </p>
+     */
+    public static boolean isSuppressingWorkers(ServerLevel level, HiveLocation location) {
+        return underAttack(level, location) && hasSoldiersLeft(location);
+    }
+
+    /**
+     * \u2b50\u2b50 IS THE HIVE UNDER ATTACK RIGHT NOW? Workers go to ground when it is.
+     * <p>
+     * [stated] "for efficency and lag prevention we can have the workers retreat into the reserves if the hives under
+     * attack and they only come out once the attack is over or theirs no more soldier castes to come out."
+     * </p>
+     * <p>
+     * \u26a0 DELIBERATELY NOT {@code isAtWar()}. That is hive-versus-hive and already stands the whole task down at the
+     * top of {@code run}. This is about a PLAYER in the territory, which is the case where a crowd of drones milling
+     * about is both a performance cost and a wasted death.
+     * </p>
+     */
+    private static boolean underAttack(ServerLevel level, HiveLocation location) {
+        return com.alien.common.gameplay.hive.config.BuildFreeMode.isEnabled()
+            && !com.alien.common.gameplay.hive.tick.HiveTerritoryAggroTask
+                .intrudersInTerritory(level, location)
+                .isEmpty();
+    }
+
+    /**
+     * Whether this hive still has soldiers to send, on the field or in the bank.
+     * <p>
+     * \u2b50 THE RELEASE CONDITION, and he was precise about it: [stated] "no more active in field and bank empty".
+     * Workers pour out as a LAST STAND once the soldiers are gone - not as a trickle back into a fight a warrior is
+     * still holding.
+     * </p>
+     */
+    private static boolean hasSoldiersLeft(HiveLocation location) {
+        // Banked soldiers, then soldiers still standing. Either means the workers stay down.
+        if (location.localReserves().getReliableCountMatching(type -> !isWorkerType(type)) > 0) {
+            return true;
+        }
+        var total = CastePopulation.totalReliableXenomorphPopulation(location);
+        var workers = location.localReserves().getReliableCountMatching(BroodBankTask::isWorkerType);
+        return total > workers;
+    }
+
+    /** Drones and runners - [stated] "the mundane moving daily grind xenos are the workers". */
+    private static boolean isWorkerType(net.minecraft.world.entity.EntityType<?> type) {
+        return type.is(AlienEntityTypeTags.DRONES) || type.is(AlienEntityTypeTags.RUNNERS);
+    }
+
+    /**
+     * A worker eligible to go to ground. Reuses the exclusions that matter and skips the age gates.
+     * <p>
+     * \u26a0\u26a0 THE EXCLUSIONS ARE NOT OPTIONAL. A name-tagged xenomorph is somebody's pet ([stated] "name tagged
+     * xenos dont get absorbed into the reserves"), and a burster, chrysalis or adolescent is still GROWING - banking
+     * one freezes it mid-transition. Both were learned the hard way by the ordinary absorb path; a retreat that
+     * bypassed them would eat a player's specimens and a hive's juveniles the first time anyone walked in.
+     * </p>
+     */
+    private static boolean isRetreatable(Alien alien) {
+        var type = alien.getType();
+        return alien.isAlive()
+            && !alien.hasCustomName()
+            && !alien.isPoisoned() // a contained specimen never retreats - it is not the hive's to move
+            && alien.convoyMembership() == null
+            && type.is(AlienEntityTypeTags.XENOMORPHS)
+            && !type.is(AlienEntityTypeTags.CHESTBURSTERS)
+            && !type.is(AlienEntityTypeTags.PREDALIEN_CHESTBURSTERS)
+            && !type.is(AlienEntityTypeTags.BURSTERS)
+            && !type.is(AlienEntityTypeTags.CHRYSALISES);
     }
 
     private static boolean isAbsorbable(HiveLocation location, Alien alien) {
@@ -142,8 +239,24 @@ public final class BroodBankTask {
         }
         var endStyle = alien.level() instanceof ServerLevel serverLevel
             && com.alien.common.gameplay.hive.dimension.EndStyleHiveRules.isEndStyle(serverLevel);
-        if (alien.hasCustomName() && endStyle) {
-            return false; // [stated] "name tagged xenos dont get absorbed into the reserves"
+        // \u26a0\u26a0 THE endStyle QUALIFIER WAS A BUG. [stated] "name tagged xenos dont get absorbed into the
+        // reserves" - unqualified. As written, a named xenomorph was protected ONLY in the End; anywhere else a
+        // player's named pet standing in hive territory was absorbed like any other member.
+        //
+        // \u2b50\u2b50 GROWTH SUPPRESSION COUNTS TOO, for the same reason - [stated] "he made a zoo and growth
+        // supressed them. this is why i was so pushy about detecting if a xeno is in containment before pulling back
+        // to reserves." Both are a player saying "this one is mine"; neither is a hive member out on business.
+        if (alien.hasCustomName() || alien.isPoisoned()) {
+            return false;
+        }
+        // \u2b50\u2b50 Still for minutes AND somewhere a player keeps returning to = an exhibit, not a stray.
+        // Still and ABANDONED is the genuinely stuck member this task exists to recover, so both halves are required.
+        if (
+            alien.level() instanceof ServerLevel containmentLevel
+                && com.alien.common.gameplay.hive.containment.ContainmentDetector
+                    .isContained(containmentLevel, alien)
+        ) {
+            return false;
         }
         if ((!alien.isHostBorn() && !endStyle) || !alien.isAlive() || alien.tickCount < ABSORB_AGE_TICKS) {
             return false;

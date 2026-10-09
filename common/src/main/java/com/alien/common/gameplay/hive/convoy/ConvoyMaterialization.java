@@ -2,7 +2,6 @@ package com.alien.common.gameplay.hive.convoy;
 
 import com.alien.Alien;
 import com.alien.common.gameplay.hive.location.HiveLocationRegistry;
-import com.alien.common.gameplay.hive.spawning.ReserveSpawnUtil;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.server.level.ServerLevel;
@@ -10,7 +9,6 @@ import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.Mob;
-import net.minecraft.world.entity.MobSpawnType;
 import net.minecraft.world.phys.AABB;
 import org.jetbrains.annotations.Nullable;
 
@@ -92,33 +90,27 @@ final class ConvoyMaterialization {
             }
         };
 
+        // ⭐⭐ A GUARANTEE THAT CANNOT BE MET NO LONGER KILLS THE WAVE — IT IS JUST NOT MET.
+        //
+        // ⚠⚠ THIS WAS THE "GOT TO 5TH WAVE THEN NOTHING SPAWNED AT ALL" BUG. Returning List.of() here made
+        // spawnNextRaidWave return 0, and its own early-out is composition().getCount() <= 0 - which was FALSE,
+        // because the composition was not empty, it was full of the WRONG CASTES. The later waves guarantee heavies
+        // (praetorian, crusher, harbinger); once those were spent the raid could never field another wave AND never
+        // read as finished, so it hung forever holding ~50 banked members hostage - which is what starved the hive's
+        // own carve sites in the same log ("unstaffed - no free drones, nothing in reserve").
+        //
+        // selectFromPools appends as it goes and only reports failure when it cannot fill the FULL count, so the
+        // partial result is already in `selected` and is kept. A raid that has spent its heavies now throws its
+        // drones instead of standing still: the wave is weaker, which is the correct consequence of having killed
+        // its elites, rather than silence.
         for (var guarantee : waveConfig.guaranteed()) {
-            if (
-                !selectFromPools(
-                    selected,
-                    selectedCounts,
-                    inventory,
-                    guarantee.pools(),
-                    guarantee.count(),
-                    level
-                )
-            ) {
-                return List.of();
-            }
+            selectFromPools(selected, selectedCounts, inventory, guarantee.pools(), guarantee.count(), level);
         }
 
-        if (
-            !selectFromPools(
-                selected,
-                selectedCounts,
-                inventory,
-                waveConfig.pools(),
-                desiredCount - selected.size(),
-                level
-            )
-        ) {
-            return List.of();
-        }
+        // Same rule for the general fill: take what it managed. Only a wave that could raise NOBODY is empty, and
+        // that now means the composition is genuinely exhausted - which is exactly the condition the spent check in
+        // LineageConvoyTickTask keys on to send the raid home.
+        selectFromPools(selected, selectedCounts, inventory, waveConfig.pools(), desiredCount - selected.size(), level);
 
         return selected;
     }
@@ -169,7 +161,6 @@ final class ConvoyMaterialization {
                 continue;
             }
 
-            ReserveSpawnUtil.markSpawnedFromReserves(spawned);
             if (spawned instanceof Mob mob) {
                 mob.setTarget(targetPlayer);
                 if (!(convoy instanceof Convoy.Raid)) {
@@ -203,7 +194,6 @@ final class ConvoyMaterialization {
                 continue;
             }
 
-            ReserveSpawnUtil.markSpawnedFromReserves(spawned);
             if (spawned instanceof Mob mob) {
                 mob.setTarget(targetPlayer);
             }
@@ -321,7 +311,8 @@ final class ConvoyMaterialization {
             0.0F
         );
         if (entity instanceof Mob mob) {
-            mob.finalizeSpawn(level, level.getCurrentDifficultyAt(spawnPos), MobSpawnType.MOB_SUMMONED, null);
+            com.alien.common.gameplay.hive.spawning.ReserveSpawnUtil
+                .finalizePrepaidSpawn(level, mob, spawnPos);
         }
         level.addFreshEntityWithPassengers(entity);
         return entity;

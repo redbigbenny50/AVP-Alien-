@@ -11,6 +11,7 @@ import com.alien.fabric.data.lang.en_us.provider.EnUsCreativeModeTabProvider;
 import com.alien.fabric.data.lang.en_us.provider.EnUsDamageTypeTagProvider;
 import com.alien.fabric.data.lang.en_us.provider.EnUsEntityProvider;
 import com.alien.fabric.data.lang.en_us.provider.EnUsEntityTypeTagProvider;
+import com.alien.fabric.data.lang.en_us.provider.EnUsGameRuleProvider;
 import com.alien.fabric.data.lang.en_us.provider.EnUsItemProvider;
 import com.alien.fabric.data.lang.en_us.provider.EnUsItemTagProvider;
 import com.alien.fabric.data.lang.en_us.provider.EnUsMobEffectTagProvider;
@@ -39,12 +40,20 @@ public class EnglishLanguageProvider extends FabricLanguageProvider {
         // Death messages
         // Boss bar shown while a queen is DOWN. This lived only in the generated en_us.json and would have been
         // wiped by the next datagen run, leaving the raw key on screen.
+        // \u26a0 %s is the royal's own name, so an empress does not announce herself as a queen. The old
+        // queen-specific key is KEPT so an existing resource pack or translation does not suddenly resolve to
+        // nothing; nothing in the mod asks for it any more.
         builder.add("boss.avp_alien.queen_incapacitated", "Queen \u2014 Incapacitated");
+        builder.add("boss.avp_alien.royal_incapacitated", "%s \u2014 Incapacitated");
         builder.add(
             "message.avp_alien.inhibitor.not_subdued",
             "The queen isn't subdued \u2014 down her, catch her hibernating, or chain her fully"
         );
         builder.add("message.avp_alien.inhibitor.already_attached", "This queen already has an inhibitor");
+        // Oct 3 - capture-chain refusals (CaptureChainItem). [stated] "it will say anchor too far".
+        builder.add("message.avp_alien.capture_chain.anchor_too_far", "Anchor too far");
+        builder.add("message.avp_alien.capture_chain.no_room", "She can't take any more chains");
+        builder.add("message.avp_alien.capture_chain.shackles_broken", "The queen breaks her shackles");
 
         builder.add("death.attack.acid", "%1$s vaporized in acid");
         builder.add("death.attack.chestbursting", "%1$s gave birth");
@@ -126,6 +135,9 @@ public class EnglishLanguageProvider extends FabricLanguageProvider {
 
         // Configs
         EnUsConfigProvider.CONSUMER.accept(builder);
+
+        // Game rules - names and tooltips on the Edit Game Rules screen
+        EnUsGameRuleProvider.CONSUMER.accept(builder);
 
         // Tags
         EnUsBiomeTagProvider.CONSUMER.accept(builder);

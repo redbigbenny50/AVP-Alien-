@@ -103,6 +103,24 @@ public final class HiveVents {
         int surfaceBandBlocks
     ) {
         var chunk = new net.minecraft.world.level.ChunkPos(vent);
+
+        // \u2b50\u2b50\u2b50 BUILD-FREE: INSIDE THE SLAB IS STRUCTURE. THE SLAB *IS* THE HIVE WHEN NOTHING IS BUILT.
+        //
+        // \u26a0\u26a0 structurePieceByChunk is EMPTY in this mode, so the ordinary test can never pass and EVERY vent
+        // would fall through to SURFACE or FRONTIER. Inside a prebuilt base that is badly wrong twice over: the
+        // heightmap reports the ROOF, so top-floor vents would read SURFACE, and with surface parties switched off
+        // (which is what an indoor map wants) those doors would belong to a party type that never runs. Defenders
+        // would have almost nowhere legal to emerge from.
+        //
+        // \u2b50 THIS ALSO DELIVERS [stated] "allow player place vents to also count if they are in the slab" for
+        // free, because classification is by POSITION and not by placer - a mapmaker's hand-placed vent in the
+        // reactor corridor is indistinguishable from one a drone made, which is exactly what he asked for.
+        if (com.alien.common.gameplay.hive.config.BuildFreeMode.isEnabled()) {
+            return location.claimedChunks().contains(chunk) && location.withinSlab(vent.getY())
+                ? VentKind.STRUCTURE
+                : isNearSurface(level, vent, surfaceBandBlocks) ? VentKind.SURFACE : VentKind.FRONTIER;
+        }
+
         if (location.structurePieceByChunk().containsKey(chunk) && location.withinSlab(vent.getY())) {
             return VentKind.STRUCTURE;
         }
@@ -223,7 +241,7 @@ public final class HiveVents {
             return Optional.empty();
         }
 
-        if (!ignoreProximity && traveller.blockPosition().distSqr(target) < LEG_WORTHWHILE_DIST_SQUARED) {
+        if (!ignoreProximity && traveller.blockPosition().distSqr(target) < LEG_WORTHWHILE_DIST_SQUARED && isShortWalk(traveller, target)) {
             return Optional.empty();
         }
 
@@ -248,6 +266,34 @@ public final class HiveVents {
 
         return Optional.of(new DuctLeg(entry, exit));
     }
+
+    /**
+     * ⭐ Oct 2 - "CLOSE" MEANS CLOSE ON FOOT, NOT AS THE CROW FLIES.
+     * <p>
+     * [stated] the case the ducts exist for: room D "on the other side of a hallway they have to snake around to". The
+     * old gate measured a straight line, so room D 15 blocks away through the wall but 60 blocks round the corridor was
+     * "too close for a duct" and the drone walked the long way. Below the straight-line threshold the WALK is now
+     * measured: walking stays the answer only when it reaches the target and its route is no more than
+     * {@link #DETOUR_FACTOR} times the straight line. A partial path, no path, or a long detour all take the duct.
+     * </p>
+     * <p>
+     * One path search per leg PLAN, not per tick - callers plan once per job (and {@code DuctRouting} throttles).
+     * </p>
+     */
+    private static boolean isShortWalk(LivingEntity traveller, BlockPos target) {
+        if (!(traveller instanceof net.minecraft.world.entity.Mob mob)) {
+            return true; // nothing to measure with - keep the old behaviour
+        }
+        var path = mob.getNavigation().createPath(target, 1);
+        if (path == null || !path.canReach()) {
+            return false;
+        }
+        var straight = Math.sqrt(traveller.blockPosition().distSqr(target));
+        return path.getNodeCount() <= straight * DETOUR_FACTOR + 4;
+    }
+
+    /** How much longer than the straight line a walk may be before the duct is taken instead. */
+    private static final double DETOUR_FACTOR = 1.6;
 
     public static boolean ductTravel(LivingEntity traveller, BlockPos entryVent, BlockPos exitVent) {
         var level = traveller.level();
@@ -283,6 +329,52 @@ public final class HiveVents {
      *
      * @return how many vents were promoted
      */
+    /**
+     * ⭐⭐ RE-MARKS VENTS THAT ARE SITTING IN SOMEBODY ELSE'S TERRITORY AS INVADER DOORS.
+     * <p>
+     * ⚠⚠ EXISTING WORLDS NEED THIS. {@code VentKind.INVADER} was declared but never assigned, so every assault vent
+     * ever dug is currently labelled SURFACE - indistinguishable from the defending hive's own emergence points. New
+     * placements are handled at the choke point in {@code VentPlacement}; this is what fixes the ones already in the
+     * ground.
+     * </p>
+     * <p>
+     * ⚠ ONLY SURFACE AND FRONTIER ARE CONSIDERED. An INTERIOR or STRUCTURE vent inside foreign territory is a vent
+     * whose hive lost the ground around it, not an invader's door - re-marking those would turn every conquered hive's
+     * own tunnels into assault entrances.
+     * </p>
+     * <p>
+     * ⚠ NOT AN INFERENCE FROM POSITION - this is the same placement-time fact, applied late. {@code classifyUntagged}
+     * still must never return INVADER, and does not.
+     * </p>
+     */
+    public static int remarkInvaderVents(
+        net.minecraft.server.level.ServerLevel level,
+        com.alien.common.gameplay.hive.location.HiveLocation location
+    ) {
+        var remarked = 0;
+        for (var kind : new VentKind[] { VentKind.SURFACE, VentKind.FRONTIER }) {
+            for (var vent : new java.util.ArrayList<>(location.ventManager().ventsOfKind(kind))) {
+                // ⚠ No chunk load just to relabel - the territory test reads the registry, but the block entity
+                // update below needs the chunk. Skipped ones are picked up next time the area is loaded.
+                if (!level.hasChunk(vent.getX() >> 4, vent.getZ() >> 4)) {
+                    continue;
+                }
+                if (!VentPlacement.isInsideForeignTerritory(level, vent, location)) {
+                    continue;
+                }
+                location.ventManager().addVent(vent, VentKind.INVADER);
+                if (
+                    level.getBlockEntity(vent) instanceof com.alien.common.gameplay.block.entity.resin.vent.ResinVentBlockEntity blockEntity
+                ) {
+                    blockEntity.setKind(VentKind.INVADER);
+                    blockEntity.markKindCurrent();
+                }
+                remarked++;
+            }
+        }
+        return remarked;
+    }
+
     public static int reclassifyStaleFrontierVents(
         net.minecraft.server.level.ServerLevel level,
         com.alien.common.gameplay.hive.location.HiveLocation location,

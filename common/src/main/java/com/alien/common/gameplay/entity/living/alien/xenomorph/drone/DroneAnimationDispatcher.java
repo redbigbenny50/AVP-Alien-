@@ -55,6 +55,15 @@ public class DroneAnimationDispatcher {
         .play(AzAlienAnimationUtil.BODY, DroneAnimationRefs.WALK_CARRY_ANIMATION_NAME, AzPlayBehaviors.LOOP)
         .build();
 
+    /**
+     * Standing still with a load: the carry clip held on its last frame - arms stay round the host. Same pattern as
+     * {@code CRAWL_HOLD}. There is no idle-carry clip, and the plain idle clip has no arm keys at all, so without this
+     * a drone that stopped (queued at a vent to hand a host in) dropped its arms to its sides.
+     */
+    private static final AzCommand<Drone> WALK_CARRY_HOLD = AzCommand.<Drone>idempotent()
+        .play(AzAlienAnimationUtil.BODY, DroneAnimationRefs.WALK_CARRY_ANIMATION_NAME, AzPlayBehaviors.HOLD_ON_LAST_FRAME)
+        .build();
+
     private final Drone drone;
 
     public DroneAnimationDispatcher(Drone drone) {
@@ -106,6 +115,11 @@ public class DroneAnimationDispatcher {
     /** Laden gait: an egg on the back, or a host held to the chest. */
     public void walkCarry() {
         WALK_CARRY.dispatchForEntity(drone);
+    }
+
+    /** Laden and standing still: the carry pose, held. */
+    public void walkCarryHold() {
+        WALK_CARRY_HOLD.dispatchForEntity(drone);
     }
 
     /**

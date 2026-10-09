@@ -21,6 +21,8 @@ import com.alien.common.gameplay.entity.living.alien.xenomorph.ai.lunge.LungeSen
 import com.alien.common.gameplay.entity.living.alien.xenomorph.ai.resin.ResinActions;
 import com.alien.common.gameplay.entity.living.alien.xenomorph.ai.resin.ResinGoals;
 import com.alien.common.gameplay.entity.living.alien.xenomorph.ai.resin.ResinSensors;
+import com.alien.common.gameplay.entity.living.alien.xenomorph.ai.swim.SwimActions;
+import com.alien.common.gameplay.entity.living.alien.xenomorph.ai.swim.SwimSensors;
 import com.alien.common.gameplay.entity.living.alien.xenomorph.ai.vent.VentActions;
 import com.alien.common.gameplay.entity.living.alien.xenomorph.ai.vent.VentGoals;
 import com.alien.common.gameplay.entity.living.alien.xenomorph.ai.vent.VentSensors;
@@ -35,6 +37,7 @@ public class XenomorphGOAP {
         return graphBuilder
             .apply(XenomorphGOAP::addSensorsPackage)
             .apply(XenomorphGOAP::addCombatPackage)
+            .apply(XenomorphGOAP::addSwimPackage)
             .apply(XenomorphGOAP::addIdlePackage);
     }
 
@@ -163,6 +166,29 @@ public class XenomorphGOAP {
         graphBuilder.addSensor(GOAPSensors.NEAREST_ATTACKABLE_TARGET);
         graphBuilder.addSensor(GOAPSensors.HAS_ATTACK_TARGET);
         graphBuilder.addSensor(CombatSensors.IS_TARGET_IN_MELEE_RANGE);
+
+        return graphBuilder;
+    }
+
+    /**
+     * ⚠⚠⚠ THIS PACKAGE DID NOT EXIST AND {@code SwimActions} WAS DEAD CODE. A repo-wide search for {@code SwimActions},
+     * {@code SwimSensors} or {@code SWIM_TO_LAND} returned NOTHING outside the swim folder itself: the action, its
+     * sensor and its perform callback were all fully written and had never been added to any graph, so no xenomorph has
+     * ever run them. What looked like swimming was always combat pathing that happened to cross water — which is why
+     * dropping one in a lake with no target left it floating in place.
+     * <p>
+     * Both crossings live here. {@code SWIM_TO_LAND} needs a target out of the water; {@code SWIM_TO_SHORE} needs no
+     * target at all. Their preconditions are exact complements, so exactly one is ever eligible.
+     * </p>
+     */
+    public static <T extends Xenomorph> Graph.Builder<T> addSwimPackage(Graph.Builder<T> graphBuilder) {
+        graphBuilder.addGoal(SwimActions.REACH_DRY_LAND);
+
+        graphBuilder.addAction(SwimActions.SWIM_TO_LAND);
+        graphBuilder.addAction(SwimActions.SWIM_TO_SHORE);
+
+        graphBuilder.addSensor(SwimSensors.NEEDS_WATER_TO_LAND_TRANSITION);
+        graphBuilder.addSensor(SwimSensors.IS_STRANDED_IN_WATER);
 
         return graphBuilder;
     }

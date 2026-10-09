@@ -45,11 +45,64 @@ public final class HostParking {
      * xenomorphs do not KILL them. A marine webbed in a chamber is meat in storage, not an enemy on the field.
      */
     public static boolean isParked(LivingEntity host) {
+        if (host instanceof Player player) {
+            return isPlayerParked(player);
+        }
+
         return host instanceof Mob mob
             && mob.isNoAi()
             && host instanceof Host hostState
             && hostState.getEmbedGameTime() != Long.MIN_VALUE;
     }
+
+    /**
+     * Oct 9 - A WEBBED PLAYER IS CARGO TOO, WHILE THEY STAY IN THE WEB.
+     * <p>
+     * [tester] "When abducted by drones and sent back to the hive they make no attempt to provide a facehugger ... the
+     * moment you're teleported in and placed in resin another drone or any xeno simply kills you". Log: "host
+     * LordOfRoaches delivered to a host chamber spot", then "LordOfRoaches was slain by Drone" a moment later.
+     * {@link #isParked} required a MOB with its AI switched off - a player is neither, so a delivered player was never
+     * counted as the hive's cargo: every xeno in the chamber saw an ordinary enemy and killed them before the egg could
+     * arrive (the egg is only sent after the host has settled).
+     * <p>
+     * A player is never frozen - the webbing slows them, they can always crawl out. So a player counts as parked only
+     * while they are still at the spot they were webbed into; once they leave it they are an escaping prisoner, the
+     * stamp is cleared, and the hive treats them as it would anyone (the escape window from {@link #embed} still stops
+     * an instant re-grab).
+     */
+    private static boolean isPlayerParked(Player player) {
+        if (!(player instanceof Host hostState) || hostState.getEmbedGameTime() == Long.MIN_VALUE) {
+            return false;
+        }
+
+        var spot = PLAYER_SPOTS.get(player);
+
+        if (spot == null || player.isCreative() || player.isSpectator() || !player.isAlive()) {
+            return false;
+        }
+
+        var dx = player.getX() - (spot.getX() + 0.5);
+        var dz = player.getZ() - (spot.getZ() + 0.5);
+        var dy = player.getY() - spot.getY();
+
+        if (dx * dx + dz * dz <= PLAYER_SPOT_RADIUS * PLAYER_SPOT_RADIUS && Math.abs(dy) <= 1.5) {
+            return true;
+        }
+
+        // Crawled out: no longer cargo.
+        if (!player.level().isClientSide) {
+            hostState.setEmbedGameTime(Long.MIN_VALUE);
+            PLAYER_SPOTS.remove(player);
+        }
+
+        return false;
+    }
+
+    /** Oct 9 - how far a webbed player may shift in the web and still count as held there, in blocks. */
+    private static final double PLAYER_SPOT_RADIUS = 1.25;
+
+    /** Oct 9 - where each webbed player was embedded (server side; entries die with the player object). */
+    private static final java.util.Map<Player, BlockPos> PLAYER_SPOTS = new java.util.WeakHashMap<>();
 
     /** Break the webbing around {@code webPos} and any captive it was holding walks free. */
     public static void releaseAt(ServerLevel level, BlockPos webPos) {
@@ -81,6 +134,10 @@ public final class HostParking {
             hostState.setEmbedGameTime(Long.MIN_VALUE);
         }
 
+        if (host instanceof Player player) {
+            PLAYER_SPOTS.remove(player);
+        }
+
         // Give the rescuer a chance to actually lead it out, rather than the nearest drone plucking it straight back.
         HostGrabImmunity.grantImmunity(host, HostGrabImmunity.EMBED_ESCAPE_DURATION_TICKS);
     }
@@ -107,6 +164,7 @@ public final class HostParking {
             // Losing the struggle is not the end of the line: the webbing slows a player but never holds them, so give
             // them a window in which the hive will not simply pluck them off the wall again while they crawl out.
             HostGrabImmunity.grantImmunity(host, HostGrabImmunity.EMBED_ESCAPE_DURATION_TICKS);
+            PLAYER_SPOTS.put((Player) host, spot.immutable());
         }
 
         if (host instanceof Host hostState) {

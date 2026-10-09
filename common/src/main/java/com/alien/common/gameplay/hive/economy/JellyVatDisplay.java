@@ -55,12 +55,11 @@ public final class JellyVatDisplay {
     }
 
     private static void syncBank(ServerLevel level, HiveLocation location, JellyType type) {
-        var chambers = chambersFor(location, type);
+        var chambers = chambersFor(level, location, type);
         if (chambers.isEmpty()) {
             return;
         }
         var vatBlock = AlienBlocks.JELLY_VAT.get();
-        int slotRow = location.hiveFloorY() + 1;
 
         // Furniture maintenance: prune stray vats (salvaging their contents into this bank - never destroy jelly),
         // regrow missing vats on their slots, and keep slot vats typed to the chamber's jelly.
@@ -69,6 +68,19 @@ public final class JellyVatDisplay {
                 continue;
             }
             var slots = HiveChamberSlots.vatSlots(level, location, chamber);
+            // 🚨 Oct 1: per chamber, not per hive. In build-free hiveFloorY() is the bottom of the 48-block band, so
+            // the
+            // stray sweep scanned a layer of rock 23 blocks under the queen. A cluster's row is its measured floor.
+            int slotRow;
+            if (com.alien.common.gameplay.hive.config.BuildFreeMode.isEnabled() && !location.isEndStyleHive()) {
+                var clusterFloor = com.alien.common.gameplay.hive.config.BuildFreeClusters.clusterFloorY(level, location, chamber);
+                if (clusterFloor == HiveLocation.NO_GROUND) {
+                    continue;
+                }
+                slotRow = clusterFloor + 1;
+            } else {
+                slotRow = location.hiveFloorY() + 1;
+            }
             var scan = new BlockPos.MutableBlockPos();
             for (int x = chamber.getMinBlockX(); x <= chamber.getMaxBlockX(); x++) {
                 for (int z = chamber.getMinBlockZ(); z <= chamber.getMaxBlockZ(); z++) {
@@ -169,7 +181,7 @@ public final class JellyVatDisplay {
         if (missing <= 0) {
             return;
         }
-        var chambers = chambersFor(location, type);
+        var chambers = chambersFor(level, location, type);
         java.util.Collections.reverse(chambers); // royal: vaults first, royal chambers last
         int withdrawn = 0;
         for (ChunkPos chamber : chambers) {
@@ -212,7 +224,31 @@ public final class JellyVatDisplay {
      * The chambers displaying a bank. ROYAL: royal chambers first (fill first, drain last), then vaults. SCOURGE: the
      * scourge chamber(s). Stable order.
      */
-    private static List<ChunkPos> chambersFor(HiveLocation location, JellyType type) {
+    private static List<ChunkPos> chambersFor(ServerLevel level, HiveLocation location, JellyType type) {
+        // \u2b50\u2b50 BUILD-FREE: SCATTERED VAT CLUSTERS INSTEAD OF VAULT CHAMBERS.
+        //
+        // \u2b50 THESE ARE NOT DECORATION, AND THAT IS WHY THEY EXIST AT ALL. [stated] "the jelly vats that survive
+        // would convert to the irradiated jelly like normal" - NukeConversion retints physical vats when a hive is
+        // nuked, so a mode with no vats anywhere would quietly delete the irradiated conversion's subject matter.
+        // He added the clusters on that reasoning, and they double as the mode's loot.
+        //
+        // \u26a0 EVERY VAT OPERATION FUNNELS THROUGH THIS ONE METHOD - fill, drain, display, shortfall cover, both
+        // jelly types and both overloads of each. Routing the mode here rather than at the four vatSlots call sites
+        // is what stops one of them being forgotten and a hive ending up with vats it fills but never drains.
+        if (com.alien.common.gameplay.hive.config.BuildFreeMode.isEnabled()) {
+            var center = new ChunkPos(location.centerPos());
+            var clusters = type == JellyType.ROYAL
+                ? com.alien.common.gameplay.hive.config.BuildFreeClusters.jellyClusterChunks(location, center)
+                : com.alien.common.gameplay.hive.config.BuildFreeClusters.scourgeClusterChunks(location, center);
+            for (var cluster : clusters) {
+                if (level.isLoaded(cluster.getWorldPosition())) {
+                    com.alien.common.gameplay.hive.config.BuildFreeClusters
+                        .stampJellyCluster(level, location, cluster);
+                }
+            }
+            return clusters;
+        }
+
         var primary = new ArrayList<ChunkPos>();
         var secondary = new ArrayList<ChunkPos>();
         for (var entry : location.structurePieceByChunk().entrySet()) {

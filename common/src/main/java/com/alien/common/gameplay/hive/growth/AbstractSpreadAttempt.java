@@ -90,6 +90,17 @@ public final class AbstractSpreadAttempt {
     ) {
         var config = HiveLocationRegistry.INSTANCE.config();
 
+        // \u26a0 Oct 3 - NEVER IN AN END-STYLE DIMENSION. [stated] End hives are "player-brought - no expansion
+        // mechanics".
+        // The loaded tick already skips spreading for them, but this is ALSO called from the unloaded slow tick and
+        // from
+        // the reserve-unload handler, neither of which asked - so an unloaded End hive could mint a daughter on paper
+        // at
+        // Y 64 over the void and convoy her into nothing. Asked here, once, for every caller.
+        if (com.alien.common.gameplay.hive.dimension.EndStyleHiveRules.isEndStyle(server, sourceLocation)) {
+            return null;
+        }
+
         // Cooldown.
         var remainingCooldownTicks = remainingCooldownTicks(sourceLocation, currentTick, config);
         if (remainingCooldownTicks > 0L) {
@@ -173,7 +184,11 @@ public final class AbstractSpreadAttempt {
         }
 
         // A hive seeds exactly two daughters in its lifetime and then stops forever, whatever else it has.
-        if (sourceLocation.daughterHivesFounded() >= config.maxDaughterHivesPerLocation()) {
+        if (
+            sourceLocation.daughterHivesFounded() >= com.alien.common.gameplay.hive.config.BuildFreeMode.daughterSlots(
+                config.maxDaughterHivesPerLocation()
+            )
+        ) {
             record(
                 sourceLocation,
                 lineage,
@@ -184,7 +199,7 @@ public final class AbstractSpreadAttempt {
                 "Source has seeded "
                     + sourceLocation.daughterHivesFounded()
                     + "/"
-                    + config.maxDaughterHivesPerLocation()
+                    + com.alien.common.gameplay.hive.config.BuildFreeMode.daughterSlots(config.maxDaughterHivesPerLocation())
                     + " daughter hives."
             );
             return null;

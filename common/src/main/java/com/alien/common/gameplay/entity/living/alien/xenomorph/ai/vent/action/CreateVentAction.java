@@ -35,6 +35,9 @@ public class CreateVentAction {
     /** How far a builder will look for somewhere to put a vent. */
     private static final int SEARCH_RADIUS = 5;
 
+    /** Path searches one vent attempt may spend, nearest candidate first. */
+    private static final int VENT_PATH_PROBES = 4;
+
     /**
      * The openness test. A frontier vent is meant to sit at a cave mouth or an opening - somewhere a party can actually
      * pour out of - not wedged into a crevice or flat against a boulder in a dirt tunnel. So the cell must have real
@@ -69,7 +72,12 @@ public class CreateVentAction {
         }
 
         // Walk to the mouth itself. Unlike the old buried vent, this cell is open ground - it can actually be stood in.
-        var result = NeoMoveToPosAction.perform(context, Vec3.atBottomCenterOf(ventSpot), 0.5);
+        // ⚠ ventSpot is reassigned above, so it cannot be captured by a lambda directly.
+        var ventSpotFinal = ventSpot;
+        var result = com.alien.common.gameplay.hive.diag.DiagProfiler.timed(
+            "path/CreateVentAction",
+            () -> NeoMoveToPosAction.perform(context, Vec3.atBottomCenterOf(ventSpotFinal), 0.5)
+        );
 
         return switch (result) {
             case FINISHED -> {
@@ -183,12 +191,24 @@ public class CreateVentAction {
             && location.withinSlab(pos.getY());
     }
 
+    /** True outside build-free; inside it, the spot must satisfy {@code BuildFreeVents.allows}. */
+    private static boolean buildFreeSpacingAllows(Xenomorph xenomorph, BlockPos pos) {
+        var location = HiveLocationRegistry.INSTANCE.getByChunk(
+            xenomorph.level().dimension(),
+            new net.minecraft.world.level.ChunkPos(pos)
+        );
+        if (location == null || !com.alien.common.gameplay.hive.vent.BuildFreeVents.applies(location)) {
+            return true;
+        }
+        return com.alien.common.gameplay.hive.vent.BuildFreeVents.allows(location, pos);
+    }
+
     private static @Nullable BlockPos findVentSpot(Xenomorph xenomorph) {
         var level = xenomorph.level();
         var origin = xenomorph.blockPosition();
 
         BlockPos best = null;
-        double bestDistance = Double.MAX_VALUE;
+        var viable = new java.util.ArrayList<BlockPos>();
 
         for (
             var candidate : BlockPos.betweenClosed(
@@ -213,19 +233,22 @@ public class CreateVentAction {
             if (isInsideBuiltStructure(xenomorph, pos)) {
                 continue; // a corridor is not a cave mouth - see below
             }
-
-            var distance = pos.distSqr(origin);
-            if (distance >= bestDistance) {
-                continue;
+            if (!buildFreeSpacingAllows(xenomorph, pos)) {
+                continue; // Oct 1 - build-free's per-storey / chunk-gap / per-hive rule, see BuildFreeVents
             }
 
-            var path = xenomorph.getNavigation().createPath(pos, 1);
-            if (path == null || !path.canReach()) {
-                continue;
-            }
+            viable.add(pos.immutable());
+        }
 
-            best = pos;
-            bestDistance = distance;
+        // ⭐ Oct 2 - NEAREST FIRST, AT MOST VENT_PATH_PROBES SEARCHES. Candidates came in grid order and every closer
+        // one
+        // ran a full path search, so one attempt could run a dozen. Sorted, the first reachable one IS the nearest.
+        viable.sort(java.util.Comparator.comparingDouble(candidate -> candidate.distSqr(origin)));
+        for (var i = 0; i < Math.min(viable.size(), VENT_PATH_PROBES); i++) {
+            var path = xenomorph.getNavigation().createPath(viable.get(i), 1);
+            if (path != null && path.canReach()) {
+                return viable.get(i);
+            }
         }
 
         return best;

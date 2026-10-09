@@ -161,7 +161,7 @@ public final class EmpressCandidatePicker {
             // founds one, so a pre-founding queen would be stranded.
             return null;
         }
-        if (queen.isContained() || queen.isInhibited()) {
+        if (com.alien.common.gameplay.hive.lifecycle.QueenCaptivity.isCaptive(queen)) {
             // Bound or inhibited queens can never become empress.
             return null;
         }

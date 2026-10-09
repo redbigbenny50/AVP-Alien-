@@ -38,9 +38,8 @@ public final class LoadedBiomassTicker {
         var income = (int) Math.round(perSec);
 
         if (income > 0) {
-            var cap = BiomassIncome.biomassCap(location, config);
-            var newBiomass = Math.min(cap, location.biomass() + income);
-            location.setBiomass(newBiomass);
+            // Oct 8: never lowers a pool banked while unloaded.
+            BiomassIncome.addUpToCap(location, income, BiomassIncome.biomassCap(location, config));
         }
 
         // Even if income is 0 this tick (no loaded entities), bump the growth tick so the scan task's elapsed

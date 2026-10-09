@@ -4,8 +4,10 @@ import com.alien.common.gameplay.block.capture.anchor.AnchorBlock;
 import com.alien.common.gameplay.block.entity.capture.anchor.AnchorBlockEntity;
 import com.alien.common.gameplay.capture.CaptureChainInteraction;
 import com.alien.common.gameplay.capture.CaptureHoldManager;
+import com.alien.common.gameplay.entity.living.alien.xenomorph.queen.Queen;
 import com.alien.common.registry.init.item.AlienItems;
 import net.minecraft.core.BlockPos;
+import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResult;
@@ -29,6 +31,10 @@ import org.jetbrains.annotations.NotNull;
  * Merely grabbing/letting go of a mob does not consume anything.
  */
 public class CaptureChainItem extends Item {
+
+    public static final String ANCHOR_TOO_FAR_KEY = "message.avp_alien.capture_chain.anchor_too_far";
+
+    public static final String NO_ROOM_KEY = "message.avp_alien.capture_chain.no_room";
 
     public CaptureChainItem(Properties properties) {
         super(properties);
@@ -85,6 +91,24 @@ public class CaptureChainItem extends Item {
         // Hand the mob the player is currently holding over to the anchor.
         Mob held = CaptureHoldManager.heldBy(serverLevel, player);
         if (held != null) {
+            // \u2b50 Oct 3 - [stated] "if you try to place a chain on an anchor thats detected as farther than 24 from
+            // the
+            // center it will say anchor too far. if youre adding additional after shes caught same rule cant be further
+            // than 24 from the established center." Refused BEFORE bind(): the anchor must never think it holds a
+            // queen whose bind manager turned the chain away. She stays in the player's hand to try another anchor.
+            if (held instanceof Queen queen) {
+                var binds = queen.getBindManager();
+                if (!binds.hasRoomForChain() || !binds.canAttachFrom(pos)) {
+                    player.displayClientMessage(
+                        Component.translatableWithFallback(
+                            binds.hasRoomForChain() ? ANCHOR_TOO_FAR_KEY : NO_ROOM_KEY,
+                            binds.hasRoomForChain() ? "Anchor too far" : "She can't take any more chains"
+                        ),
+                        true
+                    );
+                    return InteractionResult.FAIL;
+                }
+            }
             anchor.bind(held);
             CaptureHoldManager.release(held);
             if (!player.getAbilities().instabuild) {

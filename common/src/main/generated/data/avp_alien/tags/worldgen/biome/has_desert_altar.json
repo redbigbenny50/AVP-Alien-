@@ -1,5 +1,17 @@
 {
   "values": [
-    "minecraft:desert"
+    "minecraft:desert",
+    {
+      "id": "ad_astra:martian_wastelands",
+      "required": false
+    },
+    {
+      "id": "ad_astra:martian_canyon_creek",
+      "required": false
+    },
+    {
+      "id": "ad_astra:venus_wastelands",
+      "required": false
+    }
   ]
 }

@@ -148,8 +148,28 @@ public final class HiveLocationReserves {
         return false;
     }
 
+    /**
+     * ⭐⭐⭐ THE IDENTITY LIST COUNTS HERE TOO. THIS IS WHY A HIVE SHOWING "1/280" COULD FIELD NOTHING.
+     * <p>
+     * ⚠⚠ THE MOD ALREADY LEARNED THIS ONCE AND ONLY FIXED HALF OF IT. {@code VentDefenseTask.pickReserveType} carries
+     * the comment "getReliableCount, NOT getCount: getCount is the ABSTRACT bank only, so a hive whose whole population
+     * had unloaded into the IDENTITY list read as empty and picked nothing" - and then this method, one layer down,
+     * kept asking {@code underlying.getCount} alone.
+     * </p>
+     * <p>
+     * ⚠⚠ SO THE TWO DISAGREED, AND THE DISAGREEMENT WAS SILENT. pickReserveType saw the identity-banked member and
+     * returned its type; canSpawn looked only at the abstract bank, found nothing, and the caller {@code continue}d
+     * WITHOUT LOGGING. The wave then reported "could field NONE (bank 1, no reachable vent, or every mouth blocked)" -
+     * naming three causes, none of which was the real one. Nothing was blocked and no vent was unreachable: the hive
+     * simply refused to spend a member it could see.
+     * </p>
+     * <p>
+     * ⚠ Deliberately mirrors {@link #getReliableCount(EntityType)} rather than repeating its arithmetic, so the two
+     * cannot drift apart again the way these did.
+     * </p>
+     */
     public boolean canSpawn(EntityType<?> type) {
-        return accepts(type) && (underlying.getCount(type) > 0 || brood.getCount() > 0);
+        return accepts(type) && (getReliableCount(type) > 0 || brood.getCount() > 0);
     }
 
     /** Type-specific availability: main bank plus SAME-TYPE brood (wildcards are not advertised per-type). */

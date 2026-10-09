@@ -40,6 +40,20 @@ public final class VentPlacement {
      *                 from the manager - so a real surface vent sat on open ground while host hunts reported "no
      *                 near-surface vent". Placing and registering together makes that impossible to forget.
      */
+    /**
+     * Does this position sit inside a DIFFERENT live hive's claim?
+     * <p>
+     * ⚠ "Different" is the whole test. A hive placing vents throughout its own territory is ordinary business; only a
+     * vent opened in ground another hive holds is an invasion. Compared by location id rather than by lineage, so a
+     * daughter tunnelling into her mother's hive still counts - they are separate holdings even when allied.
+     * </p>
+     */
+    public static boolean isInsideForeignTerritory(Level level, BlockPos pos, HiveLocation placer) {
+        var occupant = com.alien.common.gameplay.hive.location.HiveLocationRegistry.INSTANCE
+            .getByChunk(level.dimension(), new net.minecraft.world.level.ChunkPos(pos));
+        return occupant != null && occupant.isAlive() && !occupant.id().equals(placer.id());
+    }
+
     public static void place(Level level, BlockPos ventPos, AlienVariantType variant, VentKind kind, HiveLocation location) {
         var resin = variant.resin().get();
         var resinWeb = variant.resinWeb().get();
@@ -48,8 +62,23 @@ public final class VentPlacement {
         level.setBlock(ventPos, resinVent.defaultBlockState(), Block.UPDATE_ALL);
 
         // Record what this vent is for, so nothing downstream ever has to infer it from geometry.
+        // ⭐⭐⭐ A VENT DUG INTO SOMEBODY ELSE'S TERRITORY IS AN INVADER'S DOOR, WHOEVER PLACED IT AND WHY.
+        //
+        // ⚠⚠ THIS WAS DECLARED AND NEVER WIRED. VentKind.INVADER existed, classifyUntagged correctly refused to
+        // infer it, and isPartyDoor() accepted it - but NOTHING EVER ASSIGNED IT. Every party dispatch placed
+        // SURFACE, so an assault vent inside a rival hive was indistinguishable from that hive's own emergence
+        // point, which is exactly the failure the kind was created to prevent.
+        //
+        // ⭐ DONE AT THE CHOKE POINT, not at the call sites. Every vent in the mod is placed through here, so war
+        // offensives, party dispatches into contested ground and anything written later all get it without having
+        // to remember. Patching the four current callers would have left the fifth broken.
+        //
+        // ⚠ It only fires when the ground belongs to a DIFFERENT live location - a hive venting inside its own
+        // claim is doing something completely ordinary.
+        var effectiveKind = isInsideForeignTerritory(level, ventPos, location) ? VentKind.INVADER : kind;
+
         if (level.getBlockEntity(ventPos) instanceof ResinVentBlockEntity vent) {
-            vent.setKind(kind);
+            vent.setKind(effectiveKind);
             vent.markKindCurrent();
             // Bind to the owning hive at birth, so a surface vent on unclaimed frontier ground keeps its owner
             // across reloads instead of relying on getByChunk (which only knows claimed chunks).
@@ -61,7 +90,7 @@ public final class VentPlacement {
         // Register with the owning hive's vent manager NOW, not on a later block-entity bind tick. This is the
         // single source of truth the party system queries (findSurfaceVents / findPartyVents).
         if (location != null) {
-            location.ventManager().addVent(ventPos.immutable(), kind);
+            location.ventManager().addVent(ventPos.immutable(), effectiveKind);
         }
 
         // Web every side that touches air. Xenomorphs pass through web freely; nothing else does.
@@ -87,6 +116,19 @@ public final class VentPlacement {
                 level.setBlock(pos, resin.defaultBlockState(), Block.UPDATE_ALL);
             }
         }
+    }
+
+    /**
+     * ⭐ Oct 6 - [stated] "why are xenomorphs making vents in the hive? they should not be". True if {@code pos} lies in
+     * a chunk holding one of this hive's built pieces, inside the hive's slab - the room/tunnel volume. A vent there is
+     * debris to the room upkeep (it is not part of the template), so the next repair cleared it and left its webbing
+     * floating. Same test the xenos' own vent-digging (CreateVentAction.isInsideBuiltStructure) has always used; the
+     * hive's emergency and relocation vents now use it too.
+     */
+    public static boolean isInsideBuiltStructure(HiveLocation location, BlockPos pos) {
+        return location != null
+            && location.structurePieceByChunk().containsKey(new net.minecraft.world.level.ChunkPos(pos))
+            && location.withinSlab(pos.getY());
     }
 
     /** True if this cell is open (air, or something the hive may grow through) rather than solid rock. */

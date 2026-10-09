@@ -92,6 +92,22 @@ public final class ReinforcementDispatcher {
             var reserveTotal = location.localReserves().getCountMatching(profile::matches);
             var threshold = Math.max(1, config.populationPerChunk());
 
+            // ⭐⭐⭐ A HIVE FIGHTING ANOTHER EMPIRE IS ALWAYS A RECEIVER, WHATEVER ITS BANK SAYS.
+            //
+            // [stated] the proxy war is where "she sends that hive reinforcements and a war breaks out until one of
+            // the touching hives is dead."
+            //
+            // ⚠⚠ THE SURPLUS/DEFICIT HEURISTIC BELOW HAS NO WAR AWARENESS AT ALL, and that is exactly wrong for a
+            // siege: the hive under attack is usually the one with bodies still banked, so it reads as HEALTHY and
+            // gets nothing, while a quiet hive at the far end of the empire is fed instead. The war IS the deficit.
+            //
+            // ⚠ It does not become a donor either - a hive being besieged must never be stripped to supply
+            // somebody else's quiet corner.
+            if (com.alien.common.gameplay.hive.war.AlienTerritoryWarSystem.isInEmpressWar(location)) {
+                receivers.add(location);
+                continue;
+            }
+
             if (reserveTotal >= threshold * 2) {
                 donors.add(location);
             } else if (reserveTotal < threshold / 2) {

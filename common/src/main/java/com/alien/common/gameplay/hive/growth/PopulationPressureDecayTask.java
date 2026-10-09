@@ -24,6 +24,14 @@ public final class PopulationPressureDecayTask {
     private static final long SIEGE_CLOCK_CAP_TICKS = 30L * 60L * 20L;
 
     public static void scanAll(MinecraftServer server) {
+        // ⭐ NO CHUNK DECAY IN BUILD-FREE MODE - [stated] "no decay in this mode keep it simple."
+        //
+        // ⚠ The decay floor is the FOUNDING CORE - the 3x3 a hive was born on - and that has no meaning when
+        // nothing is ever carved. Territory here is a configured box the hive fills by presence and then stops,
+        // so there is no growth curve for decay to push back against: the config number IS the territory.
+        if (com.alien.common.gameplay.hive.config.BuildFreeMode.isEnabled()) {
+            return;
+        }
         var config = HiveLocationRegistry.INSTANCE.config();
 
         for (var location : HiveLocationRegistry.INSTANCE.all()) {
@@ -31,7 +39,15 @@ public final class PopulationPressureDecayTask {
                 continue; // END-STYLE: no decay and no siege attrition - a fixed footprint is permanent while the hive
                           // lives
             }
-            if (!location.isAlive() || location.isInhibited() || location.claimedChunks().size() <= 1) {
+            if (!location.isAlive() || location.isInhibited()) {
+                continue;
+            }
+            // ⭐ AN EMPRESS-INFLUENCED HIVE DOES NOT DECAY - FIX 3, [stated] Sep 23 "a" (option a). EmpressCaps raises
+            // her
+            // hives' member ceiling but populationPerChunk was never scaled with it, so a hive she had just enlarged
+            // read as under-populated against its own footprint and the shave undid her. Her influence is the hive's
+            // protection; siege attrition stays a matter for hives with no empress behind them.
+            if (location.isEmpressInfluenced()) {
                 continue;
             }
             if (HiveLocationBootstrapProtection.isProtected(location, config)) {
@@ -78,7 +94,10 @@ public final class PopulationPressureDecayTask {
                 );
             }
 
-            while (location.claimedChunks().size() > 1 && isBelowPopulationRatio(location, config)) {
+            // ⭐⭐ THE FLOOR IS THE FOUNDING CORE, NOT ONE CHUNK. Attrition takes back EXPANSION; a hive keeps the
+            // ground it was born on until it is dead.
+            var floor = foundingCoreChunkCount(config);
+            while (location.claimedChunks().size() > floor && isBelowPopulationRatio(location, config)) {
                 var chunk = pickOutermostReleasableChunk(location);
                 if (chunk == null) {
                     break;
@@ -97,16 +116,46 @@ public final class PopulationPressureDecayTask {
             return false;
         }
 
+        // ⚠ This measures FULLNESS, not decline - a hive under its ceiling reads true whether it was ground down
+        // to that number or simply never reached it. That is tolerable now only because the founding-core floor
+        // above means the answer can never cost a hive its homeland; the ratio itself was also lowered 0.8 -> 0.5.
         var requiredPopulation = (int) Math.ceil(cap * config.minimumPopulationRatioForClaiming());
         return CastePopulation.totalTrackedPopulation(location) < requiredPopulation;
     }
 
+    /**
+     * ⭐⭐ THE GROUND A HIVE IS BORN WITH, and the floor attrition may never shave past.
+     * <p>
+     * {@code HiveLocationFoundingService.claimInitialCore} claims a square of radius
+     * {@code initialHiveLocationClaimRadiusChunks} (1 by default), so 3x3 = 9 chunks. Derived rather than hardcoded so
+     * the two cannot drift if that radius is ever retuned.
+     * </p>
+     * <p>
+     * ⚠⚠ THIS IS THE FIX FOR "CHUNK CULLING KILLED OFF HIVES EARLY", reported three times. The floor used to be ONE
+     * chunk, and because the required population scales with the chunk count the shave loop converged low: 30 adults
+     * settled at 4 chunks, 15 adults at 2, 10 adults at 2 - and 2 is exactly {@code migrationTerritoryFloorChunks}, so
+     * decay delivered small hives straight onto the evacuation trigger, which then removed the location and orphaned
+     * its founder queen. Decay can no longer reach that floor at all.
+     * </p>
+     */
+    private static int foundingCoreChunkCount(com.alien.common.gameplay.hive.config.HiveConfig config) {
+        var radius = Math.max(0, config.initialHiveLocationClaimRadiusChunks());
+        var side = 2 * radius + 1;
+        return side * side;
+    }
+
     private static @Nullable ChunkPos pickOutermostReleasableChunk(HiveLocation location) {
         var centerChunk = new ChunkPos(location.centerPos());
+        var foundingClaimTick = foundingClaimTick(location);
 
         return location.claimedChunks()
             .stream()
             .filter(chunk -> !chunk.equals(centerChunk))
+            // ⭐ EXPANSION ONLY. Every chunk of the founding core is claimed in one call and so shares a single
+            // claim tick; anything stamped with it is homeland and is never up for release. This is the precise
+            // version of the count floor above - it still holds when the core came out smaller than 3x3 because a
+            // neighbouring hive already owned some of those chunks.
+            .filter(chunk -> location.chunkClaimTicks().getOrDefault(chunk, 0L) > foundingClaimTick)
             // Never decay a chunk holding BUILT STRUCTURE: population pressure shaves abstract territory
             // only. A population dip (raid losses, economy stalls) must not de-claim the hive's own halls -
             // the chamber systems (jelly, eggs, vents) all key on claimed structure chunks.
@@ -120,6 +169,22 @@ public final class PopulationPressureDecayTask {
                     .thenComparingInt(chunk -> chunk.z)
             )
             .orElse(null);
+    }
+
+    /**
+     * The claim tick shared by the founding core. Anything stamped later than this was expanded into.
+     * <p>
+     * ⚠ FAILS CLOSED BY DESIGN. A location saved before {@code chunkClaimTicks} was populated reports 0 for every
+     * chunk, so the minimum is 0, so nothing is strictly greater and NOTHING is shaved. A legacy hive keeping all its
+     * territory is the safe direction to be wrong in.
+     * </p>
+     */
+    private static long foundingClaimTick(HiveLocation location) {
+        var earliest = Long.MAX_VALUE;
+        for (var chunk : location.claimedChunks()) {
+            earliest = Math.min(earliest, location.chunkClaimTicks().getOrDefault(chunk, 0L));
+        }
+        return earliest == Long.MAX_VALUE ? 0L : earliest;
     }
 
     private static int chebyshev(ChunkPos a, ChunkPos b) {

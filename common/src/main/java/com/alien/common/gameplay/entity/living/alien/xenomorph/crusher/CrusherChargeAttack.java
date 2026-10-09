@@ -42,7 +42,25 @@ public final class CrusherChargeAttack {
 
     private static final int MAX_GROUND_LOSS_TICKS = 12;
 
-    private static final int COOLDOWN_IN_TICKS = 4 * 20;
+    /**
+     * How long before he may charge again, measured FROM THE START OF THE CHARGE.
+     * <p>
+     * 🚨 THIS WAS SHORTER THAN THE ATTACK ITSELF. AttackCooldownTracker.start is called when an attack BEGINS - see
+     * Xenomorph.startAttack - so a 4-second cooldown against a 5-second charge expired 20 ticks BEFORE the charge had
+     * even finished, leaving no recovery gap at all. He could begin a fresh charge the instant the previous one ended,
+     * indefinitely.
+     * </p>
+     * <p>
+     * ⚠ THE REAL ATTACK IS LONGER STILL: totalDurationInTicks is OBSCURED_TARGET_BACKUP_TICKS +
+     * WINDUP_DURATION_IN_TICKS + CHARGE_DURATION_IN_TICKS + 1, so the cooldown has to clear all three before it buys
+     * any recovery time. Derived from them rather than hardcoded, so retuning any part of the charge cannot silently
+     * reintroduce a zero gap.
+     * </p>
+     */
+    private static final int CHARGE_RECOVERY_TICKS = 4 * 20;
+
+    private static final int COOLDOWN_IN_TICKS =
+        OBSCURED_TARGET_BACKUP_TICKS + WINDUP_DURATION_IN_TICKS + CHARGE_DURATION_IN_TICKS + CHARGE_RECOVERY_TICKS;
 
     private static final int STUN_DURATION_IN_TICKS = 30;
 

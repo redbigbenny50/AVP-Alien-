@@ -43,8 +43,8 @@ public final class HiveBiomassEvents {
             return;
         }
 
-        var cap = BiomassIncome.biomassCap(homeLocation, config);
-        homeLocation.setBiomass(Math.min(cap, homeLocation.biomass() + amount));
+        // Oct 8: never lowers a pool banked while unloaded.
+        BiomassIncome.addUpToCap(homeLocation, amount, BiomassIncome.biomassCap(homeLocation, config));
     }
 
     private static com.alien.common.gameplay.hive.location.HiveLocation findHomeLocation(LivingEntity killer) {

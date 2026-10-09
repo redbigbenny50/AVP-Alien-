@@ -46,6 +46,25 @@ import java.util.UUID;
  */
 public final class LineageConvoyTickTask {
 
+    /**
+     * Reused across ticks instead of allocating a fresh list every time.
+     * <p>
+     * ⚠⚠ THIS RUNS EVERY TICK AND THE LIST GROWS WITH THE WORLD. Every hive location and every lineage is a faction, so
+     * a long-running pack accumulates thousands of ids - and this method copied ALL of them into a new ArrayList TWICE
+     * per tick (once here, once in grantDualVariantRaidAdvancements) before discovering that most lineages have no
+     * convoys at all. Pure allocation churn, proportional to how long the world has been played.
+     * </p>
+     * <p>
+     * ⚠ A COPY IS STILL NEEDED - the loop body can dispatch convoys and kill lineages, which mutates the registry
+     * getAllIds() is a view of. Reusing the buffer keeps that safety without the garbage.
+     * </p>
+     */
+    private static final java.util.List<net.minecraft.resources.ResourceLocation> SCAN_SCRATCH =
+        new java.util.ArrayList<>();
+
+    private static final java.util.List<net.minecraft.resources.ResourceLocation> ADVANCEMENT_SCRATCH =
+        new java.util.ArrayList<>();
+
     private static final long RAID_WARNING_LEAD_TICKS = 20L * 60L;
 
     private static final int MARKED_FOR_DEATH_ACTIVE_RAID_TICKS = 20 * 10;
@@ -61,7 +80,10 @@ public final class LineageConvoyTickTask {
         var currentTick = server.overworld().getGameTime();
         var activeConvoyIds = new java.util.HashSet<ConvoyId>();
 
-        for (var factionId : new java.util.ArrayList<>(Alien.MOD.factions().getAllIds())) {
+        SCAN_SCRATCH.clear();
+        SCAN_SCRATCH.addAll(Alien.MOD.factions().getAllIds());
+
+        for (var factionId : SCAN_SCRATCH) {
             if (!LineageIds.isLineageId(factionId)) {
                 continue;
             }
@@ -138,6 +160,9 @@ public final class LineageConvoyTickTask {
                     }
 
                     if (!raid.returningHome() && !raid.lossConfirmed()) {
+                        if (ConvoyMemberTracker.returnStalledRaiders(server, raid, currentTick) > 0) {
+                            anyChanged = true;
+                        }
                         updateRaidTargetPos(raid, server);
                         refreshMarkedForDeath(raid, server, config);
                         maybeWarnRaidTarget(raid, server, lineage, config);
@@ -359,9 +384,18 @@ public final class LineageConvoyTickTask {
     }
 
     private static void grantDualVariantRaidAdvancements(MinecraftServer server) {
+        // ⚠ NOTHING TO GRANT WITH NOBODY ONLINE, and this ran every tick regardless - a full faction-list copy plus a
+        // HashMap and a HashSet, thrown away immediately, on an empty server as much as a busy one.
+        if (server.getPlayerList().getPlayers().isEmpty()) {
+            return;
+        }
+
         var variantsByPlayer = new HashMap<UUID, HashSet<AlienVariant>>();
 
-        for (var factionId : new java.util.ArrayList<>(Alien.MOD.factions().getAllIds())) {
+        ADVANCEMENT_SCRATCH.clear();
+        ADVANCEMENT_SCRATCH.addAll(Alien.MOD.factions().getAllIds());
+
+        for (var factionId : ADVANCEMENT_SCRATCH) {
             if (!LineageIds.isLineageId(factionId)) {
                 continue;
             }
@@ -548,10 +582,52 @@ public final class LineageConvoyTickTask {
                 : ReturnHomeReason.NONE;
         }
 
+        // ⭐⭐ SPENT. Nothing left in the bank AND nothing left on the field - the raid did its job (or died
+        // doing it) and there is nothing to send. Until this existed a raid had EXACTLY TWO ways to end: the target
+        // was killed, or the target went creative. A raid whose attackers were all simply defeated hung forever and
+        // kept its members banked inside itself, which is why the source hive could not staff its own carve sites.
+        //
+        // Reachable now because selectRaidWave no longer refuses to build a wave it cannot fill perfectly, so the
+        // composition genuinely drains to zero instead of stalling with the wrong castes left in it.
+        if (raid.composition().getCount() <= 0 && raid.materializedMembers().isEmpty()) {
+            return ReturnHomeReason.RAID_SPENT;
+        }
+
+        // 🚨🚨 THE WAVES RAN OUT AND NOBODY NOTICED. ConvoyMaterialization clamps the wave index with
+        // Math.min(nextWaveIndex(), waveCount() - 1), so once a raid passes its LAST wave the index sticks there and
+        // it throws that same wave again, and again, for as long as any members remain in the composition.
+        //
+        // ⚠⚠ REPORTED AS "are raids meant to repeat wave 5 over and over" and "the raids never end". RAID_SPENT only
+        // fires when the bank reaches ZERO, and a raid that keeps re-throwing its final wave can sit well short of
+        // that for a very long time - especially a large one, which has the most members and therefore repeats the
+        // longest.
+        //
+        // ⭐ A raid is a CAMPAIGN OF N WAVES. Once the last one has been sent and cleared, it is over regardless of
+        // what is left in the bank - the leftovers go home to the hive, which is exactly where they are needed.
+        if (raid.nextWaveIndex() >= raid.waveCount() && raid.materializedMembers().isEmpty()) {
+            return ReturnHomeReason.RAID_WAVES_EXHAUSTED;
+        }
+
         var player = server.getPlayerList().getPlayer(raid.targetPlayerId());
         if (player == null) {
-            return ReturnHomeReason.NONE;
+            // ⭐ [stated] "i would say they wait and then if no relog in a day or two in mc."
+            //
+            // THE RAID WAITS FOR A LOGGED-OUT TARGET, then gives up. The clock starts at the first tick they are
+            // seen absent, not at dispatch, so a player who is present the whole time is hunted indefinitely - the
+            // expiry is about abandonment, not about a time limit on the campaign.
+            //
+            // ⚠ config.raidExpiryTicks ALREADY EXISTED (30 real minutes = 1.5 MC days, squarely in his "day or
+            // two" range) and was being thrown away: RaidDispatch passes Long.MAX_VALUE for expiresAtTick and
+            // NOTHING has ever read that field. This is the knob finally being connected.
+            if (raid.targetOfflineSinceTick() < 0L) {
+                raid.setTargetOfflineSinceTick(currentTick);
+                return ReturnHomeReason.NONE;
+            }
+            return currentTick - raid.targetOfflineSinceTick() >= config.raidExpiryTicks()
+                ? ReturnHomeReason.TARGET_ABSENT
+                : ReturnHomeReason.NONE;
         }
+        raid.setTargetOfflineSinceTick(-1L); // they are back - the abandonment clock resets, the hunt continues
         if (player.isCreative() || player.isSpectator()) {
             return ReturnHomeReason.TARGET_UNAVAILABLE;
         }
@@ -646,6 +722,9 @@ public final class LineageConvoyTickTask {
         return switch (reason) {
             case TARGET_UNAVAILABLE -> "the target became unavailable";
             case TARGET_DEFEATED -> "the target was defeated";
+            case RAID_SPENT -> "the raid spent every member it was given";
+            case RAID_WAVES_EXHAUSTED -> "the raid finished its last wave";
+            case TARGET_ABSENT -> "the target never came back";
             case NONE -> "no return reason was recorded";
         };
     }

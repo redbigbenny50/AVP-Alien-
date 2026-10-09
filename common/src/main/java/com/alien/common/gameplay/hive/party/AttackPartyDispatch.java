@@ -3,7 +3,6 @@ package com.alien.common.gameplay.hive.party;
 import com.alien.Alien;
 import com.alien.common.gameplay.hive.config.HiveConfig;
 import com.alien.common.gameplay.hive.location.HiveLocation;
-import com.alien.common.gameplay.hive.spawning.ReserveSpawnUtil;
 import com.alien.common.registry.tag.AlienEntityTypeTags;
 import com.blib.api.common.entity.v1.EntityReserves;
 import net.minecraft.core.BlockPos;
@@ -11,7 +10,6 @@ import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.Mob;
-import net.minecraft.world.entity.MobSpawnType;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
@@ -384,11 +382,11 @@ public final class AttackPartyDispatch {
                 var jitterZ = emergePos.getZ() + 0.5 + (level.random.nextDouble() - 0.5) * 2.0;
                 entity.moveTo(jitterX, emergePos.getY(), jitterZ, level.random.nextFloat() * 360.0F, 0.0F);
                 if (entity instanceof Mob mob) {
-                    mob.finalizeSpawn(level, level.getCurrentDifficultyAt(spawnPos), MobSpawnType.MOB_SUMMONED, null);
+                    com.alien.common.gameplay.hive.spawning.ReserveSpawnUtil
+                        .finalizePrepaidSpawn(level, mob, spawnPos);
                     mob.setPersistenceRequired();
                 }
                 level.addFreshEntityWithPassengers(entity);
-                ReserveSpawnUtil.markSpawnedFromReserves(entity);
                 if (entity instanceof com.alien.common.gameplay.entity.living.alien.Alien alien) {
                     alien.setPartyMembership(new PartyMembership(party.sourceLocationId(), party.id()));
                 }

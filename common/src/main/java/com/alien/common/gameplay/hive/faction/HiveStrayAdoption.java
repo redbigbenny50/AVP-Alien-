@@ -79,6 +79,18 @@ public final class HiveStrayAdoption {
         var culled = 0;
 
         for (var candidate : sweep(level, location)) {
+            // \u2b50\u2b50 Oct 3 - A CAPTIVE OR GRACED QUEEN IS NOBODY'S STRAY. Capture severs her, so she has no
+            // lineage -
+            // and this sweep would otherwise ADOPT her (same strain) or KILL her (rival strain) the moment her cell
+            // overlapped a claim column. The sweep reaches 48 blocks past the slab, so a player's lab above a hive was
+            // exactly in range. Once she is free and her grace is over she is an ordinary stray again.
+            if (
+                candidate instanceof com.alien.common.gameplay.entity.living.alien.xenomorph.queen.Queen queen
+                    && !com.alien.common.gameplay.hive.lifecycle.QueenCaptivity.mayJoinHive(queen)
+            ) {
+                continue;
+            }
+
             // Already ours, or already somebody's: hasMember on OUR lineage answers the first, and a membership in any
             // other lineage is what makeup() looks for.
             if (lineageFaction.membership().hasMember(FactionMember.entity(candidate))) {

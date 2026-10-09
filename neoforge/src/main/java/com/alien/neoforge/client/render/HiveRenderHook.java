@@ -31,5 +31,19 @@ public final class HiveRenderHook {
             buffers,
             event.getCamera().getPosition()
         );
+        // ⭐⭐ THE WAYPOINT BEAM WAS FABRIC-ONLY. I checked the shipped 0.2.3 jar: this hook called only HiveRenderer
+        // and LimbHitboxRenderer, and NOTHING anywhere in the NeoForge build called WaypointBeamRenderer. Tracked
+        // queens have had no beacon beam on NeoForge at all - which is most players.
+        com.alien.client.render.waypoint.WaypointBeamRenderer.render(
+            event.getPoseStack(),
+            buffers,
+            event.getCamera().getPosition()
+        );
+        // The rescue channel bar, matching the Fabric hook.
+        com.alien.client.render.rescue.RescueChannelBarRenderer.render(
+            event.getPoseStack(),
+            buffers,
+            event.getCamera().getPosition()
+        );
     }
 }

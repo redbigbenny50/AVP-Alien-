@@ -378,7 +378,20 @@ public sealed interface Convoy {
 
             NONE("none"),
             TARGET_UNAVAILABLE("target_unavailable"),
-            TARGET_DEFEATED("target_defeated");
+            TARGET_DEFEATED("target_defeated"),
+            /** The composition is empty and nothing is left on the field - the raid spent itself and goes home. */
+            RAID_SPENT("raid_spent"),
+            /** The target stayed logged out past the expiry window. */
+            TARGET_ABSENT("target_absent"),
+            /**
+             * Every wave in the profile has been sent and cleared.
+             * <p>
+             * ⚠ Distinct from RAID_SPENT, which needs the bank at ZERO. ConvoyMaterialization clamps the wave index to
+             * the last wave, so without this a raid re-threw its final wave indefinitely while it still had members -
+             * reported as "repeat wave 5 over and over" and "the raids never end".
+             * </p>
+             */
+            RAID_WAVES_EXHAUSTED("raid_waves_exhausted");
 
             private final String serializedName;
 
@@ -860,6 +873,24 @@ public sealed interface Convoy {
 
         public long expiresAtTick() {
             return expiresAtTick;
+        }
+
+        /**
+         * Game tick the target was first seen logged out, or -1 while they are present.
+         * <p>
+         * ⚠ DELIBERATELY NOT PERSISTED. A restart resets the clock, which is the safe direction to be wrong in: the
+         * raid waits longer rather than dissolving a campaign the player never saw. Persisting it would need a
+         * ConvoyCodec field for a value that only matters across a few minutes of one session.
+         * </p>
+         */
+        private long targetOfflineSinceTick = -1L;
+
+        public long targetOfflineSinceTick() {
+            return targetOfflineSinceTick;
+        }
+
+        public void setTargetOfflineSinceTick(long tick) {
+            this.targetOfflineSinceTick = tick;
         }
 
         public boolean warningIssued() {

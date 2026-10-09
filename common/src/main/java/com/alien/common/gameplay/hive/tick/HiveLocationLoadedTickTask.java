@@ -38,6 +38,64 @@ public final class HiveLocationLoadedTickTask {
 
     private HiveLocationLoadedTickTask() {}
 
+    /** How often a hive puts back blocks broken outside its stamped rooms. */
+    private static final long LOOSE_REPAIR_INTERVAL_TICKS = 20L;
+
+    /** How many such blocks it restores per pass - paced so a big breach seals gradually, never in one tick. */
+    private static final int LOOSE_REPAIR_BLOCKS_PER_PASS = 4;
+
+    /**
+     * How often a live hive re-checks its own chunks for vents that went dormant by mistake.
+     * <p>
+     * ⚠ Two and a half minutes. This is a self-healing net, not a hot path - a correctly bound vent is never dormant,
+     * so in normal operation this finds nothing and costs one modulo.
+     * </p>
+     */
+    /**
+     * Brings a bank that is already over the kill cap back down to it.
+     * <p>
+     * ⚠⚠ RETROACTIVE ON PURPOSE. [stated] "retroactively any hive like the testers dumps down to 150." A world that ran
+     * with the egg-restock loop has a bank far past the ceiling - one live hive reached 284 - and the kill cap alone
+     * would never reduce it, because it only refuses to ADD. This trims what is already there.
+     * </p>
+     * <p>
+     * ⚠ Runs on the same slow sweep as the vent revive, so a healthy hive pays one comparison every few minutes and
+     * nothing else.
+     * </p>
+     */
+    private static void trimOverfilledEggBank(HiveLocation location) {
+        var variant = location.lineageVariantOrNull();
+
+        if (variant == null) {
+            return;
+        }
+
+        var eggType = com.alien.common.gameplay.entity.living.alien.ovomorph.Ovomorph.getType(variant, false);
+
+        if (eggType == null) {
+            return;
+        }
+
+        var banked = location.localReserves().getCount(eggType);
+        var cap = com.alien.common.gameplay.entity.living.alien.xenomorph.ai.egg.action.DropOffEggAction.EGG_BANK_KILL_CAP;
+
+        if (banked <= cap) {
+            return;
+        }
+
+        // The reserve marks itself dirty - HiveBalanceTask adjusts counts the same way with no extra call.
+        location.localReserves().underlying().add(eggType, cap - banked);
+
+        com.alien.Alien.LOGGER.warn(
+            "Hive {}: egg bank was {}, over the kill cap of {} - trimmed back down to the cap.",
+            location.id(),
+            banked,
+            cap
+        );
+    }
+
+    private static final long VENT_REVIVE_SWEEP_INTERVAL_TICKS = 20L * 150L;
+
     public static void run(MinecraftServer server, HiveLocation location) {
         var faction = Alien.MOD.factions().get(location.lineageFactionId());
 
@@ -75,6 +133,33 @@ public final class HiveLocationLoadedTickTask {
         }
 
         var currentTick = serverLevel.getGameTime();
+        // ⭐ Oct 2 - EVERY HIVE USED TO FIRE ITS TIMED JOBS ON THE SAME TICK. All the gates below are `tick % interval`,
+        // so
+        // with several hives loaded the aggro scans, defence and war checks landed together, and every 200 ticks the
+        // vats, restock, harvest, host ferry and brood bank ran for EVERY hive at once - a spike every ten seconds.
+        // Offsetting each hive by a fixed amount derived from its id spreads the same work evenly. Totals are
+        // unchanged: each job still runs exactly once per interval per hive. ⚠ Only the GATES use cadenceTick; anything
+        // that is handed a time value still gets the real currentTick.
+        var cadenceTick = currentTick + Math.floorMod(location.id().hashCode(), 7200);
+        // 🚨 SAFETY NET FOR DORMANT VENTS. A vent that fails to resolve its hive five times stops ticking entirely and
+        // can only be woken by HiveLocationClaims.claim - so a vent that went dormant during a startup race, while the
+        // location registry was still loading, would stay dead FOREVER on a mature hive that has stopped claiming.
+        //
+        // ⚠ Its hive is alive and ticking right here, so this is the natural place to notice. Slow on purpose: a full
+        // sweep every VENT_REVIVE_SWEEP_INTERVAL_TICKS, and only over chunks that are already loaded.
+        // ⭐ CORRIDOR AND WALL REPAIR. Paced deliberately: a few blocks a second, so a hive visibly seals a hole rather
+        // than snapping it shut, and a heavily damaged hive can never spike the tick. Costs one isEmpty check when
+        // there is nothing to fix, which is the normal case.
+        if (cadenceTick % LOOSE_REPAIR_INTERVAL_TICKS == 0) {
+            com.alien.common.gameplay.hive.structure.HiveStructureUpkeep
+                .repairLooseCells(serverLevel, location, LOOSE_REPAIR_BLOCKS_PER_PASS);
+        }
+
+        if (cadenceTick % VENT_REVIVE_SWEEP_INTERVAL_TICKS == 0) {
+            com.alien.common.gameplay.hive.growth.HiveLocationClaims.reviveDormantVentsForLocation(serverLevel, location);
+            trimOverfilledEggBank(location);
+        }
+
         if (!hasLoadedClaimedChunk(serverLevel, location)) {
             return;
         }
@@ -83,35 +168,69 @@ public final class HiveLocationLoadedTickTask {
         // is a no-op for any hive whose vents are already right - it only ever promotes FRONTIER→SURFACE for vents
         // that genuinely sit near the surface. Needed because classification is WRITE-ONCE and persisted, so
         // existing worlds carry the old wrong answer forever otherwise.
-        if (HiveTerritoryAggroTask.shouldFire(currentTick)) {
+        if (HiveTerritoryAggroTask.shouldFire(cadenceTick)) {
             com.alien.common.gameplay.hive.vent.HiveVents.reclassifyStaleFrontierVents(
                 serverLevel,
                 location,
                 HiveLocationRegistry.INSTANCE.config().surfacePartySurfaceBandBlocks()
             );
+            var t_aggro = com.alien.common.gameplay.hive.diag.DiagProfiler.isRunning() ? System.nanoTime() : 0L;
             HiveTerritoryAggroTask.run(serverLevel, location);
+            if (t_aggro != 0L) {
+                com.alien.common.gameplay.hive.diag.DiagProfiler.record("loaded/aggro", t_aggro);
+            }
         }
-        if (com.alien.common.gameplay.hive.defense.VentDefenseTask.shouldFire(currentTick)) {
+        if (com.alien.common.gameplay.hive.defense.VentDefenseTask.shouldFire(cadenceTick)) {
+            var t_vent_defense = com.alien.common.gameplay.hive.diag.DiagProfiler.isRunning() ? System.nanoTime() : 0L;
             com.alien.common.gameplay.hive.defense.VentDefenseTask.run(serverLevel, location);
+            if (t_vent_defense != 0L) {
+                com.alien.common.gameplay.hive.diag.DiagProfiler.record("loaded/vent_defense", t_vent_defense);
+            }
+        }
+        // The throne does not stay empty. A hive that lost its queen and has one banked crowns her again once the
+        // killer has walked away - see QueenSuccessionTask for why it waits. Defence tier, above the end-style
+        // branch: the End's own succession (EndRegent) is fired from the royal's death and this task skips it.
+        if (com.alien.common.gameplay.hive.lifecycle.QueenSuccessionTask.shouldFire(cadenceTick)) {
+            var t_queen_succession = com.alien.common.gameplay.hive.diag.DiagProfiler.isRunning() ? System.nanoTime() : 0L;
+            com.alien.common.gameplay.hive.lifecycle.QueenSuccessionTask.run(serverLevel, location);
+            if (t_queen_succession != 0L) {
+                com.alien.common.gameplay.hive.diag.DiagProfiler.record("loaded/queen_succession", t_queen_succession);
+            }
         }
         // A dormant rival-strain queen inside our claims is sensed and executed. Sits with defense, ABOVE the
         // end-style branch: an End fortress that somehow owns ground with a sleeper in it still answers for it.
-        if (com.alien.common.gameplay.hive.defense.DormantQueenPurge.shouldFire(currentTick)) {
+        if (com.alien.common.gameplay.hive.defense.DormantQueenPurge.shouldFire(cadenceTick)) {
+            var t_dormant_purge = com.alien.common.gameplay.hive.diag.DiagProfiler.isRunning() ? System.nanoTime() : 0L;
             com.alien.common.gameplay.hive.defense.DormantQueenPurge.run(serverLevel, location);
+            if (t_dormant_purge != 0L) {
+                com.alien.common.gameplay.hive.diag.DiagProfiler.record("loaded/dormant_purge", t_dormant_purge);
+            }
         }
         // A hive at war keeps a garrison standing, topped up one wave at a time. Defence tier, above the end-style
         // branch: a war is fought wherever the hives are.
-        if (com.alien.common.gameplay.hive.war.WarMobilization.shouldFire(currentTick)) {
+        if (com.alien.common.gameplay.hive.war.WarMobilization.shouldFire(cadenceTick)) {
+            var t_war_mobilization = com.alien.common.gameplay.hive.diag.DiagProfiler.isRunning() ? System.nanoTime() : 0L;
             com.alien.common.gameplay.hive.war.WarMobilization.run(serverLevel, location);
+            if (t_war_mobilization != 0L) {
+                com.alien.common.gameplay.hive.diag.DiagProfiler.record("loaded/war_mobilization", t_war_mobilization);
+            }
         }
         // ...and sends waves of it at the enemy hive. Ordered AFTER mobilization so a wave that just left is
         // replaced on the same tick it departs.
-        if (com.alien.common.gameplay.hive.war.WarOffensive.shouldFire(currentTick)) {
+        if (com.alien.common.gameplay.hive.war.WarOffensive.shouldFire(cadenceTick)) {
+            var t_war_offensive = com.alien.common.gameplay.hive.diag.DiagProfiler.isRunning() ? System.nanoTime() : 0L;
             com.alien.common.gameplay.hive.war.WarOffensive.run(serverLevel, location);
+            if (t_war_offensive != 0L) {
+                com.alien.common.gameplay.hive.diag.DiagProfiler.record("loaded/war_offensive", t_war_offensive);
+            }
         }
         // The throne holds its own watch, and its harbinger answers anyone who reaches the last two rooms.
-        if (com.alien.common.gameplay.hive.war.ThroneDefense.shouldFire(currentTick)) {
+        if (com.alien.common.gameplay.hive.war.ThroneDefense.shouldFire(cadenceTick)) {
+            var t_throne_defense = com.alien.common.gameplay.hive.diag.DiagProfiler.isRunning() ? System.nanoTime() : 0L;
             com.alien.common.gameplay.hive.war.ThroneDefense.run(serverLevel, location);
+            if (t_throne_defense != 0L) {
+                com.alien.common.gameplay.hive.diag.DiagProfiler.record("loaded/throne_defense", t_throne_defense);
+            }
         }
 
         // ---- END-STYLE HIVES branch off here and run NOTHING below this block. ---------------------------------
@@ -122,13 +241,13 @@ public final class HiveLocationLoadedTickTask {
         // bank still runs because vent-only banking IS the End's population model. Everything else on this driver
         // is autonomy an End hive does not have. See EndStyleHiveRules for the full ruleset.
         if (com.alien.common.gameplay.hive.dimension.EndStyleHiveRules.isEndStyle(serverLevel)) {
-            if (currentTick % 20L == 0L) {
+            if (cadenceTick % 20L == 0L) {
                 com.alien.common.gameplay.hive.empress.EmpressInfluenceSync.sync(location, lineage);
                 var endConfig = HiveLocationRegistry.INSTANCE.config();
                 AttackPartyDispatch.tryRun(server, location, endConfig);
                 AttackPartyLifecycleTask.run(server, location, endConfig);
             }
-            if (currentTick % 200L == 0L) {
+            if (cadenceTick % 200L == 0L) {
                 com.alien.common.gameplay.hive.economy.BroodBankTask.run(serverLevel, location);
             }
             com.alien.common.gameplay.hive.tick.EndHiveTickTask.run(server, serverLevel, location, lineage, currentTick);
@@ -162,7 +281,7 @@ public final class HiveLocationLoadedTickTask {
         // biomass-cost gating and skips if the location is angry. Calling every tick would be wasteful in the
         // limit; gate to a coarse cadence. Abstract spread follows this loaded-location cadence; unloaded locations
         // use HiveLocationSlowTickTask's bounded randomized fallback.
-        if (currentTick % 20L == 0L) {
+        if (cadenceTick % 20L == 0L) {
             // Reconcile on the coarse cadence rather than every tick: a hive that just loaded still starts building
             // at 23x23 within a second, and the periodic sweep is the real guarantee anyway.
             com.alien.common.gameplay.hive.empress.EmpressInfluenceSync.sync(location, lineage);
@@ -199,7 +318,11 @@ public final class HiveLocationLoadedTickTask {
             // lives on the CARRIER, not on the vents the way a cry for help does), so eggs laid away from the
             // workers are never heard about at all. This is the missing relay: find a waiting egg, hand it to a
             // free worker, and let the existing duct-travel in PickUpEggAction carry him there.
+            var t_egg_haul = com.alien.common.gameplay.hive.diag.DiagProfiler.isRunning() ? System.nanoTime() : 0L;
             com.alien.common.gameplay.hive.economy.EggHaulDispatch.run(serverLevel, location);
+            if (t_egg_haul != 0L) {
+                com.alien.common.gameplay.hive.diag.DiagProfiler.record("loaded/egg_haul", t_egg_haul);
+            }
         }
 
         // Structure growth: grow one hive piece off an open frontier socket on a coarse cadence (every 200 ticks / 10s)
@@ -208,12 +331,27 @@ public final class HiveLocationLoadedTickTask {
         // Take in the hive's own strays before anything asks how many workers it has. A host-born xenomorph that
         // burst in the field never joined anything, so construction and repair could not see it even while it hauled
         // eggs. Same beat as structure growth; see HiveStrayAdoption.
-        if (currentTick % com.alien.common.gameplay.hive.faction.HiveStrayAdoption.TICK_INTERVAL == 0L) {
+        if (cadenceTick % com.alien.common.gameplay.hive.faction.HiveStrayAdoption.TICK_INTERVAL == 0L) {
             com.alien.common.gameplay.hive.faction.HiveStrayAdoption.run(serverLevel, location);
         }
 
-        if (currentTick % 200L == 0L) {
-            if (location.isBuildFrozenForWarPrep()) {
+        if (cadenceTick % 200L == 0L) {
+            if (com.alien.common.gameplay.hive.config.BuildFreeMode.isEnabled()) {
+                // 🚨🚨 BUILD-FREE MODE NEVER REACHED THE BUILD PATH AT ALL.
+                //
+                // ⚠⚠ NEITHER HiveRouter NOR HiveStructurePlanner MENTIONS BuildFreeMode ANYWHERE, and neither did
+                // this dispatch - so a hive with the mode ON carried on commissioning carve sites, stamping royal
+                // hallways and starving its economy on resin it should never have been spending. Reported as
+                // "build free mode still building", and the log showed exactly that: queen chamber established,
+                // royal hallways stamped, carve sites unstaffed for want of drones.
+                //
+                // ⭐ THE GATE BELONGS HERE, not in the two builders. This is the single place both are dispatched
+                // from, so one check covers the router, the planner, and anything that replaces them later - which
+                // is precisely how the mode came to be missing from both of them.
+                //
+                // ⚠ The mode is read LIVE from the config, not snapshotted per hive. Turning it on stops an existing
+                // hive building from the next cycle; it does not un-build what is already there.
+            } else if (location.isBuildFrozenForWarPrep()) {
                 // No new pieces commissioned during the preparation truce.
             } else if (com.alien.common.gameplay.hive.structure.HiveRouter.ENABLED) {
                 com.alien.common.gameplay.hive.structure.HiveRouter.route(server, serverLevel, location);
@@ -258,6 +396,10 @@ public final class HiveLocationLoadedTickTask {
         var radiusSqr = (double) radius * radius;
         var center = location.centerPos();
         for (var player : level.players()) {
+            // \u26a0\u26a0 CREATIVE AND SPECTATOR COUNT HERE. Loaded biomass income is the hive's main growth channel,
+            // and filtering them out meant a hive watched only by an admin earned NOTHING: carve sites reported
+            // "carve starved - 83 owed, 7 in reserve", and the queen sat at 25 of the 100 biomass an ovipositor costs.
+            // Presence is about whether anyone is around for the hive to be alive for, not about who deserves hunting.
             if (player.blockPosition().distSqr(center) <= radiusSqr) {
                 return true;
             }

@@ -22,6 +22,31 @@ public class EggPickupManager implements GameEventListener.Provider<EggPickupReq
 
     private Ovomorph targetOvomorph;
 
+    /**
+     * ⭐ Oct 6 - AN EGG THIS XENO COULD NOT REACH IS LEFT ALONE FOR A WHILE. The egg calls for a carrier once a second;
+     * the duct check said "reachable", the walk then failed, the action ended - and the next call was answered by the
+     * same xeno, which planned its vent leg and searched again. /blib perf showed each pickup attempt at 140-400 us on
+     * runners that never got the egg. After a failed attempt this xeno ignores that one egg for 10 seconds; every other
+     * egg, and every other xeno, is unaffected.
+     */
+    private @Nullable java.util.UUID unreachableEgg;
+
+    private long unreachableEggUntil;
+
+    private static final long UNREACHABLE_EGG_COOLDOWN_TICKS = 200L;
+
+    /** Called when a pickup ends without the egg: remembers it so this xeno does not answer its next call at once. */
+    public void noteUnreachable(Ovomorph ovomorph) {
+        this.unreachableEgg = ovomorph.getUUID();
+        this.unreachableEggUntil = xenomorph.level().getGameTime() + UNREACHABLE_EGG_COOLDOWN_TICKS;
+    }
+
+    private boolean isRecentlyUnreachable(Ovomorph ovomorph) {
+        return unreachableEgg != null
+            && xenomorph.level().getGameTime() < unreachableEggUntil
+            && unreachableEgg.equals(ovomorph.getUUID());
+    }
+
     public EggPickupManager(Xenomorph xenomorph) {
         this.eggPickupRequestListener = new EggPickupRequestListener(xenomorph, this::acknowledgePickupRequest);
         this.dynamicEggPickupRequestListener = new DynamicGameEventListener<>(eggPickupRequestListener);
@@ -112,12 +137,15 @@ public class EggPickupManager implements GameEventListener.Provider<EggPickupReq
             ovomorph.pickupRequestAcknowledged
                 // If this xenomorph already has a target ovomorph, then ignore this other requesting ovomorph.
                 || targetOvomorph != null
+                // Oct 6 - this xeno just failed to reach this egg: leave it to the others for 10 seconds.
+                || isRecentlyUnreachable(ovomorph)
                 // If the xenomorph is already moving an ovomorph, don't acknowledge this other ovomorph's request.
                 || !getPassengerOvomorphs().isEmpty()
                 // A worker hauling a host is busy: claiming an egg here silences it for everyone else.
                 || isCarryingHost()
                 // If the xenomorph can't reach the ovomorph, don't try to pick the ovomorph up.
-                || (xenomorph.getNavigation().createPath(ovomorph, 0) == null)
+                // Oct 2 - through a duct OR on foot (PickUpEggAction takes the duct when it is shorter).
+                || !com.alien.common.gameplay.hive.vent.DuctRouting.canReach(xenomorph, ovomorph.blockPosition(), false)
         ) {
             return;
         }

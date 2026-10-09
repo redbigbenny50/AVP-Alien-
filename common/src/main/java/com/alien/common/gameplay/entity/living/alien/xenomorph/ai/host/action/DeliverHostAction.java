@@ -123,7 +123,7 @@ public final class DeliverHostAction {
                 var centerChunk = new net.minecraft.world.level.ChunkPos(centerPos);
                 xenomorph.teleportTo(
                     centerChunk.getMiddleBlockX() + 0.5,
-                    location.hiveFloorY() + 1,
+                    location.throneFloorY(serverLevel) + 1, // Oct 1: was hiveFloorY - inside rock in build-free
                     centerChunk.getMiddleBlockZ() + 0.5
                 );
                 NeoMoveToPosAction.onFinish(context);
@@ -180,7 +180,12 @@ public final class DeliverHostAction {
             return Action.Signal.CONTINUE;
         }
 
-        var result = NeoMoveToPosAction.perform(context, ventTarget, 0.5);
+        // ⚠ ventTarget is reassigned above, so it cannot be captured by a lambda directly.
+        var ventTargetFinal = ventTarget;
+        var result = com.alien.common.gameplay.hive.diag.DiagProfiler.timed(
+            "path/DeliverHostAction",
+            () -> NeoMoveToPosAction.perform(context, ventTargetFinal, 0.5)
+        );
         return switch (result) {
             case MOVING, FINISHED -> Action.Signal.CONTINUE;
             default -> {
@@ -232,7 +237,12 @@ public final class DeliverHostAction {
             return Action.Signal.CONTINUE;
         }
 
-        var result = NeoMoveToPosAction.perform(context, target, 0.5);
+        // ⚠ target is reassigned above, so it cannot be captured by a lambda directly.
+        var targetFinal = target;
+        var result = com.alien.common.gameplay.hive.diag.DiagProfiler.timed(
+            "path/DeliverHostAction",
+            () -> NeoMoveToPosAction.perform(context, targetFinal, 0.5)
+        );
         return switch (result) {
             case MOVING, FINISHED -> Action.Signal.CONTINUE;
             default -> {
@@ -293,6 +303,10 @@ public final class DeliverHostAction {
         if (!VentPlacement.isOpen(level, carrierPos) || !VentPlacement.restsOnSolidFace(level, carrierPos)) {
             return;
         }
+        // Oct 6 - a carrier stalled inside the hive's rooms or tunnels does not get a vent stamped where it stands.
+        if (VentPlacement.isInsideBuiltStructure(location, carrierPos)) {
+            return;
+        }
         var variant = location.lineageVariantOrNull();
         if (variant == null) {
             return;
@@ -332,7 +346,14 @@ public final class DeliverHostAction {
 
         BlockPos nearest = null;
         double nearestDistance = Double.MAX_VALUE;
-        for (var vent : PartyVentUtil.findSurfaceVents(level, location)) {
+        // ⭐ Oct 2 - A CARRIER ALREADY INSIDE THE HIVE HANDS OFF AT AN INTERIOR VENT. The surface-only rule is about
+        // where a captive from OUTSIDE comes in; a host grabbed loose inside the hive used to be walked all the way OUT
+        // to a surface vent to be brought back IN. [stated] "they should use the vents whenever possible."
+        var candidates = new java.util.ArrayList<BlockPos>(PartyVentUtil.findSurfaceVents(level, location));
+        if (com.alien.common.gameplay.entity.living.alien.xenomorph.ai.host.InteriorSweepDuty.isInsideHive(location, xenomorph)) {
+            candidates.addAll(location.ventManager().ventsOfKind(VentKind.STRUCTURE));
+        }
+        for (var vent : candidates) {
             if (writtenOff != null && writtenOff.contains(vent)) {
                 continue; // this carrier already failed to reach this one
             }
