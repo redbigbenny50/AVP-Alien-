@@ -9,6 +9,7 @@ import com.alien.common.gameplay.entity.living.alien.xenomorph.harbinger.Harbing
 import com.alien.common.model.alien.variant.AlienVariant;
 import com.blib.api.client.render.v1.entity.AzEntityRenderer;
 import com.blib.api.client.render.v1.entity.AzEntityRendererConfig;
+import com.blib.api.client.render.v1.lod.AzLodConfig;
 import net.minecraft.client.renderer.RenderType;
 import net.minecraft.client.renderer.entity.EntityRendererProvider;
 import net.minecraft.resources.ResourceLocation;
@@ -28,6 +29,7 @@ public class HarbingerRenderer extends AzEntityRenderer<Harbinger> {
                 .addRenderLayer(new MoltLayer<>())
                 .addRenderLayer(new PraetorianRenderedLimbPickerLayer<>())
                 .setShadowRadius(0.5F)
+                .withLodConfig(AzLodConfig.DEFAULT)
                 .build(),
             context
         );

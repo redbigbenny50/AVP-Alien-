@@ -7,6 +7,7 @@ import com.alien.common.gameplay.entity.living.alien.adolescent.Adolescent;
 import com.alien.common.model.alien.variant.AlienVariant;
 import com.blib.api.client.render.v1.entity.AzEntityRenderer;
 import com.blib.api.client.render.v1.entity.AzEntityRendererConfig;
+import com.blib.api.client.render.v1.lod.AzLodConfig;
 import net.minecraft.client.renderer.RenderType;
 import net.minecraft.client.renderer.entity.EntityRendererProvider;
 import net.minecraft.resources.ResourceLocation;
@@ -23,6 +24,7 @@ public class AdolescentRenderer extends AzEntityRenderer<Adolescent> {
                 .setRenderType(AdolescentRenderer::renderType)
                 .setAnimatorProvider(AdolescentAnimator::new)
                 .addRenderLayer(new MoltLayer<>())
+                .withLodConfig(AzLodConfig.DEFAULT)
                 .build(),
             context
         );
